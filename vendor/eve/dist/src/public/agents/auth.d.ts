@@ -6,19 +6,19 @@ import type { TokenValue } from "#client/types.js";
  * construct one, or supply a custom function for other schemes.
  */
 export type OutboundAuthFn = () => Promise<{
-    readonly headers: Readonly<Record<string, string>>;
+  readonly headers: Readonly<Record<string, string>>;
 }>;
 /**
  * eve-owned mirror of the `@vercel/oidc` token lookup options forwarded to
  * {@link vercelOidc}.
  */
 export interface VercelOidcOptions {
-    /** Buffer in milliseconds before token expiry that triggers a refresh. */
-    readonly expirationBufferMs?: number;
-    /** Project ID (`prj_*`) or slug to use for token refresh. */
-    readonly project?: string;
-    /** Team ID (`team_*`) or slug to use for token refresh. */
-    readonly team?: string;
+  /** Buffer in milliseconds before token expiry that triggers a refresh. */
+  readonly expirationBufferMs?: number;
+  /** Project ID (`prj_*`) or slug to use for token refresh. */
+  readonly project?: string;
+  /** Team ID (`team_*`) or slug to use for token refresh. */
+  readonly team?: string;
 }
 /**
  * Returns an {@link OutboundAuthFn} that emits a `Bearer` Vercel OIDC token for
@@ -41,6 +41,6 @@ export declare function bearer(token: TokenValue): OutboundAuthFn;
  * request.
  */
 export declare function basic(input: {
-    readonly password: TokenValue;
-    readonly username: string;
+  readonly password: TokenValue;
+  readonly username: string;
 }): OutboundAuthFn;

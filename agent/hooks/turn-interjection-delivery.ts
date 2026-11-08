@@ -14,7 +14,8 @@ import {
 
 export default defineHook({
   events: {
-    "step.started": async (event, ctx) => await recordTurnInterjectionDelivery(ctx, event.data.stepIndex),
+    "step.started": async (event, ctx) =>
+      await recordTurnInterjectionDelivery(ctx, event.data.stepIndex),
     "turn.completed": async (_event, ctx) => await finishTurnInterjectionDelivery(ctx),
     "turn.failed": async (_event, ctx) => await finishTurnInterjectionDelivery(ctx),
   },

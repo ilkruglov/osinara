@@ -26,45 +26,252 @@ const MIN_WORD_LENGTH = 4;
 
 /** Function words and the structural vocabulary every image prompt shares, as stems. */
 const STOP_STEMS = new Set([
-  "этот", "эт", "тог", "том", "такж", "либ", "есл", "чтоб", "когд", "очен", "почт", "кром", "тольк", "больш", "меньш", "всег", "вес", "сво", "сам", "будт", "вокруг", "рядом", "перед", "межд", "поверх", "внутр", "сверх", "сниз", "вверх", "вниз", "слев", "справ",
-  "кадр", "сцен", "композиц", "вариант", "подач", "изображен", "картинк", "надпис", "текст", "строк", "крупн", "мелк", "центр", "центральн", "стил", "формат", "вертикальн", "горизонтальн", "обложк", "лист", "журнал", "плакат", "цел", "сюжет", "гер", "фон", "задник", "палитр", "цвет", "чист", "лин", "контур", "аккуратн", "нормальн", "человеческ", "кист", "палец", "пальц", "раздельн", "лиц", "люд", "реальн", "кажд", "один", "одн", "друг", "ровн", "строг", "больш",
+  "этот",
+  "эт",
+  "тог",
+  "том",
+  "такж",
+  "либ",
+  "есл",
+  "чтоб",
+  "когд",
+  "очен",
+  "почт",
+  "кром",
+  "тольк",
+  "больш",
+  "меньш",
+  "всег",
+  "вес",
+  "сво",
+  "сам",
+  "будт",
+  "вокруг",
+  "рядом",
+  "перед",
+  "межд",
+  "поверх",
+  "внутр",
+  "сверх",
+  "сниз",
+  "вверх",
+  "вниз",
+  "слев",
+  "справ",
+  "кадр",
+  "сцен",
+  "композиц",
+  "вариант",
+  "подач",
+  "изображен",
+  "картинк",
+  "надпис",
+  "текст",
+  "строк",
+  "крупн",
+  "мелк",
+  "центр",
+  "центральн",
+  "стил",
+  "формат",
+  "вертикальн",
+  "горизонтальн",
+  "обложк",
+  "лист",
+  "журнал",
+  "плакат",
+  "цел",
+  "сюжет",
+  "гер",
+  "фон",
+  "задник",
+  "палитр",
+  "цвет",
+  "чист",
+  "лин",
+  "контур",
+  "аккуратн",
+  "нормальн",
+  "человеческ",
+  "кист",
+  "палец",
+  "пальц",
+  "раздельн",
+  "лиц",
+  "люд",
+  "реальн",
+  "кажд",
+  "один",
+  "одн",
+  "друг",
+  "ровн",
+  "строг",
+  "больш",
 ]);
 /** A segment that starts like this states what must not be in the picture, not what is. */
 // `\b` knows no Cyrillic, so a word ends where no Cyrillic letter follows.
-const NEGATIVE_SEGMENT = /^\s*(?:ограничени|запрет|нельзя|не(?![а-яё])|без(?![а-яё])|никак|нет(?![а-яё])|избега|исключ|кроме(?![а-яё]))/iu;
-const NEGATIVE_TAIL = /[,;]\s*(?:без|никак[а-яё]*|нет|не|нельзя|избега[а-яё]*|исключ[а-яё]*|кроме)(?![а-яё]).*$/iu;
+const NEGATIVE_SEGMENT =
+  /^\s*(?:ограничени|запрет|нельзя|не(?![а-яё])|без(?![а-яё])|никак|нет(?![а-яё])|избега|исключ|кроме(?![а-яё]))/iu;
+const NEGATIVE_TAIL =
+  /[,;]\s*(?:без|никак[а-яё]*|нет|не|нельзя|избега[а-яё]*|исключ[а-яё]*|кроме)(?![а-яё]).*$/iu;
 const QUOTED = /«[^»]*»|"[^"]*"|“[^”]*”/gu;
 const SIZE_OR_NUMBER = /\d+(?:[.,:x×/-]\d+)*/gu;
 
 const VOWELS = "аеиоуыэюя";
 const PERFECTIVE_GERUND_1 = ["вшись", "вши", "в"];
 const PERFECTIVE_GERUND_2 = ["ившись", "ывшись", "ивши", "ывши", "ив", "ыв"];
-const ADJECTIVE = ["ими", "ыми", "его", "ого", "ему", "ому", "ее", "ие", "ые", "ое", "ей", "ий", "ый", "ой", "ем", "им", "ым", "ом", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею"];
+const ADJECTIVE = [
+  "ими",
+  "ыми",
+  "его",
+  "ого",
+  "ему",
+  "ому",
+  "ее",
+  "ие",
+  "ые",
+  "ое",
+  "ей",
+  "ий",
+  "ый",
+  "ой",
+  "ем",
+  "им",
+  "ым",
+  "ом",
+  "их",
+  "ых",
+  "ую",
+  "юю",
+  "ая",
+  "яя",
+  "ою",
+  "ею",
+];
 const PARTICIPLE_1 = ["ем", "нн", "вш", "ющ", "щ"];
 const PARTICIPLE_2 = ["ивш", "ывш", "ующ"];
 const REFLEXIVE = ["ся", "сь"];
-const VERB_1 = ["ете", "йте", "ешь", "нно", "ла", "на", "ли", "ем", "ло", "но", "ет", "ют", "ны", "ть", "й", "л", "н"];
-const VERB_2 = ["ейте", "уйте", "ила", "ыла", "ена", "ите", "или", "ыли", "ило", "ыло", "ено", "ует", "уют", "ены", "ить", "ыть", "ишь", "ей", "уй", "ил", "ыл", "им", "ым", "ен", "ят", "ит", "ыт", "ую", "ю"];
-const NOUN = ["иями", "ями", "ами", "ией", "иям", "ием", "иях", "ев", "ов", "ие", "ье", "еи", "ии", "ей", "ой", "ий", "ям", "ем", "ам", "ом", "ах", "ях", "ию", "ью", "ия", "ья", "а", "е", "и", "й", "о", "у", "ы", "ь", "ю", "я"];
+const VERB_1 = [
+  "ете",
+  "йте",
+  "ешь",
+  "нно",
+  "ла",
+  "на",
+  "ли",
+  "ем",
+  "ло",
+  "но",
+  "ет",
+  "ют",
+  "ны",
+  "ть",
+  "й",
+  "л",
+  "н",
+];
+const VERB_2 = [
+  "ейте",
+  "уйте",
+  "ила",
+  "ыла",
+  "ена",
+  "ите",
+  "или",
+  "ыли",
+  "ило",
+  "ыло",
+  "ено",
+  "ует",
+  "уют",
+  "ены",
+  "ить",
+  "ыть",
+  "ишь",
+  "ей",
+  "уй",
+  "ил",
+  "ыл",
+  "им",
+  "ым",
+  "ен",
+  "ят",
+  "ит",
+  "ыт",
+  "ую",
+  "ю",
+];
+const NOUN = [
+  "иями",
+  "ями",
+  "ами",
+  "ией",
+  "иям",
+  "ием",
+  "иях",
+  "ев",
+  "ов",
+  "ие",
+  "ье",
+  "еи",
+  "ии",
+  "ей",
+  "ой",
+  "ий",
+  "ям",
+  "ем",
+  "ам",
+  "ом",
+  "ах",
+  "ях",
+  "ию",
+  "ью",
+  "ия",
+  "ья",
+  "а",
+  "е",
+  "и",
+  "й",
+  "о",
+  "у",
+  "ы",
+  "ь",
+  "ю",
+  "я",
+];
 const DERIVATIONAL = ["ость", "ост"];
 
 function regions(word: string): { rv: number; r2: number } {
   let rv = word.length;
   for (let index = 0; index < word.length; index += 1) {
-    if (VOWELS.includes(word[index]!)) { rv = index + 1; break; }
+    if (VOWELS.includes(word[index]!)) {
+      rv = index + 1;
+      break;
+    }
   }
   let r1 = word.length;
   for (let index = 1; index < word.length; index += 1) {
-    if (VOWELS.includes(word[index - 1]!) && !VOWELS.includes(word[index]!)) { r1 = index + 1; break; }
+    if (VOWELS.includes(word[index - 1]!) && !VOWELS.includes(word[index]!)) {
+      r1 = index + 1;
+      break;
+    }
   }
   let r2 = word.length;
   for (let index = r1 + 1; index < word.length; index += 1) {
-    if (VOWELS.includes(word[index - 1]!) && !VOWELS.includes(word[index]!)) { r2 = index + 1; break; }
+    if (VOWELS.includes(word[index - 1]!) && !VOWELS.includes(word[index]!)) {
+      r2 = index + 1;
+      break;
+    }
   }
   return { r2, rv };
 }
 
-function stripEnding(word: string, rv: number, endings: readonly string[], precededByAorYa = false): string | null {
+function stripEnding(
+  word: string,
+  rv: number,
+  endings: readonly string[],
+  precededByAorYa = false,
+): string | null {
   for (const ending of endings) {
     if (!word.endsWith(ending) || word.length - ending.length < rv) continue;
     if (precededByAorYa) {
@@ -83,7 +290,8 @@ export function stemRussian(input: string): string {
   if (word.length < 3 || !/^[а-я]+$/u.test(word)) return word;
   const { r2, rv } = regions(word);
   // Step 1.
-  const gerund = stripEnding(word, rv, PERFECTIVE_GERUND_1, true) ?? stripEnding(word, rv, PERFECTIVE_GERUND_2);
+  const gerund =
+    stripEnding(word, rv, PERFECTIVE_GERUND_1, true) ?? stripEnding(word, rv, PERFECTIVE_GERUND_2);
   if (gerund !== null) {
     word = gerund;
   } else {
@@ -91,7 +299,8 @@ export function stemRussian(input: string): string {
     const adjective = stripEnding(word, rv, ADJECTIVE);
     if (adjective !== null) {
       word = adjective;
-      word = stripEnding(word, rv, PARTICIPLE_1, true) ?? stripEnding(word, rv, PARTICIPLE_2) ?? word;
+      word =
+        stripEnding(word, rv, PARTICIPLE_1, true) ?? stripEnding(word, rv, PARTICIPLE_2) ?? word;
     } else {
       const verb = stripEnding(word, rv, VERB_1, true) ?? stripEnding(word, rv, VERB_2);
       word = verb ?? stripEnding(word, rv, NOUN) ?? word;
@@ -101,7 +310,10 @@ export function stemRussian(input: string): string {
   if (word.endsWith("и") && word.length - 1 >= rv) word = word.slice(0, -1);
   // Step 3.
   for (const ending of DERIVATIONAL) {
-    if (word.endsWith(ending) && word.length - ending.length >= r2) { word = word.slice(0, -ending.length); break; }
+    if (word.endsWith(ending) && word.length - ending.length >= r2) {
+      word = word.slice(0, -ending.length);
+      break;
+    }
   }
   // Step 4.
   if (word.endsWith("ь") && word.length - 1 >= rv) word = word.slice(0, -1);
@@ -123,7 +335,14 @@ function positiveSpecification(prompt: string): string {
 
 /** Content words of a text: hyphen components apart, ё as е, no numbers, no function or structural words. */
 function contentWords(text: string): string[] {
-  return (text.normalize("NFKC").toLowerCase().replace(/ё/gu, "е").replace(SIZE_OR_NUMBER, " ").match(/[а-яa-z-]+/gu) ?? [])
+  return (
+    text
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/ё/gu, "е")
+      .replace(SIZE_OR_NUMBER, " ")
+      .match(/[а-яa-z-]+/gu) ?? []
+  )
     .flatMap((word) => word.split("-"))
     .filter((word) => word.length >= MIN_WORD_LENGTH && !STOP_STEMS.has(stemRussian(word)));
 }
@@ -153,7 +372,9 @@ export function repeatedPromptElements(
 ): string[] {
   const current = promptElements(prompt);
   const earlier = new Set(previous.flatMap((text) => [...promptElements(text).keys()]));
-  const kept = new Set(keep.flatMap((text) => contentWords(text.replace(QUOTED, " ")).map(stemRussian)));
+  const kept = new Set(
+    keep.flatMap((text) => contentWords(text.replace(QUOTED, " ")).map(stemRussian)),
+  );
   const repeated: string[] = [];
   for (const [key, phrase] of current) {
     if (!earlier.has(key)) continue;
@@ -170,7 +391,10 @@ export interface ImagePromptSeries {
 }
 
 /** Last prompts per application session; a lost process means a fresh series, nothing worse. */
-export function createImagePromptSeries(maxSessions: number = SERIES_MAX_SESSIONS, maxPrompts: number = SERIES_MAX_PROMPTS): ImagePromptSeries {
+export function createImagePromptSeries(
+  maxSessions: number = SERIES_MAX_SESSIONS,
+  maxPrompts: number = SERIES_MAX_PROMPTS,
+): ImagePromptSeries {
   const sessions = new Map<string, string[]>();
   return {
     previous(sessionKey) {

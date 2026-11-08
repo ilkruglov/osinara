@@ -73,11 +73,14 @@ export async function validateReadableTextAttachmentContent(input: {
   kind: "document" | "photo";
 }): Promise<ValidatedAttachmentContent> {
   const fileName = sanitizeAttachmentFileName(input.fileName);
-  if (!isReadableTextDocumentCandidate({
-    fileName,
-    kind: input.kind,
-    ...(input.declaredMediaType ? { mediaType: input.declaredMediaType } : {}),
-  })) throw textRequired();
+  if (
+    !isReadableTextDocumentCandidate({
+      fileName,
+      kind: input.kind,
+      ...(input.declaredMediaType ? { mediaType: input.declaredMediaType } : {}),
+    })
+  )
+    throw textRequired();
   const expectedMediaType = EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES[extname(fileName).toLowerCase()]!;
   const detected = await fileTypeFromBuffer(input.bytes);
   // `file-type` recognizes XML despite its textual payload. Accept only an exact allowlisted match;
@@ -100,11 +103,16 @@ export async function validateReadableTextAttachmentContent(input: {
 
 function sanitizeAttachmentFileName(fileName: string): string {
   // NFKC first: it turns fullwidth `／` and `＼` into separators, which the base name must see.
-  const normalized = posix.basename(fileName.normalize("NFKC").replaceAll("\\", "/"))
+  const normalized = posix
+    .basename(fileName.normalize("NFKC").replaceAll("\\", "/"))
     // oxlint-disable-next-line eslint/no-control-regex -- control characters are exactly what is stripped
-    .replace(/[\u0000-\u001f\u007f]/gu, "_").trim();
+    .replace(/[\u0000-\u001f\u007f]/gu, "_")
+    .trim();
   if (!normalized || normalized === "." || normalized === "..") {
-    throw new AppError("AGENT_ATTACHMENT_FILENAME_INVALID", "Telegram передал некорректное имя файла");
+    throw new AppError(
+      "AGENT_ATTACHMENT_FILENAME_INVALID",
+      "Telegram передал некорректное имя файла",
+    );
   }
   if (utf8Bytes(normalized) <= ATTACHMENT_FILENAME_MAX_BYTES) return normalized;
 

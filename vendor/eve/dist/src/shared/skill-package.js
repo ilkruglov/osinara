@@ -1,18 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import {
-  resolveSandboxSkillRoot,
-  resolveSandboxSkillWritePath,
-} from "#shared/skill-paths.js";
+import { resolveSandboxSkillRoot, resolveSandboxSkillWritePath } from "#shared/skill-paths.js";
 import { Buffer } from "node:buffer";
 function normalizeSkillPackage(e) {
   assertSafeSkillPackageName(e.name);
-  let t = [
-    { content: Buffer.from(e.markdown, `utf8`), relativePath: `SKILL.md` },
-  ];
+  let t = [{ content: Buffer.from(e.markdown, `utf8`), relativePath: `SKILL.md` }];
   for (let [n, r] of Object.entries(e.files ?? {}))
-    (assertSafeSkillPackageFilePath(n),
-      t.push({ content: contentToBuffer(r), relativePath: n }));
+    (assertSafeSkillPackageFilePath(n), t.push({ content: contentToBuffer(r), relativePath: n }));
   return (
     t.sort((e, t) => comparePaths(e.relativePath, t.relativePath)),
     {
@@ -70,9 +64,7 @@ function assertSafeSkillPackageName(e) {
 }
 function assertSafeSkillPackageFilePath(e) {
   if (e === `SKILL.md`)
-    throw Error(
-      `Skill package files must not include "SKILL.md"; eve generates it.`,
-    );
+    throw Error(`Skill package files must not include "SKILL.md"; eve generates it.`);
   if (
     e.length === 0 ||
     e.startsWith(`/`) ||
@@ -80,9 +72,7 @@ function assertSafeSkillPackageFilePath(e) {
     /^[A-Za-z]:/.test(e) ||
     e.split(`/`).some((e) => e.length === 0 || e === `.` || e === `..`)
   )
-    throw Error(
-      `Expected skill package file paths to be relative POSIX paths.`,
-    );
+    throw Error(`Expected skill package file paths to be relative POSIX paths.`);
 }
 function contentToBuffer(e) {
   return typeof e == `string` ? Buffer.from(e, `utf8`) : Buffer.from(e);

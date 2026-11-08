@@ -1,13 +1,8 @@
-import {
-  GREP_INPUT_SCHEMA,
-  GREP_OUTPUT_SCHEMA,
-} from "#runtime/framework-tools/grep.js";
+import { GREP_INPUT_SCHEMA, GREP_OUTPUT_SCHEMA } from "#runtime/framework-tools/grep.js";
 import { executeGrepOnSandbox } from "#execution/sandbox/grep-tool.js";
 function defineGrepTool(n = {}) {
   return {
-    description:
-      n.description ??
-      `Search file contents by pattern in the workspace sandbox.`,
+    description: n.description ?? `Search file contents by pattern in the workspace sandbox.`,
     async execute(e, t) {
       return executeGrepOnSandbox(await t.getSandbox(), e);
     },

@@ -12,11 +12,7 @@ import { fileTypeFromBuffer } from "file-type";
 
 import { AppError } from "../app-error.js";
 
-const VISION_IMAGE_MEDIA_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const VISION_IMAGE_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const VISION_IMAGE_EXTENSIONS = new Set([".jpeg", ".jpg", ".png", ".webp"]);
 
@@ -24,9 +20,11 @@ export function isTelegramImageDocumentCandidate(
   attachment: Pick<TelegramAttachment, "fileName" | "kind" | "mediaType">,
 ): boolean {
   if (attachment.kind !== "document") return false;
-  return attachment.mediaType?.toLowerCase().startsWith("image/") === true ||
+  return (
+    attachment.mediaType?.toLowerCase().startsWith("image/") === true ||
     (attachment.fileName !== undefined &&
-      VISION_IMAGE_EXTENSIONS.has(extname(attachment.fileName).toLowerCase()));
+      VISION_IMAGE_EXTENSIONS.has(extname(attachment.fileName).toLowerCase()))
+  );
 }
 
 export async function validateVisionImageBytes(bytes: Uint8Array): Promise<string> {

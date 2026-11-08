@@ -26,8 +26,4 @@ function migrateTurnWorkflowInput(t) {
     value: t,
   });
 }
-export {
-  TURN_WORKFLOW_INPUT_VERSION,
-  createTurnWorkflowInput,
-  migrateTurnWorkflowInput,
-};
+export { TURN_WORKFLOW_INPUT_VERSION, createTurnWorkflowInput, migrateTurnWorkflowInput };

@@ -6,8 +6,7 @@ function summarizeToolArgs(t, n = 80) {
   let r = Object.entries(t);
   if (r.length === 0) return ``;
   let i = [];
-  for (let [t, n] of r)
-    i.push(`${stripTerminalControls(t)}=${formatInlineValue(n)}`);
+  for (let [t, n] of r) i.push(`${stripTerminalControls(t)}=${formatInlineValue(n)}`);
   return truncate(i.join(`  `), n);
 }
 function summarizeToolResult(e, t = 80) {
@@ -25,13 +24,11 @@ function summarizeToolResult(e, t = 80) {
       t,
     );
   if (typeof e != `object`) return truncate(formatScalar(e), t);
-  if (Array.isArray(e))
-    return truncate(`${e.length} ${e.length === 1 ? `item` : `items`}`, t);
+  if (Array.isArray(e)) return truncate(`${e.length} ${e.length === 1 ? `item` : `items`}`, t);
   let n = e;
   for (let e of [`result`, `text`, `message`, `summary`, `value`, `output`]) {
     let r = n[e];
-    if (r !== void 0 && typeof r != `object`)
-      return truncate(`${formatScalar(r)}`, t);
+    if (r !== void 0 && typeof r != `object`) return truncate(`${formatScalar(r)}`, t);
   }
   let r = Object.keys(n);
   if (r.length === 0) return `{}`;

@@ -12,4 +12,6 @@ export declare function serializeContext(ctx: AlsContext): Record<string, unknow
  * Each entry is matched to a registered {@link ContextKey} by name.
  * Unknown entries (no registered key) are dropped with a warning.
  */
-export declare function deserializeContext(data: Record<string, unknown>): Promise<ContextContainer>;
+export declare function deserializeContext(
+  data: Record<string, unknown>,
+): Promise<ContextContainer>;

@@ -14,8 +14,8 @@
  */
 /** What one destination is willing to receive. */
 export interface ResolvedContentOptions {
-    readonly recordInputs: boolean;
-    readonly recordOutputs: boolean;
+  readonly recordInputs: boolean;
+  readonly recordOutputs: boolean;
 }
 /**
  * The attributes with the declined content removed, or `undefined` when there
@@ -25,4 +25,7 @@ export interface ResolvedContentOptions {
  * untouched in the common case, so a destination that declined a direction the
  * span never carried costs one pass over its keys and no allocation.
  */
-export declare function withoutDeclinedContent(attributes: Readonly<Record<string, unknown>>, content: ResolvedContentOptions): Record<string, unknown> | undefined;
+export declare function withoutDeclinedContent(
+  attributes: Readonly<Record<string, unknown>>,
+  content: ResolvedContentOptions,
+): Record<string, unknown> | undefined;

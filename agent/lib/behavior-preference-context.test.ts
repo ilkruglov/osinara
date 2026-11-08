@@ -131,8 +131,10 @@ describe("requireBehaviorPreferenceAuthorization", () => {
     );
 
     // Metadata from a scheduled initiator cannot be combined with an ordinary current caller.
-    expect(() => requireBehaviorPreferenceReadAuthorization(
-      context(validAttributes, "telegram", scheduledAttributes),
-    )).toThrowError(/AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID/u);
+    expect(() =>
+      requireBehaviorPreferenceReadAuthorization(
+        context(validAttributes, "telegram", scheduledAttributes),
+      ),
+    ).toThrowError(/AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID/u);
   });
 });

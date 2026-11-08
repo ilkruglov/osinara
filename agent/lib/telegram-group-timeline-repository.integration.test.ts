@@ -15,9 +15,8 @@ import { telegramGroupJournalRepository as productionTelegramGroupJournalReposit
 import { recordVerifiedHumanTelegramMessage } from "./telegram-group-journal.integration-fixtures.js";
 import { sessionRepository } from "./sessions/session-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 // Existing timeline tests use only verified human fixtures; retain agent-response operations while
 // routing inbound writes through the actor-validating test boundary.
@@ -34,12 +33,14 @@ function message(id: string, replyToMessageId?: string): TelegramMessage {
     from: { firstName: "Анна", id: "101", isBot: false },
     messageId: id,
     raw: { date: 1_700_000_000 + Number(id) },
-    ...(replyToMessageId === undefined ? {} : {
-      replyToMessage: {
-        chat: { id: "-1001", title: "Группа", type: "supergroup" },
-        messageId: replyToMessageId,
-      },
-    }),
+    ...(replyToMessageId === undefined
+      ? {}
+      : {
+          replyToMessage: {
+            chat: { id: "-1001", title: "Группа", type: "supergroup" },
+            messageId: replyToMessageId,
+          },
+        }),
     text: `message-${id}`,
   };
 }
@@ -96,10 +97,19 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     expect(reply.sequenceId).toBe("3");
     expect(reply.replyToAgent).toBe(true);
     const entries = await telegramGroupJournalRepository.listRecent({
-      anchorEntryId: null, beforeSequence: null, groupId, limit: 50, messageThreadId: null,
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId,
+      limit: 50,
+      messageThreadId: null,
     });
-    expect(entries.map((entry) => [entry.sequenceId, entry.actorKind, entry.replyToSequenceId]))
-      .toEqual([["1", "user", null], ["2", "agent_self", "1"], ["3", "user", "2"]]);
+    expect(
+      entries.map((entry) => [entry.sequenceId, entry.actorKind, entry.replyToSequenceId]),
+    ).toEqual([
+      ["1", "user", null],
+      ["2", "agent_self", "1"],
+      ["3", "user", "2"],
+    ]);
     expect(entries[1]?.senderDisplayName).toBe("Мия");
   });
 
@@ -147,7 +157,10 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
 
   it("does not reset the sequence after physical pruning", async () => {
     const groupId = await group();
-    await database().query("UPDATE telegram_groups SET next_timeline_sequence = 1000 WHERE id = $1", [groupId]);
+    await database().query(
+      "UPDATE telegram_groups SET next_timeline_sequence = 1000 WHERE id = $1",
+      [groupId],
+    );
 
     const result = await telegramGroupJournalRepository.record(groupId, message("1001"));
 
@@ -253,8 +266,10 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     });
 
     expect(page.omittedBeforeSequence).toBeNull();
-    expect(page.entries.map((entry) => [entry.telegramMessageId, entry.actorKind]))
-      .toEqual([["12", "user"], ["13", "agent_self"]]);
+    expect(page.entries.map((entry) => [entry.telegramMessageId, entry.actorKind])).toEqual([
+      ["12", "user"],
+      ["13", "agent_self"],
+    ]);
   });
 
   it("marks an incremental gap when unseen history exceeds the context limit", async () => {

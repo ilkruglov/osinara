@@ -9,27 +9,27 @@ import type { CompiledRuntimeAgentBundle } from "#runtime/sessions/compiled-agen
  * default session.
  */
 export interface RuntimeSession {
-    /**
-     * Diagnostic identifier (e.g. `"process-default"` or a test-provided label).
-     * Used for logs and error messages; not relied on for dispatch.
-     */
-    readonly id: string;
-    /**
-     * The installed bundled compiled-artifact snapshot, or `null` when no
-     * snapshot has been installed in this session yet.
-     */
-    compiledArtifacts: BundledCompiledArtifacts | null;
-    /**
-     * Cache of resolved compiled-agent bundles, keyed by the versioned cache key
-     * derived from the compiled-artifact source.
-     */
-    readonly bundleCache: Map<string, Promise<CompiledRuntimeAgentBundle>>;
-    /**
-     * Reverse index from the stable source key to the currently active versioned
-     * cache key. Used to evict the previous entry when a source's version
-     * changes.
-     */
-    readonly bundleCacheKeyBySourceKey: Map<string, string>;
+  /**
+   * Diagnostic identifier (e.g. `"process-default"` or a test-provided label).
+   * Used for logs and error messages; not relied on for dispatch.
+   */
+  readonly id: string;
+  /**
+   * The installed bundled compiled-artifact snapshot, or `null` when no
+   * snapshot has been installed in this session yet.
+   */
+  compiledArtifacts: BundledCompiledArtifacts | null;
+  /**
+   * Cache of resolved compiled-agent bundles, keyed by the versioned cache key
+   * derived from the compiled-artifact source.
+   */
+  readonly bundleCache: Map<string, Promise<CompiledRuntimeAgentBundle>>;
+  /**
+   * Reverse index from the stable source key to the currently active versioned
+   * cache key. Used to evict the previous entry when a source's version
+   * changes.
+   */
+  readonly bundleCacheKeyBySourceKey: Map<string, string>;
 }
 /**
  * Creates a fresh, empty runtime session.
@@ -49,4 +49,7 @@ export declare function getActiveRuntimeSession(): RuntimeSession;
  * inside it. Concurrent callers each observe their own session. The
  * process-default session is untouched.
  */
-export declare function withRuntimeSession<T>(session: RuntimeSession, fn: () => Promise<T> | T): Promise<T>;
+export declare function withRuntimeSession<T>(
+  session: RuntimeSession,
+  fn: () => Promise<T> | T,
+): Promise<T>;

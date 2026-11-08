@@ -1,12 +1,9 @@
 import { queueDeferredStepInput } from "#harness/pending-input-batches.js";
 function responsesForBatches(e, t) {
-  return e.filter((e) =>
-    t.some((t) => t.requests.some((t) => t.requestId === e.requestId)),
-  );
+  return e.filter((e) => t.some((t) => t.requests.some((t) => t.requestId === e.requestId)));
 }
 function appendResolvedBatchTranscript(e, t, n) {
-  (e.push(...t.responseMessages),
-    n.length > 0 && e.push({ content: [...n], role: `tool` }));
+  (e.push(...t.responseMessages), n.length > 0 && e.push({ content: [...n], role: `tool` }));
 }
 function finishResolvedInput(t) {
   let n = {};
@@ -15,8 +12,7 @@ function finishResolvedInput(t) {
     t.deferTurnInput &&
       ((t.resolvedStepInput?.context?.length ?? 0) > 0 &&
         (n.context = t.resolvedStepInput?.context),
-      t.resolvedStepInput?.message !== void 0 &&
-        (n.message = t.resolvedStepInput.message)),
+      t.resolvedStepInput?.message !== void 0 && (n.message = t.resolvedStepInput.message)),
     Object.keys(n).length > 0
       ? {
           consumedMessage: t.resolvedStepInput?.messageConsumed,
@@ -45,8 +41,7 @@ function compactStepInput(e) {
   let t = {};
   return (
     (e.context?.length ?? 0) > 0 && (t.context = e.context),
-    (e.inputResponses?.length ?? 0) > 0 &&
-      (t.inputResponses = e.inputResponses),
+    (e.inputResponses?.length ?? 0) > 0 && (t.inputResponses = e.inputResponses),
     e.message !== void 0 && (t.message = e.message),
     e.messageConsumed === !0 && (t.messageConsumed = !0),
     e.outputSchema !== void 0 && (t.outputSchema = e.outputSchema),

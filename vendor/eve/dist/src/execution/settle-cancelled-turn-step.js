@@ -1,13 +1,7 @@
 import { callAdapterEventHandler } from "#channel/adapter.js";
 import { ChannelInstrumentationKey } from "#context/keys.js";
-import {
-  encodeMessageStreamEvent,
-  stampMessageStreamEvent,
-} from "#protocol/message.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { encodeMessageStreamEvent, stampMessageStreamEvent } from "#protocol/message.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 import {
   getHarnessEmissionState,
   isHarnessBetweenTurns,
@@ -15,10 +9,7 @@ import {
 } from "#harness/emission.js";
 import { abandonRunningAgentTurns } from "#harness/handles/transitions.js";
 import { deserializeContext, serializeContext } from "#context/serialize.js";
-import {
-  createDurableSessionState,
-  readDurableSession,
-} from "#execution/durable-session-store.js";
+import { createDurableSessionState, readDurableSession } from "#execution/durable-session-store.js";
 import { hydrateDurableSession } from "#execution/session.js";
 import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
 import { buildAdapterContext } from "#channel/adapter-context.js";
@@ -54,9 +45,7 @@ async function settleCancelledTurnStep(a) {
       turnAgent: d.turnAgent,
     }),
     m = getHarnessEmissionState(o.state),
-    h = [...getProxyInputRequests(o.state).values()].some(
-      (e) => e.kind === `session-limit`,
-    );
+    h = [...getProxyInputRequests(o.state).values()].some((e) => e.kind === `session-limit`);
   if (!(isHarnessBetweenTurns(p) && hasProxyInputRequests(o.state) && !h)) {
     let n = a.parentWritable.getWriter();
     try {

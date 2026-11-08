@@ -13,7 +13,9 @@ const ADMIN_URL = "postgresql://osinara:owner-secret@postgres:5432/osinara";
 
 describe("requireAppDatabaseConfig", () => {
   it("accepts the app role on the migration connection's database and decodes the password", () => {
-    expect(requireAppDatabaseConfig(ADMIN_URL, "postgresql://osinara_app:a%27b@postgres:5432/osinara")).toEqual({
+    expect(
+      requireAppDatabaseConfig(ADMIN_URL, "postgresql://osinara_app:a%27b@postgres:5432/osinara"),
+    ).toEqual({
       database: "osinara",
       password: "a'b",
     });
@@ -32,9 +34,11 @@ describe("requireAppDatabaseConfig", () => {
   });
 
   it("refuses when the migration connection is the app role itself", () => {
-    expect(() => requireAppDatabaseConfig(
-      "postgresql://osinara_app:x@postgres:5432/osinara",
-      "postgresql://osinara_app:x@postgres:5432/osinara",
-    )).toThrowError(/AGENT_APP_DATABASE_BOUNDARY_INVALID/u);
+    expect(() =>
+      requireAppDatabaseConfig(
+        "postgresql://osinara_app:x@postgres:5432/osinara",
+        "postgresql://osinara_app:x@postgres:5432/osinara",
+      ),
+    ).toThrowError(/AGENT_APP_DATABASE_BOUNDARY_INVALID/u);
   });
 });

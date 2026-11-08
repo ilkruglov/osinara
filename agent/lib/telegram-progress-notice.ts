@@ -41,12 +41,14 @@ export async function deliverTelegramProgressNotice(input: {
     }
   } catch (error) {
     // The answer this notice announces is still being produced: never fail the turn over a notice.
-    console.error(JSON.stringify({
-      code: "AGENT_TELEGRAM_PROGRESS_NOTICE_FAILED",
-      errorCode: isAppError(error) ? error.code : null,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      stepIndex: input.stepIndex,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_PROGRESS_NOTICE_FAILED",
+        errorCode: isAppError(error) ? error.code : null,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        stepIndex: input.stepIndex,
+      }),
+    );
   }
   return sentMessageIds;
 }

@@ -27,9 +27,12 @@ export interface TelegramFinalPresentationChunk {
   readonly text: string;
 }
 
-const RICH_BLOCK_PATTERN = /(?:^|\n)(?:#{2,3}\s|>\s|[-+*]\s|\d+\.\s|- \[[ xX]\]\s|```|\$\$\s*$|---\s*$|\|[^\n]*\|\s*$)/mu;
-const GFM_TABLE_DELIMITER_PATTERN = /(?:^|\n)\s*:?-{3,}:?\s*\|\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*\s*(?:$|\n)/mu;
-const RICH_INLINE_PATTERN = /(?:\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|\|\|[^|\n]+\|\||`[^`\n]+`|\[[^\]\n]+\]\([^\s)]+\)|<(?:details(?:\s+open)?|summary|u|ins|sub|sup)>|<\/(?:details|summary|u|ins|sub|sup)>)/iu;
+const RICH_BLOCK_PATTERN =
+  /(?:^|\n)(?:#{2,3}\s|>\s|[-+*]\s|\d+\.\s|- \[[ xX]\]\s|```|\$\$\s*$|---\s*$|\|[^\n]*\|\s*$)/mu;
+const GFM_TABLE_DELIMITER_PATTERN =
+  /(?:^|\n)\s*:?-{3,}:?\s*\|\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*\s*(?:$|\n)/mu;
+const RICH_INLINE_PATTERN =
+  /(?:\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|\|\|[^|\n]+\|\||`[^`\n]+`|\[[^\]\n]+\]\([^\s)]+\)|<(?:details(?:\s+open)?|summary|u|ins|sub|sup)>|<\/(?:details|summary|u|ins|sub|sup)>)/iu;
 const RICH_ITALIC_PATTERN = /(?:^|[^\p{L}\p{N}_])(?:\*[^*\n]+\*|_[^_\n]+_)(?=$|[^\p{L}\p{N}_])/u;
 const RICH_MATH_PATTERN = /\$(?:[\\\p{L}][^$\n]*|[^$\n]*[=+*/^_-][^$\n]*)\$(?![\p{L}\p{N}])/u;
 const LONG_ANSWER_MAX_CHARACTERS = 600;
@@ -42,10 +45,12 @@ function usesSupportedRichBlockFormatting(markdown: string): boolean {
 }
 
 function usesSupportedRichFormatting(markdown: string): boolean {
-  return usesSupportedRichBlockFormatting(markdown) ||
+  return (
+    usesSupportedRichBlockFormatting(markdown) ||
     RICH_INLINE_PATTERN.test(markdown) ||
     RICH_ITALIC_PATTERN.test(markdown) ||
-    RICH_MATH_PATTERN.test(markdown);
+    RICH_MATH_PATTERN.test(markdown)
+  );
 }
 
 function characterLength(value: string): number {
@@ -58,7 +63,8 @@ function characterLength(value: string): number {
  * screen than one 600-character paragraph and used to hide behind "Полный ответ" anyway.
  */
 function isLongAnswer(markdown: string): boolean {
-  const structuredBlock = /(?:^|\n)```/u.test(markdown) ||
+  const structuredBlock =
+    /(?:^|\n)```/u.test(markdown) ||
     /(?:^|\n)\|[^\n]*\|\s*$/mu.test(markdown) ||
     GFM_TABLE_DELIMITER_PATTERN.test(markdown);
   return characterLength(markdown) > LONG_ANSWER_MAX_CHARACTERS || structuredBlock;
@@ -66,17 +72,18 @@ function isLongAnswer(markdown: string): boolean {
 
 /** A lead is a short prose paragraph; a column of short lines (verse, a list) is not cut in two. */
 function isProseLead(block: string): boolean {
-  return characterLength(block) <= LONG_ANSWER_LEAD_MAX_CHARACTERS &&
+  return (
+    characterLength(block) <= LONG_ANSWER_LEAD_MAX_CHARACTERS &&
     block.split("\n").length <= LONG_ANSWER_LEAD_MAX_LINES &&
-    !usesSupportedRichBlockFormatting(block);
+    !usesSupportedRichBlockFormatting(block)
+  );
 }
 
 function neutralizeMalformedDetails(markdown: string): string {
   return markdown.replace(
     /```[\s\S]*?(?:```|$)|`[^`\n]*`|<\/?(?:details|summary)(?:\s[^>]*)?>/giu,
-    (value) => value.startsWith("`")
-      ? value
-      : value.replaceAll("<", "&lt;").replaceAll(">", "&gt;"),
+    (value) =>
+      value.startsWith("`") ? value : value.replaceAll("<", "&lt;").replaceAll(">", "&gt;"),
   );
 }
 
@@ -99,15 +106,21 @@ function formatPart(
   pacing: TelegramChunkPacing,
 ): TelegramFinalPresentationChunk[] {
   // Only the opening chunk carries the pause: a provider-sized overflow is the same utterance.
-  const chunkPacing = (index: number): TelegramChunkPacing => index === 0 ? pacing : "immediate";
+  const chunkPacing = (index: number): TelegramChunkPacing => (index === 0 ? pacing : "immediate");
 
   // Plain text uses Telegram's ordinary 4096-character transport and never receives parse mode.
   if (!usesSupportedRichFormatting(markdown)) {
-    return splitTelegramMessageText(markdown)
-      .map((text, index) => ({ format: "plain", pacing: chunkPacing(index), text }));
+    return splitTelegramMessageText(markdown).map((text, index) => ({
+      format: "plain",
+      pacing: chunkPacing(index),
+      text,
+    }));
   }
-  return formatTelegramRichMessages(markdown)
-    .map((text, index) => ({ format: "rich", pacing: chunkPacing(index), text }));
+  return formatTelegramRichMessages(markdown).map((text, index) => ({
+    format: "rich",
+    pacing: chunkPacing(index),
+    text,
+  }));
 }
 
 export function formatTelegramFinalPresentation(

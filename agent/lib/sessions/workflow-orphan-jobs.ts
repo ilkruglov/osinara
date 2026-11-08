@@ -26,7 +26,10 @@ const ORPHAN_JOB_GRACE_MINUTES = 10;
 const ORPHAN_JOB_SCAN_LIMIT = 1000;
 
 interface WorkflowQueryClient {
-  query(text: string, values?: readonly unknown[]): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
+  query(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
 }
 
 function orphanCandidateRunId(data: unknown): string | undefined {
@@ -67,12 +70,20 @@ export async function releaseOrphanWorkflowJobs(
   if (runIdByJob.size === 0) return { released: 0, nextAfterId };
 
   const runIds = [...new Set(runIdByJob.values())].sort();
-  const live = await client.query("SELECT id::text AS id FROM workflow.workflow_runs WHERE id = ANY($1::text[])", [runIds]);
+  const live = await client.query(
+    "SELECT id::text AS id FROM workflow.workflow_runs WHERE id = ANY($1::text[])",
+    [runIds],
+  );
   const liveRunIds = new Set(live.rows.map((row) => row.id));
-  const orphanJobIds = [...runIdByJob].filter(([, runId]) => !liveRunIds.has(runId)).map(([jobId]) => jobId);
+  const orphanJobIds = [...runIdByJob]
+    .filter(([, runId]) => !liveRunIds.has(runId))
+    .map(([jobId]) => jobId);
   if (orphanJobIds.length === 0) return { released: 0, nextAfterId };
 
-  const completed = await client.query("SELECT id FROM graphile_worker.complete_jobs($1::bigint[])", [orphanJobIds]);
+  const completed = await client.query(
+    "SELECT id FROM graphile_worker.complete_jobs($1::bigint[])",
+    [orphanJobIds],
+  );
   const released = completed.rowCount ?? 0;
   console.info(JSON.stringify({ code: "AGENT_WORKFLOW_ORPHAN_JOBS_RELEASED", released }));
   return { released, nextAfterId };

@@ -20,7 +20,11 @@ type ProcessingOperations = Pick<
 
 export const telegramIngressProcessingRepository: ProcessingOperations = {
   async beginVoiceTranscription(updateId, leaseToken) {
-    requireUuid(leaseToken, "AGENT_TELEGRAM_LEASE_INVALID", "Токен аренды обработки Telegram имеет некорректный формат");
+    requireUuid(
+      leaseToken,
+      "AGENT_TELEGRAM_LEASE_INVALID",
+      "Токен аренды обработки Telegram имеет некорректный формат",
+    );
     const started = await database().query(
       `UPDATE telegram_ingress_updates
        SET voice_transcription_started_at = now(), updated_at = now()
@@ -45,7 +49,10 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
     );
     const row = existing.rows[0];
     if (!row?.active) {
-      throw new AppError("AGENT_TELEGRAM_LEASE_LOST", "Срок обработки голосового сообщения истёк. Операция остановлена");
+      throw new AppError(
+        "AGENT_TELEGRAM_LEASE_LOST",
+        "Срок обработки голосового сообщения истёк. Операция остановлена",
+      );
     }
     if (row.voice_transcript) return "completed";
     if (row.voice_transcription_started_at) {
@@ -54,11 +61,18 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
         "Распознавание голосового сообщения было прервано. Отправьте запись повторно",
       );
     }
-    throw new AppError("AGENT_TELEGRAM_VOICE_INVALID", "Для сообщения не найдены данные голосовой записи");
+    throw new AppError(
+      "AGENT_TELEGRAM_VOICE_INVALID",
+      "Для сообщения не найдены данные голосовой записи",
+    );
   },
 
   async beginDispatch(updateId, leaseToken) {
-    requireUuid(leaseToken, "AGENT_TELEGRAM_LEASE_INVALID", "Токен аренды обработки Telegram имеет некорректный формат");
+    requireUuid(
+      leaseToken,
+      "AGENT_TELEGRAM_LEASE_INVALID",
+      "Токен аренды обработки Telegram имеет некорректный формат",
+    );
     const started = await database().query(
       `UPDATE telegram_ingress_updates
        SET dispatch_started_at = now(), updated_at = now()
@@ -75,7 +89,10 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
       [updateId, leaseToken],
     );
     if (!existing.rows[0]?.active) {
-      throw new AppError("AGENT_TELEGRAM_LEASE_LOST", "Срок передачи сообщения в Eve истёк. Операция остановлена");
+      throw new AppError(
+        "AGENT_TELEGRAM_LEASE_LOST",
+        "Срок передачи сообщения в Eve истёк. Операция остановлена",
+      );
     }
     throw new AppError(
       "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
@@ -87,8 +104,16 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
 
   async saveVoiceTranscript(updateId, leaseToken, transcript) {
     const normalizedTranscript = transcript.trim();
-    requireNonEmpty(normalizedTranscript, "AGENT_VOICE_TRANSCRIPT_EMPTY", "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз");
-    requireUuid(leaseToken, "AGENT_TELEGRAM_LEASE_INVALID", "Токен аренды обработки Telegram имеет некорректный формат");
+    requireNonEmpty(
+      normalizedTranscript,
+      "AGENT_VOICE_TRANSCRIPT_EMPTY",
+      "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз",
+    );
+    requireUuid(
+      leaseToken,
+      "AGENT_TELEGRAM_LEASE_INVALID",
+      "Токен аренды обработки Telegram имеет некорректный формат",
+    );
     const result = await database().query<{ voice_transcript: string }>(
       `UPDATE telegram_ingress_updates
        SET voice_transcript = COALESCE(voice_transcript, $3),
@@ -101,10 +126,16 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
     );
     const persisted = result.rows[0]?.voice_transcript;
     if (!persisted) {
-      throw new AppError("AGENT_TELEGRAM_LEASE_LOST", "Срок обработки голосового сообщения истёк. Результат не был сохранён");
+      throw new AppError(
+        "AGENT_TELEGRAM_LEASE_LOST",
+        "Срок обработки голосового сообщения истёк. Результат не был сохранён",
+      );
     }
     if (persisted !== normalizedTranscript) {
-      throw new AppError("AGENT_VOICE_TRANSCRIPT_CONFLICT", "Для голосового сообщения уже сохранён другой результат распознавания. Обработка остановлена");
+      throw new AppError(
+        "AGENT_VOICE_TRANSCRIPT_CONFLICT",
+        "Для голосового сообщения уже сохранён другой результат распознавания. Обработка остановлена",
+      );
     }
   },
 };

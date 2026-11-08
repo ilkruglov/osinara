@@ -40,7 +40,7 @@ function processHarness(
   const container = {
     exec: vi.fn(async () => exec),
     inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
-      top: vi.fn(async () => ({ Processes: [] })),
+    top: vi.fn(async () => ({ Processes: [] })),
     remove,
   };
   const docker = {
@@ -67,22 +67,34 @@ describe("Docker sandbox process lifecycle", () => {
   it("bounds commands by default and reports GNU timeout termination", async () => {
     const harness = processHarness({ ExitCode: 124, Running: false });
 
-    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "sleep infinity" }))
-      .resolves.toMatchObject({
-        exitCode: 124,
-        stderr: expect.stringContaining("AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT"),
-      });
-    expect(harness.container.exec).toHaveBeenCalledWith(expect.objectContaining({
-      // By absolute path: the head of the container's PATH is the model's to write.
-      Cmd: ["/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "120", "/bin/bash", "-c", "sleep infinity"],
-    }));
+    await expect(
+      harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "sleep infinity" }),
+    ).resolves.toMatchObject({
+      exitCode: 124,
+      stderr: expect.stringContaining("AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT"),
+    });
+    expect(harness.container.exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // By absolute path: the head of the container's PATH is the model's to write.
+        Cmd: [
+          "/usr/bin/timeout",
+          "--signal=TERM",
+          "--kill-after=5s",
+          "120",
+          "/bin/bash",
+          "-c",
+          "sleep infinity",
+        ],
+      }),
+    );
   });
 
   it("removes disposable compute when an aborted exec is still running", async () => {
     const harness = processHarness({ ExitCode: null, Running: true });
 
-    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "stuck-command" }))
-      .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_PROCESS_STATE_INVALID/);
+    await expect(
+      harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "stuck-command" }),
+    ).rejects.toThrowError(/AGENT_SANDBOX_RUNNER_PROCESS_STATE_INVALID/);
     expect(harness.remove).toHaveBeenCalledWith({ force: true, v: true });
   });
 
@@ -92,8 +104,9 @@ describe("Docker sandbox process lifecycle", () => {
       SANDBOX_RUNNER_MAX_OUTPUT_BYTES + 1,
     );
 
-    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }))
-      .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
+    await expect(
+      harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }),
+    ).rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
     expect(harness.source.destroyed).toBe(true);
     expect(harness.remove).toHaveBeenCalledWith({ force: true, v: true });
   });
@@ -107,8 +120,9 @@ describe("Docker sandbox process lifecycle", () => {
     );
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }))
-      .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
+    await expect(
+      harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }),
+    ).rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
     expect(log).toHaveBeenCalledWith("Sandbox process cleanup failed after primary error", {
       cleanupError: expect.objectContaining({
         cause: cleanupError,

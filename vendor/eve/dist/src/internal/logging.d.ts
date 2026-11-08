@@ -29,10 +29,10 @@ type LogFields = Readonly<Record<string, unknown>>;
  * associate related lines should pass the same `errorId` on each call.
  */
 export interface Logger {
-    debug(message: string, fields?: LogFields): void;
-    info(message: string, fields?: LogFields): void;
-    warn(message: string, fields?: LogFields): void;
-    error(message: string, fields?: LogFields): void;
+  debug(message: string, fields?: LogFields): void;
+  info(message: string, fields?: LogFields): void;
+  warn(message: string, fields?: LogFields): void;
+  error(message: string, fields?: LogFields): void;
 }
 /**
  * Builds a logger bound to a stable namespace (e.g. `"slack.route"` or
@@ -50,7 +50,12 @@ export declare function createLogger(namespace: string): Logger;
  * plain objects that crossed a workflow step boundary) that the bare logger
  * would otherwise emit without a `detail` dump.
  */
-export declare function logError(logger: Logger, message: string, error: unknown, fields?: LogFields): string;
+export declare function logError(
+  logger: Logger,
+  message: string,
+  error: unknown,
+  fields?: LogFields,
+): string;
 /**
  * Generates a stable, opaque identifier for one error instance.
  *
@@ -92,8 +97,8 @@ export declare function extractErrorId(details: unknown): string | undefined;
  * structured error name nor message is useful.
  */
 export declare function formatErrorHint(event: {
-    readonly message?: string;
-    readonly details?: unknown;
+  readonly message?: string;
+  readonly details?: unknown;
 }): string;
 /**
  * Records an error on an OTel span and sets the span status to ERROR.
@@ -113,10 +118,10 @@ export declare function isLogLevelEnabled(level: LogLevel): boolean;
  * `formatError` shape — so subscribers receive JSON, never live objects.
  */
 export interface LogRecord {
-    readonly level: LogLevel;
-    readonly namespace: string;
-    readonly message: string;
-    readonly fields?: JsonObject;
+  readonly level: LogLevel;
+  readonly namespace: string;
+  readonly message: string;
+  readonly fields?: JsonObject;
 }
 /**
  * Registers the process-wide structured log subscriber, replacing any
@@ -130,7 +135,9 @@ export interface LogRecord {
  * console so a broken subscriber can never swallow logs. Single slot by
  * design — one interactive host per process.
  */
-export declare function setLogRecordSubscriber(subscriber: ((record: LogRecord) => void) | undefined): void;
+export declare function setLogRecordSubscriber(
+  subscriber: ((record: LogRecord) => void) | undefined,
+): void;
 /**
  * Renders a throwable's full cause chain via `util.inspect`, bounded to
  * the logger's inline-detail budget. Exported for callers that route a

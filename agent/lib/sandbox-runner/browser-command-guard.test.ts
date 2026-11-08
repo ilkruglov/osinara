@@ -35,24 +35,49 @@ describe("refuseBrowserCommand", () => {
       "sh -c agent-browser --session osinara-reader click e5",
       "echo e5 | xargs agent-browser --session osinara-reader click",
       "agent\\-browser click e5",
-      "agent-\"\"browser click e5",
+      'agent-""browser click e5',
       "a=agent; $a-browser click e5",
       "/usr/local/bin/agent-b* click e5",
     ]) {
-      expect(refuseBrowserCommand(command)).toMatchObject({ exitCode: 126, stderr: expect.stringContaining(BROWSER_COMMAND_FORBIDDEN) });
+      expect(refuseBrowserCommand(command)).toMatchObject({
+        exitCode: 126,
+        stderr: expect.stringContaining(BROWSER_COMMAND_FORBIDDEN),
+      });
     }
   });
 
   it("lets the reader session and ordinary commands through", () => {
-    expect(refuseBrowserCommand("timeout 45s agent-browser --session osinara-reader --engine lightpanda open https://x.ru")).toBeNull();
-    expect(refuseBrowserCommand("agent-browser --session osinara-reader --engine lightpanda read")).toBeNull();
+    expect(
+      refuseBrowserCommand(
+        "timeout 45s agent-browser --session osinara-reader --engine lightpanda open https://x.ru",
+      ),
+    ).toBeNull();
+    expect(
+      refuseBrowserCommand("agent-browser --session osinara-reader --engine lightpanda read"),
+    ).toBeNull();
     expect(refuseBrowserCommand("ls /workspace/personal/shots && cat notes.md")).toBeNull();
-    expect(refuseBrowserCommand("agent-browser --session=osinara-reader --engine lightpanda read")).toBeNull();
-    expect(refuseBrowserCommand("agent-browser --session 'osinara-reader' read | head -c 600 # notes")).toBeNull();
-    expect(refuseBrowserCommand("timeout 45s agent-browser --session osinara-reader open https://x.ru && ls")).toBeNull();
+    expect(
+      refuseBrowserCommand("agent-browser --session=osinara-reader --engine lightpanda read"),
+    ).toBeNull();
+    expect(
+      refuseBrowserCommand("agent-browser --session 'osinara-reader' read | head -c 600 # notes"),
+    ).toBeNull();
+    expect(
+      refuseBrowserCommand(
+        "timeout 45s agent-browser --session osinara-reader open https://x.ru && ls",
+      ),
+    ).toBeNull();
     expect(refuseBrowserCommand("agent-browser \\\n  --session osinara-reader read")).toBeNull();
     expect(refuseBrowserCommand("agent-browser '--session' osinara-reader read")).toBeNull();
-    expect(refuseBrowserCommand("agent-browser --session osinara-reader open https://x.ru; agent-browser --session osinara-reader read")).toBeNull();
-    expect(refuseBrowserCommand("node \"$HOME/.agents/skills/agent-browser/scripts/browserless.mjs\" status")).toBeNull();
+    expect(
+      refuseBrowserCommand(
+        "agent-browser --session osinara-reader open https://x.ru; agent-browser --session osinara-reader read",
+      ),
+    ).toBeNull();
+    expect(
+      refuseBrowserCommand(
+        'node "$HOME/.agents/skills/agent-browser/scripts/browserless.mjs" status',
+      ),
+    ).toBeNull();
   });
 });

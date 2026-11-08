@@ -6,4 +6,6 @@ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
  * Called at graph resolution time so the section is part of the turn
  * agent's static instructions rather than injected per-step.
  */
-export declare function formatConnectionsSection(connections: readonly ResolvedConnectionDefinition[]): string;
+export declare function formatConnectionsSection(
+  connections: readonly ResolvedConnectionDefinition[],
+): string;

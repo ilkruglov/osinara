@@ -2,10 +2,7 @@ import { z } from "#compiled/zod/index.js";
 import { runtimeToolCallActionRequestSchema } from "#runtime/actions/types.js";
 const inputOptionSchema = z
     .object({
-      description: z
-        .string()
-        .describe(`Optional additional context for this option.`)
-        .optional(),
+      description: z.string().describe(`Optional additional context for this option.`).optional(),
       id: z.string().describe(`Stable identifier for the option.`),
       label: z.string().describe(`User-facing label for the option.`),
       style: z
@@ -14,11 +11,7 @@ const inputOptionSchema = z
         .optional(),
     })
     .strict(),
-  inputRequestKindSchema = z.enum([
-    `question`,
-    `session-limit`,
-    `tool-approval`,
-  ]),
+  inputRequestKindSchema = z.enum([`question`, `session-limit`, `tool-approval`]),
   inputRequestSchema = z
     .object({
       action: runtimeToolCallActionRequestSchema,
@@ -30,9 +23,7 @@ const inputOptionSchema = z
         .optional(),
       display: z
         .enum([`confirmation`, `select`, `text`])
-        .describe(
-          `Rendering hint: the channel uses this to pick a UX treatment.`,
-        )
+        .describe(`Rendering hint: the channel uses this to pick a UX treatment.`)
         .optional(),
       kind: inputRequestKindSchema.describe(
         `Framework-owned request source used to resolve, route, and render the response.`,

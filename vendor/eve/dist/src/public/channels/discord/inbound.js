@@ -67,14 +67,11 @@ function parseComponentInteraction(r) {
   return s
     ? {
         ...i,
-        componentType:
-          typeof a.component_type == `number` ? a.component_type : 0,
+        componentType: typeof a.component_type == `number` ? a.component_type : 0,
         customId: a.custom_id,
         messageId: s,
         type: DISCORD_INTERACTION_TYPE.MESSAGE_COMPONENT,
-        values: Array.isArray(a.values)
-          ? a.values.filter((e) => typeof e == `string`)
-          : [],
+        values: Array.isArray(a.values) ? a.values.filter((e) => typeof e == `string`) : [],
       }
     : null;
 }
@@ -122,22 +119,16 @@ function parseMember(n) {
   if (r)
     return {
       nick: isNonEmptyString(n.nick) ? n.nick : void 0,
-      roles: Array.isArray(n.roles)
-        ? n.roles.filter((e) => typeof e == `string`)
-        : [],
+      roles: Array.isArray(n.roles) ? n.roles.filter((e) => typeof e == `string`) : [],
       user: r,
     };
 }
 function parseUser(n) {
-  return !isObject(n) ||
-    !isNonEmptyString(n.id) ||
-    !isNonEmptyString(n.username)
+  return !isObject(n) || !isNonEmptyString(n.id) || !isNonEmptyString(n.username)
     ? null
     : {
         avatar: isNonEmptyString(n.avatar) ? n.avatar : void 0,
-        discriminator: isNonEmptyString(n.discriminator)
-          ? n.discriminator
-          : void 0,
+        discriminator: isNonEmptyString(n.discriminator) ? n.discriminator : void 0,
         globalName: isNonEmptyString(n.global_name) ? n.global_name : void 0,
         id: n.id,
         isBot: n.bot === !0,
@@ -159,8 +150,7 @@ function parseOptions(n) {
   return r;
 }
 function parseOptionValue(e) {
-  if (typeof e == `string` || typeof e == `number` || typeof e == `boolean`)
-    return e;
+  if (typeof e == `string` || typeof e == `number` || typeof e == `boolean`) return e;
 }
 function parseTextInputs(n) {
   let r = {};

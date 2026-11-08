@@ -80,8 +80,7 @@ function matchTsConfigPathPattern(e, t) {
   if (n === -1) return e === t ? `` : void 0;
   let r = t.slice(0, n),
     i = t.slice(n + 1);
-  if (!(!e.startsWith(r) || !e.endsWith(i)))
-    return e.slice(r.length, e.length - i.length);
+  if (!(!e.startsWith(r) || !e.endsWith(i))) return e.slice(r.length, e.length - i.length);
 }
 async function resolveExistingPath(e, t, n) {
   if (await existsAsFile(e, n)) return e;
@@ -127,10 +126,7 @@ function createCachedStatProbe() {
 }
 function isPathNotFoundError(e) {
   return (
-    typeof e == `object` &&
-    !!e &&
-    `code` in e &&
-    (e.code === `ENOENT` || e.code === `ENOTDIR`)
+    typeof e == `object` && !!e && `code` in e && (e.code === `ENOENT` || e.code === `ENOTDIR`)
   );
 }
 function isPackageImport(e) {

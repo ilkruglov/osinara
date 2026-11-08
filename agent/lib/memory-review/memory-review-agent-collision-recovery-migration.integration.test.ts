@@ -14,9 +14,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const MIGRATION_NAME = "070_memory_review_agent_collision_recovery.sql";
 const MIGRATION_ORDINAL = 70;
 const TEST_SCHEMA = "test_memory_review_agent_collision_recovery";
@@ -124,9 +123,17 @@ describeWithDatabase("070 memory review agent collision recovery migration", () 
               last_activity_at, retired_at, delete_after, memory_review_batch_id)
            VALUES ($1::uuid, gen_random_uuid(), 0, $2, $3, 'family', 'proactive', 'failed',
                    $4, $5, $6, now(), now(), now(), now() + interval '90 days', $7::uuid)`,
-          [id, family.rows[0]!.id, group.rows[0]!.id, `memory-review:${BATCH_ID}`,
-            memoryReviewBatchId === null ? `retired-memory-review:${id}` : `memory-review:${BATCH_ID}`,
-            eveSessionId, memoryReviewBatchId],
+          [
+            id,
+            family.rows[0]!.id,
+            group.rows[0]!.id,
+            `memory-review:${BATCH_ID}`,
+            memoryReviewBatchId === null
+              ? `retired-memory-review:${id}`
+              : `memory-review:${BATCH_ID}`,
+            eveSessionId,
+            memoryReviewBatchId,
+          ],
         );
       }
       await client.query(
@@ -142,13 +149,18 @@ describeWithDatabase("070 memory review agent collision recovery migration", () 
         [BATCH_ID, conversation.rows[0]!.id],
       );
       await client.query(
-         `INSERT INTO memory_turn_source_sets
+        `INSERT INTO memory_turn_source_sets
             (eve_session_id, eve_turn_id, application_session_id, conversation_id,
              current_timeline_entry_id, invoking_telegram_user_id, binding_hash,
              memory_review_batch_id)
           VALUES ($1, 'turn_0', $2, $3, NULL, 'agent-collision-owner', $4, $5)`,
-        [COLLISION_EVE_SESSION_ID, COLLISION_APPLICATION_SESSION_ID,
-          conversation.rows[0]!.id, "a".repeat(64), BATCH_ID],
+        [
+          COLLISION_EVE_SESSION_ID,
+          COLLISION_APPLICATION_SESSION_ID,
+          conversation.rows[0]!.id,
+          "a".repeat(64),
+          BATCH_ID,
+        ],
       );
       await client.query(
         `INSERT INTO memory_turn_sources
@@ -182,10 +194,11 @@ describeWithDatabase("070 memory review agent collision recovery migration", () 
       await expect(client.query(migration)).rejects.toThrow(
         "AGENT_MEMORY_REVIEW_AGENT_COLLISION_RECOVERY_BINDING_INVALID",
       );
-      await expect(client.query(
-        "UPDATE memory_review_batches SET recovery_attempts = 3 WHERE id = $1",
-        [BATCH_ID],
-      )).rejects.toThrow();
+      await expect(
+        client.query("UPDATE memory_review_batches SET recovery_attempts = 3 WHERE id = $1", [
+          BATCH_ID,
+        ]),
+      ).rejects.toThrow();
       await client.query(
         `UPDATE memory_turn_source_sets SET application_session_id = $2
           WHERE memory_review_batch_id = $1`,
@@ -194,55 +207,82 @@ describeWithDatabase("070 memory review agent collision recovery migration", () 
 
       await client.query(migration);
 
-      await expect(client.query(
-        `SELECT status::text, recovery_attempts, last_recovery_diagnostic_code,
+      await expect(
+        client.query(
+          `SELECT status::text, recovery_attempts, last_recovery_diagnostic_code,
                 application_session_id, eve_session_id, diagnostic_code
            FROM memory_review_batches WHERE id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{
-        application_session_id: null,
-        diagnostic_code: null,
-        eve_session_id: null,
-        last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_IMPLICIT_AGENT_COLLISION",
-        recovery_attempts: 3,
-        status: "pending",
-      }] });
-      await expect(client.query(
-        `SELECT continuation_token, memory_review_batch_id
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            application_session_id: null,
+            diagnostic_code: null,
+            eve_session_id: null,
+            last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_IMPLICIT_AGENT_COLLISION",
+            recovery_attempts: 3,
+            status: "pending",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT continuation_token, memory_review_batch_id
            FROM conversation_sessions WHERE id = $1`,
-        [COLLISION_APPLICATION_SESSION_ID],
-      )).resolves.toMatchObject({ rows: [{
-        continuation_token: `retired-memory-review:${COLLISION_APPLICATION_SESSION_ID}`,
-        memory_review_batch_id: null,
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS source_count,
+          [COLLISION_APPLICATION_SESSION_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            continuation_token: `retired-memory-review:${COLLISION_APPLICATION_SESSION_ID}`,
+            memory_review_batch_id: null,
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS source_count,
                 min(timeline_sequence)::text AS first, max(timeline_sequence)::text AS last
            FROM memory_review_batch_sources WHERE batch_id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ source_count: 50, first: "5540", last: "5589" }] });
-      await expect(client.query(
-        "SELECT count(*)::integer AS count FROM memory_turn_source_sets WHERE memory_review_batch_id = $1",
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 0 }] });
-      await expect(client.query(
-        `SELECT recovery_generation FROM memory_review_owner_alerts
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ source_count: 50, first: "5540", last: "5589" }] });
+      await expect(
+        client.query(
+          "SELECT count(*)::integer AS count FROM memory_turn_source_sets WHERE memory_review_batch_id = $1",
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 0 }] });
+      await expect(
+        client.query(
+          `SELECT recovery_generation FROM memory_review_owner_alerts
           WHERE batch_id = $1 ORDER BY recovery_generation`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ recovery_generation: 1 }, { recovery_generation: 2 }] });
-      await expect(client.query(
-        `SELECT metadata FROM audit_events
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ recovery_generation: 1 }, { recovery_generation: 2 }] });
+      await expect(
+        client.query(
+          `SELECT metadata FROM audit_events
           WHERE event_type = 'memory_review.operator_recovered' AND subject_id = $1
           ORDER BY created_at DESC LIMIT 1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ metadata: {
-        collisionEveSessionId: COLLISION_EVE_SESSION_ID,
-        recoveryAttempt: 3,
-      } }] });
-      await expect(client.query(
-        `UPDATE memory_review_batches SET recovery_attempts = 4 WHERE id = $1`,
-        [BATCH_ID],
-      )).rejects.toThrow();
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            metadata: {
+              collisionEveSessionId: COLLISION_EVE_SESSION_ID,
+              recoveryAttempt: 3,
+            },
+          },
+        ],
+      });
+      await expect(
+        client.query(`UPDATE memory_review_batches SET recovery_attempts = 4 WHERE id = $1`, [
+          BATCH_ID,
+        ]),
+      ).rejects.toThrow();
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

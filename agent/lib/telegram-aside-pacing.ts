@@ -15,7 +15,8 @@ const TELEGRAM_ASIDE_PAUSE_PER_CHARACTER_MILLISECONDS = 30;
 export const TELEGRAM_ASIDE_PAUSE_MAX_MILLISECONDS = 4000;
 
 export function asidePauseMilliseconds(text: string): number {
-  const typing = TELEGRAM_ASIDE_PAUSE_BASE_MILLISECONDS +
+  const typing =
+    TELEGRAM_ASIDE_PAUSE_BASE_MILLISECONDS +
     Array.from(text).length * TELEGRAM_ASIDE_PAUSE_PER_CHARACTER_MILLISECONDS;
   return Math.min(typing, TELEGRAM_ASIDE_PAUSE_MAX_MILLISECONDS);
 }

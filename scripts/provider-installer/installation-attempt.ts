@@ -37,12 +37,12 @@ async function requirePhysicalRootDirectory(
 ): Promise<void> {
   const metadata = await filesystem.lstat(path);
   if (
-    !metadata.isDirectory()
-    || metadata.isSymbolicLink()
-    || metadata.uid !== 0
-    || metadata.gid !== 0
-    || (metadata.mode & 0o777) !== mode
-    || await filesystem.realpath(path) !== path
+    !metadata.isDirectory() ||
+    metadata.isSymbolicLink() ||
+    metadata.uid !== 0 ||
+    metadata.gid !== 0 ||
+    (metadata.mode & 0o777) !== mode ||
+    (await filesystem.realpath(path)) !== path
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_ATTEMPT_OWNERSHIP_INVALID",
@@ -51,7 +51,10 @@ async function requirePhysicalRootDirectory(
   }
 }
 
-async function pathExists(filesystem: InstallationAttemptFilesystem, path: string): Promise<boolean> {
+async function pathExists(
+  filesystem: InstallationAttemptFilesystem,
+  path: string,
+): Promise<boolean> {
   try {
     await filesystem.lstat(path);
     return true;
@@ -69,7 +72,7 @@ export async function recoverPreMigrationInstallationAttempt(input: {
   readonly migrationMarker: string;
 }): Promise<boolean> {
   const filesystem = input.filesystem ?? productionFilesystem;
-  if (!await pathExists(filesystem, input.baseDir)) return false;
+  if (!(await pathExists(filesystem, input.baseDir))) return false;
 
   // Any marker object means migration may have started; metadata ambiguity must preserve the tree.
   if (await pathExists(filesystem, input.migrationMarker)) {
@@ -78,7 +81,7 @@ export async function recoverPreMigrationInstallationAttempt(input: {
       "Предыдущая установка достигла миграционного рубежа. Автоматический повтор и удаление данных запрещены; выполните osinara doctor",
     );
   }
-  if (!await pathExists(filesystem, input.attemptDir)) {
+  if (!(await pathExists(filesystem, input.attemptDir))) {
     throw new InstallerError(
       "OSINARA_INSTALL_EXISTING_STATE",
       "На сервере уже существует /opt/osinara без installer attempt marker; используйте диагностику",

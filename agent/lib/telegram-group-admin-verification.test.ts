@@ -40,22 +40,25 @@ function check(fetchImplementation: typeof fetch, signal?: AbortSignal) {
 describe("telegram group admin verification", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["creator", "administrator"])("accepts an owner whose chat status is %s", async (status) => {
-    const fetchMock = vi.fn().mockResolvedValue(memberAnswer(status));
+  it.each(["creator", "administrator"])(
+    "accepts an owner whose chat status is %s",
+    async (status) => {
+      const fetchMock = vi.fn().mockResolvedValue(memberAnswer(status));
 
-    await expect(check(fetchMock)).resolves.toBeUndefined();
+      await expect(check(fetchMock)).resolves.toBeUndefined();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.telegram.org/bottelegram-bot-secret/getChatMember",
-      expect.objectContaining({ method: "POST", signal: expect.any(AbortSignal) }),
-    );
-    const request = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect(JSON.parse(String(request.body))).toEqual({
-      chat_id: CHAT_ID,
-      user_id: Number(OWNER_TELEGRAM_USER_ID),
-    });
-  });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://api.telegram.org/bottelegram-bot-secret/getChatMember",
+        expect.objectContaining({ method: "POST", signal: expect.any(AbortSignal) }),
+      );
+      const request = fetchMock.mock.calls[0]![1] as RequestInit;
+      expect(JSON.parse(String(request.body))).toEqual({
+        chat_id: CHAT_ID,
+        user_id: Number(OWNER_TELEGRAM_USER_ID),
+      });
+    },
+  );
 
   it.each(["member", "restricted", "left", "kicked", "owner"])(
     "refuses an owner whose chat status is %s",
@@ -74,9 +77,9 @@ describe("telegram group admin verification", () => {
     [403, "Forbidden: bot was kicked from the supergroup chat"],
   ])("fails closed when Telegram rejects the lookup with %s", async (status, description) => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const fetchMock = vi.fn().mockResolvedValue(
-      telegramAnswer({ description, error_code: status, ok: false }, status),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(telegramAnswer({ description, error_code: status, ok: false }, status));
 
     await expect(check(fetchMock)).rejects.toMatchObject({
       code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_REJECTED",
@@ -93,9 +96,14 @@ describe("telegram group admin verification", () => {
 
   it.each([500, 502, 429])("fails closed when Telegram is unavailable with %s", async (status) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const fetchMock = vi.fn().mockResolvedValue(
-      telegramAnswer({ description: "Internal Server Error", error_code: status, ok: false }, status),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        telegramAnswer(
+          { description: "Internal Server Error", error_code: status, ok: false },
+          status,
+        ),
+      );
 
     await expect(check(fetchMock)).rejects.toMatchObject({
       code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_UNAVAILABLE",
@@ -105,7 +113,9 @@ describe("telegram group admin verification", () => {
   it("fails closed on a network failure or timeout", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.fn().mockRejectedValue(
-      Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
+      Object.assign(new Error("The operation was aborted due to timeout"), {
+        name: "TimeoutError",
+      }),
     );
 
     await expect(check(fetchMock)).rejects.toMatchObject({
@@ -129,7 +139,10 @@ describe("telegram group admin verification", () => {
     ["no result", { ok: true }],
     ["no status", { ok: true, result: { user: { id: Number(OWNER_TELEGRAM_USER_ID) } } }],
     ["another user", { ok: true, result: { status: "creator", user: { id: 1 } } }],
-    ["not ok", { ok: false, result: { status: "creator", user: { id: Number(OWNER_TELEGRAM_USER_ID) } } }],
+    [
+      "not ok",
+      { ok: false, result: { status: "creator", user: { id: Number(OWNER_TELEGRAM_USER_ID) } } },
+    ],
   ])("fails closed on a malformed answer: %s", async (_label, body) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -143,19 +156,23 @@ describe("telegram group admin verification", () => {
     async (telegramUserId) => {
       const fetchMock = vi.fn();
 
-      await expect(verifier(fetchMock).requireAdministrator({
-        telegramChatId: CHAT_ID,
-        telegramUserId,
-      })).rejects.toMatchObject({ code: "AGENT_TELEGRAM_GROUP_OWNER_IDENTITY_MISSING" });
+      await expect(
+        verifier(fetchMock).requireAdministrator({
+          telegramChatId: CHAT_ID,
+          telegramUserId,
+        }),
+      ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_GROUP_OWNER_IDENTITY_MISSING" });
       expect(fetchMock).not.toHaveBeenCalled();
     },
   );
 
   it("requires a configured bot token", () => {
-    expect(() => createTelegramGroupAdminVerifier({
-      botToken: "",
-      fetch: vi.fn(),
-      timeoutMilliseconds: 15_000,
-    })).toThrowError(/AGENT_TELEGRAM_CONFIG_MISSING/u);
+    expect(() =>
+      createTelegramGroupAdminVerifier({
+        botToken: "",
+        fetch: vi.fn(),
+        timeoutMilliseconds: 15_000,
+      }),
+    ).toThrowError(/AGENT_TELEGRAM_CONFIG_MISSING/u);
   });
 });

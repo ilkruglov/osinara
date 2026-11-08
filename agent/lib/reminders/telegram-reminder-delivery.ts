@@ -49,7 +49,9 @@ function formatScheduledTime(job: ClaimedReminder): string {
   }).format(new Date(job.dueAt));
 }
 
-export async function deliverTelegramReminder(job: ClaimedReminder): Promise<ProactiveDeliveryReceipt> {
+export async function deliverTelegramReminder(
+  job: ClaimedReminder,
+): Promise<ProactiveDeliveryReceipt> {
   const delayedNotice = job.delayed
     ? `Доставлено с задержкой. Изначальное время: ${formatScheduledTime(job)} (${job.timezone}).`
     : null;
@@ -74,8 +76,10 @@ export async function deliverTelegramReminder(job: ClaimedReminder): Promise<Pro
       if (reason !== null) throw new TelegramRecipientUnreachableError(job.telegramChatId, reason);
       throw new Error(`Telegram sendMessage failed with HTTP ${response.status}.`);
     }
-    const sentId = (response.body as { result?: { message_id?: unknown } } | null)?.result?.message_id;
-    const messageId = typeof sentId === "number" || typeof sentId === "string" ? String(sentId) : "";
+    const sentId = (response.body as { result?: { message_id?: unknown } } | null)?.result
+      ?.message_id;
+    const messageId =
+      typeof sentId === "number" || typeof sentId === "string" ? String(sentId) : "";
     if (!/^[1-9]\d*$/u.test(messageId)) {
       throw new AppError(
         "AGENT_REMINDER_TELEGRAM_DELIVERY_AMBIGUOUS",
@@ -84,18 +88,23 @@ export async function deliverTelegramReminder(job: ClaimedReminder): Promise<Pro
     }
     return { messageId, text };
   } catch (error) {
-    console.error(JSON.stringify({
-      code: error instanceof TelegramRecipientUnreachableError
-        ? error.code
-        : "AGENT_REMINDER_TELEGRAM_DELIVERY_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      reminderId: job.id,
-    }));
+    console.error(
+      JSON.stringify({
+        code:
+          error instanceof TelegramRecipientUnreachableError
+            ? error.code
+            : "AGENT_REMINDER_TELEGRAM_DELIVERY_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        reminderId: job.id,
+      }),
+    );
     throw error;
   }
 }
 
-export async function deliverReachableTelegramReminder(job: ClaimedReminder): Promise<ProactiveDeliveryReceipt> {
+export async function deliverReachableTelegramReminder(
+  job: ClaimedReminder,
+): Promise<ProactiveDeliveryReceipt> {
   const reason = await unreachableTelegramRecipient(job.telegramChatId, "reminder");
   if (reason !== null) throw new TelegramRecipientUnreachableError(job.telegramChatId, reason);
   return deliverTelegramReminder(job);

@@ -26,9 +26,13 @@ describe("Eve skill materialization patch", () => {
 
     // Eve rewrites every dynamic package on every turn; sequential writes cost one container
     // round trip per file, 2-5 seconds per external-group turn (10 сентября 2026).
-    expect(codeShape(lifecycle)).not.toContain(codeShape("for(let{skills:e}of p)for(let t of e)await writeSkillPackageToSandbox"));
+    expect(codeShape(lifecycle)).not.toContain(
+      codeShape("for(let{skills:e}of p)for(let t of e)await writeSkillPackageToSandbox"),
+    );
     expect(codeText(lifecycle)).toContain(codeText("await Promise.all( p.flatMap"));
-    expect(codeShape(skillPackage)).not.toContain(codeShape("for(let t of e.skill.files)await e.sandbox.writeBinaryFile"));
+    expect(codeShape(skillPackage)).not.toContain(
+      codeShape("for(let t of e.skill.files)await e.sandbox.writeBinaryFile"),
+    );
     expect(codeText(skillPackage)).toContain(codeText("await Promise.all( e.skill.files.map"));
   });
 

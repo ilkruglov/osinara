@@ -6,9 +6,9 @@ import type { ResolvedAgent } from "#runtime/types.js";
  * Input for resolving one compiled authored agent into a runtime-owned model.
  */
 export interface ResolveAgentInput {
-    manifest: CompiledAgentNodeManifest | CompiledAgentResources;
-    moduleMap: CompiledModuleMap;
-    nodeId?: string;
+  manifest: CompiledAgentNodeManifest | CompiledAgentResources;
+  moduleMap: CompiledModuleMap;
+  nodeId?: string;
 }
 /**
  * Resolves the core authored agent path from compiled artifacts.

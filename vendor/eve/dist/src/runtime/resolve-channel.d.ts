@@ -14,4 +14,8 @@ import type { ResolvedChannelDefinition } from "#runtime/types.js";
  * `ResolvedChannelDefinition` values directly and do not flow through
  * this resolver.
  */
-export declare function resolveChannelDefinition(definition: CompiledChannelDefinition, moduleMap: CompiledModuleMap, nodeId: string | undefined): Promise<ResolvedChannelDefinition>;
+export declare function resolveChannelDefinition(
+  definition: CompiledChannelDefinition,
+  moduleMap: CompiledModuleMap,
+  nodeId: string | undefined,
+): Promise<ResolvedChannelDefinition>;

@@ -1,12 +1,16 @@
 import { type ToolSet } from "ai";
 import type { ResolvedConnectionDefinition } from "#runtime/types.js";
 import { type OpenApiOperation } from "#runtime/connections/openapi-operations.js";
-import type { ConnectionClient, ConnectionToolExecuteOptions, ConnectionToolMetadata } from "#runtime/connections/types.js";
+import type {
+  ConnectionClient,
+  ConnectionToolExecuteOptions,
+  ConnectionToolMetadata,
+} from "#runtime/connections/types.js";
 interface OpenApiToolCache {
-    readonly metadata: readonly ConnectionToolMetadata[];
-    readonly operations: ReadonlyMap<string, OpenApiOperation>;
-    readonly tools: ToolSet;
-    readonly baseUrl: string;
+  readonly metadata: readonly ConnectionToolMetadata[];
+  readonly operations: ReadonlyMap<string, OpenApiOperation>;
+  readonly tools: ToolSet;
+  readonly baseUrl: string;
 }
 /**
  * Result of executing an OpenAPI operation. Returned to the model as the
@@ -14,9 +18,9 @@ interface OpenApiToolCache {
  * including non-2xx responses.
  */
 export interface OpenApiToolResult {
-    readonly status: number;
-    readonly statusText: string;
-    readonly body: unknown;
+  readonly status: number;
+  readonly statusText: string;
+  readonly body: unknown;
 }
 /**
  * A {@link ConnectionClient} that turns an OpenAPI 3.x or Swagger 2.0
@@ -31,13 +35,17 @@ export interface OpenApiToolResult {
  * `{ status, statusText, body }`.
  */
 export declare class OpenApiConnectionClient implements ConnectionClient {
-    #private;
-    constructor(connection: ResolvedConnectionDefinition);
-    /** Loads and parses the OpenAPI document, sharing one in-flight load. */
-    connect(): Promise<OpenApiToolCache>;
-    getToolMetadata(): Promise<readonly ConnectionToolMetadata[]>;
-    getTools(): Promise<ToolSet>;
-    executeTool(toolName: string, args: unknown, options?: ConnectionToolExecuteOptions): Promise<OpenApiToolResult>;
-    close(): Promise<void>;
+  #private;
+  constructor(connection: ResolvedConnectionDefinition);
+  /** Loads and parses the OpenAPI document, sharing one in-flight load. */
+  connect(): Promise<OpenApiToolCache>;
+  getToolMetadata(): Promise<readonly ConnectionToolMetadata[]>;
+  getTools(): Promise<ToolSet>;
+  executeTool(
+    toolName: string,
+    args: unknown,
+    options?: ConnectionToolExecuteOptions,
+  ): Promise<OpenApiToolResult>;
+  close(): Promise<void>;
 }
 export {};

@@ -34,7 +34,11 @@ function dockerWithThreads(threads: number) {
     restart: vi.fn(async () => undefined),
     // One Chromium is a dozen processes carrying most of the threads; the cgroup counts threads.
     top: vi.fn(async () => ({
-      Processes: [["1", "1"], ["7", "1"], ["120", String(threads - 2)]],
+      Processes: [
+        ["1", "1"],
+        ["7", "1"],
+        ["120", String(threads - 2)],
+      ],
     })),
   };
   const docker = {
@@ -74,21 +78,33 @@ describe("sandbox process reaping", () => {
       output.end();
       return output;
     };
-    const exec = vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })), start: vi.fn(async () => finished()) }));
+    const exec = vi.fn(async () => ({
+      inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
+      start: vi.fn(async () => finished()),
+    }));
     const crowded = {
       exec,
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
-      restart: vi.fn(() => new Promise<void>((resolve) => { finishRestart = resolve; })),
+      restart: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishRestart = resolve;
+          }),
+      ),
       top: vi.fn(async () => ({ Processes: [["1", String(SANDBOX_PIDS_REAP_THRESHOLD)]] })),
     };
     let otherRunning = false;
     const stopped = {
       exec,
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: otherRunning } })),
-      start: vi.fn(async () => { otherRunning = true; }),
+      start: vi.fn(async () => {
+        otherRunning = true;
+      }),
     };
     const docker = {
-      getContainer: vi.fn((name: string) => (name === sandboxContainerName(OTHER_SESSION_ID) ? stopped : crowded)),
+      getContainer: vi.fn((name: string) =>
+        name === sandboxContainerName(OTHER_SESSION_ID) ? stopped : crowded,
+      ),
       listContainers: vi.fn(async () => []),
       modem: {
         demuxStream: vi.fn((stream: PassThrough, stdout: PassThrough, stderr: PassThrough) => {

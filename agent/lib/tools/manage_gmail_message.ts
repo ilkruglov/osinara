@@ -20,10 +20,13 @@ interface GmailMessageManagerDependencies {
 export function createGmailMessageManager(dependencies: GmailMessageManagerDependencies) {
   return async function manageGmailMessage(input: GmailMessageInput, ctx: ToolContext) {
     const parsed = requireGmailMessageInput(input);
-    return await dependencies.execute({
-      argv: gmailMessageMutationArgv(parsed),
-      expectedProfileRef: parsed.profileRef,
-    }, ctx);
+    return await dependencies.execute(
+      {
+        argv: gmailMessageMutationArgv(parsed),
+        expectedProfileRef: parsed.profileRef,
+      },
+      ctx,
+    );
   };
 }
 

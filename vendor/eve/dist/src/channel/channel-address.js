@@ -1,12 +1,6 @@
-import {
-  createSession,
-  sessionCallbackToTurnCaller,
-} from "#channel/session.js";
+import { createSession, sessionCallbackToTurnCaller } from "#channel/session.js";
 import { createChannelDeliveryMetadata } from "#channel/delivery-metadata.js";
-import {
-  normalizeSendInput,
-  serializeUrlFilePartsInMessage,
-} from "#channel/send-input.js";
+import { normalizeSendInput, serializeUrlFilePartsInMessage } from "#channel/send-input.js";
 import { DEFAULT_TURN_POLICY } from "#channel/types.js";
 import { isRuntimeSessionOwnershipConflictError } from "#execution/runtime-errors.js";
 import { isReservedSessionCommandToken } from "#execution/session-command-token.js";
@@ -14,9 +8,7 @@ function createChannelAddress(r) {
   let i = r.metadata ?? {},
     a = `${r.channelName}:${r.continuationToken}`;
   if (isReservedSessionCommandToken(a))
-    throw Error(
-      `Channel address "${a}" uses eve's reserved session namespace.`,
-    );
+    throw Error(`Channel address "${a}" uses eve's reserved session namespace.`);
   return {
     continuationToken: r.continuationToken,
     async deliver(n, o) {
@@ -33,9 +25,7 @@ function createChannelAddress(r) {
           payload: { ...c, message: serializeUrlFilePartsInMessage(c.message) },
           requestId: i.requestId,
           turnPolicy:
-            c.message === void 0
-              ? void 0
-              : (o.turnPolicy ?? r.turnPolicy ?? DEFAULT_TURN_POLICY),
+            c.message === void 0 ? void 0 : (o.turnPolicy ?? r.turnPolicy ?? DEFAULT_TURN_POLICY),
         },
         d = l === void 0 ? u : { ...u, caller: l },
         dispatch = async () => {
@@ -58,10 +48,7 @@ function createChannelAddress(r) {
         );
       let p = o.state,
         m = {
-          adapter:
-            p === void 0
-              ? r.adapter
-              : { ...r.adapter, state: { ...r.adapter.state, ...p } },
+          adapter: p === void 0 ? r.adapter : { ...r.adapter, state: { ...r.adapter.state, ...p } },
           auth: o.auth,
           capabilities: o.mode === `task` ? void 0 : { requestInput: !0 },
           callback: o.callback,
@@ -79,11 +66,10 @@ function createChannelAddress(r) {
           title: o.title,
         };
       try {
-        return createSession(
-          (await r.runtime.createSession(m)).sessionId,
-          r.runtime,
-          { ...i, turnPolicy: r.turnPolicy },
-        );
+        return createSession((await r.runtime.createSession(m)).sessionId, r.runtime, {
+          ...i,
+          turnPolicy: r.turnPolicy,
+        });
       } catch (e) {
         if (!isRuntimeSessionOwnershipConflictError(e)) throw e;
         let t = await dispatch();

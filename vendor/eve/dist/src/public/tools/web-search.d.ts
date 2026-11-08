@@ -3,8 +3,8 @@ export type { WebSearchProvider };
 declare const WEB_SEARCH_TOOL_KIND = "eve:web-search-tool";
 /** Configuration accepted by {@link webSearch}. */
 export interface WebSearchToolInput {
-    /** Provider to use when the agent model is routed through AI Gateway. */
-    readonly provider: WebSearchProvider;
+  /** Provider to use when the agent model is routed through AI Gateway. */
+  readonly provider: WebSearchProvider;
 }
 /**
  * Provider-managed web search configuration.
@@ -14,8 +14,8 @@ export interface WebSearchToolInput {
  * their native web search implementation.
  */
 export interface WebSearchToolDefinition {
-    readonly kind: typeof WEB_SEARCH_TOOL_KIND;
-    readonly provider: WebSearchProvider;
+  readonly kind: typeof WEB_SEARCH_TOOL_KIND;
+  readonly provider: WebSearchProvider;
 }
 /**
  * Configures the framework-provided `web_search` tool.

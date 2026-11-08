@@ -6,10 +6,7 @@
  */
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import {
-  classifyMissedSessionEvent,
-  type SessionEventResult,
-} from "./session-eve-event.js";
+import { classifyMissedSessionEvent, type SessionEventResult } from "./session-eve-event.js";
 
 const POSITIVE_BIGINT_PATTERN = /^[1-9][0-9]*$/u;
 

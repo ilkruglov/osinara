@@ -1,9 +1,6 @@
 import { __toESM } from "../../_virtual/_rolldown/runtime.js";
 import { require_picocolors } from "../../node_modules/.pnpm/picocolors@1.1.1/node_modules/picocolors/picocolors.js";
-import {
-  initExtensionHandoff,
-  initExtensionInstructions,
-} from "./agent-instructions.js";
+import { initExtensionHandoff, initExtensionInstructions } from "./agent-instructions.js";
 import { tryInitializeGit } from "./init-git.js";
 import { mkdtemp, readdir, rename, rm, stat } from "node:fs/promises";
 import { createLogger, isLogLevelEnabled } from "#internal/logging.js";
@@ -20,10 +17,7 @@ import { EVE_WORDMARK } from "#cli/banner.js";
 import { formatElapsed } from "#cli/format-elapsed.js";
 import { startCliLiveRow } from "#cli/ui/live-row.js";
 import { formatNodeEngineOverrideWarning } from "#setup/node-engine.js";
-import {
-  detectInvokingPackageManager,
-  detectPackageManager,
-} from "#setup/package-manager.js";
+import { detectInvokingPackageManager, detectPackageManager } from "#setup/package-manager.js";
 import { pathExists } from "#setup/path-exists.js";
 import { parseProjectName } from "#setup/project-name.js";
 import { blockingCreateInPlaceEntries } from "#setup/scaffold/create-in-place.js";
@@ -81,17 +75,14 @@ function formatWorkspaceRootMutationWarning(e) {
 }
 async function resolveScaffoldPackageManager(e, t) {
   let n = await t.detectPackageManager(e);
-  return n.source === "default"
-    ? (t.detectInvokingPackageManager() ?? `pnpm`)
-    : n.kind;
+  return n.source === "default" ? (t.detectInvokingPackageManager() ?? `pnpm`) : n.kind;
 }
 async function scaffoldExtension(e, t, n, r, i) {
   let o = resolve(e),
     l = t === `.`,
     u = l ? o : join(o, t);
   if (l) await assertCanScaffoldInPlace(u);
-  else if (await pathExists(u))
-    throw Error(`Cannot create project because "${u}" already exists.`);
+  else if (await pathExists(u)) throw Error(`Cannot create project because "${u}" already exists.`);
   let d = await mkdtemp(join(o, `.eve-extension-init-`)),
     p = [];
   try {
@@ -208,24 +199,14 @@ async function runExtensionInitCommand(e, t, i, a = defaultDependencies) {
     `${import_picocolors.default.green(`✓`)} Created an ${EVE_WORDMARK} extension in ${import_picocolors.default.bold(c)} ${import_picocolors.default.dim(`in ${formatElapsed(p)}`)}`,
   );
   for (let t of u)
-    e.log(
-      import_picocolors.default.yellow(
-        `⚠ ${formatWorkspaceRootMutationWarning(t)}`,
-      ),
-    );
+    e.log(import_picocolors.default.yellow(`⚠ ${formatWorkspaceRootMutationWarning(t)}`));
   (e.log(
     `${import_picocolors.default.green(`✓`)} Installed dependencies ${import_picocolors.default.dim(`in ${formatElapsed(m)}`)}`,
   ),
     h.kind === `failed`
-      ? e.error(
-          import_picocolors.default.yellow(
-            `Git initialization failed: ${h.reason}`,
-          ),
-        )
+      ? e.error(import_picocolors.default.yellow(`Git initialization failed: ${h.reason}`))
       : h.kind === `initialized` &&
-        e.log(
-          `${import_picocolors.default.green(`✓`)} Initialized Git repository`,
-        ),
+        e.log(`${import_picocolors.default.green(`✓`)} Initialized Git repository`),
     e.log(
       initExtensionHandoff({
         packageManager: l,

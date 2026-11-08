@@ -32,18 +32,13 @@ function collectTeamsFileParts(e, t) {
   return a;
 }
 function buildTeamsTurnMessage(e, t) {
-  return t.length === 0
-    ? e
-    : e.trim().length === 0
-      ? [...t]
-      : [{ type: `text`, text: e }, ...t];
+  return t.length === 0 ? e : e.trim().length === 0 ? [...t] : [{ type: `text`, text: e }, ...t];
 }
 function createTeamsFetchFile(e) {
   return async (t) => {
     if (!e.enabled || !isAllowedUrl(t, e.allowedHosts)) return null;
     let n = await fetch(t);
-    if (!n.ok)
-      throw Error(`Teams file fetch returned HTTP ${n.status} for ${t}.`);
+    if (!n.ok) throw Error(`Teams file fetch returned HTTP ${n.status} for ${t}.`);
     return {
       bytes: Buffer.from(await n.arrayBuffer()),
       mediaType: n.headers.get(`content-type`) ?? void 0,
@@ -62,22 +57,18 @@ function toTeamsFilePart(e, t, n) {
       };
 }
 function readAttachmentUrl(e) {
-  return e.contentType ===
-    `application/vnd.microsoft.teams.file.download.info` &&
+  return e.contentType === `application/vnd.microsoft.teams.file.download.info` &&
     isObject(e.content) &&
     typeof e.content.downloadUrl == `string`
     ? e.content.downloadUrl
-    : e.contentUrl &&
-        !e.contentType.startsWith(`application/vnd.microsoft.card.`)
+    : e.contentUrl && !e.contentType.startsWith(`application/vnd.microsoft.card.`)
       ? e.contentUrl
       : null;
 }
 function inferMediaType(e) {
-  return e.contentType ===
-    `application/vnd.microsoft.teams.file.download.info` &&
-    (isObject(e.content) && typeof e.content.fileType == `string`
-      ? e.content.fileType
-      : void 0) === `txt`
+  return e.contentType === `application/vnd.microsoft.teams.file.download.info` &&
+    (isObject(e.content) && typeof e.content.fileType == `string` ? e.content.fileType : void 0) ===
+      `txt`
     ? `text/plain`
     : e.contentType || `application/octet-stream`;
 }

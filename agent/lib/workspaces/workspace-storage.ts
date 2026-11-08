@@ -29,7 +29,8 @@ import { validateWorkspacePath } from "./workspace-path.js";
 const DIRECTORY_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
 // O_NONBLOCK keeps a FIFO planted under a file's name from blocking the open forever.
 const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-const CREATE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
+const CREATE_FLAGS =
+  constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
 
 export function workspaceDirectory(root: string, workspaceId: string): string {
   if (!/^[0-9a-f-]{36}$/u.test(workspaceId)) {
@@ -59,11 +60,19 @@ function notFound(): AppError {
 }
 
 function symlinkForbidden(): AppError {
-  return new AppError("AGENT_WORKSPACE_SYMLINK_FORBIDDEN", "Символические ссылки запрещены в workspace");
+  return new AppError(
+    "AGENT_WORKSPACE_SYMLINK_FORBIDDEN",
+    "Символические ссылки запрещены в workspace",
+  );
 }
 
 /** Maps a refused open of `name` under `parent` to the workspace error it means. */
-async function openError(error: unknown, parent: FileHandle, name: string, directoryExpected: boolean): Promise<Error> {
+async function openError(
+  error: unknown,
+  parent: FileHandle,
+  name: string,
+  directoryExpected: boolean,
+): Promise<Error> {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === "ENOENT") return notFound();
   if (code === "ELOOP") return symlinkForbidden();
@@ -73,7 +82,9 @@ async function openError(error: unknown, parent: FileHandle, name: string, direc
     if (metadata?.isSymbolicLink()) return symlinkForbidden();
     return new AppError(
       "AGENT_WORKSPACE_PATH_INVALID",
-      directoryExpected ? "Путь внутри workspace проходит через обычный файл" : "Путь должен указывать на обычный файл",
+      directoryExpected
+        ? "Путь внутри workspace проходит через обычный файл"
+        : "Путь должен указывать на обычный файл",
     );
   }
   return error as Error;
@@ -108,7 +119,11 @@ async function openDirectory(
         await mkdir(at(current, segment)).catch((error: NodeJS.ErrnoException) => {
           if (error.code === "EEXIST") return;
           // The directory held by `current` was removed meanwhile (by the sandbox).
-          if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
+          if (error.code === "ENOENT")
+            throw new AppError(
+              "AGENT_WORKSPACE_FILE_NOT_FOUND",
+              "Каталог файла удалён во время записи",
+            );
           throw error;
         });
       }
@@ -165,7 +180,10 @@ async function openRegularFile(
 }
 
 /** Regular files below an open directory, without following any symlink; `prefix` is its path. */
-async function scanDirectory(directory: FileHandle, prefix: string): Promise<WorkspaceStoredFile[]> {
+async function scanDirectory(
+  directory: FileHandle,
+  prefix: string,
+): Promise<WorkspaceStoredFile[]> {
   const entries = await readdir(`/proc/self/fd/${directory.fd}`, { withFileTypes: true });
   const files: WorkspaceStoredFile[] = [];
   for (const entry of entries) {
@@ -183,7 +201,7 @@ async function scanDirectory(directory: FileHandle, prefix: string): Promise<Wor
         throw await openError(error, directory, entry.name, true);
       }
       try {
-        files.push(...await scanDirectory(child, path));
+        files.push(...(await scanDirectory(child, path)));
       } finally {
         await closeQuietly(child);
       }
@@ -225,10 +243,16 @@ export async function listWorkspaceStoredFilesUnder(
     directory = await openDirectory(root, workspaceId, safePath.split("/"), false);
   } catch (error) {
     if (error instanceof AppError && error.code === "AGENT_WORKSPACE_FILE_NOT_FOUND") {
-      throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла не найден в выбранном workspace");
+      throw new AppError(
+        "AGENT_WORKSPACE_FILE_NOT_FOUND",
+        "Каталог файла не найден в выбранном workspace",
+      );
     }
     if (error instanceof AppError && error.code === "AGENT_WORKSPACE_PATH_INVALID") {
-      throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь workspace должен указывать на каталог");
+      throw new AppError(
+        "AGENT_WORKSPACE_PATH_INVALID",
+        "Путь workspace должен указывать на каталог",
+      );
     }
     throw error;
   }
@@ -305,11 +329,17 @@ export async function writeWorkspaceFile(
   // suffix failed with ENAMETOOLONG (Codex review, 6 November 2026).
   const temporary = `.osinara-${crypto.randomUUID()}.tmp`;
   try {
-    const file = await open(at(parent, temporary), CREATE_FLAGS, 0o644).catch((error: NodeJS.ErrnoException) => {
-      // The directory held by its descriptor was removed meanwhile (by the sandbox).
-      if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
-      throw error;
-    });
+    const file = await open(at(parent, temporary), CREATE_FLAGS, 0o644).catch(
+      (error: NodeJS.ErrnoException) => {
+        // The directory held by its descriptor was removed meanwhile (by the sandbox).
+        if (error.code === "ENOENT")
+          throw new AppError(
+            "AGENT_WORKSPACE_FILE_NOT_FOUND",
+            "Каталог файла удалён во время записи",
+          );
+        throw error;
+      },
+    );
     try {
       await file.writeFile(content);
     } finally {
@@ -319,7 +349,11 @@ export async function writeWorkspaceFile(
       if (error.code === "EISDIR" || error.code === "ENOTDIR") {
         throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
       }
-      if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
+      if (error.code === "ENOENT")
+        throw new AppError(
+          "AGENT_WORKSPACE_FILE_NOT_FOUND",
+          "Каталог файла удалён во время записи",
+        );
       throw error;
     });
   } finally {

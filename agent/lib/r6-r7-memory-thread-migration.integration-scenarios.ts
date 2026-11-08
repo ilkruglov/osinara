@@ -61,8 +61,13 @@ export async function verifyR6CascadeDeletion(
          (conversation_id, family_id, scope, scope_partition_key, telegram_user_id,
           linked_user_id, display_name_snapshot, first_observed_at, last_observed_at)
        VALUES ($1, $2, $3, $4, 'r6-cascade-owner', $5, 'Owner', now(), now()) RETURNING id`,
-      [input.conversationId, family.rows[0]!.id, input.scope,
-        input.scope === "group" ? input.groupId : family.rows[0]!.id, user.rows[0]!.id],
+      [
+        input.conversationId,
+        family.rows[0]!.id,
+        input.scope,
+        input.scope === "group" ? input.groupId : family.rows[0]!.id,
+        user.rows[0]!.id,
+      ],
     );
     const timeline = await client.query<{ id: string }>(
       `INSERT INTO telegram_group_messages
@@ -70,8 +75,13 @@ export async function verifyR6CascadeDeletion(
           telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
        VALUES ($1, $2, $3, $4, 'user', 'telegram:r6-cascade-owner', 'r6-cascade-owner',
                'Owner', false, 'text', $5, now()) RETURNING id`,
-      [input.conversationId, input.groupId, 9000 + input.sequence, input.sequence,
-        `${input.scope} durable source`],
+      [
+        input.conversationId,
+        input.groupId,
+        9000 + input.sequence,
+        input.sequence,
+        `${input.scope} durable source`,
+      ],
     );
     const claim = await client.query<{ id: string }>(
       `INSERT INTO memory_items
@@ -82,8 +92,15 @@ export async function verifyR6CascadeDeletion(
                $4, CASE WHEN $2::memory_scope = 'group' THEN 'r6-cascade-owner' ELSE NULL END,
                $2, 'episode', $5, 'test:r6-cascade', 'user_confirmed', 'normal', $6,
                'evidenced', $7, true, lower($5), false) RETURNING id`,
-      [family.rows[0]!.id, input.scope, input.groupId, user.rows[0]!.id,
-        `${input.scope} durable claim`, input.operationKey, input.conversationId],
+      [
+        family.rows[0]!.id,
+        input.scope,
+        input.groupId,
+        user.rows[0]!.id,
+        `${input.scope} durable claim`,
+        input.operationKey,
+        input.conversationId,
+      ],
     );
     await client.query(
       `INSERT INTO claim_evidence
@@ -93,11 +110,21 @@ export async function verifyR6CascadeDeletion(
           timeline_entry_id, timeline_sequence, source_message_id, source_snapshot)
        VALUES ($1, $2, $3, $4, 'primary', 'firsthand', $5, $6, $7, $8, $9, now(),
                $10, $11, $12, $13, '{}'::jsonb)`,
-      [claim.rows[0]!.id, family.rows[0]!.id, input.scope,
+      [
+        claim.rows[0]!.id,
+        family.rows[0]!.id,
+        input.scope,
         input.scope === "group" ? input.groupId : family.rows[0]!.id,
-        input.conversationId, `${input.scope} origin`, input.groupId,
-        participant.rows[0]!.id, user.rows[0]!.id, `${input.scope} durable source`,
-        timeline.rows[0]!.id, input.sequence, 9000 + input.sequence],
+        input.conversationId,
+        `${input.scope} origin`,
+        input.groupId,
+        participant.rows[0]!.id,
+        user.rows[0]!.id,
+        `${input.scope} durable source`,
+        timeline.rows[0]!.id,
+        input.sequence,
+        9000 + input.sequence,
+      ],
     );
     return { claimId: claim.rows[0]!.id, timelineId: timeline.rows[0]!.id };
   };
@@ -147,10 +174,17 @@ export async function verifyR6CascadeDeletion(
           application_event_id, source_conversation_id, source_timeline_entry_id,
           source_snapshot, summary, occurred_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb, $9, now()) RETURNING id`,
-      [family.rows[0]!.id, input.scope, partition, project.rows[0]!.id,
+      [
+        family.rows[0]!.id,
+        input.scope,
+        partition,
+        project.rows[0]!.id,
         input.scope === "family" ? "verified_user_statement" : "application_event",
-        event.rows[0]!.id, input.scope === "family" ? input.conversationId : null,
-        input.scope === "family" ? input.timelineId : null, `${input.scope} outcome`],
+        event.rows[0]!.id,
+        input.scope === "family" ? input.conversationId : null,
+        input.scope === "family" ? input.timelineId : null,
+        `${input.scope} outcome`,
+      ],
     );
     await client.query(
       `INSERT INTO confirmed_outcome_source_claims
@@ -163,8 +197,14 @@ export async function verifyR6CascadeDeletion(
          (family_id, scope, scope_partition_key, memory_project_id, title, purpose,
           status, completion_outcome_id, completed_at)
        VALUES ($1, $2, $3, $4, $5, 'Cascade contract', 'completed', $6, now()) RETURNING id`,
-      [family.rows[0]!.id, input.scope, partition, project.rows[0]!.id,
-        `${input.scope} thread`, outcome.rows[0]!.id],
+      [
+        family.rows[0]!.id,
+        input.scope,
+        partition,
+        project.rows[0]!.id,
+        `${input.scope} thread`,
+        outcome.rows[0]!.id,
+      ],
     );
     await client.query(
       `INSERT INTO memory_thread_entries
@@ -177,9 +217,14 @@ export async function verifyR6CascadeDeletion(
          (family_id, scope, scope_partition_key, memory_project_id, discovery_path,
           candidate_key, input_hash)
        VALUES ($1, $2, $3, $4, 'online', $5, $6) RETURNING id`,
-      [family.rows[0]!.id, input.scope, partition, project.rows[0]!.id,
+      [
+        family.rows[0]!.id,
+        input.scope,
+        partition,
+        project.rows[0]!.id,
         input.scope === "group" ? "a".repeat(64) : "b".repeat(64),
-        input.scope === "group" ? "c".repeat(64) : "d".repeat(64)],
+        input.scope === "group" ? "c".repeat(64) : "d".repeat(64),
+      ],
     );
     return {
       jobId: job.rows[0]!.id,
@@ -204,22 +249,32 @@ export async function verifyR6CascadeDeletion(
   });
 
   // External deletion cascades every group-owned R6 root.
-  await expect(client.query("DELETE FROM telegram_groups WHERE id = $1", [externalGroup.id]))
-    .resolves.toBeDefined();
-  await expect(client.query(
-    `SELECT
+  await expect(
+    client.query("DELETE FROM telegram_groups WHERE id = $1", [externalGroup.id]),
+  ).resolves.toBeDefined();
+  await expect(
+    client.query(
+      `SELECT
        (SELECT count(*)::integer FROM memory_projects WHERE id = $1) AS projects,
        (SELECT count(*)::integer FROM confirmed_outcomes WHERE id = $2) AS outcomes,
        (SELECT count(*)::integer FROM memory_threads WHERE id = $3) AS threads,
        (SELECT count(*)::integer FROM memory_thread_discovery_jobs WHERE id = $4) AS jobs`,
-    [externalRoots.projectId, externalRoots.outcomeId, externalRoots.threadId, externalRoots.jobId],
-  )).resolves.toMatchObject({ rows: [{ jobs: 0, outcomes: 0, projects: 0, threads: 0 }] });
+      [
+        externalRoots.projectId,
+        externalRoots.outcomeId,
+        externalRoots.threadId,
+        externalRoots.jobId,
+      ],
+    ),
+  ).resolves.toMatchObject({ rows: [{ jobs: 0, outcomes: 0, projects: 0, threads: 0 }] });
 
   // Family roots survive group deletion, while erased conversation provenance retracts the outcome.
-  await expect(client.query("DELETE FROM telegram_groups WHERE id = $1", [familyGroup.id]))
-    .resolves.toBeDefined();
-  await expect(client.query(
-    `SELECT outcome.status::text, outcome.source_conversation_id, outcome.source_timeline_entry_id,
+  await expect(
+    client.query("DELETE FROM telegram_groups WHERE id = $1", [familyGroup.id]),
+  ).resolves.toBeDefined();
+  await expect(
+    client.query(
+      `SELECT outcome.status::text, outcome.source_conversation_id, outcome.source_timeline_entry_id,
             outcome.source_erased_at, thread.status::text AS thread_status,
             thread.completion_outcome_id,
             EXISTS (SELECT 1 FROM memory_projects WHERE id = $3) AS project_survives,
@@ -227,17 +282,20 @@ export async function verifyR6CascadeDeletion(
      FROM confirmed_outcomes AS outcome
      JOIN memory_threads AS thread ON thread.id = $2
      WHERE outcome.id = $1`,
-    [familyRoots.outcomeId, familyRoots.threadId, familyRoots.projectId, familyRoots.jobId],
-  )).resolves.toMatchObject({
-    rows: [{
-      completion_outcome_id: null,
-      job_survives: true,
-      project_survives: true,
-      source_conversation_id: null,
-      source_erased_at: expect.any(Date),
-      source_timeline_entry_id: null,
-      status: "retracted",
-      thread_status: "active",
-    }],
+      [familyRoots.outcomeId, familyRoots.threadId, familyRoots.projectId, familyRoots.jobId],
+    ),
+  ).resolves.toMatchObject({
+    rows: [
+      {
+        completion_outcome_id: null,
+        job_survives: true,
+        project_survives: true,
+        source_conversation_id: null,
+        source_erased_at: expect.any(Date),
+        source_timeline_entry_id: null,
+        status: "retracted",
+        thread_status: "active",
+      },
+    ],
   });
 }

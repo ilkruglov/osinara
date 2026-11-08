@@ -56,15 +56,21 @@ export default defineTool({
     "deliveredAfter и deliveredBefore задают включительный период по времени доставки в ISO datetime.",
     "Результат: {items,nextCursor}; каждый item содержит отдельные поля deliveryId и sourceId. Для следующей страницы передай nextCursor без изменений.",
   ].join(" "),
-  inputSchema: z.object({
-    cursor: z.string().min(1).optional(),
-    deliveredAfter: z.string().datetime({ offset: true }).optional(),
-    deliveredBefore: z.string().datetime({ offset: true }).optional(),
-    limit: z.number().int().min(1).max(PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT)
-      .default(PROACTIVE_DELIVERY_HISTORY_DEFAULT_LIMIT),
-    query: z.string().trim().min(1).max(200).optional(),
-    sourceKind: z.enum(["agent_schedule", "reminder"]).optional(),
-  }).strict(),
+  inputSchema: z
+    .object({
+      cursor: z.string().min(1).optional(),
+      deliveredAfter: z.string().datetime({ offset: true }).optional(),
+      deliveredBefore: z.string().datetime({ offset: true }).optional(),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT)
+        .default(PROACTIVE_DELIVERY_HISTORY_DEFAULT_LIMIT),
+      query: z.string().trim().min(1).max(200).optional(),
+      sourceKind: z.enum(["agent_schedule", "reminder"]).optional(),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await proactiveDeliveryRepository.list({
       ...requireDeliveryAuthorization(ctx),

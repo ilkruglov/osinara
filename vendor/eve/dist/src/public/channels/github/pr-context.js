@@ -60,10 +60,7 @@ async function buildGitHubPullRequestContext(r) {
             pullRequestNumber: r.pullRequestNumber,
             repo: r.repo,
           }),
-    u = [
-      ...GITHUB_DEFAULT_EXCLUDED_DIFF_FILES,
-      ...(r.config?.excludedFiles ?? []),
-    ];
+    u = [...GITHUB_DEFAULT_EXCLUDED_DIFF_FILES, ...(r.config?.excludedFiles ?? [])];
   return (
     o.push(``, ...renderPullRequestFiles(l, u)),
     [
@@ -122,11 +119,7 @@ function renderPullRequestMetadata(e) {
 }
 function renderPullRequestFiles(e, t) {
   if (e.length === 0)
-    return [
-      `<github_pull_request_files>`,
-      `none`,
-      `</github_pull_request_files>`,
-    ];
+    return [`<github_pull_request_files>`, `none`, `</github_pull_request_files>`];
   let n = [`<github_pull_request_files>`],
     i = MAX_PATCH_BYTES,
     a = !1;
@@ -141,17 +134,10 @@ function renderPullRequestFiles(e, t) {
       continue;
     }
     let e = truncateByBytes(r.patch, i);
-    (n.push(`patch:`, indent(e.text)),
-      (i -= e.bytes),
-      e.truncated && ((a = !0), (i = 0)));
+    (n.push(`patch:`, indent(e.text)), (i -= e.bytes), e.truncated && ((a = !0), (i = 0)));
   }
   return (
-    a &&
-      n.push(
-        ``,
-        `patches_truncated: true`,
-        `max_patch_bytes: ${MAX_PATCH_BYTES}`,
-      ),
+    a && n.push(``, `patches_truncated: true`, `max_patch_bytes: ${MAX_PATCH_BYTES}`),
     n.push(`</github_pull_request_files>`),
     n
   );

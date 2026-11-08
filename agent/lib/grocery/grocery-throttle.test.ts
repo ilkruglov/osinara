@@ -93,7 +93,8 @@ describe("grocery catalog throttle", () => {
   });
 
   it("passes a plain failure through without starting a cooldown", async () => {
-    const call = vi.fn()
+    const call = vi
+      .fn()
       .mockRejectedValueOnce(new AppError("AGENT_GROCERY_UNAVAILABLE", "нет связи"))
       .mockResolvedValue({ ok: true });
     const { run } = catalog(call);

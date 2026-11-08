@@ -17,8 +17,12 @@ describe("workflowPostgresSettings", () => {
   });
 
   it("takes whole numbers in range", () => {
-    expect(workflowPostgresSettings({ WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32", WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30" }))
-      .toEqual({ maxPoolSize: 32, queueConcurrency: 30 });
+    expect(
+      workflowPostgresSettings({
+        WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32",
+        WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30",
+      }),
+    ).toEqual({ maxPoolSize: 32, queueConcurrency: 30 });
   });
 
   it.each([
@@ -30,11 +34,17 @@ describe("workflowPostgresSettings", () => {
     ["WORKFLOW_POSTGRES_MAX_POOL_SIZE", " 32"],
     ["WORKFLOW_POSTGRES_MAX_POOL_SIZE", "100000"],
   ])("refuses %s=%s", (name, value) => {
-    expect(() => workflowPostgresSettings({ [name]: value })).toThrow("AGENT_RUNTIME_TUNING_INVALID");
+    expect(() => workflowPostgresSettings({ [name]: value })).toThrow(
+      "AGENT_RUNTIME_TUNING_INVALID",
+    );
   });
 
   it("treats an empty value as absent, as compose writes an unset variable", () => {
-    expect(workflowPostgresSettings({ WORKFLOW_POSTGRES_MAX_POOL_SIZE: "", WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "" }))
-      .toEqual({ maxPoolSize: undefined, queueConcurrency: 50 });
+    expect(
+      workflowPostgresSettings({
+        WORKFLOW_POSTGRES_MAX_POOL_SIZE: "",
+        WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "",
+      }),
+    ).toEqual({ maxPoolSize: undefined, queueConcurrency: 50 });
   });
 });

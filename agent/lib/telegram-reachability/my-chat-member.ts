@@ -36,7 +36,8 @@ const PRESENT_STATUSES = new Set(["administrator", "creator", "member"]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function safeInteger(value: unknown): value is number {
@@ -68,9 +69,20 @@ export function parseMyChatMemberUpdate(raw: unknown): MyChatMemberUpdate | null
   const member = record(change?.new_chat_member);
   const updateId = update?.update_id;
   const date = change?.date;
-  if (!chat || !member || !safeInteger(chat.id) || chat.id === 0 || typeof chat.type !== "string" ||
-      !CHAT_TYPES.has(chat.type) || !safeInteger(date) || date <= 0 ||
-      !safeInteger(updateId) || updateId < 0 || typeof member.status !== "string") return null;
+  if (
+    !chat ||
+    !member ||
+    !safeInteger(chat.id) ||
+    chat.id === 0 ||
+    typeof chat.type !== "string" ||
+    !CHAT_TYPES.has(chat.type) ||
+    !safeInteger(date) ||
+    date <= 0 ||
+    !safeInteger(updateId) ||
+    updateId < 0 ||
+    typeof member.status !== "string"
+  )
+    return null;
   const chatType = chat.type as MyChatMemberUpdate["chatType"];
   const reason = reachability(chatType, member);
   if (reason === undefined) return null;
@@ -97,16 +109,21 @@ export function createMyChatMemberHook(
     }
     // The receipt time is the proof's time for a later stale 403: the same clock as a send's start.
     const applied = await repository.applyMembershipChange({ ...update, receivedAt: now() });
-    console.info(JSON.stringify({
-      applied,
-      chatId: update.chatId,
-      chatType: update.chatType,
-      code: update.reason === null ? "AGENT_TELEGRAM_RECIPIENT_REACHABLE" : "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
-      reason: update.reason,
-      source: "membership_update",
-      status: update.status,
-      updateId: update.updateId,
-    }));
+    console.info(
+      JSON.stringify({
+        applied,
+        chatId: update.chatId,
+        chatType: update.chatType,
+        code:
+          update.reason === null
+            ? "AGENT_TELEGRAM_RECIPIENT_REACHABLE"
+            : "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+        reason: update.reason,
+        source: "membership_update",
+        status: update.status,
+        updateId: update.updateId,
+      }),
+    );
     return new Response("ok");
   };
 }

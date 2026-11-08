@@ -7,13 +7,16 @@ export declare function resolveLocalTraceSchemaDirectory(appRoot: string): strin
  * Segments are added, never rewritten, so this directory's mtime is the instant
  * the trace last received a span.
  */
-export declare function resolveLocalTraceSegmentsDirectory(appRoot: string, traceId: string): string;
+export declare function resolveLocalTraceSegmentsDirectory(
+  appRoot: string,
+  traceId: string,
+): string;
 /** Persists spans from agent-owned traces as immutable OTLP/JSON segments. */
 export declare class LocalTraceSpanProcessor implements SpanProcessor {
-    #private;
-    constructor(appRoot: string);
-    forceFlush(): Promise<void>;
-    onStart(): void;
-    onEnd(span: unknown): void;
-    shutdown(): Promise<void>;
+  #private;
+  constructor(appRoot: string);
+  forceFlush(): Promise<void>;
+  onStart(): void;
+  onEnd(span: unknown): void;
+  shutdown(): Promise<void>;
 }

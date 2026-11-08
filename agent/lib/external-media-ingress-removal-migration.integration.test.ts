@@ -73,12 +73,27 @@ describeWithDatabase("020 external media ingress cleanup migration", () => {
         "SELECT update_id::text, status, lease_token::text, last_error_code FROM telegram_ingress_updates ORDER BY update_id",
       );
       expect(rows.rows).toEqual([
-        { last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED", lease_token: null, status: "failed", update_id: "1" },
-        { last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED", lease_token: null, status: "failed", update_id: "2" },
+        {
+          last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED",
+          lease_token: null,
+          status: "failed",
+          update_id: "1",
+        },
+        {
+          last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED",
+          lease_token: null,
+          status: "failed",
+          update_id: "2",
+        },
         { last_error_code: null, lease_token: null, status: "pending", update_id: "3" },
         { last_error_code: null, lease_token: null, status: "pending", update_id: "4" },
         { last_error_code: null, lease_token: null, status: "pending", update_id: "5" },
-        { last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED", lease_token: null, status: "failed", update_id: "6" },
+        {
+          last_error_code: "AGENT_EXTERNAL_MEDIA_IGNORED",
+          lease_token: null,
+          status: "failed",
+          update_id: "6",
+        },
       ]);
     } finally {
       client.release();
@@ -136,11 +151,7 @@ describeWithDatabase("020 external media ingress cleanup migration", () => {
       const ignored = await client.query<{ update_id: string }>(
         "SELECT update_id::text FROM telegram_ingress_ignored_updates",
       );
-      expect(ignored.rows).toEqual([
-        { update_id: "11" },
-        { update_id: "15" },
-        { update_id: "16" },
-      ]);
+      expect(ignored.rows).toEqual([{ update_id: "11" }, { update_id: "15" }, { update_id: "16" }]);
     } finally {
       client.release();
     }

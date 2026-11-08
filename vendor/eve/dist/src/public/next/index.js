@@ -16,16 +16,13 @@ function resolveApplicationRoot(e) {
 function resolveDevServerTimeout(e) {
   if (e !== void 0) {
     if (!Number.isFinite(e) || e <= 0)
-      throw Error(
-        `eve Next.js development server timeout must be a positive number.`,
-      );
+      throw Error(`eve Next.js development server timeout must be a positive number.`);
     return e;
   }
 }
 function normalizeRoutePrefix(e) {
   let t = (e.startsWith(`/`) ? e : `/${e}`).replace(/\/+$/, ``);
-  if (t.length === 0)
-    throw Error(`eve Next.js service prefix cannot resolve to the root route.`);
+  if (t.length === 0) throw Error(`eve Next.js service prefix cannot resolve to the root route.`);
   return t;
 }
 function joinRoutePrefix(e, t) {
@@ -47,14 +44,10 @@ function readLocalProductionPort(e) {
   let t = process.env[EVE_NEXT_PRODUCTION_PORT_ENV],
     n = t === void 0 || t.trim().length === 0 ? 4274 : Number.parseInt(t, 10);
   if (t !== void 0 && t.trim().length > 0 && String(n) !== t.trim())
-    throw Error(
-      `${EVE_NEXT_PRODUCTION_PORT_ENV} must be an integer between 1 and 65535.`,
-    );
+    throw Error(`${EVE_NEXT_PRODUCTION_PORT_ENV} must be an integer between 1 and 65535.`);
   let r = n + e;
   if (r < 1 || r > 65535)
-    throw Error(
-      `${EVE_NEXT_PRODUCTION_PORT_ENV} plus the eve agent count exceeds 65535.`,
-    );
+    throw Error(`${EVE_NEXT_PRODUCTION_PORT_ENV} plus the eve agent count exceeds 65535.`);
   return r;
 }
 function resolveProductionDestination(e) {
@@ -70,10 +63,7 @@ function resolveProductionDestination(e) {
 function createEveRewriteRule(e) {
   let t = createAgentRewriteSource(e.publicRoutePrefix);
   return {
-    destination: joinRoutePrefix(
-      e.destinationPrefix,
-      `${EVE_ROUTE_PREFIX}/:path+`,
-    ),
+    destination: joinRoutePrefix(e.destinationPrefix, `${EVE_ROUTE_PREFIX}/:path+`),
     source: t,
   };
 }
@@ -111,9 +101,7 @@ function createDefaultBuildCommand(e) {
 function normalizeAgentsConfig(e, t) {
   let n = normalizeRoutePrefix(e.servicePrefix ?? `/_eve_internal/eve`),
     resolveBuildCommand = (n, r) =>
-      r ??
-      e.eveBuildCommand ??
-      createDefaultBuildCommand({ agentRoot: n, nextRoot: t });
+      r ?? e.eveBuildCommand ?? createDefaultBuildCommand({ agentRoot: n, nextRoot: t });
   if (e.agents === void 0) {
     let t = resolveApplicationRoot(e.eveRoot);
     return [
@@ -127,12 +115,9 @@ function normalizeAgentsConfig(e, t) {
     ];
   }
   if (e.eveRoot !== void 0)
-    throw Error(
-      `withEve cannot combine eveRoot with agents. Use one configuration form.`,
-    );
+    throw Error(`withEve cannot combine eveRoot with agents. Use one configuration form.`);
   let r = Object.entries(e.agents);
-  if (r.length === 0)
-    throw Error(`withEve agents must contain at least one named eve agent.`);
+  if (r.length === 0) throw Error(`withEve agents must contain at least one named eve agent.`);
   return r.map(([e, t], r) => {
     assertValidAgentName(e);
     let i = typeof t == `string` ? { root: t } : t,
@@ -143,9 +128,7 @@ function normalizeAgentsConfig(e, t) {
       localProductionPortOffset: r,
       name: e,
       publicRoutePrefix: createNamedAgentRoutePrefix(e),
-      servicePrefix: normalizeRoutePrefix(
-        i.servicePrefix ?? createNamedAgentServicePrefix(n, e),
-      ),
+      servicePrefix: normalizeRoutePrefix(i.servicePrefix ?? createNamedAgentServicePrefix(n, e)),
     };
   });
 }
@@ -189,10 +172,8 @@ function withEve(n, r = {}) {
                   devServerTimeoutMs: a,
                   logLabel: t.name,
                   phase: r,
-                  productionDestinationPrefix:
-                    t.productionDestination.destinationPrefix,
-                  productionServerOrigin:
-                    t.productionDestination.localServerOrigin,
+                  productionDestinationPrefix: t.productionDestination.destinationPrefix,
+                  productionServerOrigin: t.productionDestination.localServerOrigin,
                 }),
                 publicRoutePrefix: t.publicRoutePrefix,
               }),

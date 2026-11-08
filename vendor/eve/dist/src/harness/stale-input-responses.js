@@ -6,8 +6,7 @@ function dropStaleSessionLimitContinuationResponses(e) {
   if (e.stepInput === void 0) return;
   let t = e.stepInput.inputResponses ?? [],
     r = e.stepInput.attributedInputResponses ?? [],
-    keep = (t) =>
-      e.pendingRequestIds.has(t) || !isSessionLimitContinuationRequestId(t),
+    keep = (t) => e.pendingRequestIds.has(t) || !isSessionLimitContinuationRequestId(t),
     i = t.filter((e) => keep(e.requestId)),
     a = r.filter(({ response: e }) => keep(e.requestId));
   if (i.length === t.length && a.length === r.length) return e.stepInput;
@@ -23,29 +22,19 @@ function convertStaleResponsesToUserMessage(e) {
   if (e.stepInput === void 0) return { kind: `unchanged` };
   let t = e.stepInput.inputResponses ?? [],
     n = e.stepInput.attributedInputResponses ?? [];
-  if (t.length === 0 && n.length === 0)
-    return { kind: `unchanged`, stepInput: e.stepInput };
+  if (t.length === 0 && n.length === 0) return { kind: `unchanged`, stepInput: e.stepInput };
   let r = [],
     a = [],
     o = [];
   for (let n of t) (e.pendingRequestIds.has(n.requestId) ? r : o).push(n);
-  for (let t of n)
-    e.pendingRequestIds.has(t.response.requestId)
-      ? a.push(t)
-      : o.push(t.response);
+  for (let t of n) e.pendingRequestIds.has(t.response.requestId) ? a.push(t) : o.push(t.response);
   if (o.length === 0) return { kind: `unchanged`, stepInput: e.stepInput };
   let s = extractHistoricalInputRequests({
       history: e.history,
       requestIds: new Set(o.map((e) => e.requestId)),
     }),
-    c = appendOptionalUserContent(
-      e.stepInput.message,
-      formatModelMessage(o, s),
-    ),
-    l = appendOptionalUserContent(
-      e.stepInput.message,
-      formatDisplayMessage(o, s),
-    ),
+    c = appendOptionalUserContent(e.stepInput.message, formatModelMessage(o, s)),
+    l = appendOptionalUserContent(e.stepInput.message, formatDisplayMessage(o, s)),
     { attributedInputResponses: u, inputResponses: d, ...f } = e.stepInput,
     p = { ...f, message: c };
   return (
@@ -61,15 +50,13 @@ function formatModelMessage(e, t) {
       a = {};
     if ((e.optionId !== void 0 && (a.optionId = e.optionId), i !== void 0)) {
       let e = { id: i.id, label: i.label };
-      (i.description !== void 0 && (e.description = i.description),
-        (a.selectedOption = e));
+      (i.description !== void 0 && (e.description = i.description), (a.selectedOption = e));
     }
     e.text !== void 0 && (a.text = e.text);
     let o = { requestId: e.requestId, response: a };
     return (
       n !== void 0 &&
-        ((o.prompt = n.prompt),
-        (o.requestType = isApprovalRequest(n) ? `approval` : `question`)),
+        ((o.prompt = n.prompt), (o.requestType = isApprovalRequest(n) ? `approval` : `question`)),
       o
     );
   });
@@ -101,7 +88,4 @@ function appendOptionalUserContent(n, r) {
   let i = normalizeUserContent(n);
   return i === void 0 ? r : appendUserContent({ appended: r, existing: i });
 }
-export {
-  convertStaleResponsesToUserMessage,
-  dropStaleSessionLimitContinuationResponses,
-};
+export { convertStaleResponsesToUserMessage, dropStaleSessionLimitContinuationResponses };

@@ -18,10 +18,7 @@ async function cancelClientSession(t) {
       path: createEveSessionCancelRoutePath(t.sessionId),
     }),
     i = CancelTurnResponseSchema.safeParse(n);
-  if (
-    !i.success ||
-    (i.data.status === `accepted` && i.data.sessionId !== t.sessionId)
-  )
+  if (!i.success || (i.data.status === `accepted` && i.data.sessionId !== t.sessionId))
     throw Error(`Cancel route returned an invalid response (${r.status}).`);
   return i.data.status === `accepted`
     ? { sessionId: i.data.sessionId, status: `accepted` }
@@ -34,10 +31,7 @@ async function clearClientSession(e) {
       path: createEveSessionClearRoutePath(e.sessionId),
     }),
     r = ClearResponseSchema.safeParse(n);
-  if (
-    !r.success ||
-    (r.data.status === `accepted` && r.data.sessionId !== e.sessionId)
-  )
+  if (!r.success || (r.data.status === `accepted` && r.data.sessionId !== e.sessionId))
     throw Error(`Clear route returned an invalid response.`);
   return r.data.status === `accepted`
     ? { sessionId: r.data.sessionId, status: `accepted` }
@@ -50,10 +44,7 @@ async function compactClientSession(e) {
       path: createEveSessionCompactRoutePath(e.sessionId),
     }),
     r = CompactResponseSchema.safeParse(t);
-  if (
-    !r.success ||
-    (r.data.status === `accepted` && r.data.sessionId !== e.sessionId)
-  )
+  if (!r.success || (r.data.status === `accepted` && r.data.sessionId !== e.sessionId))
     throw Error(`Compact route returned an invalid response.`);
   return r.data.status === `accepted`
     ? { sessionId: r.data.sessionId, status: `accepted` }
@@ -67,10 +58,7 @@ async function resetClientSession(e) {
       path: createEveSessionResetRoutePath(e.sessionId),
     }),
     n = ResetResponseSchema.safeParse(t);
-  if (
-    !n.success ||
-    (n.data.status === `reset` && n.data.previousSessionId !== e.sessionId)
-  )
+  if (!n.success || (n.data.status === `reset` && n.data.previousSessionId !== e.sessionId))
     throw Error(`Reset route returned an invalid response.`);
   return n.data.status === `reset`
     ? { previousSessionId: n.data.previousSessionId, status: `reset` }
@@ -101,9 +89,4 @@ async function postJson(e) {
 function withRedirectPolicy(e, t) {
   return t === void 0 ? e : { ...e, redirect: t };
 }
-export {
-  cancelClientSession,
-  clearClientSession,
-  compactClientSession,
-  resetClientSession,
-};
+export { cancelClientSession, clearClientSession, compactClientSession, resetClientSession };

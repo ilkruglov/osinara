@@ -1,8 +1,14 @@
 import type { CancelTurnInput, CancelTurnResult, Runtime } from "#channel/types.js";
-import { type Run, type StartOptionsWithoutDeploymentId, type WorkflowFunction, type WorkflowMetadata } from "#internal/workflow/runtime.js";
+import {
+  type Run,
+  type StartOptionsWithoutDeploymentId,
+  type WorkflowFunction,
+  type WorkflowMetadata,
+} from "#internal/workflow/runtime.js";
 import type { RuntimeCompiledArtifactsSource } from "#runtime/compiled-artifacts-source.js";
 import type { DynamicSubagentAgentConfig } from "#runtime/subagents/dynamic-agent-config.js";
-export declare const LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE = "deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()";
+export declare const LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE =
+  "deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()";
 /**
  * Workflow function names whose bundled id is stable across deployments
  * (no `@<pkg.version>` stamp). The bundler reads this set when emitting
@@ -15,7 +21,7 @@ export declare const LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE = "deploymentId 'late
  */
 export declare const STABLE_WORKFLOW_NAMES: ReadonlySet<string>;
 interface WorkflowHookRecord {
-    readonly runId: string;
+  readonly runId: string;
 }
 /**
  * Stable workflow reference used by `start()` to locate the workflow
@@ -24,7 +30,7 @@ interface WorkflowHookRecord {
  * deployments without rewriting the registry key.
  */
 export declare const workflowEntryReference: {
-    workflowId: string;
+  workflowId: string;
 };
 /**
  * Stable workflow reference used by the driver to dispatch per-turn
@@ -34,31 +40,37 @@ export declare const workflowEntryReference: {
  * version differs from the caller's deployment.
  */
 export declare const turnWorkflowReference: {
-    workflowId: string;
+  workflowId: string;
 };
 /** Stable workflow reference for session deadline timers. */
 export declare const sessionTimeoutWorkflowReference: {
-    workflowId: string;
+  workflowId: string;
 };
 /** Stable workflow reference for durable task runs (`experimental.tasks`). */
 export declare const taskRunWorkflowReference: {
-    workflowId: string;
+  workflowId: string;
 };
 /**
  * Creates a workflow-backed runtime whose long-lived driver owns the
  * event stream and dispatches each turn as a child workflow run.
  */
 export declare function createWorkflowRuntime(config: {
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
-    readonly nodeId?: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
+  readonly nodeId?: string;
 }): Runtime;
 /** Requests cancellation through a session's stable command inbox. */
-export declare function requestWorkflowTurnCancellation(input: CancelTurnInput): Promise<CancelTurnResult>;
+export declare function requestWorkflowTurnCancellation(
+  input: CancelTurnInput,
+): Promise<CancelTurnResult>;
 export declare function waitForCommandHookOwner(token: string): Promise<WorkflowHookRecord>;
 /**
  * Starts a workflow on the latest deployment when latest routing applies,
  * while preserving local/dev worlds that do not implement latest routing.
  */
-export declare function startWorkflowPreferLatest<TArgs extends unknown[], TResult>(workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata, args: TArgs, options?: StartOptionsWithoutDeploymentId): Promise<Run<unknown> | Run<TResult>>;
+export declare function startWorkflowPreferLatest<TArgs extends unknown[], TResult>(
+  workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata,
+  args: TArgs,
+  options?: StartOptionsWithoutDeploymentId,
+): Promise<Run<unknown> | Run<TResult>>;
 export {};

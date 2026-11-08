@@ -12,9 +12,7 @@ async function executeLoadSkillTool(e, t) {
     if (a.includes(i)) {
       let e = r.get(SandboxKey);
       if (e === void 0)
-        throw Error(
-          `The dynamic skill "${i}" requires sandbox access on the runtime context.`,
-        );
+        throw Error(`The dynamic skill "${i}" requires sandbox access on the runtime context.`);
       return await loadSkillFromSandbox(e, i, o);
     }
     let e = t.find((e) => e.name === i);

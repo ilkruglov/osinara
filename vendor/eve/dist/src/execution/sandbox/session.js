@@ -39,10 +39,7 @@ function buildSandboxSession(n, r = async () => {}) {
       });
       return r === null
         ? null
-        : applyLineRange(
-            decodeBytes(await streamToBuffer(r), e.encoding ?? `utf-8`),
-            e,
-          );
+        : applyLineRange(decodeBytes(await streamToBuffer(r), e.encoding ?? `utf-8`), e);
     },
     async writeFile(e) {
       await n.writeFile({
@@ -120,8 +117,6 @@ function decodeBytes(e, t) {
     : Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString(t);
 }
 function encodeString(e, t) {
-  return t === `utf-8` || t === `utf8`
-    ? new TextEncoder().encode(e)
-    : Buffer.from(e, t);
+  return t === `utf-8` || t === `utf8` ? new TextEncoder().encode(e) : Buffer.from(e, t);
 }
 export { buildSandboxSession };

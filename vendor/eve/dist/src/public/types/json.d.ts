@@ -23,6 +23,12 @@
  * a `JSON.stringify(...)` / `JSON.parse(...)` round trip and must not
  * cross a durable step boundary.
  */
-export type JsonValue = string | number | boolean | null | readonly JsonValue[] | {
-    readonly [key: string]: JsonValue;
-};
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | {
+      readonly [key: string]: JsonValue;
+    };

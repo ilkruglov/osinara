@@ -70,12 +70,7 @@ function renderMessageQueueRows(n) {
     c = a.glyph;
   if (r.messages.length === 0 && !r.steering)
     return o && r.cancelling
-      ? [
-          clipVisible(
-            `  ${s.yellow(c.dotActive)} ${s.dim(`Cancelling turn…`)}`,
-            i,
-          ),
-        ]
+      ? [clipVisible(`  ${s.yellow(c.dotActive)} ${s.dim(`Cancelling turn…`)}`, i)]
       : [];
   let l = [clipVisible(`  ${s.gray(c.arrowUp)} ${headerBody(r, o, a)}`, i)];
   for (let [n, a] of r.messages.entries()) {

@@ -18,15 +18,15 @@ export declare const PendingSkillAnnouncementKey: ContextKey<string>;
  */
 /** Refreshes session skills exactly once for each compiled runtime revision. */
 export declare function refreshDynamicSessionSkillsForRuntimeRevision(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicSkillResolver[];
-    readonly event: UnstampedMessageStreamEvent;
-    readonly messages: readonly ModelMessage[];
-    readonly runtimeRevision: string;
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicSkillResolver[];
+  readonly event: UnstampedMessageStreamEvent;
+  readonly messages: readonly ModelMessage[];
+  readonly runtimeRevision: string;
 }): Promise<void>;
 export declare function dispatchDynamicSkillEvent(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicSkillResolver[];
-    readonly event: UnstampedMessageStreamEvent;
-    readonly messages: readonly ModelMessage[];
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicSkillResolver[];
+  readonly event: UnstampedMessageStreamEvent;
+  readonly messages: readonly ModelMessage[];
 }): Promise<void>;

@@ -44,8 +44,8 @@ function snapReasoningToCapabilities(t, n) {
   let i = ALL_REASONING_LEVELS.indexOf(t),
     a = r[0];
   for (let t of r)
-    Math.abs(ALL_REASONING_LEVELS.indexOf(t) - i) <
-      Math.abs(ALL_REASONING_LEVELS.indexOf(a) - i) && (a = t);
+    Math.abs(ALL_REASONING_LEVELS.indexOf(t) - i) < Math.abs(ALL_REASONING_LEVELS.indexOf(a) - i) &&
+      (a = t);
   return a;
 }
 function modelEditorMenuRows(e, t, n) {
@@ -92,9 +92,7 @@ function initialModelEditorState(e) {
   return {
     screen: {
       kind: `menu`,
-      cursor:
-        modelEditorMenuRows(e, t, n).find((e) => e.disabled !== !0)?.value ??
-        `done`,
+      cursor: modelEditorMenuRows(e, t, n).find((e) => e.disabled !== !0)?.value ?? `done`,
     },
     draft: t,
     capabilities: n,
@@ -131,15 +129,11 @@ function settleResult(e, t) {
 function adjustMenuValue(e, t, n, r) {
   let i = r === `left` ? -1 : 1;
   if (n === `reasoning`) {
-    if (reasoningSectionView(t, e.draft, e.capabilities).kind !== `interactive`)
-      return ignore(e);
+    if (reasoningSectionView(t, e.draft, e.capabilities).kind !== `interactive`) return ignore(e);
     let n = reasoningPositions(e.capabilities, e.draft.reasoning);
     if (n.length === 0) return ignore(e);
     let r = e.draft.reasoning === "default" ? -1 : n.indexOf(e.draft.reasoning),
-      a =
-        r === -1
-          ? n[i === 1 ? 0 : n.length - 1]
-          : n[(r + i + n.length) % n.length];
+      a = r === -1 ? n[i === 1 ? 0 : n.length - 1] : n[(r + i + n.length) % n.length];
     return a === e.draft.reasoning
       ? ignore(e)
       : {
@@ -148,8 +142,7 @@ function adjustMenuValue(e, t, n, r) {
         };
   }
   if (n === `tier`) {
-    if (tierSectionView(t, e.capabilities).kind !== `interactive`)
-      return ignore(e);
+    if (tierSectionView(t, e.capabilities).kind !== `interactive`) return ignore(e);
     let n = e.draft.tier === `priority` ? `standard` : `priority`;
     return { kind: `render`, state: { ...e, draft: { ...e.draft, tier: n } } };
   }
@@ -219,17 +212,11 @@ function transitionModelScreen(e, n, a, o) {
         ? renderSelect(reduceSelect(o, { type: `clear` }, { options: s }))
         : toMenu(e, `model`);
     case `move`:
-      return renderSelect(
-        reduceSelect(o, { type: n.direction }, { options: s }),
-      );
+      return renderSelect(reduceSelect(o, { type: n.direction }, { options: s }));
     case `char`:
-      return renderSelect(
-        reduceSelect(o, { type: `char`, char: n.char }, { options: s }),
-      );
+      return renderSelect(reduceSelect(o, { type: `char`, char: n.char }, { options: s }));
     case `backspace`:
-      return renderSelect(
-        reduceSelect(o, { type: `backspace` }, { options: s }),
-      );
+      return renderSelect(reduceSelect(o, { type: `backspace` }, { options: s }));
     case `submit`: {
       let n = selectValueAtCursor(filterOptions(s, o.filter), o.cursor);
       if (n === void 0) return ignore(e);

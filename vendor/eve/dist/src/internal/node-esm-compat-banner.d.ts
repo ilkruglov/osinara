@@ -9,8 +9,8 @@
  * provides.
  */
 interface NodeEsmCompatBannerOptions {
-    /** Whether to expose a CommonJS `require` shim alongside the path globals. */
-    readonly includeRequire?: boolean;
+  /** Whether to expose a CommonJS `require` shim alongside the path globals. */
+  readonly includeRequire?: boolean;
 }
 /**
  * Builds the ESM CommonJS-compatibility banner appropriate for a single
@@ -20,27 +20,35 @@ interface NodeEsmCompatBannerOptions {
  *
  * Returns an empty string when the chunk already provides every binding.
  */
-export declare function buildNodeEsmCompatBanner(code: string, options?: NodeEsmCompatBannerOptions): string;
+export declare function buildNodeEsmCompatBanner(
+  code: string,
+  options?: NodeEsmCompatBannerOptions,
+): string;
 interface BannerPlugin {
-    readonly name: string;
-    renderChunk(code: string, chunk?: {
-        readonly fileName?: string;
-    }): {
-        code: string;
-        map: SourceMap;
-    } | null;
+  readonly name: string;
+  renderChunk(
+    code: string,
+    chunk?: {
+      readonly fileName?: string;
+    },
+  ): {
+    code: string;
+    map: SourceMap;
+  } | null;
 }
 interface SourceMap {
-    readonly version: 3;
-    readonly sources: readonly string[];
-    readonly sourcesContent: readonly string[];
-    readonly names: readonly string[];
-    readonly mappings: string;
+  readonly version: 3;
+  readonly sources: readonly string[];
+  readonly sourcesContent: readonly string[];
+  readonly names: readonly string[];
+  readonly mappings: string;
 }
 /**
  * Creates a bundler plugin that prepends the Node ESM compatibility
  * banner to each output chunk, skipping any banner line whose binding
  * the chunk already provides. Compatible with both Rollup and Rolldown.
  */
-export declare function createNodeEsmCompatBannerPlugin(options?: NodeEsmCompatBannerOptions): BannerPlugin;
+export declare function createNodeEsmCompatBannerPlugin(
+  options?: NodeEsmCompatBannerOptions,
+): BannerPlugin;
 export {};

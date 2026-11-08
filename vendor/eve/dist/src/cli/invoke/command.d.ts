@@ -4,30 +4,30 @@ import type { DevelopmentServer, DevelopmentServerOptions } from "#internal/nitr
 import { type RunInvokeInput } from "./invoke.js";
 import { type InvokeResult } from "./result.js";
 export interface InvokeCommandDependencies {
-    readonly loadEnvironment: (appRoot: string) => void | Promise<void>;
-    readonly runInvoke: (input: RunInvokeInput) => Promise<InvokeResult>;
-    readonly startHost: (appRoot: string) => DevelopmentServer | Promise<DevelopmentServer>;
+  readonly loadEnvironment: (appRoot: string) => void | Promise<void>;
+  readonly runInvoke: (input: RunInvokeInput) => Promise<InvokeResult>;
+  readonly startHost: (appRoot: string) => DevelopmentServer | Promise<DevelopmentServer>;
 }
 /** Runtime overrides used when wiring `eve invoke` into the root CLI. */
 export interface InvokeCliRuntimeDependencies {
-    readonly runInvoke: (input: RunInvokeInput) => Promise<InvokeResult>;
-    readonly startHost: (appRoot: string, options?: DevelopmentServerOptions) => DevelopmentServer;
+  readonly runInvoke: (input: RunInvokeInput) => Promise<InvokeResult>;
+  readonly startHost: (appRoot: string, options?: DevelopmentServerOptions) => DevelopmentServer;
 }
 interface InvokeCommandLogger {
-    log(message: string): void;
+  log(message: string): void;
 }
 /** Registers the invoke command with lazily loaded production dependencies. */
 export declare function registerRuntimeInvokeCommand(input: {
-    readonly applicationContext: CliApplicationContext;
-    readonly logger: InvokeCommandLogger;
-    readonly program: Command;
-    readonly runtime: Partial<InvokeCliRuntimeDependencies>;
+  readonly applicationContext: CliApplicationContext;
+  readonly logger: InvokeCommandLogger;
+  readonly program: Command;
+  readonly runtime: Partial<InvokeCliRuntimeDependencies>;
 }): void;
 /** Registers the non-interactive invoke command. */
 export declare function registerInvokeCommand(input: {
-    readonly applicationContext: CliApplicationContext;
-    readonly deps: InvokeCommandDependencies;
-    readonly logger: InvokeCommandLogger;
-    readonly program: Command;
+  readonly applicationContext: CliApplicationContext;
+  readonly deps: InvokeCommandDependencies;
+  readonly logger: InvokeCommandLogger;
+  readonly program: Command;
 }): void;
 export {};

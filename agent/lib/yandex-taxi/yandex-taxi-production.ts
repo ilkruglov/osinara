@@ -12,5 +12,10 @@ import { sandboxSessionId } from "../sessions/session-context.js";
 import { createYandexTaxiClient, type YandexTaxiClient } from "./yandex-taxi-client.js";
 
 export function yandexTaxiClientFor(ctx: ToolContext): YandexTaxiClient {
-  return createYandexTaxiClient({ driver: productionBrowserDriver({ sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
+  return createYandexTaxiClient({
+    driver: productionBrowserDriver({
+      sandboxSessionId: sandboxSessionId(ctx),
+      signal: ctx.abortSignal,
+    }),
+  });
 }

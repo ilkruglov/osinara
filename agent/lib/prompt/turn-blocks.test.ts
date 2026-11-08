@@ -14,10 +14,7 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
-import {
-  createModeBlockResolver,
-  createPreferenceBlockResolver,
-} from "./turn-blocks.js";
+import { createModeBlockResolver, createPreferenceBlockResolver } from "./turn-blocks.js";
 
 function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   return {
@@ -36,7 +33,11 @@ function context(
   messages: readonly ModelMessage[] = [],
   channelKind = "telegram",
 ) {
-  return { channel: { kind: channelKind }, messages, session: { auth: sessionAuth, id: "session-1" } };
+  return {
+    channel: { kind: channelKind },
+    messages,
+    session: { auth: sessionAuth, id: "session-1" },
+  };
 }
 
 const privateAuth = auth({
@@ -168,9 +169,9 @@ describe("mode block resolution", () => {
   });
 
   it("intersects the verified snapshot with the current database policy", async () => {
-    const loadCapabilities = vi.fn().mockResolvedValue(
-      new Set<ExternalGroupToolName>(["remember", "web_fetch"]),
-    );
+    const loadCapabilities = vi
+      .fn()
+      .mockResolvedValue(new Set<ExternalGroupToolName>(["remember", "web_fetch"]));
     const resolve = createModeBlockResolver({
       loadCapabilities,
       loadReactionPolicy: reactionPolicy,
@@ -183,8 +184,11 @@ describe("mode block resolution", () => {
   });
 
   it("describes authored skills granted to the group and survives a failed grant lookup", async () => {
-    const loadCapabilities = vi.fn().mockResolvedValue(new Set<ExternalGroupToolName>(["remember"]));
-    const loadGrantedSkills = vi.fn()
+    const loadCapabilities = vi
+      .fn()
+      .mockResolvedValue(new Set<ExternalGroupToolName>(["remember"]));
+    const loadGrantedSkills = vi
+      .fn()
       .mockResolvedValueOnce([{ description: "Сводка недели по чату", name: "weekly-digest" }])
       .mockRejectedValueOnce(new Error("database unavailable"));
     const resolve = createModeBlockResolver({

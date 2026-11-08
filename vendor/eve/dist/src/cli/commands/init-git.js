@@ -55,29 +55,19 @@ async function tryInitializeGit(n) {
     )
   )
     return { kind: `skipped`, reason: `existing-metadata` };
-  if (!(await isGitAvailable()))
-    return { kind: `skipped`, reason: `git-unavailable` };
-  if (await isInsideExistingRepository(n))
-    return { kind: `skipped`, reason: `parent-repository` };
+  if (!(await isGitAvailable())) return { kind: `skipped`, reason: `git-unavailable` };
+  if (await isInsideExistingRepository(n)) return { kind: `skipped`, reason: `parent-repository` };
   let r = await runGitStage(n, `initialize`, [`init`], !1);
   if (r !== void 0) return r;
   if (!(await hasConfiguredDefaultBranch(n))) {
-    let e = await runGitStage(
-      n,
-      `default-branch`,
-      [`checkout`, `-b`, `main`],
-      !0,
-    );
+    let e = await runGitStage(n, `default-branch`, [`checkout`, `-b`, `main`], !0);
     if (e !== void 0) return e;
   }
   let i = await runGitStage(n, `stage`, [`add`, `-A`], !0);
   return i === void 0
-    ? ((await runGitStage(
-        n,
-        `commit`,
-        [`commit`, `-m`, `Initial commit from eve`],
-        !0,
-      )) ?? { kind: `initialized` })
+    ? ((await runGitStage(n, `commit`, [`commit`, `-m`, `Initial commit from eve`], !0)) ?? {
+        kind: `initialized`,
+      })
     : i;
 }
 export { tryInitializeGit };

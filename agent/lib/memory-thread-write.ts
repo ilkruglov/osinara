@@ -20,10 +20,7 @@ import {
   THREAD_TITLE_MAX_CHARACTERS,
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
-import type {
-  CreateMemoryThreadInput,
-  MemoryThreadWriteResult,
-} from "./memory-record.js";
+import type { CreateMemoryThreadInput, MemoryThreadWriteResult } from "./memory-record.js";
 import { memoryVectorLiteral } from "./memory-vector.js";
 
 interface ThreadIdentity {
@@ -92,18 +89,26 @@ function scopePartitionKey(auth: MemoryAuthorization, scope: MemoryScope): strin
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  return memoryVectorLiteral(vector, () => new AppError(
-    "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
-    "Не удалось построить смысловой индекс названия нити памяти",
-  ));
+  return memoryVectorLiteral(
+    vector,
+    () =>
+      new AppError(
+        "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
+        "Не удалось построить смысловой индекс названия нити памяти",
+      ),
+  );
 }
 
 export async function embedMemoryThreadTitle(
   input: CreateMemoryThreadInput | undefined,
 ): Promise<readonly number[] | null> {
   if (!input || input.action !== "create") return null;
-  if (!input.title.trim() || input.title.length > THREAD_TITLE_MAX_CHARACTERS ||
-    !input.purpose.trim() || input.purpose.length > THREAD_PURPOSE_MAX_CHARACTERS) {
+  if (
+    !input.title.trim() ||
+    input.title.length > THREAD_TITLE_MAX_CHARACTERS ||
+    !input.purpose.trim() ||
+    input.purpose.length > THREAD_PURPOSE_MAX_CHARACTERS
+  ) {
     throw invalidInput("Название или назначение нити памяти не соответствует допустимым границам");
   }
   return (await embedMemoryPassages([input.title]))[0]!;
@@ -148,10 +153,7 @@ async function loadThread(
   };
 }
 
-function sourceSubject(
-  scope: MemoryScope,
-  prepared: PreparedClaimEvidence,
-): ThreadIdentity {
+function sourceSubject(scope: MemoryScope, prepared: PreparedClaimEvidence): ThreadIdentity {
   if (prepared.subjectKind === "label" || prepared.subjectKind === "none") {
     throw invalidInput("Subject-thread требует явного current_author или verified_ref");
   }
@@ -171,11 +173,11 @@ function withThreadIdentity(
   identity: ThreadIdentity,
 ): PreparedClaimEvidence {
   const primary = prepared.sources.find((source) => source.role === "primary");
-  const reported = primary !== undefined && (
-    (identity.subjectParticipantId !== null &&
+  const reported =
+    primary !== undefined &&
+    ((identity.subjectParticipantId !== null &&
       identity.subjectParticipantId !== primary.authorParticipantId) ||
-    (identity.subjectUserId !== null && identity.subjectUserId !== primary.authorUserId)
-  );
+      (identity.subjectUserId !== null && identity.subjectUserId !== primary.authorUserId));
   return {
     ...prepared,
     evidenceKind: reported ? "reported" : prepared.evidenceKind,
@@ -261,8 +263,16 @@ async function findOrCreateThread(
        AND parent_thread_id IS NOT DISTINCT FROM $7::uuid
        AND title_normalized = lower(regexp_replace(trim($8), '\\s+', ' ', 'g'))
      FOR UPDATE`,
-    [auth.familyId, scope, partition, identity.subjectUserId, identity.subjectParticipantId,
-      identity.memoryProjectId, parentThreadId, input.title],
+    [
+      auth.familyId,
+      scope,
+      partition,
+      identity.subjectUserId,
+      identity.subjectParticipantId,
+      identity.memoryProjectId,
+      parentThreadId,
+      input.title,
+    ],
   );
   if (existing.rows[0]) {
     if (existing.rows[0].status === "completed") {
@@ -311,18 +321,31 @@ async function findOrCreateThread(
      ORDER BY semantic_similarity DESC NULLS LAST, purpose_similarity DESC,
               thread.updated_at DESC, thread.id
      LIMIT $15`,
-    [auth.familyId, scope, partition, identity.subjectUserId, identity.subjectParticipantId,
-      identity.memoryProjectId, parentThreadId, input.title, input.purpose,
-      vectorLiteral(titleEmbedding), MEMORY_EMBEDDING_MODEL_VERSION,
+    [
+      auth.familyId,
+      scope,
+      partition,
+      identity.subjectUserId,
+      identity.subjectParticipantId,
+      identity.memoryProjectId,
+      parentThreadId,
+      input.title,
+      input.purpose,
+      vectorLiteral(titleEmbedding),
+      MEMORY_EMBEDDING_MODEL_VERSION,
       THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
       THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
-      projectRoot, THREAD_CREATION_CANDIDATE_LIMIT],
+      projectRoot,
+      THREAD_CREATION_CANDIDATE_LIMIT,
+    ],
   );
   if (candidates.rows.length > 0) {
-    throw new MemoryThreadCandidateError(candidates.rows.map((candidate) => ({
-      threadRef: candidate.thread_ref,
-      title: candidate.title,
-    })));
+    throw new MemoryThreadCandidateError(
+      candidates.rows.map((candidate) => ({
+        threadRef: candidate.thread_ref,
+        title: candidate.title,
+      })),
+    );
   }
 
   const inserted = await client.query<{ id: string; thread_ref: string }>(
@@ -332,9 +355,20 @@ async function findOrCreateThread(
         title_embedding, title_embedding_model)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::vector, $12)
      RETURNING id, thread_ref`,
-    [auth.familyId, scope, partition, identity.subjectUserId, identity.subjectParticipantId,
-      identity.subjectConversationId, identity.memoryProjectId, parentThreadId, input.title,
-      input.purpose, vectorLiteral(titleEmbedding), MEMORY_EMBEDDING_MODEL_VERSION],
+    [
+      auth.familyId,
+      scope,
+      partition,
+      identity.subjectUserId,
+      identity.subjectParticipantId,
+      identity.subjectConversationId,
+      identity.memoryProjectId,
+      parentThreadId,
+      input.title,
+      input.purpose,
+      vectorLiteral(titleEmbedding),
+      MEMORY_EMBEDDING_MODEL_VERSION,
+    ],
   );
   return { action: "created", id: inserted.rows[0]!.id, threadRef: inserted.rows[0]!.thread_ref };
 }
@@ -349,10 +383,9 @@ export async function prepareMemoryThreadWrite(
 ): Promise<PreparedMemoryThreadWrite | null> {
   if (!input) return null;
   const partition = scopePartitionKey(auth, scope);
-  await client.query(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-    [`memory-thread-write:${auth.familyId}:${scope}:${partition}`],
-  );
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `memory-thread-write:${auth.familyId}:${scope}:${partition}`,
+  ]);
   if (input.action === "attach") {
     const thread = await loadThread(client, auth, scope, input.threadRef, false);
     requireCompatibleIdentity(prepared, thread);
@@ -364,14 +397,17 @@ export async function prepareMemoryThreadWrite(
       threadId: thread.id,
     };
   }
-  if (!titleEmbedding) throw invalidInput("Для новой нити отсутствует проверенный смысловой индекс");
+  if (!titleEmbedding)
+    throw invalidInput("Для новой нити отсутствует проверенный смысловой индекс");
   const parent = input.parentThreadRef
     ? await loadThread(client, auth, scope, input.parentThreadRef, true)
     : null;
   if (parent) requireCompatibleIdentity(prepared, parent);
-  const identity = parent ?? (input.identity === "project"
-    ? await projectIdentity(client, auth, scope, input.title, prepared)
-    : sourceSubject(scope, prepared));
+  const identity =
+    parent ??
+    (input.identity === "project"
+      ? await projectIdentity(client, auth, scope, input.title, prepared)
+      : sourceSubject(scope, prepared));
   const thread = await findOrCreateThread(
     client,
     auth,
@@ -423,8 +459,13 @@ export async function materializeMemoryThreadWrite(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
      VALUES ($1, $2, $3, $4,
              jsonb_build_object('threadRef', $5::text, 'role', $6::text))`,
-    [auth.familyId, systemActor ? null : auth.userId,
+    [
+      auth.familyId,
+      systemActor ? null : auth.userId,
       prepared.result.action === "created" ? "memory.thread_created" : "memory.thread_attached",
-      claimId, prepared.result.threadRef, prepared.role],
+      claimId,
+      prepared.result.threadRef,
+      prepared.role,
+    ],
   );
 }

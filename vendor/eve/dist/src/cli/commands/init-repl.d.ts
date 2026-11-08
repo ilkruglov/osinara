@@ -1,43 +1,51 @@
 import { type Prompter } from "#setup/prompter.js";
 declare const positional: (prompt: string) => string[];
-declare const CODING_AGENT_REPLS: readonly [{
+declare const CODING_AGENT_REPLS: readonly [
+  {
     readonly command: "claude";
     readonly label: "Claude Code";
     readonly promptArgs: typeof positional;
-}, {
+  },
+  {
     readonly command: "codex";
     readonly label: "Codex";
     readonly promptArgs: typeof positional;
-}, {
+  },
+  {
     readonly command: "cursor-agent";
     readonly label: "Cursor";
     readonly promptArgs: typeof positional;
-}, {
+  },
+  {
     readonly command: "droid";
     readonly label: "Droid";
     readonly promptArgs: typeof positional;
-}, {
+  },
+  {
     readonly command: "gemini";
     readonly label: "Gemini CLI";
     readonly promptArgs: (prompt: string) => string[];
-}, {
+  },
+  {
     readonly command: "opencode";
     readonly label: "opencode";
     readonly promptArgs: (prompt: string) => string[];
-}, {
+  },
+  {
     readonly command: "pi";
     readonly label: "Pi";
     readonly promptArgs: typeof positional;
-}];
+  },
+];
 type CodingAgentReplDefinition = (typeof CODING_AGENT_REPLS)[number];
 /** A coding-agent REPL that can take over the terminal after `eve init`. */
 export type CodingAgentRepl = CodingAgentReplDefinition["command"];
 /** The one post-init continuation point for a human terminal session. */
 export type InitHandoff = "exit" | "eve-dev" | CodingAgentRepl;
 export interface InitReplDependencies {
-    createPrompter(): Prompter;
-    hasInteractiveTerminal(): boolean;
-    isCodingAgentReplAvailable(command: CodingAgentRepl): Promise<boolean>;
+  createPrompter(): Prompter;
+  hasInteractiveTerminal(): boolean;
+  isCodingAgentReplAvailable(command: CodingAgentRepl): Promise<boolean>;
 }
 /** The full path of the named REPL's executable on `PATH`, or null if absent. */
 export declare function resolveCodingAgentRepl(command: CodingAgentRepl): Promise<string | null>;
@@ -49,15 +57,15 @@ export declare function isCodingAgentReplAvailable(command: CodingAgentRepl): Pr
  * of them on `PATH`, keep the prior direct-to-dev behavior.
  */
 export declare function selectInitHandoff(input: {
-    agentName: string;
-    deps?: Partial<InitReplDependencies>;
+  agentName: string;
+  deps?: Partial<InitReplDependencies>;
 }): Promise<InitHandoff>;
 interface ReplSpawnPlan {
-    file: string;
-    args: readonly string[];
-    shell: boolean;
-    /** False means the prompt is not in argv and the caller must surface it. */
-    seeded: boolean;
+  file: string;
+  args: readonly string[];
+  shell: boolean;
+  /** False means the prompt is not in argv and the caller must surface it. */
+  seeded: boolean;
 }
 /**
  * Decides how to launch a REPL from its resolved executable path. A directly
@@ -67,14 +75,19 @@ interface ReplSpawnPlan {
  * metacharacters in an argument, so it launches the bare REPL and reports the
  * prompt as unseeded.
  */
-export declare function replSpawnPlan(command: CodingAgentRepl, resolvedPath: string | null, prompt: string, platform?: NodeJS.Platform): ReplSpawnPlan;
+export declare function replSpawnPlan(
+  command: CodingAgentRepl,
+  resolvedPath: string | null,
+  prompt: string,
+  platform?: NodeJS.Platform,
+): ReplSpawnPlan;
 /** Starts the selected coding-agent REPL in the newly initialized project. */
 export declare function spawnCodingAgentRepl(input: {
-    command: CodingAgentRepl;
-    cwd: string;
-    prompt: string;
-    /** Surfaces the prompt when it could not be seeded into the REPL's argv. */
-    onPromptUnseeded?: (prompt: string) => void;
-    resolvePath?: (command: CodingAgentRepl) => Promise<string | null>;
+  command: CodingAgentRepl;
+  cwd: string;
+  prompt: string;
+  /** Surfaces the prompt when it could not be seeded into the REPL's argv. */
+  onPromptUnseeded?: (prompt: string) => void;
+  resolvePath?: (command: CodingAgentRepl) => Promise<string | null>;
 }): Promise<boolean>;
 export {};

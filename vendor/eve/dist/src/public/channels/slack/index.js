@@ -20,10 +20,7 @@ import {
   cardChildToFallbackText,
   isCardElement,
 } from "#compiled/chat/index.js";
-import {
-  cardToBlocks,
-  cardToFallbackText,
-} from "#public/channels/slack/blocks.js";
+import { cardToBlocks, cardToFallbackText } from "#public/channels/slack/blocks.js";
 import {
   callSlackApi,
   resolveSlackBotToken,

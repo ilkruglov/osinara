@@ -9,6 +9,12 @@
  * import { defineState } from "eve/context";
  * ```
  */
-export type { Session, SessionAuth, SessionAuthContext, SessionParent, SessionTurn, } from "#context/accessors.js";
+export type {
+  Session,
+  SessionAuth,
+  SessionAuthContext,
+  SessionParent,
+  SessionTurn,
+} from "#context/accessors.js";
 export { defineState, type StateHandle } from "#public/definitions/state.js";
 export type { SessionContext } from "#public/definitions/callback-context.js";

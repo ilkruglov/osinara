@@ -1,30 +1,55 @@
 import type { ModelMessage, TextStreamPart, ToolSet, TypedToolResult } from "ai";
-type ToolResponsePart = Extract<ModelMessage, {
+type ToolResponsePart = Extract<
+  ModelMessage,
+  {
     role: "tool";
-}>["content"][number];
-type InlineToolResultPart = Extract<ToolResponsePart, {
+  }
+>["content"][number];
+type InlineToolResultPart = Extract<
+  ToolResponsePart,
+  {
     type: "tool-result";
-}>;
-import type { AssistantStepFinishReason, RuntimeIdentity, RuntimeTraceContext } from "#protocol/message.js";
+  }
+>;
+import type {
+  AssistantStepFinishReason,
+  RuntimeIdentity,
+  RuntimeTraceContext,
+} from "#protocol/message.js";
 import type { RunMode } from "#shared/run-mode.js";
 import type { JsonObject } from "#shared/json.js";
 import type { HarnessEmissionState } from "#harness/emission-state.js";
 import type { HarnessEmitFn, HarnessToolMap, StepInput } from "#harness/types.js";
-export { getHarnessEmissionState, isHarnessBetweenTurns, setHarnessEmissionState, } from "#harness/emission-state.js";
+export {
+  getHarnessEmissionState,
+  isHarnessBetweenTurns,
+  setHarnessEmissionState,
+} from "#harness/emission-state.js";
 export type { HarnessEmissionState } from "#harness/emission-state.js";
 /**
  * Emits `session.started` (once), `turn.started`, and `message.received` at the
  * beginning of a new turn. Returns updated emission state.
  */
-export declare function emitTurnPreamble(emitFn: HarnessEmitFn, input: StepInput, state: HarnessEmissionState, runtimeIdentity?: RuntimeIdentity, traceContext?: RuntimeTraceContext): Promise<HarnessEmissionState>;
+export declare function emitTurnPreamble(
+  emitFn: HarnessEmitFn,
+  input: StepInput,
+  state: HarnessEmissionState,
+  runtimeIdentity?: RuntimeIdentity,
+  traceContext?: RuntimeTraceContext,
+): Promise<HarnessEmissionState>;
 /**
  * Emits `step.started` for one model call.
  */
-export declare function emitStepStarted(emitFn: HarnessEmitFn, state: HarnessEmissionState, modelId: string, messages?: readonly import("ai").ModelMessage[]): Promise<void>;
+export declare function emitStepStarted(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  modelId: string,
+  messages?: readonly import("ai").ModelMessage[],
+): Promise<void>;
 interface FailedStepPayload {
-    readonly code: string;
-    readonly details?: JsonObject;
-    readonly message: string;
+  readonly code: string;
+  readonly details?: JsonObject;
+  readonly message: string;
 }
 /**
  * Emits the full terminal failure cascade: `step.failed` →
@@ -35,16 +60,24 @@ interface FailedStepPayload {
  * `session.failed` tail tells adapters the session is dead and no
  * further follow-up is possible on the same continuation token.
  */
-export declare function emitFailedStep(emitFn: HarnessEmitFn, state: HarnessEmissionState, input: FailedStepPayload & {
+export declare function emitFailedStep(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  input: FailedStepPayload & {
     readonly sessionId: string;
-}): Promise<void>;
+  },
+): Promise<void>;
 /**
  * Emits the recoverable failure cascade: `step.failed` →
  * `turn.failed` → `session.waiting`.
  */
-export declare function emitRecoverableFailedTurn(emitFn: HarnessEmitFn, state: HarnessEmissionState, input: FailedStepPayload & {
+export declare function emitRecoverableFailedTurn(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  input: FailedStepPayload & {
     readonly continuationToken: string;
-}): Promise<HarnessEmissionState>;
+  },
+): Promise<HarnessEmissionState>;
 /**
  * Returns updated emission state for the next step in the current turn.
  */
@@ -53,12 +86,18 @@ export declare function advanceStep(state: HarnessEmissionState): HarnessEmissio
  * Emits `turn.completed` and either `session.waiting` or `session.completed`.
  * Returns updated emission state with an incremented sequence.
  */
-export declare function emitTurnEpilogue(emitFn: HarnessEmitFn, state: HarnessEmissionState, mode: RunMode): Promise<HarnessEmissionState>;
+export declare function emitTurnEpilogue(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  mode: RunMode,
+): Promise<HarnessEmissionState>;
 /**
  * Maps an AI SDK finish reason string to the eve-owned
  * {@link AssistantStepFinishReason} union. Unknown values become `"other"`.
  */
-export declare function normalizeAssistantStepFinishReason(value: string | undefined): AssistantStepFinishReason;
+export declare function normalizeAssistantStepFinishReason(
+  value: string | undefined,
+): AssistantStepFinishReason;
 /**
  * Result of consuming one step's `fullStream`.
  *
@@ -66,15 +105,15 @@ export declare function normalizeAssistantStepFinishReason(value: string | undef
  * authorization results also route back to the park detector.
  */
 interface EmittedStreamContent {
-    readonly emittedActionCallIds: ReadonlySet<string>;
-    readonly handledInlineToolResultCallIds: ReadonlySet<string>;
-    readonly invalidInputToolCallIds: ReadonlySet<string>;
-    readonly inlineAuthorizationResults: readonly TypedToolResult<ToolSet>[];
-    readonly trailingInlineToolResultParts: readonly InlineToolResultPart[];
+  readonly emittedActionCallIds: ReadonlySet<string>;
+  readonly handledInlineToolResultCallIds: ReadonlySet<string>;
+  readonly invalidInputToolCallIds: ReadonlySet<string>;
+  readonly inlineAuthorizationResults: readonly TypedToolResult<ToolSet>[];
+  readonly trailingInlineToolResultParts: readonly InlineToolResultPart[];
 }
 interface StreamActionEmissionOptions {
-    readonly excludedActionToolNames: ReadonlySet<string>;
-    readonly tools: HarnessToolMap;
+  readonly excludedActionToolNames: ReadonlySet<string>;
+  readonly tools: HarnessToolMap;
 }
 /**
  * Consumes the AI SDK `fullStream` and emits real-time text and reasoning
@@ -84,4 +123,9 @@ interface StreamActionEmissionOptions {
  * stream batch into one request event before their first result. A result
  * without a streamed call resumes a call from an earlier step.
  */
-export declare function emitStreamContent(emitFn: HarnessEmitFn, state: HarnessEmissionState, fullStream: AsyncIterable<TextStreamPart<ToolSet>>, options?: StreamActionEmissionOptions): Promise<EmittedStreamContent>;
+export declare function emitStreamContent(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  fullStream: AsyncIterable<TextStreamPart<ToolSet>>,
+  options?: StreamActionEmissionOptions,
+): Promise<EmittedStreamContent>;

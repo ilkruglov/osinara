@@ -17,7 +17,11 @@ import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
 import { runtimeVersions, type RuntimeVersions } from "./runtime-versions.js";
 import type { TurnEvaluationIdentity } from "./turn-evaluation-repository.js";
-import { measureTurnExchange, type ExchangeEntry, type ExchangeMetrics } from "./turn-exchange-metrics.js";
+import {
+  measureTurnExchange,
+  type ExchangeEntry,
+  type ExchangeMetrics,
+} from "./turn-exchange-metrics.js";
 import { turnExchangeRepository, type TurnResponseKind } from "./turn-exchange-repository.js";
 import { turnIdentity, type TurnIdentityContext } from "./turn-identity.js";
 
@@ -25,20 +29,38 @@ import { turnIdentity, type TurnIdentityContext } from "./turn-identity.js";
 export const EXCHANGE_JOURNAL_LIMIT = 20;
 
 export interface TurnExchangeDependencies {
-  listRecent: (input: { groupId: string; messageThreadId: string | null }) => Promise<readonly ExchangeEntry[]>;
-  recordMetrics: (identity: TurnEvaluationIdentity, metrics: ExchangeMetrics, versions: RuntimeVersions) => Promise<void>;
-  recordResponseKind: (identity: TurnEvaluationIdentity, kind: TurnResponseKind, versions: RuntimeVersions) => Promise<void>;
+  listRecent: (input: {
+    groupId: string;
+    messageThreadId: string | null;
+  }) => Promise<readonly ExchangeEntry[]>;
+  recordMetrics: (
+    identity: TurnEvaluationIdentity,
+    metrics: ExchangeMetrics,
+    versions: RuntimeVersions,
+  ) => Promise<void>;
+  recordResponseKind: (
+    identity: TurnEvaluationIdentity,
+    kind: TurnResponseKind,
+    versions: RuntimeVersions,
+  ) => Promise<void>;
   versions: () => RuntimeVersions;
 }
 
 type TurnContext = TurnIdentityContext & { session: { turn: { id: string } } };
 
 const defaultDependencies: TurnExchangeDependencies = {
-  listRecent: (input) => telegramGroupJournalRepository.listRecent({
-    anchorEntryId: null, beforeSequence: null, groupId: input.groupId, limit: EXCHANGE_JOURNAL_LIMIT, messageThreadId: input.messageThreadId,
-  }),
-  recordMetrics: (identity, metrics, versions) => turnExchangeRepository.recordMetrics(identity, metrics, versions),
-  recordResponseKind: (identity, kind, versions) => turnExchangeRepository.recordResponseKind(identity, kind, versions),
+  listRecent: (input) =>
+    telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: input.groupId,
+      limit: EXCHANGE_JOURNAL_LIMIT,
+      messageThreadId: input.messageThreadId,
+    }),
+  recordMetrics: (identity, metrics, versions) =>
+    turnExchangeRepository.recordMetrics(identity, metrics, versions),
+  recordResponseKind: (identity, kind, versions) =>
+    turnExchangeRepository.recordResponseKind(identity, kind, versions),
   versions: runtimeVersions,
 };
 
@@ -47,16 +69,24 @@ function evaluationIdentity(ctx: TurnContext): TurnEvaluationIdentity | null {
   const identity = turnIdentity(ctx);
   if (!identity) return null;
   return {
-    chatKind: identity.chatKind, eveSessionId: ctx.session.id, eveTurnId: ctx.session.turn.id,
-    familyId: identity.familyId, telegramChatId: identity.telegramChatId, triggeringEntryId: identity.triggeringEntryId,
+    chatKind: identity.chatKind,
+    eveSessionId: ctx.session.id,
+    eveTurnId: ctx.session.turn.id,
+    familyId: identity.familyId,
+    telegramChatId: identity.telegramChatId,
+    triggeringEntryId: identity.triggeringEntryId,
   };
 }
 
 function logFailure(code: string, ctx: TurnContext, error: unknown): void {
-  console.error(JSON.stringify({
-    code, error: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
-    eveSessionId: ctx.session.id, eveTurnId: ctx.session.turn.id,
-  }));
+  console.error(
+    JSON.stringify({
+      code,
+      error: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+      eveSessionId: ctx.session.id,
+      eveTurnId: ctx.session.turn.id,
+    }),
+  );
 }
 
 export async function recordTurnResponseKind(
@@ -81,8 +111,14 @@ export async function observeTurnExchange(
   const identity = evaluationIdentity(ctx);
   if (!identity || identity.chatKind !== "external" || !identity.triggeringEntryId) return;
   try {
-    const entries = (await dependencies.listRecent({ groupId: input.groupId, messageThreadId: input.forumTopicId })).slice(-EXCHANGE_JOURNAL_LIMIT);
-    const metrics = measureTurnExchange({ entries, ownMessageIds: input.ownMessageIds, triggeringEntryId: identity.triggeringEntryId });
+    const entries = (
+      await dependencies.listRecent({ groupId: input.groupId, messageThreadId: input.forumTopicId })
+    ).slice(-EXCHANGE_JOURNAL_LIMIT);
+    const metrics = measureTurnExchange({
+      entries,
+      ownMessageIds: input.ownMessageIds,
+      triggeringEntryId: identity.triggeringEntryId,
+    });
     if (!metrics) return;
     await dependencies.recordMetrics(identity, metrics, dependencies.versions());
   } catch (error) {

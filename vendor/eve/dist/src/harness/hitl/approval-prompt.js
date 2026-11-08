@@ -9,14 +9,8 @@ function renderPendingApprovalsSnippet(n) {
     return [
       PENDING_APPROVALS_LABEL,
       `The following tool calls are awaiting approval and have not executed:`,
-      ...r.map((e) =>
-        JSON.stringify({ requestId: e.requestId, toolName: e.action.toolName }),
-      ),
+      ...r.map((e) => JSON.stringify({ requestId: e.requestId, toolName: e.action.toolName })),
     ].join(`
 `);
 }
-export {
-  PENDING_APPROVALS_LABEL,
-  isPendingApprovalsSnippet,
-  renderPendingApprovalsSnippet,
-};
+export { PENDING_APPROVALS_LABEL, isPendingApprovalsSnippet, renderPendingApprovalsSnippet };

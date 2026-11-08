@@ -2,14 +2,14 @@ import type { SessionAuthContext } from "#channel/types.js";
 import { type TaskView } from "#tasks/types.js";
 /** Input for one durable task run. */
 export interface TaskRunWorkflowInput {
-    /** Private task inbox token; a routing credential, never model-visible. */
-    readonly taskInboxToken: string;
-    /** The creation view, normally `working`. */
-    readonly initialView: TaskView;
-    /** Parent session delivery token used to wake the task's owning parent. */
-    readonly parentContinuationToken: string;
-    /** Additive for old in-flight task runs; absence is restored as fail-closed null auth. */
-    readonly parentAuth?: SessionAuthContext | null;
+  /** Private task inbox token; a routing credential, never model-visible. */
+  readonly taskInboxToken: string;
+  /** The creation view, normally `working`. */
+  readonly initialView: TaskView;
+  /** Parent session delivery token used to wake the task's owning parent. */
+  readonly parentContinuationToken: string;
+  /** Additive for old in-flight task runs; absence is restored as fail-closed null auth. */
+  readonly parentAuth?: SessionAuthContext | null;
 }
 /**
  * The durable task run: single writer for one task's lifecycle.

@@ -30,16 +30,17 @@ interface TelegramGroupRegistrationBase {
   toolAllowlist: string[];
 }
 
-export type TelegramGroupRegistration = TelegramGroupRegistrationBase & (
-  | {
-    messageMode: StandardTelegramGroupMessageMode;
-    type: "family_private";
-  }
-  | {
-    messageMode: TelegramGroupMessageMode;
-    type: Exclude<RegisteredGroupType, "family_private">;
-  }
-);
+export type TelegramGroupRegistration = TelegramGroupRegistrationBase &
+  (
+    | {
+        messageMode: StandardTelegramGroupMessageMode;
+        type: "family_private";
+      }
+    | {
+        messageMode: TelegramGroupMessageMode;
+        type: Exclude<RegisteredGroupType, "family_private">;
+      }
+  );
 
 export interface TelegramGroupPolicyUpdate {
   familyId: string;
@@ -67,10 +68,7 @@ export interface TelegramGroupSessionRotation {
 }
 
 export interface TelegramGroupAdministrationRepository {
-  listStatuses(input: {
-    familyId: string;
-    requestedBy: string;
-  }): Promise<TelegramGroupStatus[]>;
+  listStatuses(input: { familyId: string; requestedBy: string }): Promise<TelegramGroupStatus[]>;
   registerGroup(input: TelegramGroupRegistration): Promise<{ groupId: string }>;
   removeRegistration(input: {
     familyId: string;
@@ -135,13 +133,17 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Receipt-time media policy and trust-zone replacement share this chat-level lock.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        input.telegramChatId,
+        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+      ]);
 
       // A type change crosses a trust boundary, so replace the row and cascade all scoped data.
-      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType }>(
+      const existing = await client.query<{
+        family_id: string;
+        id: string;
+        type: RegisteredGroupType;
+      }>(
         `SELECT id, family_id, type
          FROM telegram_groups
          WHERE telegram_chat_id = $1
@@ -208,10 +210,10 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
 
       // Serialize exact-chat administration so registration replacement or removal cannot race
       // selection of the trust zone whose canonical sessions are being rotated.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        input.telegramChatId,
+        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+      ]);
       const registered = await client.query<{ id: string }>(
         `SELECT id
            FROM telegram_groups
@@ -224,17 +226,17 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         throw new AppError(
           "AGENT_GROUP_NOT_FOUND",
           "Группа с таким telegramChatId не зарегистрирована в вашей семье. " +
-            "Вызовите manage_telegram_group ровно с {\"action\":\"status\"}, " +
+            'Вызовите manage_telegram_group ровно с {"action":"status"}, ' +
             "выберите нужную группу и повторите готовый startNewContextInput из результата",
         );
       }
 
       // Session preparation takes the same group-wide lock before its route lock. Once acquired,
       // the following statement sees every canonical generation committed before this request.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [group.id, SESSION_GROUP_ROTATION_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        group.id,
+        SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
+      ]);
 
       // Canonical rows represent main chat and forum topics. Parked task sessions retain the exact
       // Eve state and requester binding needed to finish or deny their pending operation safely.
@@ -270,10 +272,10 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Prevent removal from overtaking an in-flight media trust-zone decision.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        input.telegramChatId,
+        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+      ]);
 
       // Both group keys remain mandatory so another family's registration is never deleted.
       const result = await client.query<{ id: string }>(
@@ -308,13 +310,17 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Serialize against registration, removal, and receipt-time trust decisions for this chat.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        input.telegramChatId,
+        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+      ]);
 
       // Lock the existing identity in place; policy updates never replace a trust-zone row.
-      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType }>(
+      const existing = await client.query<{
+        family_id: string;
+        id: string;
+        type: RegisteredGroupType;
+      }>(
         `SELECT id, family_id, type
          FROM telegram_groups
          WHERE telegram_chat_id = $1

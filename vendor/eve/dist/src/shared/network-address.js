@@ -28,8 +28,7 @@ const httpServerUrlSchema = z.url({ protocol: /^https?$/ }),
   reservedRanges.addSubnet(`fe80::`, 10, `ipv6`),
   reservedRanges.addSubnet(`ff00::`, 8, `ipv6`));
 const loopbackRanges = new BlockList();
-(loopbackRanges.addSubnet(`127.0.0.0`, 8, `ipv4`),
-  loopbackRanges.addAddress(`::1`, `ipv6`));
+(loopbackRanges.addSubnet(`127.0.0.0`, 8, `ipv4`), loopbackRanges.addAddress(`::1`, `ipv6`));
 function normalizeAddress(e) {
   let t = e.trim().replace(/^\[(.*)\]$/u, `$1`),
     n = t.indexOf(`%`),

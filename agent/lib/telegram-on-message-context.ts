@@ -16,10 +16,7 @@ import type { PrepareSessionInput } from "./sessions/session-repository.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
 import type { TelegramRepository } from "./telegram-repository.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
-import type {
-  WorkspaceAuthorization,
-  WorkspaceScope,
-} from "./workspaces/workspace-repository.js";
+import type { WorkspaceAuthorization, WorkspaceScope } from "./workspaces/workspace-repository.js";
 
 type AllowedConversationAccess = ReturnType<typeof evaluateConversationAccess> & { allowed: true };
 
@@ -77,8 +74,8 @@ export function telegramSessionScope(access: AllowedConversationAccess) {
     resolved.memoryScopes.includes("personal")
       ? { groupId: null, scope: "personal", userId: resolved.userId }
       : resolved.memoryScopes.includes("group")
-      ? { groupId: resolved.groupId, scope: "group", userId: null }
-      : { groupId: resolved.groupId, scope: "family", userId: null };
+        ? { groupId: resolved.groupId, scope: "group", userId: null }
+        : { groupId: resolved.groupId, scope: "family", userId: null };
   return input;
 }
 
@@ -91,9 +88,7 @@ export function telegramProactiveDeliveryAuthorization(
   return {
     familyId: access.access.familyId,
     groupId: scope.groupId,
-    messageThreadId: message.messageThreadId === undefined
-      ? null
-      : String(message.messageThreadId),
+    messageThreadId: message.messageThreadId === undefined ? null : String(message.messageThreadId),
     ownerUserId: scope.userId,
     scope: scope.scope,
     telegramChatId: message.chat.id,

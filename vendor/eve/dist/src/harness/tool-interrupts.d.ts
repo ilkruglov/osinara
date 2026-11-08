@@ -17,6 +17,13 @@
 import type { AlsContext } from "#context/container.js";
 import type { AuthorizationSignal } from "#harness/authorization.js";
 /** Stashes a tool's full interrupt signal under its `toolCallId` for the current step. */
-export declare function stashToolInterrupt(ctx: AlsContext, toolCallId: string, signal: AuthorizationSignal): void;
+export declare function stashToolInterrupt(
+  ctx: AlsContext,
+  toolCallId: string,
+  signal: AuthorizationSignal,
+): void;
 /** Reads the full interrupt signal stashed for `toolCallId`, if any. */
-export declare function readToolInterrupt(ctx: AlsContext, toolCallId: string): AuthorizationSignal | undefined;
+export declare function readToolInterrupt(
+  ctx: AlsContext,
+  toolCallId: string,
+): AuthorizationSignal | undefined;

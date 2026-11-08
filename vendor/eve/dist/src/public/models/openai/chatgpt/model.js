@@ -66,8 +66,7 @@ function stripOpenAIItemIds(e, n) {
     a = {};
   for (let [t, r] of Object.entries(e)) {
     let e = stripOpenAIItemIds(r, n);
-    ((t === `providerOptions` || t === `providerMetadata`) &&
-      (e = withoutOpenAIItemId(e)),
+    ((t === `providerOptions` || t === `providerMetadata`) && (e = withoutOpenAIItemId(e)),
       e !== r && (i = !0),
       (a[t] = e));
   }

@@ -50,8 +50,6 @@ function structuralProviderMetadata(e) {
     let t = n[e];
     (typeof t == `string` || typeof t == `number`) && (r[e] = t);
   }
-  return Object.freeze(
-    Object.keys(r).length === 0 ? {} : { gateway: Object.freeze(r) },
-  );
+  return Object.freeze(Object.keys(r).length === 0 ? {} : { gateway: Object.freeze(r) });
 }
 export { structuralProviderMetadata, withoutInstrumentationContent };

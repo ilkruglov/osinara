@@ -13,8 +13,7 @@ async function probeAgentInfo(e) {
   try {
     return { kind: `ready`, info: await e.client.info() };
   } catch (e) {
-    if (!isRetryableAgentInfoFailure(e))
-      return { kind: `unavailable`, error: e };
+    if (!isRetryableAgentInfoFailure(e)) return { kind: `unavailable`, error: e };
   }
   await sleep(100);
   try {

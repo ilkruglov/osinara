@@ -22,14 +22,16 @@ export function createProcessMemoryLog(log: (line: string) => void = console.inf
     if (now - lastAt < INTERVAL_MILLISECONDS) return;
     lastAt = now;
     const usage = process.memoryUsage();
-    log(JSON.stringify({
-      code: "AGENT_PROCESS_MEMORY",
-      externalMb: megabytes(usage.external),
-      heapLimitMb: megabytes(getHeapStatistics().heap_size_limit),
-      heapTotalMb: megabytes(usage.heapTotal),
-      heapUsedMb: megabytes(usage.heapUsed),
-      rssMb: megabytes(usage.rss),
-    }));
+    log(
+      JSON.stringify({
+        code: "AGENT_PROCESS_MEMORY",
+        externalMb: megabytes(usage.external),
+        heapLimitMb: megabytes(getHeapStatistics().heap_size_limit),
+        heapTotalMb: megabytes(usage.heapTotal),
+        heapUsedMb: megabytes(usage.heapUsed),
+        rssMb: megabytes(usage.rss),
+      }),
+    );
   };
 }
 

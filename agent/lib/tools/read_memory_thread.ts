@@ -18,11 +18,13 @@ import {
 export default defineTool({
   description:
     "Прочитать bounded страницу source-backed истории нити по opaque threadRef; используй cursor для углубления.",
-  inputSchema: z.object({
-    cursor: z.string().regex(THREAD_ENTRY_REF_PATTERN).optional(),
-    limit: z.number().int().min(1).max(THREAD_HISTORY_PAGE_MAX_ENTRIES).default(20),
-    threadRef: z.string().regex(THREAD_REF_PATTERN),
-  }).strict(),
+  inputSchema: z
+    .object({
+      cursor: z.string().regex(THREAD_ENTRY_REF_PATTERN).optional(),
+      limit: z.number().int().min(1).max(THREAD_HISTORY_PAGE_MAX_ENTRIES).default(20),
+      threadRef: z.string().regex(THREAD_REF_PATTERN),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await memoryThreadQueryRepository.read(
       requireMemoryAuthorization(ctx),

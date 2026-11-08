@@ -8,13 +8,13 @@ import type { EveEvalContext, EveEvalJudgeConfig, EveEvalTargetHandle } from "#e
  * AssertionCollector.finalize} it against the completed task result.
  */
 export declare function createEvalContext(deps: {
-    readonly manager: EvalSessionManager;
-    readonly collector: AssertionCollector;
-    readonly target: EveEvalTargetHandle;
-    readonly signal: AbortSignal;
-    readonly judge: EveEvalJudgeConfig | undefined;
-    readonly log: (message: string) => void;
+  readonly manager: EvalSessionManager;
+  readonly collector: AssertionCollector;
+  readonly target: EveEvalTargetHandle;
+  readonly signal: AbortSignal;
+  readonly judge: EveEvalJudgeConfig | undefined;
+  readonly log: (message: string) => void;
 }): {
-    readonly context: EveEvalContext;
-    readonly collector: AssertionCollector;
+  readonly context: EveEvalContext;
+  readonly collector: AssertionCollector;
 };

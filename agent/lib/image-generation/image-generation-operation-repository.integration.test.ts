@@ -75,15 +75,39 @@ describeWithDatabase("image generation operation repository", () => {
 
   it("remembers the provider job of a started operation for reconciliation", async () => {
     const workspaceId = await workspace();
-    await imageGenerationOperationRepository.begin({ inputHash: "c".repeat(64), operationKey: "image-call-job", outputPath: FILE.path, workspaceId });
-    await imageGenerationOperationRepository.recordProviderJob("image-call-job", { jobId: "cmvbdeekj0073zx013f2euglr", model: "nano-banana-2", provider: "plusvibe" });
-    await imageGenerationOperationRepository.markAmbiguous("image-call-job", "AGENT_IMAGE_GENERATION_AMBIGUOUS");
-    const settled = await database().query<{ provider: string | null; provider_job_id: string | null; provider_model: string | null }>(
+    await imageGenerationOperationRepository.begin({
+      inputHash: "c".repeat(64),
+      operationKey: "image-call-job",
+      outputPath: FILE.path,
+      workspaceId,
+    });
+    await imageGenerationOperationRepository.recordProviderJob("image-call-job", {
+      jobId: "cmvbdeekj0073zx013f2euglr",
+      model: "nano-banana-2",
+      provider: "plusvibe",
+    });
+    await imageGenerationOperationRepository.markAmbiguous(
+      "image-call-job",
+      "AGENT_IMAGE_GENERATION_AMBIGUOUS",
+    );
+    const settled = await database().query<{
+      provider: string | null;
+      provider_job_id: string | null;
+      provider_model: string | null;
+    }>(
       "SELECT provider, provider_job_id, provider_model FROM image_generation_operations WHERE operation_key = 'image-call-job'",
     );
-    expect(settled.rows[0]).toEqual({ provider: "plusvibe", provider_job_id: "cmvbdeekj0073zx013f2euglr", provider_model: "nano-banana-2" });
+    expect(settled.rows[0]).toEqual({
+      provider: "plusvibe",
+      provider_job_id: "cmvbdeekj0073zx013f2euglr",
+      provider_model: "nano-banana-2",
+    });
     // A settled operation keeps the job it had: a late report never rewrites history.
-    await imageGenerationOperationRepository.recordProviderJob("image-call-job", { jobId: "late", model: "x", provider: "y" });
+    await imageGenerationOperationRepository.recordProviderJob("image-call-job", {
+      jobId: "late",
+      model: "x",
+      provider: "y",
+    });
     const again = await database().query<{ provider_job_id: string | null }>(
       "SELECT provider_job_id FROM image_generation_operations WHERE operation_key = 'image-call-job'",
     );
@@ -99,12 +123,14 @@ describeWithDatabase("image generation operation repository", () => {
       workspaceId,
     });
 
-    await expect(imageGenerationOperationRepository.begin({
-      inputHash: "c".repeat(64),
-      operationKey: "image-call-mismatch",
-      outputPath: FILE.path,
-      workspaceId,
-    })).rejects.toThrowError(/AGENT_IMAGE_GENERATION_REPLAY_MISMATCH/u);
+    await expect(
+      imageGenerationOperationRepository.begin({
+        inputHash: "c".repeat(64),
+        operationKey: "image-call-mismatch",
+        outputPath: FILE.path,
+        workspaceId,
+      }),
+    ).rejects.toThrowError(/AGENT_IMAGE_GENERATION_REPLAY_MISMATCH/u);
   });
 
   it("keeps an ambiguous charge terminal", async () => {

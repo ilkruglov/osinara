@@ -4,16 +4,16 @@
  * stream: `at` and `source` first, then the event identity and payload.
  */
 export interface DevSessionEventLine {
-    readonly at: string;
-    readonly source: "event";
-    readonly runId: string;
-    readonly type: string;
-    readonly data?: unknown;
+  readonly at: string;
+  readonly source: "event";
+  readonly runId: string;
+  readonly type: string;
+  readonly data?: unknown;
 }
 /** Time window (inclusive) of events to resolve, in wall-clock event time. */
 export interface DevSessionEventWindow {
-    readonly from: Date;
-    readonly to: Date;
+  readonly from: Date;
+  readonly to: Date;
 }
 /**
  * Reads session events for one diagnostic-log window from the local
@@ -33,4 +33,7 @@ export interface DevSessionEventWindow {
  * time window: events from any `eve dev` process in the window are
  * included, since the store does not attribute runs to processes.
  */
-export declare function readDevSessionEvents(appRoot: string, window: DevSessionEventWindow): Promise<DevSessionEventLine[]>;
+export declare function readDevSessionEvents(
+  appRoot: string,
+  window: DevSessionEventWindow,
+): Promise<DevSessionEventLine[]>;

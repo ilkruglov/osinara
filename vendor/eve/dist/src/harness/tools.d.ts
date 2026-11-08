@@ -22,10 +22,10 @@ import type { ToolExecuteOptions } from "#shared/tool-definition.js";
  * retry call so the request can proceed without it.
  */
 export declare function buildToolSet(input: {
-    readonly approvedTools?: ReadonlySet<string>;
-    readonly capabilities?: SessionCapabilities;
-    readonly disabledProviderTools?: ReadonlySet<string>;
-    readonly tools: HarnessToolMap;
+  readonly approvedTools?: ReadonlySet<string>;
+  readonly capabilities?: SessionCapabilities;
+  readonly disabledProviderTools?: ReadonlySet<string>;
+  readonly tools: HarnessToolMap;
 }): ToolSet;
 /**
  * Builds a ToolSet from an ordered list of harness definitions.
@@ -34,10 +34,10 @@ export declare function buildToolSet(input: {
  * ordering where step tools override turn/session tools.
  */
 export declare function buildToolSetFromDefinitions(input: {
-    readonly approvedTools?: ReadonlySet<string>;
-    readonly capabilities?: SessionCapabilities;
-    readonly disabledProviderTools?: ReadonlySet<string>;
-    readonly tools: readonly HarnessToolDefinition[];
+  readonly approvedTools?: ReadonlySet<string>;
+  readonly capabilities?: SessionCapabilities;
+  readonly disabledProviderTools?: ReadonlySet<string>;
+  readonly tools: readonly HarnessToolDefinition[];
 }): ToolSet;
 /**
  * Wraps a tool's `execute` so a returned {@link AuthorizationSignal} is
@@ -46,7 +46,9 @@ export declare function buildToolSetFromDefinitions(input: {
  * omits OAuth URLs, user codes, and hook URLs from model-facing history.
  * Returns `undefined` for client-side tools (no `execute`).
  */
-export declare function wrapToolExecute(definition: HarnessToolDefinition): ((input: any, options: ToolExecuteOptions) => Promise<any> | AsyncIterable<any>) | undefined;
+export declare function wrapToolExecute(
+  definition: HarnessToolDefinition,
+): ((input: any, options: ToolExecuteOptions) => Promise<any> | AsyncIterable<any>) | undefined;
 /**
  * Builds the AI SDK ToolSet for one harness step.
  *
@@ -67,12 +69,14 @@ export declare function wrapToolExecute(definition: HarnessToolDefinition): ((in
  * a gateway fallback provider has rejected a provider-specific tool.
  */
 export declare function buildToolSetWithProviderTools(input: {
-    readonly approvedTools?: ReadonlySet<string>;
-    readonly capabilities?: SessionCapabilities;
-    readonly disabledProviderTools?: ReadonlySet<string>;
-    readonly modelReference: RuntimeModelReference;
-    readonly tools: HarnessToolMap;
-    readonly webSearchProvider?: WebSearchProvider;
+  readonly approvedTools?: ReadonlySet<string>;
+  readonly capabilities?: SessionCapabilities;
+  readonly disabledProviderTools?: ReadonlySet<string>;
+  readonly modelReference: RuntimeModelReference;
+  readonly tools: HarnessToolMap;
+  readonly webSearchProvider?: WebSearchProvider;
 }): Promise<ToolSet>;
 /** Builds the AI SDK 7 call-level approval policy for an assembled tool set. */
-export declare function buildToolApproval(tools: ToolSet): ToolApprovalConfiguration<ToolSet, Record<string, unknown>>;
+export declare function buildToolApproval(
+  tools: ToolSet,
+): ToolApprovalConfiguration<ToolSet, Record<string, unknown>>;

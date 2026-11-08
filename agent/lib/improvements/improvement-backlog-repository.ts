@@ -80,11 +80,18 @@ export const improvementBacklogRepository = {
                ELSE 'low' END
        RETURNING id, category, summary, priority, evidence, recurrence_count, status,
                  first_seen_at, last_seen_at, (xmax <> 0) AS recurred`,
-      [input.familyId, input.fingerprint, input.category, input.summary, input.priority,
-        JSON.stringify(input.evidence)],
+      [
+        input.familyId,
+        input.fingerprint,
+        input.category,
+        input.summary,
+        input.priority,
+        JSON.stringify(input.evidence),
+      ],
     );
     const row = result.rows[0];
-    if (!row) throw new AppError("AGENT_IMPROVEMENT_WRITE_FAILED", "Не удалось сохранить пункт бэклога");
+    if (!row)
+      throw new AppError("AGENT_IMPROVEMENT_WRITE_FAILED", "Не удалось сохранить пункт бэклога");
     return { item: rowToItem(row), recurred: row.recurred };
   },
 
@@ -100,10 +107,11 @@ export const improvementBacklogRepository = {
     );
     return result.rows
       .map(rowToItem)
-      .sort((a, b) =>
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        b.recurrenceCount - a.recurrenceCount ||
-        b.lastSeenAt.localeCompare(a.lastSeenAt)
+      .sort(
+        (a, b) =>
+          PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+          b.recurrenceCount - a.recurrenceCount ||
+          b.lastSeenAt.localeCompare(a.lastSeenAt),
       )
       .slice(0, IMPROVEMENT_LIST_LIMIT);
   },
@@ -123,7 +131,8 @@ export const improvementBacklogRepository = {
       [input.id, input.familyId, input.status, input.closedByUserId],
     );
     const row = result.rows[0];
-    if (!row) throw new AppError("AGENT_IMPROVEMENT_NOT_FOUND", "Открытый пункт с таким id не найден");
+    if (!row)
+      throw new AppError("AGENT_IMPROVEMENT_NOT_FOUND", "Открытый пункт с таким id не найден");
     return rowToItem(row);
   },
 };

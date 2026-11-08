@@ -7,18 +7,12 @@ function createRuntimeSession(e = `test-session`) {
     id: e,
   };
 }
-const RUNTIME_SESSION_STORAGE_GLOBAL_KEY = Symbol.for(
-    `eve.runtime-session-storage`,
-  ),
-  RUNTIME_SESSION_DEFAULT_GLOBAL_KEY = Symbol.for(
-    `eve.runtime-session-default`,
-  ),
+const RUNTIME_SESSION_STORAGE_GLOBAL_KEY = Symbol.for(`eve.runtime-session-storage`),
+  RUNTIME_SESSION_DEFAULT_GLOBAL_KEY = Symbol.for(`eve.runtime-session-default`),
   globalContainer = globalThis;
 globalContainer[RUNTIME_SESSION_STORAGE_GLOBAL_KEY] === void 0 &&
-  (globalContainer[RUNTIME_SESSION_STORAGE_GLOBAL_KEY] =
-    new AsyncLocalStorage());
-const runtimeSessionStorage =
-  globalContainer[RUNTIME_SESSION_STORAGE_GLOBAL_KEY];
+  (globalContainer[RUNTIME_SESSION_STORAGE_GLOBAL_KEY] = new AsyncLocalStorage());
+const runtimeSessionStorage = globalContainer[RUNTIME_SESSION_STORAGE_GLOBAL_KEY];
 function resolveProcessDefaultSession() {
   return (
     globalContainer[RUNTIME_SESSION_DEFAULT_GLOBAL_KEY] === void 0 &&

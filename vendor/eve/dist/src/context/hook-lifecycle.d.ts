@@ -8,7 +8,7 @@ import type { ContextContainer } from "./container.js";
  * scope so hooks see the same context as the rest of the step.
  */
 export declare function dispatchStreamEventHooks(input: {
-    readonly ctx: ContextContainer;
-    readonly registry: RuntimeHookRegistry;
-    readonly event: MessageStreamEvent;
+  readonly ctx: ContextContainer;
+  readonly registry: RuntimeHookRegistry;
+  readonly event: MessageStreamEvent;
 }): Promise<void>;

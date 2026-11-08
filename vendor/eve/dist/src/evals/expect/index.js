@@ -1,15 +1,10 @@
 import { Levenshtein } from "../../node_modules/.pnpm/autoevals@0.0.132_ws@8.21.3_bufferutil@4.1.0_/node_modules/autoevals/jsdist/index.js";
-import {
-  formatDiagnosticValue,
-  toDiagnosticMetadataValue,
-} from "#evals/diagnostics.js";
+import { formatDiagnosticValue, toDiagnosticMetadataValue } from "#evals/diagnostics.js";
 import { deepEquals, testRegExp } from "#evals/match.js";
 function makeAssertion(e) {
   let evaluate = (t) => {
     let n = e.evaluate(t);
-    return n instanceof Promise
-      ? n.then(normalizeEvaluation)
-      : normalizeEvaluation(n);
+    return n instanceof Promise ? n.then(normalizeEvaluation) : normalizeEvaluation(n);
   };
   return {
     name: e.name,
@@ -51,8 +46,7 @@ function includes(e) {
   });
 }
 function satisfies(e, r) {
-  if (r.trim().length === 0)
-    throw Error(`satisfies() requires a non-empty label.`);
+  if (r.trim().length === 0) throw Error(`satisfies() requires a non-empty label.`);
   return makeAssertion({
     name: `satisfies(${r})`,
     severity: `gate`,

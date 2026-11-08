@@ -18,13 +18,7 @@ const source = z.object({
     z.object({ kind: z.literal(`external`), provider: z.string() }),
     z.object({
       kind: z.literal(`chatgpt`),
-      state: z.enum([
-        `checking`,
-        `ready`,
-        `signed-out`,
-        `reauth-required`,
-        `unavailable`,
-      ]),
+      state: z.enum([`checking`, `ready`, `signed-out`, `reauth-required`, `unavailable`]),
       accountLabel: z.string().optional(),
     }),
     z.object({
@@ -38,15 +32,7 @@ const source = z.object({
     contextWindowTokens: z.number().optional(),
     providerOptions: z.unknown().optional(),
     reasoning: z
-      .enum([
-        `provider-default`,
-        `none`,
-        `minimal`,
-        `low`,
-        `medium`,
-        `high`,
-        `xhigh`,
-      ])
+      .enum([`provider-default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`])
       .optional()
       .catch(void 0),
     source: source.optional(),

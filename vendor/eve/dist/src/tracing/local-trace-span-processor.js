@@ -33,8 +33,7 @@ var LocalTraceSpanProcessor = class {
       (this.#t = this.#t
         .then(async () => {
           let t = resolveLocalTraceSegmentsDirectory(this.#e, r);
-          (await mkdir(t, { recursive: !0 }),
-            await atomicWriteFile(join(t, `${n}.otlp.json`), i));
+          (await mkdir(t, { recursive: !0 }), await atomicWriteFile(join(t, `${n}.otlp.json`), i));
         })
         .catch((e) => {
           this.#n ||

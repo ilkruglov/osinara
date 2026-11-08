@@ -58,10 +58,10 @@ export type SandboxWriteTextFileOptions = Parameters<AiSdkSandbox["writeTextFile
  * directories.
  */
 export interface SandboxRemovePathOptions {
-    readonly abortSignal?: AbortSignal;
-    readonly force?: boolean;
-    readonly path: string;
-    readonly recursive?: boolean;
+  readonly abortSignal?: AbortSignal;
+  readonly force?: boolean;
+  readonly path: string;
+  readonly recursive?: boolean;
 }
 /**
  * Public eve-owned sandbox session exposed to authored lifecycle hooks.
@@ -77,47 +77,57 @@ export interface SandboxRemovePathOptions {
  * for every backend. Absolute paths pass through unchanged.
  *
  */
-export interface SandboxSession extends Pick<AiSdkSandbox, "run" | "spawn" | "readFile" | "readBinaryFile" | "readTextFile" | "writeFile" | "writeBinaryFile" | "writeTextFile"> {
-    /**
-     * Stable identifier for the backend session this handle wraps.
-     *
-     * Persists across reconnects to the same logical session: two calls
-     * that resume the same underlying backend sandbox observe the same
-     * `id`. Template sessions constructed during bootstrap expose the
-     * template key; live sessions expose the session key assigned by the
-     * runtime. Useful as a cache key for per-session state that must
-     * outlive individual step executions.
-     */
-    readonly id: string;
-    /**
-     * Anchors a sandbox-relative path to `/workspace` and returns the
-     * resulting absolute path.
-     *
-     * Relative paths resolve from `/workspace`; absolute paths pass through.
-     * The read and write methods already apply this internally.
-     */
-    resolvePath(path: string): string;
-    /**
-     * Applies a firewall network policy to this live sandbox at run time,
-     * for changing the policy *during* a turn (e.g. brokering a credential
-     * resolved mid-turn, or tightening egress after fetching data). A
-     * per-domain `transform` injects headers at the firewall so secrets
-     * never enter the sandbox process. The policy takes effect from the time
-     * the call resolves, so await it before the egress you want governed.
-     *
-     * When the policy is known at session start, prefer configuring it up
-     * front in the sandbox backend factory or `onSession`'s `use()`. The
-     * Docker backend honors only `"allow-all"` and `"deny-all"`;
-     * the just-bash backend rejects this call entirely (its network policy
-     * is fixed at sandbox creation and it runs no binaries to govern).
-     */
-    setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
-    /**
-     * Removes one file or directory from the sandbox filesystem.
-     *
-     * Relative paths resolve from `/workspace`; absolute paths pass through.
-     */
-    removePath(options: SandboxRemovePathOptions): Promise<void>;
+export interface SandboxSession extends Pick<
+  AiSdkSandbox,
+  | "run"
+  | "spawn"
+  | "readFile"
+  | "readBinaryFile"
+  | "readTextFile"
+  | "writeFile"
+  | "writeBinaryFile"
+  | "writeTextFile"
+> {
+  /**
+   * Stable identifier for the backend session this handle wraps.
+   *
+   * Persists across reconnects to the same logical session: two calls
+   * that resume the same underlying backend sandbox observe the same
+   * `id`. Template sessions constructed during bootstrap expose the
+   * template key; live sessions expose the session key assigned by the
+   * runtime. Useful as a cache key for per-session state that must
+   * outlive individual step executions.
+   */
+  readonly id: string;
+  /**
+   * Anchors a sandbox-relative path to `/workspace` and returns the
+   * resulting absolute path.
+   *
+   * Relative paths resolve from `/workspace`; absolute paths pass through.
+   * The read and write methods already apply this internally.
+   */
+  resolvePath(path: string): string;
+  /**
+   * Applies a firewall network policy to this live sandbox at run time,
+   * for changing the policy *during* a turn (e.g. brokering a credential
+   * resolved mid-turn, or tightening egress after fetching data). A
+   * per-domain `transform` injects headers at the firewall so secrets
+   * never enter the sandbox process. The policy takes effect from the time
+   * the call resolves, so await it before the egress you want governed.
+   *
+   * When the policy is known at session start, prefer configuring it up
+   * front in the sandbox backend factory or `onSession`'s `use()`. The
+   * Docker backend honors only `"allow-all"` and `"deny-all"`;
+   * the just-bash backend rejects this call entirely (its network policy
+   * is fixed at sandbox creation and it runs no binaries to govern).
+   */
+  setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
+  /**
+   * Removes one file or directory from the sandbox filesystem.
+   *
+   * Relative paths resolve from `/workspace`; absolute paths pass through.
+   */
+  removePath(options: SandboxRemovePathOptions): Promise<void>;
 }
 /**
  * Sandbox session exposed to authored runtime callbacks through
@@ -127,12 +137,12 @@ export interface SandboxSession extends Pick<AiSdkSandbox, "run" | "spawn" | "re
  * always exposes a provider-backed `stop()` method.
  */
 export interface RuntimeSandboxSession extends SandboxSession {
-    /**
-     * Stops the backing sandbox compute while preserving the durable session.
-     * A later runtime callback reopens the session through its configured
-     * backend. Providers may also support resuming the same handle.
-     */
-    stop(): Promise<void>;
+  /**
+   * Stops the backing sandbox compute while preserving the durable session.
+   * A later runtime callback reopens the session through its configured
+   * backend. Providers may also support resuming the same handle.
+   */
+  stop(): Promise<void>;
 }
 /**
  * Internal sandbox session, used to construct the public {@link SandboxSession}.
@@ -148,13 +158,16 @@ export interface RuntimeSandboxSession extends SandboxSession {
  * here is the **already-resolved** path: the public-surface builder
  * calls `resolvePath` before delegating.
  */
-export interface InternalSandboxSession extends Pick<AiSdkSandbox, "spawn" | "readFile" | "writeFile"> {
-    /**
-     * Stable identifier surfaced on the public {@link SandboxSession}.
-     */
-    readonly id: string;
-    /** Removes an already-resolved path from the backend filesystem. */
-    removePath(options: SandboxRemovePathOptions): Promise<void>;
-    /** Translates a user-facing path to the backend's native path. */
-    resolvePath(path: string): string;
+export interface InternalSandboxSession extends Pick<
+  AiSdkSandbox,
+  "spawn" | "readFile" | "writeFile"
+> {
+  /**
+   * Stable identifier surfaced on the public {@link SandboxSession}.
+   */
+  readonly id: string;
+  /** Removes an already-resolved path from the backend filesystem. */
+  removePath(options: SandboxRemovePathOptions): Promise<void>;
+  /** Translates a user-facing path to the backend's native path. */
+  resolvePath(path: string): string;
 }

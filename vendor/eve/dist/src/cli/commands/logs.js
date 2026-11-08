@@ -3,8 +3,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 const LOG_DIRECTORY_SEGMENTS = [`.eve`, `logs`],
   LOG_DISPLAY_DIRECTORY = LOG_DIRECTORY_SEGMENTS.join(`/`),
-  LOG_ID_PATTERN =
-    /^dev-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z)-\d+\.log$/;
+  LOG_ID_PATTERN = /^dev-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z)-\d+\.log$/;
 async function listDevDiagnosticLogs(e) {
   let t = join(e, ...LOG_DIRECTORY_SEGMENTS),
     i;
@@ -45,9 +44,7 @@ function resolveDevDiagnosticLog(e, t) {
   let o = e.filter((e) => e.id.startsWith(r) || e.id.startsWith(`dev-${r}`));
   if (o.length === 1) return o[0];
   throw o.length === 0
-    ? Error(
-        `No diagnostic log matches "${t}". Run \`eve logs ls\` to see available logs.`,
-      )
+    ? Error(`No diagnostic log matches "${t}". Run \`eve logs ls\` to see available logs.`)
     : Error(
         [
           `"${t}" matches ${o.length} diagnostic logs:`,
@@ -110,7 +107,7 @@ function mergeLogWithEvents(e, t) {
     a = [],
     o = 0,
     s = 0;
-  for (; o < n.length || s < i.length; ) {
+  for (; o < n.length || s < i.length;) {
     let e = n[o],
       t = i[s];
     t === void 0 || (e !== void 0 && e.at <= t.at)
@@ -146,9 +143,4 @@ function formatSize(e) {
   let t = e / 1024;
   return t < 1024 ? `${t.toFixed(1)} KiB` : `${(t / 1024).toFixed(1)} MiB`;
 }
-export {
-  listDevDiagnosticLogs,
-  resolveDevDiagnosticLog,
-  runLogsListCommand,
-  runLogsShowCommand,
-};
+export { listDevDiagnosticLogs, resolveDevDiagnosticLog, runLogsListCommand, runLogsShowCommand };

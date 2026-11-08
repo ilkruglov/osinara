@@ -33,14 +33,26 @@ export default defineAgent({
     if (last?.isError) throw new Error(`TEST_WORKSPACE_TOOL_FAILED: ${JSON.stringify(last)}`);
     const trusted = ordinalOf(marker) > EXTERNAL_TURN_COUNT;
     if (trusted && !child) {
-      if (!toolResults.some((result) => result.name === "agent" && JSON.stringify(result.output).includes(`child-${marker}`))) {
+      if (
+        !toolResults.some(
+          (result) =>
+            result.name === "agent" && JSON.stringify(result.output).includes(`child-${marker}`),
+        )
+      ) {
         return { toolCalls: [{ name: "agent", input: { message: `child:${marker}` } }] };
       }
-      if (!toolResults.some((result) => result.name === "bash" && JSON.stringify(result.output).includes(`BASH:${marker}`))) {
+      if (
+        !toolResults.some(
+          (result) =>
+            result.name === "bash" && JSON.stringify(result.output).includes(`BASH:${marker}`),
+        )
+      ) {
         return { toolCalls: [{ name: "bash", input: { command: `printf 'BASH:${marker}\\n'` } }] };
       }
     }
-    if (!toolResults.some((result) => result.name === "probe_workspace" && result.output === marker)) {
+    if (
+      !toolResults.some((result) => result.name === "probe_workspace" && result.output === marker)
+    ) {
       return { toolCalls: [{ name: "probe_workspace", input: { marker } }] };
     }
     return `${child ? "child" : "reply"}-${marker}`;

@@ -67,7 +67,8 @@ export function parseTelegramWhisperCommand(
   const match = WHISPER_PATTERN.exec(message.text.trim());
   if (!match) return null;
   const addressedBot = match[1];
-  if (addressedBot !== undefined && addressedBot.toLowerCase() !== botUsername.toLowerCase()) return null;
+  if (addressedBot !== undefined && addressedBot.toLowerCase() !== botUsername.toLowerCase())
+    return null;
   return {
     ephemeralMessageId,
     question: (match[2] ?? "").trim(),
@@ -84,15 +85,22 @@ export function withTelegramWhisperMarker(
   return { ...payload, message: { ...message, [TELEGRAM_WHISPER_MARKER_KEY]: { ...marker } } };
 }
 
-export function readTelegramWhisperMarker(raw: Record<string, unknown>): TelegramWhisperMarker | null {
+export function readTelegramWhisperMarker(
+  raw: Record<string, unknown>,
+): TelegramWhisperMarker | null {
   const value = raw[TELEGRAM_WHISPER_MARKER_KEY];
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
   const ephemeralMessageId = positiveId(candidate.ephemeralMessageId);
   const placeholderMessageId = positiveId(candidate.placeholderMessageId);
   const receiverUserId = candidate.receiverUserId;
-  if (ephemeralMessageId === null || placeholderMessageId === null ||
-    typeof receiverUserId !== "string" || !/^[1-9]\d*$/u.test(receiverUserId)) return null;
+  if (
+    ephemeralMessageId === null ||
+    placeholderMessageId === null ||
+    typeof receiverUserId !== "string" ||
+    !/^[1-9]\d*$/u.test(receiverUserId)
+  )
+    return null;
   return { ephemeralMessageId, placeholderMessageId, receiverUserId };
 }
 

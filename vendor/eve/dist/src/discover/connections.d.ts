@@ -5,12 +5,14 @@ import type { ProjectSource, ProjectSourceEntry } from "#discover/project-source
  * Shared diagnostic emitted when the authored `connections/` root is not a
  * directory.
  */
-export declare const DISCOVER_CONNECTIONS_DIRECTORY_INVALID = "discover/connections-directory-invalid";
+export declare const DISCOVER_CONNECTIONS_DIRECTORY_INVALID =
+  "discover/connections-directory-invalid";
 /**
  * Discovery diagnostic emitted when a connection exists in both file form
  * (`connections/<name>.ts`) and folder form (`connections/<name>/`).
  */
-export declare const DISCOVER_CONNECTION_FILE_FOLDER_COLLISION = "discover/connection-file-folder-collision";
+export declare const DISCOVER_CONNECTION_FILE_FOLDER_COLLISION =
+  "discover/connection-file-folder-collision";
 /**
  * Discovery diagnostic emitted when a folder-form connection contains no
  * `connection.ts` definition module.
@@ -20,15 +22,15 @@ export declare const DISCOVER_CONNECTION_FOLDER_EMPTY = "discover/connection-fol
  * Result of discovering authored connection sources from a single agent root.
  */
 interface DiscoverConnectionSourcesResult {
-    connections: ConnectionSourceRef[];
-    diagnostics: DiscoverDiagnostic[];
+  connections: ConnectionSourceRef[];
+  diagnostics: DiscoverDiagnostic[];
 }
 /**
  * Discovers authored connections under `agent/connections/`.
  */
 export declare function discoverConnectionSources(input: {
-    rootEntries: readonly ProjectSourceEntry[];
-    rootPath: string;
-    source: ProjectSource;
+  rootEntries: readonly ProjectSourceEntry[];
+  rootPath: string;
+  source: ProjectSource;
 }): Promise<DiscoverConnectionSourcesResult>;
 export {};

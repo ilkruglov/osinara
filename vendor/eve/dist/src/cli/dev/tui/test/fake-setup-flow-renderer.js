@@ -1,9 +1,5 @@
 function createFakeSetupFlowRenderer(e = {}) {
-  let {
-    readProviderPicker = async () => void 0,
-    readModelEditor = async () => void 0,
-    ...t
-  } = e;
+  let { readProviderPicker = async () => void 0, readModelEditor = async () => void 0, ...t } = e;
   return {
     begin: () => {},
     end: () => {},

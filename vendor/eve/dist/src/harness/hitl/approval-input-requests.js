@@ -22,9 +22,7 @@ import {
 const APPROVED_TOOLS_KEY = `eve.runtime.hitl.approvedTools`;
 function hasAnsweredApprovalBatch(t, n) {
   let r = new Set(n.map((e) => e.requestId));
-  return t.some((t) =>
-    t.requests.every((t) => !isApprovalRequest(t) || r.has(t.requestId)),
-  );
+  return t.some((t) => t.requests.every((t) => !isApprovalRequest(t) || r.has(t.requestId)));
 }
 function resolveApprovalInputBatches(r) {
   let a = new Set(r.responses.map((e) => e.requestId)),
@@ -44,15 +42,9 @@ function resolveApprovalInputBatches(r) {
       return {
         outcome: `unresolved`,
         messages: [...r.baseHistory],
-        session: queueDeferredStepInput(
-          r.session,
-          compactStepInput(r.resolvedStepInput),
-        ),
+        session: queueDeferredStepInput(r.session, compactStepInput(r.resolvedStepInput)),
       };
-    let e =
-      p.length === 0
-        ? r.session
-        : queueDeferredStepInput(r.session, { inputResponses: p });
+    let e = p.length === 0 ? r.session : queueDeferredStepInput(r.session, { inputResponses: p });
     return {
       consumedMessage: r.resolvedStepInput.messageConsumed,
       outcome: `continue`,
@@ -110,20 +102,14 @@ function resolveApprovalBatch(e) {
   };
 }
 function recordApprovedTools(t) {
-  let n = new Set(
-      t.responses
-        .filter((e) => e.optionId === `approve`)
-        .map((e) => e.requestId),
-    ),
+  let n = new Set(t.responses.filter((e) => e.optionId === `approve`).map((e) => e.requestId)),
     r = t.pendingBatch.requests
       .filter((t) => isApprovalRequest(t) && n.has(t.requestId))
       .map((e) => t.resolveApprovalKey?.(e) ?? e.action.toolName);
   if (r.length === 0) return t.session;
   let i = { ...t.session.state };
   return (
-    (i[APPROVED_TOOLS_KEY] = [
-      ...new Set([...getApprovedTools(t.session), ...r]),
-    ]),
+    (i[APPROVED_TOOLS_KEY] = [...new Set([...getApprovedTools(t.session), ...r])]),
     { ...t.session, state: i }
   );
 }
@@ -133,11 +119,7 @@ function buildRejectedActionBatch(t, n) {
     o = [];
   for (let n of t.requests) {
     if (!isApprovalRequest(n)) continue;
-    let {
-      approved: t,
-      reason: s,
-      status: c,
-    } = resolveApprovalOutcome(i.get(n.requestId));
+    let { approved: t, reason: s, status: c } = resolveApprovalOutcome(i.get(n.requestId));
     t ||
       o.push({
         callId: n.action.callId,
@@ -199,8 +181,4 @@ function buildApprovalToolResponseParts(e, t) {
     i
   );
 }
-export {
-  getApprovedTools,
-  hasAnsweredApprovalBatch,
-  resolveApprovalInputBatches,
-};
+export { getApprovedTools, hasAnsweredApprovalBatch, resolveApprovalInputBatches };

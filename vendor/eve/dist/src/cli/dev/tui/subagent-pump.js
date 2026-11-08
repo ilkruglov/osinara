@@ -8,9 +8,7 @@ var SubagentPump = class {
   #r = new Map();
   #i = new Map();
   constructor(e) {
-    ((this.#e = e.client),
-      (this.#t = e.view),
-      (this.#n = e.formatActionResultError));
+    ((this.#e = e.client), (this.#t = e.view), (this.#n = e.formatActionResultError));
   }
   begin(t) {
     let n = t.data.callId,
@@ -40,8 +38,7 @@ var SubagentPump = class {
   background(e) {
     let t = this.#r.get(e);
     t !== void 0 &&
-      ((t.background = !0),
-      t.status !== `authoritative` && this.#t?.background({ callId: e }));
+      ((t.background = !0), t.status !== `authoritative` && this.#t?.background({ callId: e }));
   }
   abortAll() {
     for (let e of this.#i.values()) e.abort();
@@ -65,13 +62,13 @@ var SubagentPump = class {
       (async () => {
         let e = 100;
         try {
-          for (; !o.signal.aborted && a.status !== `authoritative`; ) {
+          for (; !o.signal.aborted && a.status !== `authoritative`;) {
             let s = !1;
             try {
-              let e = await i.fetch(
-                streamPathAt(a.childStreamPath, a.childStreamIndex),
-                { cache: `no-store`, signal: o.signal },
-              );
+              let e = await i.fetch(streamPathAt(a.childStreamPath, a.childStreamIndex), {
+                cache: `no-store`,
+                signal: o.signal,
+              });
               if (!e.ok || e.body === null)
                 throw (
                   await e.body?.cancel().catch(() => {}),
@@ -92,8 +89,7 @@ var SubagentPump = class {
             } catch {
               if (o.signal.aborted) return;
             }
-            ((e = s ? 100 : Math.min(e * 2, 2e3)),
-              await abortableDelay(e, o.signal));
+            ((e = s ? 100 : Math.min(e * 2, 2e3)), await abortableDelay(e, o.signal));
           }
         } finally {
           this.#i.get(r) === o && this.#i.delete(r);
@@ -127,10 +123,7 @@ var SubagentPump = class {
   }
   #s(e, t) {
     let n = this.#r.get(e);
-    if (
-      !(!n || n.status === `authoritative`) &&
-      !(!t && n.status === `provisional`)
-    ) {
+    if (!(!n || n.status === `authoritative`) && !(!t && n.status === `provisional`)) {
       n.status = t ? `authoritative` : `provisional`;
       for (let [t, r] of n.steps)
         r.finalized ||
@@ -172,8 +165,7 @@ var SubagentPump = class {
       finalizeCurrent = () => {
         if (n.currentSectionKey === null) return;
         let e = n.steps.get(n.currentSectionKey);
-        (e && ((e.finalized = !0), emit(n.currentSectionKey, e)),
-          (n.currentSectionKey = null));
+        (e && ((e.finalized = !0), emit(n.currentSectionKey, e)), (n.currentSectionKey = null));
       };
     switch (t.type) {
       case `reasoning.appended`: {
@@ -190,9 +182,7 @@ var SubagentPump = class {
       }
       case `message.completed`: {
         let { key: e, step: r } = openCurrentSubagentSection(n);
-        (t.data.message !== null &&
-          r.message.length === 0 &&
-          (r.message = t.data.message),
+        (t.data.message !== null && r.message.length === 0 && (r.message = t.data.message),
           (r.finalized = !0),
           emit(e, r),
           (n.currentSectionKey = null));
@@ -281,8 +271,7 @@ function openCurrentSubagentSection(e) {
       finalized: !1,
     }));
   let t = e.steps.get(e.currentSectionKey);
-  if (!t)
-    throw Error(`invariant: subagent section state missing for current key`);
+  if (!t) throw Error(`invariant: subagent section state missing for current key`);
   return { key: e.currentSectionKey, step: t };
 }
 export { SubagentPump };

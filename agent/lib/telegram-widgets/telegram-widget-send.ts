@@ -57,7 +57,13 @@ export async function sendTelegramWidget(input: {
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
     method: "sendWidget",
   });
-  if (!response.ok) return { ambiguous: response.status >= 500, body: response.body, ok: false, status: response.status };
+  if (!response.ok)
+    return {
+      ambiguous: response.status >= 500,
+      body: response.body,
+      ok: false,
+      status: response.status,
+    };
   const result = (response.body as { result?: { message_id?: unknown } } | null)?.result;
   const messageId = result?.message_id;
   if (typeof messageId !== "number" && typeof messageId !== "string") {
@@ -84,6 +90,7 @@ export async function editTelegramWidgetData(input: {
   });
   if (response.ok) return { ok: true };
   const description = (response.body as { description?: unknown } | null)?.description;
-  if (typeof description === "string" && /message is not modified/iu.test(description)) return { ok: true };
+  if (typeof description === "string" && /message is not modified/iu.test(description))
+    return { ok: true };
   return { body: response.body, ok: false, status: response.status };
 }

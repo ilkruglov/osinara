@@ -86,9 +86,10 @@ export async function requireReminderMutationAccess(
     throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
   }
   const role = await requireCurrentMembership(client, auth);
-  const allowed = reminder.scope === "personal"
-    ? reminder.author_user_id === auth.userId
-    : reminder.author_user_id === auth.userId || role === "owner";
+  const allowed =
+    reminder.scope === "personal"
+      ? reminder.author_user_id === auth.userId
+      : reminder.author_user_id === auth.userId || role === "owner";
   if (!allowed) {
     throw new AppError(
       "AGENT_REMINDER_MUTATION_DENIED",

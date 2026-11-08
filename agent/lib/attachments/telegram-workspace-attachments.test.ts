@@ -53,12 +53,14 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
       scope: "personal",
     });
 
-    expect(result).toMatchObject([{
-      mediaType: "text/csv",
-      path: "inbox/42/Семейный бюджет.csv",
-      scope: "personal",
-      telegramMessageId: "42",
-    }]);
+    expect(result).toMatchObject([
+      {
+        mediaType: "text/csv",
+        path: "inbox/42/Семейный бюджет.csv",
+        scope: "personal",
+        telegramMessageId: "42",
+      },
+    ]);
     expect(writeBinary).toHaveBeenCalledWith(auth, {
       bytes,
       mediaType: "text/csv",
@@ -75,13 +77,15 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
       writeBinary: vi.fn(),
     });
 
-    await expect(importer.persist({
-      attachments: [attachment, { ...attachment, fileId: "second" }],
-      auth,
-      chatId: "101",
-      messageId: "42",
-      scope: "personal",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_COUNT_EXCEEDED/);
+    await expect(
+      importer.persist({
+        attachments: [attachment, { ...attachment, fileId: "second" }],
+        auth,
+        chatId: "101",
+        messageId: "42",
+        scope: "personal",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_COUNT_EXCEEDED/);
     expect(download).not.toHaveBeenCalled();
   });
 
@@ -101,27 +105,36 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
       writeBinary,
     });
 
-    await expect(importer.persist({
-      attachments: [{
-        fileId: "opaque-file-id",
-        fileUniqueId: "opaque-id",
-        kind: "document",
+    await expect(
+      importer.persist({
+        attachments: [
+          {
+            fileId: "opaque-file-id",
+            fileUniqueId: "opaque-id",
+            kind: "document",
+            mediaType: "application/octet-stream",
+          },
+        ],
+        auth,
+        chatId: "101",
+        messageId: "43",
+        scope: "personal",
+      }),
+    ).resolves.toEqual([
+      {
         mediaType: "application/octet-stream",
-      }],
+        path: "inbox/43/document-opaque-id",
+        scope: "personal",
+        telegramMessageId: "43",
+      },
+    ]);
+    expect(writeBinary).toHaveBeenCalledWith(
       auth,
-      chatId: "101",
-      messageId: "43",
-      scope: "personal",
-    })).resolves.toEqual([{
-      mediaType: "application/octet-stream",
-      path: "inbox/43/document-opaque-id",
-      scope: "personal",
-      telegramMessageId: "43",
-    }]);
-    expect(writeBinary).toHaveBeenCalledWith(auth, expect.objectContaining({
-      mediaType: "application/octet-stream",
-      path: "inbox/43/document-opaque-id",
-    }));
+      expect.objectContaining({
+        mediaType: "application/octet-stream",
+        path: "inbox/43/document-opaque-id",
+      }),
+    );
   });
 
   it("isolates a family attachment by its trusted Telegram group", async () => {
@@ -153,10 +166,13 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
       scope: "family",
     });
 
-    expect(writeBinary).toHaveBeenCalledWith(familyAuth, expect.objectContaining({
-      path: "inbox/groups/00000000-0000-4000-8000-000000000123/44/archive.custom",
-      scope: "family",
-    }));
+    expect(writeBinary).toHaveBeenCalledWith(
+      familyAuth,
+      expect.objectContaining({
+        path: "inbox/groups/00000000-0000-4000-8000-000000000123/44/archive.custom",
+        scope: "family",
+      }),
+    );
   });
 
   it("persists only readable UTF-8 text in an external group workspace inbox", async () => {
@@ -183,24 +199,29 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     });
 
     await importer.persist({
-      attachments: [{
-        fileId: "text-file",
-        fileName: "notes.md",
-        fileUniqueId: "text-id",
-        kind: "document",
-        mediaType: "text/markdown",
-      }],
+      attachments: [
+        {
+          fileId: "text-file",
+          fileName: "notes.md",
+          fileUniqueId: "text-id",
+          kind: "document",
+          mediaType: "text/markdown",
+        },
+      ],
       auth: groupAuth,
       chatId: "-100456",
       messageId: "45",
       scope: "group",
     });
 
-    expect(writeBinary).toHaveBeenCalledWith(groupAuth, expect.objectContaining({
-      mediaType: "text/markdown",
-      path: "inbox/45/notes.md",
-      scope: "group",
-    }));
+    expect(writeBinary).toHaveBeenCalledWith(
+      groupAuth,
+      expect.objectContaining({
+        mediaType: "text/markdown",
+        path: "inbox/45/notes.md",
+        scope: "group",
+      }),
+    );
   });
 
   it("rejects binary bytes disguised as external text before persistence", async () => {
@@ -218,18 +239,22 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
       writeBinary,
     });
 
-    await expect(importer.persist({
-      attachments: [{
-        fileId: "binary-file",
-        fileName: "notes.txt",
-        kind: "document",
-        mediaType: "text/plain",
-      }],
-      auth: groupAuth,
-      chatId: "-100456",
-      messageId: "46",
-      scope: "group",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    await expect(
+      importer.persist({
+        attachments: [
+          {
+            fileId: "binary-file",
+            fileName: "notes.txt",
+            kind: "document",
+            mediaType: "text/plain",
+          },
+        ],
+        auth: groupAuth,
+        chatId: "-100456",
+        messageId: "46",
+        scope: "group",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
     expect(writeBinary).not.toHaveBeenCalled();
   });
 });

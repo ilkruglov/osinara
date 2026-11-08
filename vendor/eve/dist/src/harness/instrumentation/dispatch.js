@@ -14,18 +14,13 @@ function createInstrumentationDispatcher(e, t) {
   let n = t.handlerTimeoutMs ?? 5e3,
     r = normalizeDispatchGroups(e),
     i = new WeakMap(),
-    a = [...r.serialBefore, ...r.parallel, ...r.serialAfter].some(
-      (e) => e.capture === `content`,
-    ),
+    a = [...r.serialBefore, ...r.parallel, ...r.serialAfter].some((e) => e.capture === `content`),
     publish = async (e) => {
       let t = snapshotInstrumentationEvent(e, i),
         a = t.type === `session.completed` || t.type === `session.failed`,
         o = t.type === `turn.cancelled` || t.type === `turn.failed`;
       if (a || o) {
-        let e = takeInstrumentationActionScopes(
-            t.sessionId,
-            o ? t.turnId : void 0,
-          ),
+        let e = takeInstrumentationActionScopes(t.sessionId, o ? t.turnId : void 0),
           n = terminalActionFailure(t);
         for (let t of e)
           await publish({
@@ -37,29 +32,23 @@ function createInstrumentationDispatcher(e, t) {
       }
       let s,
         visibleEvent = (e) =>
-          e.capture === `content`
-            ? t
-            : ((s ??= withoutInstrumentationContent(t)), s);
+          e.capture === `content` ? t : ((s ??= withoutInstrumentationContent(t)), s);
       try {
         try {
-          for (let e of r.serialBefore)
-            await dispatchToProvider(e, t, n, () => visibleEvent(e));
+          for (let e of r.serialBefore) await dispatchToProvider(e, t, n, () => visibleEvent(e));
           if (r.parallel.length === 1) {
             let e = r.parallel[0];
             await dispatchToProvider(e, t, n, () => visibleEvent(e));
           } else if (r.parallel.length > 1) {
             let e = (
               await Promise.allSettled(
-                r.parallel.map((e) =>
-                  dispatchToProvider(e, t, n, () => visibleEvent(e)),
-                ),
+                r.parallel.map((e) => dispatchToProvider(e, t, n, () => visibleEvent(e))),
               )
             ).find((e) => e.status === `rejected`);
             if (e !== void 0) throw e.reason;
           }
         } finally {
-          for (let e of r.serialAfter)
-            await dispatchToProvider(e, t, n, () => visibleEvent(e));
+          for (let e of r.serialAfter) await dispatchToProvider(e, t, n, () => visibleEvent(e));
         }
       } finally {
         releaseTerminalState(t);

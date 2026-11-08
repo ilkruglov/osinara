@@ -1,7 +1,4 @@
-import {
-  normalizeLogicalPath,
-  stripLogicalPathExtension,
-} from "#discover/filesystem.js";
+import { normalizeLogicalPath, stripLogicalPathExtension } from "#discover/filesystem.js";
 import { createPathDerivedSourceId } from "#discover/manifest.js";
 async function discoverMarkdownSource(e) {
   let t = normalizeLogicalPath(e.logicalPath);

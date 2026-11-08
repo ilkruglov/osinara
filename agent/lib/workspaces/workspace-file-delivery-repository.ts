@@ -11,10 +11,7 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { WorkspaceBinaryFile } from "./workspace-binary-repository.js";
 import { workspaceBinaryRepository } from "./workspace-binary-repository.js";
-import type {
-  WorkspaceAuthorization,
-  WorkspaceScope,
-} from "./workspace-repository.js";
+import type { WorkspaceAuthorization, WorkspaceScope } from "./workspace-repository.js";
 
 interface BinaryReader {
   readBinary(
@@ -66,7 +63,8 @@ function assertReplayMatches(
     presentation: "document" | "photo" | "widget";
   },
 ): void {
-  const matches = row.workspace_id === binary.workspaceId &&
+  const matches =
+    row.workspace_id === binary.workspaceId &&
     row.file_path === binary.file.path &&
     row.content_sha256 === binary.file.contentSha256 &&
     row.requested_by === auth.userId &&
@@ -105,7 +103,10 @@ function ambiguousDelivery(): AppError {
   );
 }
 
-async function findDelivery(client: PoolClient, operationKey: string): Promise<DeliveryRow | undefined> {
+async function findDelivery(
+  client: PoolClient,
+  operationKey: string,
+): Promise<DeliveryRow | undefined> {
   const result = await client.query<DeliveryRow>(
     `SELECT workspace_id, file_path, content_sha256, requested_by, telegram_chat_id,
             telegram_message_thread_id::text, presentation, status, telegram_message_id
@@ -125,14 +126,23 @@ async function reserveDelivery(
     // Serialize the absence check and reservation across workers. The lock ends before Telegram
     // is called; a committed started row then blocks parallel calls and ambiguous retries.
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-      JSON.stringify(["workspace-delivery", input.chatId, threadId(input.messageThreadId), input.turnId, binary.file.contentSha256]),
+      JSON.stringify([
+        "workspace-delivery",
+        input.chatId,
+        threadId(input.messageThreadId),
+        input.turnId,
+        binary.file.contentSha256,
+      ]),
     ]);
   }
   const replay = await findDelivery(client, input.operationKey);
   if (replay) return replayReservation(replay, auth, binary, input);
 
   if (input.turnId !== null) {
-    const sent = await client.query<{ status: "completed" | "started"; telegram_message_id: string | null }>(
+    const sent = await client.query<{
+      status: "completed" | "started";
+      telegram_message_id: string | null;
+    }>(
       `SELECT status, telegram_message_id FROM workspace_file_deliveries
         WHERE telegram_chat_id = $1 AND turn_id = $2 AND content_sha256 = $3
           AND telegram_message_thread_id IS NOT DISTINCT FROM $4::bigint
@@ -142,7 +152,8 @@ async function reserveDelivery(
     );
     const previous = sent.rows[0];
     if (previous) {
-      if (previous.status !== "completed" || !previous.telegram_message_id) throw ambiguousDelivery();
+      if (previous.status !== "completed" || !previous.telegram_message_id)
+        throw ambiguousDelivery();
       return { ...binary, status: "duplicate", telegramMessageId: previous.telegram_message_id };
     }
   }
@@ -176,7 +187,10 @@ async function reserveDelivery(
 
 export function createWorkspaceFileDeliveryRepository(binaryReader: BinaryReader) {
   return {
-    async begin(auth: WorkspaceAuthorization, input: DeliveryInput): Promise<WorkspaceFileDeliveryReservation> {
+    async begin(
+      auth: WorkspaceAuthorization,
+      input: DeliveryInput,
+    ): Promise<WorkspaceFileDeliveryReservation> {
       // Authorization and the byte snapshot precede the short reservation transaction.
       const binary = await binaryReader.readBinary(auth, input.scope, input.path);
       const client = await database().connect();
@@ -215,6 +229,5 @@ export function createWorkspaceFileDeliveryRepository(binaryReader: BinaryReader
   };
 }
 
-export const workspaceFileDeliveryRepository = createWorkspaceFileDeliveryRepository(
-  workspaceBinaryRepository,
-);
+export const workspaceFileDeliveryRepository =
+  createWorkspaceFileDeliveryRepository(workspaceBinaryRepository);

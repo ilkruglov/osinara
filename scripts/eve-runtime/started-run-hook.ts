@@ -18,7 +18,10 @@ const STARTED_RUN_HOOK_TIMEOUT_MS = 5 * 60 * 1000;
 const LIVE_RUN_STATUSES = new Set(["pending", "running"]);
 
 function startedRunHookError(runId: string, reason: string, cause: unknown): Error {
-  const error = new Error(`AGENT_EVE_SESSION_HOOK_UNAVAILABLE: the started run ${runId} has no hook (${reason})`, { cause });
+  const error = new Error(
+    `AGENT_EVE_SESSION_HOOK_UNAVAILABLE: the started run ${runId} has no hook (${reason})`,
+    { cause },
+  );
   error.name = "EveStartedRunHookError";
   return error;
 }
@@ -40,8 +43,10 @@ export async function waitForStartedRunHook<T>(input: {
     } catch (error) {
       if (!input.isHookMissing(error)) throw error;
       const status = await input.runStatus();
-      if (!LIVE_RUN_STATUSES.has(status)) throw startedRunHookError(input.runId, `run ${status}`, error);
-      if (now() >= deadline) throw startedRunHookError(input.runId, "still pending after the wait", error);
+      if (!LIVE_RUN_STATUSES.has(status))
+        throw startedRunHookError(input.runId, `run ${status}`, error);
+      if (now() >= deadline)
+        throw startedRunHookError(input.runId, "still pending after the wait", error);
     }
   }
 }

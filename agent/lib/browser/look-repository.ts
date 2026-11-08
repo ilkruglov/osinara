@@ -24,8 +24,19 @@ import { database } from "../database.js";
 import type { EnteredField } from "./gate.js";
 import type { PageElement, PageView } from "./page-view.js";
 
-export interface VisionView { blockers: string[]; note: string; screen: string; selected: string[]; }
-export interface PendingClick { claimed?: boolean; element: PageElement; epoch: string; n: number; reason: string; }
+export interface VisionView {
+  blockers: string[];
+  note: string;
+  screen: string;
+  selected: string[];
+}
+export interface PendingClick {
+  claimed?: boolean;
+  element: PageElement;
+  epoch: string;
+  n: number;
+  reason: string;
+}
 export interface BrowserLook {
   elements: PageElement[];
   entered: EnteredField[];
@@ -46,17 +57,44 @@ export interface BrowserLook {
 }
 
 interface Row {
-  elements: PageElement[]; entered: EnteredField[]; epoch: string; family_id: string; pending: PendingClick | null;
-  sandbox_session_id: string; screenshot_path: string | null; state_hash: number; steps: number; title: string; updated_at: Date;
-  url: string; user_id: string; text_hash: number; view: VisionView | null; view_hash: string;
+  elements: PageElement[];
+  entered: EnteredField[];
+  epoch: string;
+  family_id: string;
+  pending: PendingClick | null;
+  sandbox_session_id: string;
+  screenshot_path: string | null;
+  state_hash: number;
+  steps: number;
+  title: string;
+  updated_at: Date;
+  url: string;
+  user_id: string;
+  text_hash: number;
+  view: VisionView | null;
+  view_hash: string;
 }
-const COLUMNS = "sandbox_session_id, family_id, user_id, epoch, url, title, elements, view_hash, text_hash, state_hash, view, screenshot_path, entered, pending, steps, updated_at";
+const COLUMNS =
+  "sandbox_session_id, family_id, user_id, epoch, url, title, elements, view_hash, text_hash, state_hash, view, screenshot_path, entered, pending, steps, updated_at";
 
 function fromRow(row: Row): BrowserLook {
   return {
-    elements: row.elements, entered: row.entered, epoch: row.epoch, familyId: row.family_id, pending: row.pending,
-    sandboxSessionId: row.sandbox_session_id, screenshotPath: row.screenshot_path, stateHash: row.state_hash, steps: row.steps, title: row.title,
-    textHash: row.text_hash, updatedAt: row.updated_at, url: row.url, userId: row.user_id, view: row.view, viewHash: row.view_hash,
+    elements: row.elements,
+    entered: row.entered,
+    epoch: row.epoch,
+    familyId: row.family_id,
+    pending: row.pending,
+    sandboxSessionId: row.sandbox_session_id,
+    screenshotPath: row.screenshot_path,
+    stateHash: row.state_hash,
+    steps: row.steps,
+    title: row.title,
+    textHash: row.text_hash,
+    updatedAt: row.updated_at,
+    url: row.url,
+    userId: row.user_id,
+    view: row.view,
+    viewHash: row.view_hash,
   };
 }
 
@@ -81,7 +119,13 @@ export function createLookRepository() {
 
     /** Replaces the look; keeps `entered` on the same site for the same person; never keeps a pending click. */
     async saveLook(input: {
-      familyId: string; sandboxSessionId: string; screenshotPath: string | null; userId: string; view: PageView; viewHash: string; vision: VisionView | null;
+      familyId: string;
+      sandboxSessionId: string;
+      screenshotPath: string | null;
+      userId: string;
+      view: PageView;
+      viewHash: string;
+      vision: VisionView | null;
     }): Promise<BrowserLook> {
       const result = await database().query<Row>(
         `INSERT INTO browser_looks
@@ -96,11 +140,22 @@ export function createLookRepository() {
                steps = browser_looks.steps + 1
          RETURNING ${COLUMNS}`,
         [
-          input.sandboxSessionId, input.familyId, input.view.epoch, input.view.url, input.view.title, JSON.stringify(input.view.elements),
-          input.viewHash, input.vision === null ? null : JSON.stringify(input.vision), input.screenshotPath,
+          input.sandboxSessionId,
+          input.familyId,
+          input.view.epoch,
+          input.view.url,
+          input.view.title,
+          JSON.stringify(input.view.elements),
+          input.viewHash,
+          input.vision === null ? null : JSON.stringify(input.vision),
+          input.screenshotPath,
           await (async () => {
             const previous = await this.get(input.sandboxSessionId, input.familyId);
-            return previous !== null && previous.userId === input.userId && sameSite(previous.url, input.view.url);
+            return (
+              previous !== null &&
+              previous.userId === input.userId &&
+              sameSite(previous.url, input.view.url)
+            );
           })(),
           input.view.textHash,
           input.view.stateHash,
@@ -111,7 +166,11 @@ export function createLookRepository() {
     },
 
     /** Re-filling the same field of the same look replaces its entry; anything else is another field. */
-    async addEntered(sandboxSessionId: string, familyId: string, entry: EnteredField): Promise<void> {
+    async addEntered(
+      sandboxSessionId: string,
+      familyId: string,
+      entry: EnteredField,
+    ): Promise<void> {
       await database().query(
         `UPDATE browser_looks
             SET entered = (SELECT COALESCE(jsonb_agg(e), '[]'::jsonb) FROM jsonb_array_elements(entered) e
@@ -123,7 +182,12 @@ export function createLookRepository() {
     },
 
     /** True for the one caller that took the unclaimed pending click of this epoch and number. */
-    async claimPending(sandboxSessionId: string, familyId: string, epoch: string, n: number): Promise<boolean> {
+    async claimPending(
+      sandboxSessionId: string,
+      familyId: string,
+      epoch: string,
+      n: number,
+    ): Promise<boolean> {
       const result = await database().query(
         `UPDATE browser_looks SET pending = pending || '{"claimed":true}'::jsonb, updated_at = now()
           WHERE sandbox_session_id = $1 AND family_id = $2 AND epoch = $3
@@ -133,7 +197,11 @@ export function createLookRepository() {
       return result.rowCount === 1;
     },
 
-    async setPending(sandboxSessionId: string, familyId: string, pending: PendingClick | null): Promise<void> {
+    async setPending(
+      sandboxSessionId: string,
+      familyId: string,
+      pending: PendingClick | null,
+    ): Promise<void> {
       await database().query(
         `UPDATE browser_looks SET pending = $3, updated_at = now() WHERE sandbox_session_id = $1 AND family_id = $2`,
         [sandboxSessionId, familyId, pending === null ? null : JSON.stringify(pending)],
@@ -141,12 +209,17 @@ export function createLookRepository() {
     },
 
     async reset(sandboxSessionId: string, familyId: string): Promise<void> {
-      await database().query("DELETE FROM browser_looks WHERE sandbox_session_id = $1 AND family_id = $2", [sandboxSessionId, familyId]);
+      await database().query(
+        "DELETE FROM browser_looks WHERE sandbox_session_id = $1 AND family_id = $2",
+        [sandboxSessionId, familyId],
+      );
     },
 
     /** After a browser restart: the page every look of this sandbox describes is closed. */
     async resetSandbox(sandboxSessionId: string): Promise<void> {
-      await database().query("DELETE FROM browser_looks WHERE sandbox_session_id = $1", [sandboxSessionId]);
+      await database().query("DELETE FROM browser_looks WHERE sandbox_session_id = $1", [
+        sandboxSessionId,
+      ]);
     },
   };
 }

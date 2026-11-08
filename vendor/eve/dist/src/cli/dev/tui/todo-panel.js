@@ -1,20 +1,9 @@
 import "./rail.js";
 import { toolBaseName } from "./tool-presentation.js";
 import { clipVisible, stripTerminalControls } from "#cli/ui/terminal-text.js";
-const TODO_STATUSES = new Set([
-  `pending`,
-  `in_progress`,
-  `completed`,
-  `cancelled`,
-]);
+const TODO_STATUSES = new Set([`pending`, `in_progress`, `completed`, `cancelled`]);
 function readTodoToolItems(t, i) {
-  if (
-    toolBaseName(t) !== `todo` ||
-    typeof i != `object` ||
-    !i ||
-    Array.isArray(i)
-  )
-    return;
+  if (toolBaseName(t) !== `todo` || typeof i != `object` || !i || Array.isArray(i)) return;
   let a = i.todos;
   if (!Array.isArray(a)) return;
   let o = [];
@@ -23,8 +12,7 @@ function readTodoToolItems(t, i) {
     let t = e,
       i = t.content,
       a = t.status;
-    if (typeof i != `string` || typeof a != `string` || !TODO_STATUSES.has(a))
-      return;
+    if (typeof i != `string` || typeof a != `string` || !TODO_STATUSES.has(a)) return;
     o.push({ content: firstLine(stripTerminalControls(i)), status: a });
   }
   return o;
@@ -36,9 +24,7 @@ function renderTodoPanelRows(e) {
   let { items: n, width: r, theme: i } = e,
     a = i.colors,
     o = i.glyph,
-    s = n.filter(
-      (e) => e.status === `completed` || e.status === `cancelled`,
-    ).length,
+    s = n.filter((e) => e.status === `completed` || e.status === `cancelled`).length,
     c = [
       e.working
         ? `  ${a.gray(o.square)} ${a.dim(`Todo`)}`
@@ -48,11 +34,7 @@ function renderTodoPanelRows(e) {
   for (let t of n) {
     let n = t.status === `completed` || t.status === `cancelled`,
       r;
-    (l
-      ? (r = ` `)
-      : n
-        ? (r = a.dim(o.rule))
-        : ((r = a.dim(o.corner)), (l = !0)),
+    (l ? (r = ` `) : n ? (r = a.dim(o.rule)) : ((r = a.dim(o.corner)), (l = !0)),
       c.push(`  ${r} ${todoItemBody(t, e, i)}`));
   }
   return c.map((e) => clipVisible(e, r));
@@ -61,17 +43,11 @@ function renderFinishedTodoRows(e, n, r) {
   let i = r.colors,
     a = r.glyph,
     o = [`  ${i.green(a.success)} ${i.dim(`Todo`)}`];
-  for (let t of e)
-    o.push(`  ${i.dim(a.rule)} ${settledMark(t, r)} ${i.dim(t.content)}`);
-  return (
-    o.push(`  ${i.dim(a.corner)} ${i.green(`Done`)}`),
-    o.map((e) => clipVisible(e, n))
-  );
+  for (let t of e) o.push(`  ${i.dim(a.rule)} ${settledMark(t, r)} ${i.dim(t.content)}`);
+  return (o.push(`  ${i.dim(a.corner)} ${i.green(`Done`)}`), o.map((e) => clipVisible(e, n)));
 }
 function settledMark(e, t) {
-  return e.status === `cancelled`
-    ? t.colors.red(t.glyph.error)
-    : t.colors.green(t.glyph.success);
+  return e.status === `cancelled` ? t.colors.red(t.glyph.error) : t.colors.green(t.glyph.success);
 }
 function todoItemBody(e, t, n) {
   let r = n.colors,
@@ -82,11 +58,7 @@ function todoItemBody(e, t, n) {
     case `cancelled`:
       return `${r.red(i.error)} ${r.dim(e.content)}`;
     case `in_progress`: {
-      let n = t.working
-        ? t.pulse.trim().length > 0
-          ? i.dotActive
-          : ` `
-        : i.dotActive;
+      let n = t.working ? (t.pulse.trim().length > 0 ? i.dotActive : ` `) : i.dotActive;
       return `${r.yellow(n)} ${e.content}`;
     }
     case `pending`:
@@ -96,9 +68,4 @@ function todoItemBody(e, t, n) {
 function firstLine(e) {
   return e.split(/\r?\n/u, 1)[0] ?? ``;
 }
-export {
-  allTodoItemsSettled,
-  readTodoToolItems,
-  renderFinishedTodoRows,
-  renderTodoPanelRows,
-};
+export { allTodoItemsSettled, readTodoToolItems, renderFinishedTodoRows, renderTodoPanelRows };

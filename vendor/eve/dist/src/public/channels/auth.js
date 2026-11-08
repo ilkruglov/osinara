@@ -82,8 +82,7 @@ async function runOidcVerification(e, t) {
     audiences: [...t.audiences],
     clockSkewSeconds: t.clockSkewSeconds ?? 30,
     discoveryUrl:
-      t.discoveryUrl ??
-      `${t.issuer.replace(/\/$/, ``)}/.well-known/openid-configuration`,
+      t.discoveryUrl ?? `${t.issuer.replace(/\/$/, ``)}/.well-known/openid-configuration`,
     issuer: t.issuer,
     kind: `oidc`,
     ...(t.claims === void 0 ? {} : { claims: t.claims }),
@@ -111,20 +110,14 @@ function isIpAllowed(e, t) {
 function createUnauthorizedResponse(e = {}) {
   let t = e.status ?? 401,
     n = e.code ?? (t === 403 ? `forbidden` : `unauthorized`),
-    r =
-      e.message ??
-      (t === 403 ? `Forbidden.` : `Authorization is required for this route.`),
+    r = e.message ?? (t === 403 ? `Forbidden.` : `Authorization is required for this route.`),
     i = e.challenges ?? [],
     a = new Headers({ "cache-control": `no-store` });
   for (let e of i) a.append(`www-authenticate`, formatChallenge(e));
-  return Response.json(
-    { code: n, error: r, ok: !1 },
-    { headers: a, status: t },
-  );
+  return Response.json({ code: n, error: r, ok: !1 }, { headers: a, status: t });
 }
 function formatChallenge(e) {
-  if (e.parameters === void 0 || Object.keys(e.parameters).length === 0)
-    return e.scheme;
+  if (e.parameters === void 0 || Object.keys(e.parameters).length === 0) return e.scheme;
   let t = Object.entries(e.parameters)
     .map(([e, t]) => `${e}="${escapeAuthChallengeParameter(t)}"`)
     .join(`, `);
@@ -137,8 +130,7 @@ function isValidOAuthIdentifierUrl(e) {
   try {
     let n = new URL(e);
     return (
-      (n.protocol === `https:` ||
-        (n.protocol === `http:` && isLoopbackHostname(n.hostname))) &&
+      (n.protocol === `https:` || (n.protocol === `http:` && isLoopbackHostname(n.hostname))) &&
       n.username.length === 0 &&
       n.password.length === 0 &&
       n.search.length === 0 &&
@@ -151,11 +143,7 @@ function isValidOAuthIdentifierUrl(e) {
 function isValidMetadataPath(e) {
   if (!e.startsWith(`/`) || e.startsWith(`//`)) return !1;
   let t = new URL(e, `https://eve.invalid`);
-  return (
-    t.origin === `https://eve.invalid` &&
-    t.search.length === 0 &&
-    t.hash.length === 0
-  );
+  return t.origin === `https://eve.invalid` && t.search.length === 0 && t.hash.length === 0;
 }
 var UnauthenticatedError = class extends Error {
     response;
@@ -212,10 +200,7 @@ function readOAuthResourceOptions(e) {
 const AUTH_CHALLENGES_SYMBOL = Symbol.for(`eve.channels.auth.challenges`);
 function withAuthChallenges(e, t) {
   let wrapped = (t) => e(t);
-  return (
-    Object.defineProperty(wrapped, AUTH_CHALLENGES_SYMBOL, { value: t }),
-    wrapped
-  );
+  return (Object.defineProperty(wrapped, AUTH_CHALLENGES_SYMBOL, { value: t }), wrapped);
 }
 function getDeclaredChallenges(e) {
   return e[AUTH_CHALLENGES_SYMBOL];
@@ -238,26 +223,18 @@ async function routeAuth(e, t) {
       if (n) return n;
     }
   } catch (e) {
-    if (
-      typeof e == `object` &&
-      e &&
-      `response` in e &&
-      e.response instanceof Response
-    )
+    if (typeof e == `object` && e && `response` in e && e.response instanceof Response)
       return e.response;
     throw e;
   }
   let r = collectDeclaredChallenges(n);
   return createUnauthorizedResponse({
-    challenges:
-      r.length > 0 ? addInvalidBearerTokenError(e, r) : [{ scheme: `Bearer` }],
+    challenges: r.length > 0 ? addInvalidBearerTokenError(e, r) : [{ scheme: `Bearer` }],
   });
 }
 function addInvalidBearerTokenError(e, t) {
   let n = e.headers.get(`authorization`);
-  return n === null ||
-    !/^Bearer(?:\s|$)/i.test(n.trim()) ||
-    !t.some((e) => e.scheme === `Bearer`)
+  return n === null || !/^Bearer(?:\s|$)/i.test(n.trim()) || !t.some((e) => e.scheme === `Bearer`)
     ? t
     : t.map((e) =>
         e.scheme !== `Bearer` || e.parameters?.error !== void 0
@@ -278,8 +255,7 @@ function none() {
   return () => ANONYMOUS_SESSION_AUTH_CONTEXT;
 }
 function localDev() {
-  return () =>
-    isLocalDevelopmentServer() ? LOCAL_DEV_SESSION_AUTH_CONTEXT : null;
+  return () => (isLocalDevelopmentServer() ? LOCAL_DEV_SESSION_AUTH_CONTEXT : null);
 }
 function isLocalDevelopmentServer() {
   return process.env.VERCEL && process.env.VERCEL_ENV === `development`
@@ -302,16 +278,12 @@ async function verifyVercelOidc(e, t = {}) {
   if (e === null || e.length === 0) return { ok: !1 };
   let n = decodeUnverifiedJwtClaims(e);
   if (n === null)
-    return (
-      vercelOidcLog.debug(`Rejected token that failed to decode as a JWT.`),
-      { ok: !1 }
-    );
+    return (vercelOidcLog.debug(`Rejected token that failed to decode as a JWT.`), { ok: !1 });
   if (!n.issuer.startsWith(`https://oidc.vercel.com/`))
     return (
-      vercelOidcLog.debug(
-        `Rejected token whose issuer is not a Vercel OIDC issuer.`,
-        { issuer: n.issuer },
-      ),
+      vercelOidcLog.debug(`Rejected token whose issuer is not a Vercel OIDC issuer.`, {
+        issuer: n.issuer,
+      }),
       { ok: !1 }
     );
   if (n.audiences.length === 0)
@@ -323,10 +295,10 @@ async function verifyVercelOidc(e, t = {}) {
     );
   if (!n.audiences.some((e) => e.startsWith(`https://vercel.com/`)))
     return (
-      vercelOidcLog.debug(
-        `Rejected token whose audience is not a Vercel audience.`,
-        { audiences: n.audiences, issuer: n.issuer },
-      ),
+      vercelOidcLog.debug(`Rejected token whose audience is not a Vercel audience.`, {
+        audiences: n.audiences,
+        issuer: n.issuer,
+      }),
       { ok: !1 }
     );
   let r = resolveCurrentVercelProject(t),
@@ -357,11 +329,8 @@ function resolveCurrentVercelProject(e) {
   if (e.currentVercelProject !== void 0) return e.currentVercelProject;
   let t = process.env.VERCEL_PROJECT_ID?.trim();
   if (t === void 0 || t.length === 0) return;
-  let n =
-    process.env.VERCEL_TARGET_ENV?.trim() || process.env.VERCEL_ENV?.trim();
-  return n === void 0 || n.length === 0
-    ? { projectId: t }
-    : { environment: n, projectId: t };
+  let n = process.env.VERCEL_TARGET_ENV?.trim() || process.env.VERCEL_ENV?.trim();
+  return n === void 0 || n.length === 0 ? { projectId: t } : { environment: n, projectId: t };
 }
 function vercelSubject(e) {
   (assertVercelSubjectSegment(`teamSlug`, e.teamSlug),
@@ -374,8 +343,7 @@ function vercelSubject(e) {
   return `owner:${e.teamSlug}:project:${e.projectName}:environment:${t}`;
 }
 function assertVercelSubjectSegment(e, t) {
-  if (t.length === 0)
-    throw Error(`vercelSubject: ${e} must be a non-empty string.`);
+  if (t.length === 0) throw Error(`vercelSubject: ${e} must be a non-empty string.`);
   if (t.includes(`*`) || t.includes(`:`))
     throw Error(
       `vercelSubject: ${e} ${JSON.stringify(t)} may not contain ${t.includes(`:`) ? `':'` : `'*'`}. Hand-write the subject string when wildcards are intentional.`,
@@ -390,10 +358,7 @@ function vercelOidc(e = {}) {
           (n !== null && isLocalDevelopmentVercelOidc()
             ? await resolveVercelOidcCurrentProject(t)
             : void 0),
-        a = await verifyVercelOidc(
-          n,
-          i === void 0 ? e : { ...e, currentVercelProject: i },
-        );
+        a = await verifyVercelOidc(n, i === void 0 ? e : { ...e, currentVercelProject: i });
       return a.ok ? a.sessionAuth : null;
     },
     [{ scheme: `Bearer` }],
@@ -402,8 +367,7 @@ function vercelOidc(e = {}) {
 function isLocalDevelopmentVercelOidc() {
   return process.env.VERCEL_ENV === `development`
     ? !0
-    : process.env.VERCEL_ENV === `preview` ||
-        process.env.VERCEL_ENV === `production`
+    : process.env.VERCEL_ENV === `preview` || process.env.VERCEL_ENV === `production`
       ? !1
       : isEveDevEnvironment();
 }
@@ -424,10 +388,7 @@ function httpBasic(e, t) {
 function jwtHmac(e) {
   return withAuthChallenges(
     async (t) => {
-      let n = await verifyJwtHmac(
-        extractBearerToken(t.headers.get(`authorization`)),
-        e,
-      );
+      let n = await verifyJwtHmac(extractBearerToken(t.headers.get(`authorization`)), e);
       return n.ok ? n.sessionAuth : null;
     },
     [{ scheme: `Bearer` }],
@@ -436,10 +397,7 @@ function jwtHmac(e) {
 function jwtEcdsa(e) {
   return withAuthChallenges(
     async (t) => {
-      let n = await verifyJwtEcdsa(
-        extractBearerToken(t.headers.get(`authorization`)),
-        e,
-      );
+      let n = await verifyJwtEcdsa(extractBearerToken(t.headers.get(`authorization`)), e);
       return n.ok ? n.sessionAuth : null;
     },
     [{ scheme: `Bearer` }],
@@ -448,10 +406,7 @@ function jwtEcdsa(e) {
 function oidc(e) {
   return withAuthChallenges(
     async (t) => {
-      let n = await verifyOidc(
-        extractBearerToken(t.headers.get(`authorization`)),
-        e,
-      );
+      let n = await verifyOidc(extractBearerToken(t.headers.get(`authorization`)), e);
       return n.ok ? n.sessionAuth : null;
     },
     [{ scheme: `Bearer` }],

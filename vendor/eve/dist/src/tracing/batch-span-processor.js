@@ -1,13 +1,7 @@
 import { createLogger, formatError } from "#internal/logging.js";
-import {
-  TraceFlags,
-  context,
-  createContextKey,
-} from "#compiled/@opentelemetry/api/index.js";
+import { TraceFlags, context, createContextKey } from "#compiled/@opentelemetry/api/index.js";
 const log = createLogger(`harness.batch-span-processor`),
-  SUPPRESS_TRACING_KEY = createContextKey(
-    `OpenTelemetry SDK Context Key SUPPRESS_TRACING`,
-  ),
+  SUPPRESS_TRACING_KEY = createContextKey(`OpenTelemetry SDK Context Key SUPPRESS_TRACING`),
   DEFAULTS = {
     exportTimeoutMillis: 3e4,
     maxExportBatchSize: 512,
@@ -40,18 +34,15 @@ function batchSpanProcessor(e, n = {}) {
     try {
       await new Promise((t, i) => {
         try {
-          context.with(
-            context.active().setValue(SUPPRESS_TRACING_KEY, !0),
-            () => {
-              e.export(n, (e) => {
-                if (e.code === 0) {
-                  t();
-                  return;
-                }
-                i(e.error ?? Error(`Span export failed.`));
-              });
-            },
-          );
+          context.with(context.active().setValue(SUPPRESS_TRACING_KEY, !0), () => {
+            e.export(n, (e) => {
+              if (e.code === 0) {
+                t();
+                return;
+              }
+              i(e.error ?? Error(`Span export failed.`));
+            });
+          });
         } catch (e) {
           i(e instanceof Error ? e : Error(String(e)));
         }
@@ -65,10 +56,7 @@ function batchSpanProcessor(e, n = {}) {
       f ||
         !(await waitForExporter(pendingDrain(), `span export`)) ||
         e.forceFlush === void 0 ||
-        (await waitForExporter(
-          settleExporter(`exporter flush`, e.forceFlush),
-          `exporter flush`,
-        ));
+        (await waitForExporter(settleExporter(`exporter flush`, e.forceFlush), `exporter flush`));
     },
     onEnd(e) {
       if (!f && isSampled(e) && !(l.length >= s)) {
@@ -87,17 +75,14 @@ function batchSpanProcessor(e, n = {}) {
         t.then(() => settleExporter(`exporter shutdown`, e.shutdown));
         return;
       }
-      await waitForExporter(
-        settleExporter(`exporter shutdown`, e.shutdown),
-        `exporter shutdown`,
-      );
+      await waitForExporter(settleExporter(`exporter shutdown`, e.shutdown), `exporter shutdown`);
     },
   };
   function pendingDrain() {
     return (
       cancelTimer(),
       (d = d.then(async () => {
-        for (; l.length > 0; ) await exportBatch(l.splice(0, o));
+        for (; l.length > 0;) await exportBatch(l.splice(0, o));
       })),
       d
     );
@@ -134,8 +119,7 @@ function isSampled(e) {
   if (typeof t != `function`) return !1;
   let r = Reflect.apply(t, e, []);
   return (
-    typeof r.traceFlags == `number` &&
-    (r.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
+    typeof r.traceFlags == `number` && (r.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
   );
 }
 export { batchSpanProcessor };

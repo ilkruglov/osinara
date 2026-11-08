@@ -4,4 +4,6 @@ import type { ContextReader } from "#context/provider.js";
  * context. The bundle is already resolved to the correct node (root or
  * subagent) at run start.
  */
-export declare function getActiveRuntimeNode(ctx: ContextReader): import("../runtime/graph.ts").ResolvedRuntimeAgentNode;
+export declare function getActiveRuntimeNode(
+  ctx: ContextReader,
+): import("../runtime/graph.ts").ResolvedRuntimeAgentNode;

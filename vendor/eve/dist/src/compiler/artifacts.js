@@ -67,14 +67,8 @@ function createCompileMetadata(e) {
   };
 }
 async function writeCompilerArtifacts(e) {
-  let r = resolveCompilerArtifactPathsAt(
-      e.appRoot,
-      e.artifactLocations.writeRoot,
-    ),
-    i = resolveCompilerArtifactPathsAt(
-      e.appRoot,
-      e.artifactLocations.publishedRoot,
-    ),
+  let r = resolveCompilerArtifactPathsAt(e.appRoot, e.artifactLocations.writeRoot),
+    i = resolveCompilerArtifactPathsAt(e.appRoot, e.artifactLocations.publishedRoot),
     a = createDiscoveryDiagnosticsArtifact(e.diagnostics),
     o = await materializeWorkspaceResources({
       compileDirectoryPath: r.compileDirectoryPath,

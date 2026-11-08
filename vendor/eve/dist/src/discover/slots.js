@@ -25,11 +25,7 @@ function collectNamedSlotCandidates(t, n) {
       o = t ?? a;
     if (o === null) continue;
     let s = r.get(o);
-    if (
-      (s === void 0 &&
-        ((s = { moduleFileNames: [], slotName: o }), r.set(o, s)),
-      t !== null)
-    ) {
+    if ((s === void 0 && ((s = { moduleFileNames: [], slotName: o }), r.set(o, s)), t !== null)) {
       s.markdownFileName = i.name;
       continue;
     }
@@ -40,8 +36,6 @@ function collectNamedSlotCandidates(t, n) {
     .sort((e, t) => e.slotName.localeCompare(t.slotName));
 }
 function getMarkdownSlotName(e) {
-  return !e.toLowerCase().endsWith(`.md`) || e.length <= 3
-    ? null
-    : e.slice(0, -3);
+  return !e.toLowerCase().endsWith(`.md`) || e.length <= 3 ? null : e.slice(0, -3);
 }
 export { collectFlatSlotCandidates, collectNamedSlotCandidates };

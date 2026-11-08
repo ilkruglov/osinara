@@ -29,23 +29,47 @@ describe("memoryRetention", () => {
 
   it("decays from learning or later reinforcement, independently of the event date", () => {
     const base = { attribute: null, kind: "episode" as const, reinforcementCount: 0 };
-    expect(memoryRetention({ ...base, createdAt: now, lastReinforcedAt: null, occurredAt: null }, now))
-      .toBeCloseTo(1, 5);
-    expect(memoryRetention({ ...base, createdAt: daysAgo(30), lastReinforcedAt: null, occurredAt: null }, now))
-      .toBeCloseTo(Math.exp(-1), 5);
-    expect(memoryRetention({ ...base, createdAt: now, lastReinforcedAt: null, occurredAt: daysAgo(30) }, now))
-      .toBeCloseTo(1, 5);
-    expect(memoryRetention({
-      ...base, createdAt: daysAgo(90), lastReinforcedAt: daysAgo(30), occurredAt: daysAgo(90),
-    }, now)).toBeCloseTo(Math.exp(-1), 5);
+    expect(
+      memoryRetention({ ...base, createdAt: now, lastReinforcedAt: null, occurredAt: null }, now),
+    ).toBeCloseTo(1, 5);
+    expect(
+      memoryRetention(
+        { ...base, createdAt: daysAgo(30), lastReinforcedAt: null, occurredAt: null },
+        now,
+      ),
+    ).toBeCloseTo(Math.exp(-1), 5);
+    expect(
+      memoryRetention(
+        { ...base, createdAt: now, lastReinforcedAt: null, occurredAt: daysAgo(30) },
+        now,
+      ),
+    ).toBeCloseTo(1, 5);
+    expect(
+      memoryRetention(
+        {
+          ...base,
+          createdAt: daysAgo(90),
+          lastReinforcedAt: daysAgo(30),
+          occurredAt: daysAgo(90),
+        },
+        now,
+      ),
+    ).toBeCloseTo(Math.exp(-1), 5);
   });
 
   it("admits a newly learned old event and never anchors before learning", () => {
     for (const lastReinforcedAt of [null, daysAgo(90)]) {
-      const retention = memoryRetention({
-        attribute: null, createdAt: now, kind: "episode", lastReinforcedAt,
-        occurredAt: daysAgo(100), reinforcementCount: 0,
-      }, now);
+      const retention = memoryRetention(
+        {
+          attribute: null,
+          createdAt: now,
+          kind: "episode",
+          lastReinforcedAt,
+          occurredAt: daysAgo(100),
+          reinforcementCount: 0,
+        },
+        now,
+      );
       expect(retention).toBe(1);
       expect(isRetainedForAutomaticContext(retention)).toBe(true);
     }
@@ -53,7 +77,11 @@ describe("memoryRetention", () => {
 
   it("grows stability with reinforcement: S = S0 * (1 + ln(1 + n))", () => {
     const input = {
-      attribute: null, createdAt: daysAgo(30), kind: "episode" as const, lastReinforcedAt: null, occurredAt: null,
+      attribute: null,
+      createdAt: daysAgo(30),
+      kind: "episode" as const,
+      lastReinforcedAt: null,
+      occurredAt: null,
     };
     const once = memoryRetention({ ...input, reinforcementCount: 1 }, now);
     expect(once).toBeCloseTo(Math.exp(-30 / (30 * (1 + Math.log(2)))), 5);

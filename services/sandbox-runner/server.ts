@@ -25,10 +25,7 @@ interface ServerDependencies {
   engine: SandboxEngine;
 }
 
-const PROCESS_ROUTE = new RegExp(
-  `^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/processes$`,
-  "u",
-);
+const PROCESS_ROUTE = new RegExp(`^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/processes$`, "u");
 const FILE_ROUTE = new RegExp(`^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/files$`, "u");
 const STOP_ROUTE = new RegExp(`^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/stop$`, "u");
 const TOOL_ENVIRONMENT_ROUTE = new RegExp(
@@ -81,8 +78,12 @@ function requiredPath(url: URL): string {
 }
 
 function requestError(error: unknown): boolean {
-  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
-    .test(error.message);
+  return (
+    error instanceof Error &&
+    /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u.test(
+      error.message,
+    )
+  );
 }
 
 async function route(
@@ -201,7 +202,10 @@ export function createSandboxRunnerServer(dependencies: ServerDependencies) {
         path: request.url,
       });
       if (response.destroyed) return;
-      if (error instanceof Error && error.message.startsWith("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED")) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED")
+      ) {
         // Not a fault of the runner: every container is in use, the caller tells the person.
         sendJson(response, 503, {
           code: "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED",

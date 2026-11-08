@@ -1,8 +1,4 @@
-import {
-  localDev,
-  placeholderAuth,
-  vercelOidc,
-} from "#public/channels/auth.js";
+import { localDev, placeholderAuth, vercelOidc } from "#public/channels/auth.js";
 import { isHttpRouteDefinition } from "#channel/routes.js";
 import { eveChannel } from "#public/channels/eve.js";
 import {

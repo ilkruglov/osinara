@@ -6,17 +6,17 @@
  * example reading a file out of a container via `cat`).
  */
 export interface DockerCommandResult {
-    readonly exitCode: number;
-    readonly stderr: string;
-    readonly stdout: string;
-    readonly stdoutBytes: Buffer;
+  readonly exitCode: number;
+  readonly stderr: string;
+  readonly stdout: string;
+  readonly stdoutBytes: Buffer;
 }
 /**
  * Options for one buffered {@link DockerCli.run} invocation.
  */
 export interface DockerRunOptions {
-    readonly signal?: AbortSignal;
-    readonly stdin?: Uint8Array;
+  readonly signal?: AbortSignal;
+  readonly stdin?: Uint8Array;
 }
 /**
  * Handle to one streaming `docker …` invocation (e.g. `docker exec`).
@@ -24,12 +24,12 @@ export interface DockerRunOptions {
  * shape so the sandbox engine can adapt it directly.
  */
 export interface DockerProcess {
-    readonly stdout: ReadableStream<Uint8Array>;
-    readonly stderr: ReadableStream<Uint8Array>;
-    wait(): Promise<{
-        exitCode: number;
-    }>;
-    kill(): Promise<void>;
+  readonly stdout: ReadableStream<Uint8Array>;
+  readonly stderr: ReadableStream<Uint8Array>;
+  wait(): Promise<{
+    exitCode: number;
+  }>;
+  kill(): Promise<void>;
 }
 /**
  * Minimal Docker CLI driver the local sandbox engine runs on. A thin
@@ -37,29 +37,32 @@ export interface DockerProcess {
  * testable without a Docker daemon.
  */
 export interface DockerCli {
-    /** Runs `docker <args>` to completion, buffering stdout/stderr. */
-    run(args: readonly string[], options?: DockerRunOptions): Promise<DockerCommandResult>;
-    /** Spawns `docker <args>` with streaming stdout/stderr. */
-    stream(args: readonly string[], options?: {
-        readonly signal?: AbortSignal;
-    }): DockerProcess;
+  /** Runs `docker <args>` to completion, buffering stdout/stderr. */
+  run(args: readonly string[], options?: DockerRunOptions): Promise<DockerCommandResult>;
+  /** Spawns `docker <args>` with streaming stdout/stderr. */
+  stream(
+    args: readonly string[],
+    options?: {
+      readonly signal?: AbortSignal;
+    },
+  ): DockerProcess;
 }
 /**
  * Raised when the `docker` executable cannot be spawned at all (not
  * installed or not on `PATH`).
  */
 export declare class DockerUnavailableError extends Error {
-    /** Structured remediation, surfaced by the semantic-error catalog. */
-    readonly hint: string;
-    constructor(cause?: unknown);
+  /** Structured remediation, surfaced by the semantic-error catalog. */
+  readonly hint: string;
+  constructor(cause?: unknown);
 }
 /**
  * Raised when the `docker` CLI exists but the daemon is not reachable.
  */
 export declare class DockerDaemonUnavailableError extends Error {
-    /** Structured remediation, surfaced by the semantic-error catalog. */
-    readonly hint: string;
-    constructor(detail: string);
+  /** Structured remediation, surfaced by the semantic-error catalog. */
+  readonly hint: string;
+  constructor(detail: string);
 }
 /**
  * Verifies the Docker daemon answers before the engine performs its

@@ -3,11 +3,11 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * Input shape accepted by {@link defineWriteFileTool}.
  */
 export interface DefineWriteFileToolInput {
-    /**
-     * Optional model-facing description. Defaults to a generic
-     * "Write a file to the workspace sandbox." line.
-     */
-    readonly description?: string;
+  /**
+   * Optional model-facing description. Defaults to a generic
+   * "Write a file to the workspace sandbox." line.
+   */
+  readonly description?: string;
 }
 /**
  * Defines a model-visible file-writer tool that writes files to the

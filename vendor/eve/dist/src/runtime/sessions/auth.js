@@ -4,9 +4,7 @@ const runtimeSessionAuthAttributeValueSchema = z.union([
   z.array(z.string()).readonly(),
 ]);
 z.object({
-  attributes: z
-    .record(z.string(), runtimeSessionAuthAttributeValueSchema)
-    .readonly(),
+  attributes: z.record(z.string(), runtimeSessionAuthAttributeValueSchema).readonly(),
   authenticator: z.enum([`http-basic`, `jwt-hmac`, `jwt-ecdsa`, `oidc`]),
   issuer: z.string().optional(),
   principalId: z.string(),

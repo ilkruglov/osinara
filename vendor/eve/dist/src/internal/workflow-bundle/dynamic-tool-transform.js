@@ -6,12 +6,7 @@ import {
 } from "#internal/workflow-bundle/dynamic-tool-ast-references.js";
 let transformCounter = 0;
 async function transformDynamicToolExecute(e, t) {
-  if (
-    !t.includes(`defineDynamic`) ||
-    !t.includes(`events`) ||
-    !t.includes(`execute`)
-  )
-    return null;
+  if (!t.includes(`defineDynamic`) || !t.includes(`events`) || !t.includes(`execute`)) return null;
   let n = findDynamicToolHandlers(t, await parseSource(e, t));
   return n.every((e) => e.executes.length === 0) ? null : applyTransform(t, n);
 }
@@ -31,9 +26,7 @@ function findDynamicToolHandlers(e, t) {
         let r = t.arguments[0];
         if (r.type === `ObjectExpression`) {
           let t = findProperty(r, `events`);
-          t?.value &&
-            t.value.type === `ObjectExpression` &&
-            collectHandlers(e, t.value, i);
+          t?.value && t.value.type === `ObjectExpression` && collectHandlers(e, t.value, i);
         }
         return !1;
       }
@@ -46,11 +39,7 @@ function collectHandlers(e, t, n) {
   for (let r of t.properties ?? []) {
     if (r.type !== `Property`) continue;
     let t = r.value;
-    if (
-      !t ||
-      (t.type !== `ArrowFunctionExpression` && t.type !== `FunctionExpression`)
-    )
-      continue;
+    if (!t || (t.type !== `ArrowFunctionExpression` && t.type !== `FunctionExpression`)) continue;
     let i = t.body;
     if (!i) continue;
     let a = findBlockBodyStart(i);
@@ -80,8 +69,7 @@ function findBlockBodyStart(e) {
 }
 function extractParamNames(e) {
   let t = [];
-  for (let n of e.params ?? [])
-    n.type === `Identifier` && n.name && t.push(n.name);
+  for (let n of e.params ?? []) n.type === `Identifier` && n.name && t.push(n.name);
   return t;
 }
 function collectScopeVarDeclarations(e) {
@@ -107,16 +95,9 @@ function collectVarsRecursive(e, t) {
     Array.isArray(e.body))
   )
     for (let n of e.body) collectVarsRecursive(n, t);
-  else
-    e.body &&
-      typeof e.body == `object` &&
-      `type` in e.body &&
-      collectVarsRecursive(e.body, t);
+  else e.body && typeof e.body == `object` && `type` in e.body && collectVarsRecursive(e.body, t);
   if (e.declarations) for (let n of e.declarations) collectVarsRecursive(n, t);
-  if (
-    (e.expression && collectVarsRecursive(e.expression, t),
-    Array.isArray(n.consequent))
-  )
+  if ((e.expression && collectVarsRecursive(e.expression, t), Array.isArray(n.consequent)))
     for (let e of n.consequent) collectVarsRecursive(e, t);
   else n.consequent && collectVarsRecursive(n.consequent, t);
   if (
@@ -142,8 +123,7 @@ function collectPatternNames(e, t) {
         n.type === `Property`
           ? collectPatternNames(n.value, t)
           : n.type === `RestElement` && collectPatternNames(n.argument, t);
-    if (e.type === `ArrayPattern`)
-      for (let n of e.elements ?? []) n && collectPatternNames(n, t);
+    if (e.type === `ArrayPattern`) for (let n of e.elements ?? []) n && collectPatternNames(n, t);
   }
 }
 function findExecuteFunctions(e, t) {
@@ -184,9 +164,7 @@ function walkForExecuteProps(e, t, n, r) {
       ) {
         let a = t.value;
         if (!a || a.start === void 0 || a.end === void 0) continue;
-        let o =
-            a.type === `FunctionExpression` ||
-            a.type === `ArrowFunctionExpression`,
+        let o = a.type === `FunctionExpression` || a.type === `ArrowFunctionExpression`,
           s = t.method === !0;
         if (o || s) {
           let o = extractFnParams(e, a),
@@ -214,12 +192,8 @@ function walkForExecuteProps(e, t, n, r) {
   else t.body && typeof t.body == `object` && `type` in t.body && walk(t.body);
   if (t.properties)
     for (let e of t.properties)
-      e.value &&
-        typeof e.value == `object` &&
-        `type` in e.value &&
-        walk(e.value);
-  if ((t.callee && walk(t.callee), t.arguments))
-    for (let e of t.arguments) walk(e);
+      e.value && typeof e.value == `object` && `type` in e.value && walk(e.value);
+  if ((t.callee && walk(t.callee), t.arguments)) for (let e of t.arguments) walk(e);
   if (
     (t.expression && walk(t.expression),
     t.argument && walk(t.argument),
@@ -269,8 +243,7 @@ function applyTransform(e, n) {
         ],
         c = new Set(),
         l = [];
-      for (let e = s.length - 1; e >= 0; e--)
-        c.has(s[e]) || (c.add(s[e]), l.unshift(s[e]));
+      for (let e = s.length - 1; e >= 0; e--) c.has(s[e]) || (c.add(s[e]), l.unshift(s[e]));
       let u = collectReferencedIdentifierNames(n.bodyNode),
         d = extractExecuteParamNames(n.params),
         f = l.filter((e) => !d.has(e) && u.has(e)),
@@ -283,9 +256,7 @@ function applyTransform(e, n) {
         y = `eve:dynamic-tool//${n.hoistedName}`;
       (i.push(`${m}function ${n.hoistedName}(${_}) {\n  ${h}${v}\n}`),
         a.push(`${n.hoistedName}.stepId = ${JSON.stringify(y)};`),
-        a.push(
-          `__eveStepRegistry.set(${JSON.stringify(y)}, ${n.hoistedName});`,
-        ),
+        a.push(`__eveStepRegistry.set(${JSON.stringify(y)}, ${n.hoistedName});`),
         o.push(n.hoistedName));
       let b = g || ``,
         x = g
@@ -358,7 +329,4 @@ function extractExecuteParamNames(e) {
   }
   return t;
 }
-export {
-  transformDynamicToolExecute as transformDynamicToolAwait,
-  transformDynamicToolExecute,
-};
+export { transformDynamicToolExecute as transformDynamicToolAwait, transformDynamicToolExecute };

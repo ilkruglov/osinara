@@ -70,15 +70,19 @@ describe("createTelegramMessageHandler reply routing", () => {
       },
     });
 
-    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "group-101::340",
-      telegramMessageId: "340",
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      kind: "canonical",
-      telegramForumTopicId: null,
-    }));
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "group-101::340",
+        telegramMessageId: "340",
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        kind: "canonical",
+        telegramForumTopicId: null,
+      }),
+    );
     expect(result).toMatchObject({
       continuationToken: "group-101::340:osinara:2",
       replyHandling: "message",
@@ -120,14 +124,18 @@ describe("createTelegramMessageHandler reply routing", () => {
     });
 
     expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::340");
-    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "group-101::340",
-      telegramMessageId: "340",
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      kind: "canonical",
-    }));
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "group-101::340",
+        telegramMessageId: "340",
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        kind: "canonical",
+      }),
+    );
     expect(result).toMatchObject({
       continuationToken: "group-101::340:osinara:2",
       replyHandling: "message",
@@ -173,10 +181,12 @@ describe("createTelegramMessageHandler reply routing", () => {
     });
 
     expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::88");
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      kind: "canonical",
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        kind: "canonical",
+      }),
+    );
     expect(result?.auth).toMatchObject({
       attributes: {
         groupId: "group-1",
@@ -210,13 +220,17 @@ describe("createTelegramMessageHandler reply routing", () => {
       },
     });
 
-    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "telegram-101::88",
-      telegramMessageId: "88",
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "telegram-101::88",
-    }));
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "telegram-101::88",
+        telegramMessageId: "88",
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "telegram-101::88",
+      }),
+    );
     expect(result).toMatchObject({ replyHandling: "message" });
   });
 
@@ -247,10 +261,12 @@ describe("createTelegramMessageHandler reply routing", () => {
       },
     });
 
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "group-101::341",
-      kind: "task",
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "group-101::341",
+        kind: "task",
+      }),
+    );
     expect(result).not.toBeNull();
     expect(result).not.toHaveProperty("replyHandling");
   });
@@ -275,10 +291,12 @@ describe("createTelegramMessageHandler reply routing", () => {
     });
 
     expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::88");
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      kind: "canonical",
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        kind: "canonical",
+      }),
+    );
     expect(result).not.toBeNull();
   });
 
@@ -317,9 +335,7 @@ describe("createTelegramMessageHandler reply routing", () => {
       role: "member",
       userId: "user-1",
     });
-    repository.session.hasRoute
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+    repository.session.hasRoute.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const handler = createTelegramMessageHandler(repository);
 
     const result = await handler(telegramContext().context, {
@@ -341,10 +357,12 @@ describe("createTelegramMessageHandler reply routing", () => {
 
     expect(repository.session.hasRoute).toHaveBeenNthCalledWith(1, "group-101:278:279");
     expect(repository.session.hasRoute).toHaveBeenNthCalledWith(2, "group-101::279");
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      kind: "canonical",
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        kind: "canonical",
+      }),
+    );
     expect(result).not.toBeNull();
   });
 
@@ -382,9 +400,11 @@ describe("createTelegramMessageHandler reply routing", () => {
     // Another bot's message can never be one of our confirmation prompts.
     expect(repository.hitl.authorizeReply).not.toHaveBeenCalled();
     expect(result).toMatchObject({ replyHandling: "message" });
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      kind: "canonical",
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "canonical",
+      }),
+    );
   });
 
   it("ignores a username-less reply to an unknown bot message route", async () => {
@@ -392,14 +412,16 @@ describe("createTelegramMessageHandler reply routing", () => {
     repository.session.hasRoute.mockResolvedValue(false);
     const handler = createTelegramMessageHandler(repository);
 
-    await expect(handler(telegramContext().context, {
-      ...groupMessage("ответ другому боту"),
-      replyToMessage: {
-        chat: { id: "group-101", type: "group" },
-        from: { firstName: "Other", id: "bot-2", isBot: true },
-        messageId: "188",
-      },
-    })).resolves.toBeNull();
+    await expect(
+      handler(telegramContext().context, {
+        ...groupMessage("ответ другому боту"),
+        replyToMessage: {
+          chat: { id: "group-101", type: "group" },
+          from: { firstName: "Other", id: "bot-2", isBot: true },
+          messageId: "188",
+        },
+      }),
+    ).resolves.toBeNull();
 
     expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::188");
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();

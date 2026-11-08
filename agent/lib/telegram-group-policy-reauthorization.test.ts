@@ -33,10 +33,12 @@ describe("Telegram group policy reauthorization", () => {
       userId: "user-1",
     });
 
-    await expect(createTelegramMessageHandler(repository)(
-      telegramContext().context,
-      groupMessage(`@${BOT_USERNAME} ответь мне`),
-    )).resolves.toBeNull();
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegramContext().context,
+        groupMessage(`@${BOT_USERNAME} ответь мне`),
+      ),
+    ).resolves.toBeNull();
 
     expect(repository.telegram.findGroup).toHaveBeenCalledTimes(2);
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();

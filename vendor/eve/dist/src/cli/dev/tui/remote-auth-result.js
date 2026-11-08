@@ -10,9 +10,7 @@ function describeRemoteAuthCompletedMutations(e) {
 }
 function appendRemoteAuthMutationSummary(e, t) {
   let n = describeRemoteAuthCompletedMutations(t);
-  return n.length === 0
-    ? e
-    : `${e} Completed before the failure: ${n.join(`, `)}.`;
+  return n.length === 0 ? e : `${e} Completed before the failure: ${n.join(`, `)}.`;
 }
 function formatRemoteAuthChallengeMessage(e) {
   return [

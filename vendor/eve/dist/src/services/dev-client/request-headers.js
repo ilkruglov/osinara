@@ -31,19 +31,14 @@ async function resolveLinkedDevelopmentOidcToken(e) {
   if (t === void 0) return ``;
   let n = { ownerId: t.orgId, projectId: t.projectId },
     r = await resolveDevelopmentOidcToken(n);
-  if (r.kind === `resolved` && isLocalDevelopmentUserToken(r.token))
-    return r.token;
+  if (r.kind === `resolved` && isLocalDevelopmentUserToken(r.token)) return r.token;
   if (r.kind !== `resolved` && r.kind !== `target-mismatch`) return ``;
   let i = await resolveDevelopmentOidcToken({ ...n, forceRefresh: !0 });
-  return i.kind === `resolved` && isLocalDevelopmentUserToken(i.token)
-    ? i.token
-    : ``;
+  return i.kind === `resolved` && isLocalDevelopmentUserToken(i.token) ? i.token : ``;
 }
 function isLocalDevelopmentUserToken(e) {
   let t = decodeOidcPayload(e);
-  return (
-    t !== void 0 && LocalDevelopmentUserOidcClaimsSchema.safeParse(t).success
-  );
+  return t !== void 0 && LocalDevelopmentUserOidcClaimsSchema.safeParse(t).success;
 }
 function validateDevelopmentOidcToken(e, t) {
   let n = decodeOidcPayload(e);
@@ -64,9 +59,7 @@ function validateDevelopmentOidcToken(e, t) {
   return (
     r.data.owner_id !== t.ownerId && i.push(`owner_id`),
     r.data.project_id !== t.projectId && i.push(`project_id`),
-    i.length > 0
-      ? { kind: `target-mismatch`, mismatchedClaims: i }
-      : { kind: `resolved`, token: e }
+    i.length > 0 ? { kind: `target-mismatch`, mismatchedClaims: i } : { kind: `resolved`, token: e }
   );
 }
 function decodeOidcPayload(e) {

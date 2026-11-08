@@ -12,10 +12,17 @@ import type { ApplicationConversation } from "./conversation-repository.js";
 import type { ConversationAccess, RegisteredGroup } from "./family-access.js";
 import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-context.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
-import { SESSION_HANDOFF_CARRIED_ATTRIBUTE, SESSION_HANDOFF_CARRIED_VALUE } from "./sessions/session-handoff-shown.js";
+import {
+  SESSION_HANDOFF_CARRIED_ATTRIBUTE,
+  SESSION_HANDOFF_CARRIED_VALUE,
+} from "./sessions/session-handoff-shown.js";
 import type { PreparedSession } from "./sessions/session-repository.js";
 import type { TelegramInboundActor } from "./telegram-inbound-actor.js";
-import { alreadySeenSeriesContext, alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
+import {
+  alreadySeenSeriesContext,
+  alreadySeenTurnContext,
+  turnInterjectionMarkerContext,
+} from "./turn-interjection/turn-interjection-block.js";
 import type { TurnInterjectionContentKind } from "./turn-interjection/turn-interjection-repository.js";
 import { TURN_INTERJECTION_MARKER_ATTRIBUTE } from "./turn-interjection/turn-interjection-scope.js";
 import {
@@ -34,9 +41,11 @@ function envelopeReplacedByReplyText(
   message: TelegramMessage,
   replyHandling: "message" | undefined,
 ): boolean {
-  return replyHandling !== "message" &&
+  return (
+    replyHandling !== "message" &&
     message.replyToMessage?.from?.isBot === true &&
-    (message.text || message.caption).trim().length > 0;
+    (message.text || message.caption).trim().length > 0
+  );
 }
 
 // Same field name and value as in the ordinary envelope, so the mode rule for it applies as is.
@@ -92,11 +101,14 @@ export function buildTelegramTurnResult(input: {
   if (input.storedAttachments.length > 0) {
     context.push(formatStoredTelegramAttachments(input.storedAttachments));
   }
-  if (input.lazyAttachment) context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
+  if (input.lazyAttachment)
+    context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
   if (input.pendingDelivery) context.push(input.pendingDelivery.context);
   if (input.shownDuringTurn) context.push(alreadySeenTurnContext(input.shownDuringTurn));
-  if (input.shownEarlierInSeries) context.push(alreadySeenSeriesContext(input.shownEarlierInSeries));
-  if (input.turnInterjectionMarker) context.push(turnInterjectionMarkerContext(input.turnInterjectionMarker));
+  if (input.shownEarlierInSeries)
+    context.push(alreadySeenSeriesContext(input.shownEarlierInSeries));
+  if (input.turnInterjectionMarker)
+    context.push(turnInterjectionMarkerContext(input.turnInterjectionMarker));
   // The envelope carries the quote on an ordinary turn; a second copy would read as another quote.
   if (input.replyQuotedText && envelopeReplacedByReplyText(input.message, input.replyHandling)) {
     context.push(formatTelegramReplyQuote(input.replyQuotedText));
@@ -129,7 +141,9 @@ export function buildTelegramTurnResult(input: {
           ? {}
           : { telegramProfileReplyTimelineSequence: input.profileReplyTimelineSequence }),
         telegramTurnStartedAt: input.turnStartedAt.toISOString(),
-        ...(input.currentUpdateId === null ? {} : { osinaraTelegramUpdateId: input.currentUpdateId }),
+        ...(input.currentUpdateId === null
+          ? {}
+          : { osinaraTelegramUpdateId: input.currentUpdateId }),
         ...(input.turnInterjectionMarker === null
           ? {}
           : { [TURN_INTERJECTION_MARKER_ATTRIBUTE]: input.turnInterjectionMarker }),
@@ -146,7 +160,9 @@ export function buildTelegramTurnResult(input: {
         telegramTimelineSequence: input.turnContext.cursorSequence,
         telegramTimelineVisibleEntryIds: input.turnContext.visibleEntryIds,
         // The hook on `turn.started` marks the handoff shown for this turn only (`hooks/session-handoff.ts`).
-        ...(input.turnContext.handoffBlock ? { [SESSION_HANDOFF_CARRIED_ATTRIBUTE]: SESSION_HANDOFF_CARRIED_VALUE } : {}),
+        ...(input.turnContext.handoffBlock
+          ? { [SESSION_HANDOFF_CARRIED_ATTRIBUTE]: SESSION_HANDOFF_CARRIED_VALUE }
+          : {}),
         ...(input.turnContext.memoryReviewBatchId === undefined
           ? {}
           : { memoryReviewBatchId: input.turnContext.memoryReviewBatchId }),

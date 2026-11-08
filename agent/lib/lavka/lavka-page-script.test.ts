@@ -14,24 +14,60 @@ import { describe, expect, it, vi } from "vitest";
 import type { LavkaPageRequest } from "./lavka-page-script.js";
 import { lavkaPageScript } from "./lavka-page-script.js";
 
-function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; status: number } | "hang" | "fail", searchLimit = 12, hostname = "lavka.yandex.ru") {
-  const fetch = vi.fn(async () => response === "hang" ? await new Promise<never>(() => {}) : response === "fail" ? Promise.reject(new TypeError("Failed to fetch")) : ({
-    ok: response.status >= 200 && response.status < 300,
-    status: response.status,
-    text: async () => typeof response.body === "string" ? response.body : JSON.stringify(response.body),
-  }));
-  const document = { documentElement: { innerHTML: "<script>{\"csrfToken\":\"tok-1\"}</script>" } };
+function runInFakeTab(
+  request: LavkaPageRequest,
+  response: { body: unknown; status: number } | "hang" | "fail",
+  searchLimit = 12,
+  hostname = "lavka.yandex.ru",
+) {
+  const fetch = vi.fn(async () =>
+    response === "hang"
+      ? await new Promise<never>(() => {})
+      : response === "fail"
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : {
+            ok: response.status >= 200 && response.status < 300,
+            status: response.status,
+            text: async () =>
+              typeof response.body === "string" ? response.body : JSON.stringify(response.body),
+          },
+  );
+  const document = { documentElement: { innerHTML: '<script>{"csrfToken":"tok-1"}</script>' } };
   // oxlint-disable-next-line typescript/no-implied-eval -- the fixed page script runs against a fake tab
-  const run = new Function("fetch", "document", "location", `return ${lavkaPageScript(request, searchLimit)};`) as (f: unknown, d: unknown, l: unknown) => Promise<string>;
-  return { fetch, result: run(fetch, document, { hostname }).then((text) => JSON.parse(text) as { authorized: boolean; data: unknown; error: string | null; status: number }) };
+  const run = new Function(
+    "fetch",
+    "document",
+    "location",
+    `return ${lavkaPageScript(request, searchLimit)};`,
+  ) as (f: unknown, d: unknown, l: unknown) => Promise<string>;
+  return {
+    fetch,
+    result: run(fetch, document, { hostname }).then(
+      (text) =>
+        JSON.parse(text) as {
+          authorized: boolean;
+          data: unknown;
+          error: string | null;
+          status: number;
+        },
+    ),
+  };
 }
 
 describe("lavkaPageScript", () => {
   it("reports a failed request and one that never settles as status 0 instead of a rejected eval", async () => {
-    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, "fail").result).toEqual({ authorized: true, data: null, error: "network:TypeError", status: 0 });
+    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, "fail").result).toEqual({
+      authorized: true,
+      data: null,
+      error: "network:TypeError",
+      status: 0,
+    });
     vi.useFakeTimers();
     try {
-      const pending = runInFakeTab({ body: {}, endpoint: "orderSubmit", project: "submit" }, "hang").result;
+      const pending = runInFakeTab(
+        { body: {}, endpoint: "orderSubmit", project: "submit" },
+        "hang",
+      ).result;
       await vi.advanceTimersByTimeAsync(30_000);
       expect(await pending).toEqual({ authorized: true, data: null, error: "timeout", status: 0 });
     } finally {
@@ -41,28 +77,60 @@ describe("lavkaPageScript", () => {
 
   // Review 28 September 2026: a parallel browser_open can move the tab between the URL check and the eval.
   it("sends nothing from a tab that is no longer on Lavka", async () => {
-    const { fetch, result } = runInFakeTab({ body: { flat: "5" }, endpoint: "orderSubmit", project: "submit" }, { body: {}, status: 200 }, 12, "evil.example");
-    expect(await result).toEqual({ authorized: true, data: null, error: "wrong_origin:evil.example", status: 0 });
+    const { fetch, result } = runInFakeTab(
+      { body: { flat: "5" }, endpoint: "orderSubmit", project: "submit" },
+      { body: {}, status: 200 },
+      12,
+      "evil.example",
+    );
+    expect(await result).toEqual({
+      authorized: true,
+      data: null,
+      error: "wrong_origin:evil.example",
+      status: 0,
+    });
     expect(fetch).not.toHaveBeenCalled();
   });
 
   // The site maps a tracked order to { id, status, trackingInfo: { title, subtitle } } (main bundle,
   // module 61908, read 26 October 2026); the status a person reads lives in trackingInfo.
   it("reads a tracked order's status title where the site keeps it", async () => {
-    const { result } = runInFakeTab({ endpoint: "trackedOrders", project: "orders" }, { body: [
-      { id: "o-1", status: "delivering", trackingInfo: { subtitle: "Будет через 7 минут", title: "Курьер в пути" } },
-      { orderId: "o-2", status: "created", title: "Заказ принят" },
-    ], status: 200 });
+    const { result } = runInFakeTab(
+      { endpoint: "trackedOrders", project: "orders" },
+      {
+        body: [
+          {
+            id: "o-1",
+            status: "delivering",
+            trackingInfo: { subtitle: "Будет через 7 минут", title: "Курьер в пути" },
+          },
+          { orderId: "o-2", status: "created", title: "Заказ принят" },
+        ],
+        status: 200,
+      },
+    );
     expect((await result).data).toEqual([
-      { eta: "", orderId: "o-1", status: "delivering", subtitle: "Будет через 7 минут", title: "Курьер в пути" },
+      {
+        eta: "",
+        orderId: "o-1",
+        status: "delivering",
+        subtitle: "Будет через 7 минут",
+        title: "Курьер в пути",
+      },
       { eta: "", orderId: "o-2", status: "created", subtitle: "", title: "Заказ принят" },
     ]);
   });
 
   it("posts to the site's path with the page's CSRF token and the session cookies", async () => {
-    const { fetch, result } = runInFakeTab({ body: { text: "молоко 'х'" }, endpoint: "search", project: "search" }, { body: { cacheProducts: [] }, status: 200 });
+    const { fetch, result } = runInFakeTab(
+      { body: { text: "молоко 'х'" }, endpoint: "search", project: "search" },
+      { body: { cacheProducts: [] }, status: 200 },
+    );
     expect(await result).toEqual({ authorized: true, data: [], error: null, status: 200 });
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, { body: string; credentials: string; headers: Record<string, string>; method: string }];
+    const [url, init] = fetch.mock.calls[0] as unknown as [
+      string,
+      { body: string; credentials: string; headers: Record<string, string>; method: string },
+    ];
     expect(url).toBe("/api/v1/providers/search/v3/lavka");
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
@@ -72,45 +140,172 @@ describe("lavkaPageScript", () => {
   });
 
   it("projects a search and a cart down to what the tool shows", async () => {
-    const products = Array.from({ length: 30 }, (_, i) => ({ available: i % 2 === 0, currentPrice: `${100 + i}`, deepLink: `slug-${i}`, id: `hash-${i}`, oldPrice: null, title: `Товар ${i}`, amount: "1 л", huge: "x".repeat(10_000) }));
-    const search = await runInFakeTab({ endpoint: "search", project: "search" }, { body: { cacheProducts: products }, status: 200 }, 3).result;
+    const products = Array.from({ length: 30 }, (_, i) => ({
+      available: i % 2 === 0,
+      currentPrice: `${100 + i}`,
+      deepLink: `slug-${i}`,
+      id: `hash-${i}`,
+      oldPrice: null,
+      title: `Товар ${i}`,
+      amount: "1 л",
+      huge: "x".repeat(10_000),
+    }));
+    const search = await runInFakeTab(
+      { endpoint: "search", project: "search" },
+      { body: { cacheProducts: products }, status: 200 },
+      3,
+    ).result;
     expect(search.data).toEqual([
-      { amount: "1 л", available: true, id: "hash-0", oldPrice: null, price: 100, slug: "slug-0", title: "Товар 0" },
-      { amount: "1 л", available: false, id: "hash-1", oldPrice: null, price: 101, slug: "slug-1", title: "Товар 1" },
-      { amount: "1 л", available: true, id: "hash-2", oldPrice: null, price: 102, slug: "slug-2", title: "Товар 2" },
+      {
+        amount: "1 л",
+        available: true,
+        id: "hash-0",
+        oldPrice: null,
+        price: 100,
+        slug: "slug-0",
+        title: "Товар 0",
+      },
+      {
+        amount: "1 л",
+        available: false,
+        id: "hash-1",
+        oldPrice: null,
+        price: 101,
+        slug: "slug-1",
+        title: "Товар 1",
+      },
+      {
+        amount: "1 л",
+        available: true,
+        id: "hash-2",
+        oldPrice: null,
+        price: 102,
+        slug: "slug-2",
+        title: "Товар 2",
+      },
     ]);
 
-    const cart = await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: { cart: {
-      availableForCheckout: true, cartId: "c1", cartVersion: 7, items: [{ id: "hash-0", title: "Товар 0", quantity: "2", currentPrice: "100", amount: "1 л", isUnavailableOnDepot: false }],
-      orderConditions: { deliveryCost: "199", eta: "15–25 мин" }, paymentMethod: { id: "card-1", type: "card", meta: { card: { system: "MIR", cardBank: "Т-Банк" } } },
-      totalDiscountValue: "0", totalItemsCount: 2, totalItemsPrice: "200", totalPriceValue: "399",
-    } }, status: 200 }).result;
-    expect(cart.data).toMatchObject({ availableForCheckout: true, cartId: "c1", cartVersion: 7, deliveryFee: 199, eta: "15–25 мин", itemCount: 2, subtotal: 200, total: 399 });
-    expect((cart.data as { items: unknown[] }).items).toEqual([{ amount: "1 л", id: "hash-0", price: 100, quantity: 2, title: "Товар 0", unavailableOnDepot: false }]);
-    expect((cart.data as { paymentMethod: unknown }).paymentMethod).toEqual({ bank: "Т-Банк", id: "card-1", system: "MIR", type: "card" });
+    const cart = await runInFakeTab(
+      { endpoint: "cart", project: "cart" },
+      {
+        body: {
+          cart: {
+            availableForCheckout: true,
+            cartId: "c1",
+            cartVersion: 7,
+            items: [
+              {
+                id: "hash-0",
+                title: "Товар 0",
+                quantity: "2",
+                currentPrice: "100",
+                amount: "1 л",
+                isUnavailableOnDepot: false,
+              },
+            ],
+            orderConditions: { deliveryCost: "199", eta: "15–25 мин" },
+            paymentMethod: {
+              id: "card-1",
+              type: "card",
+              meta: { card: { system: "MIR", cardBank: "Т-Банк" } },
+            },
+            totalDiscountValue: "0",
+            totalItemsCount: 2,
+            totalItemsPrice: "200",
+            totalPriceValue: "399",
+          },
+        },
+        status: 200,
+      },
+    ).result;
+    expect(cart.data).toMatchObject({
+      availableForCheckout: true,
+      cartId: "c1",
+      cartVersion: 7,
+      deliveryFee: 199,
+      eta: "15–25 мин",
+      itemCount: 2,
+      subtotal: 200,
+      total: 399,
+    });
+    expect((cart.data as { items: unknown[] }).items).toEqual([
+      {
+        amount: "1 л",
+        id: "hash-0",
+        price: 100,
+        quantity: 2,
+        title: "Товар 0",
+        unavailableOnDepot: false,
+      },
+    ]);
+    expect((cart.data as { paymentMethod: unknown }).paymentMethod).toEqual({
+      bank: "Т-Банк",
+      id: "card-1",
+      system: "MIR",
+      type: "card",
+    });
   });
 
   // The owner's account carries 230 cards; the default must survive the cut to ten.
   it("puts the default payment method first and keeps the site's error text", async () => {
-    const methods = Array.from({ length: 30 }, (_, i) => ({ availability: { available: true }, cardBank: `Bank ${i}`, displayName: ["MIR", `**${i}`], id: `card-${i}`, type: "card" }));
-    const result = await runInFakeTab({ endpoint: "paymentMethods", project: "paymentMethods" }, { body: { defaultMethod: methods[25], methods }, status: 200 }).result;
-    const data = result.data as { defaultId: string; methods: Array<{ id: string; label: string }> };
+    const methods = Array.from({ length: 30 }, (_, i) => ({
+      availability: { available: true },
+      cardBank: `Bank ${i}`,
+      displayName: ["MIR", `**${i}`],
+      id: `card-${i}`,
+      type: "card",
+    }));
+    const result = await runInFakeTab(
+      { endpoint: "paymentMethods", project: "paymentMethods" },
+      { body: { defaultMethod: methods[25], methods }, status: 200 },
+    ).result;
+    const data = result.data as {
+      defaultId: string;
+      methods: Array<{ id: string; label: string }>;
+    };
     expect(data.defaultId).toBe("card-25");
     expect(data.methods[0]).toMatchObject({ id: "card-25", label: "MIR **25" });
     expect(data.methods).toHaveLength(10);
-    const refused = await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: { data: { errors: ["deliveryType must be a string"], name: "ValidationError" } }, status: 400 }).result;
-    expect(refused).toMatchObject({ authorized: true, data: null, status: 400, error: expect.stringContaining("deliveryType must be a string") });
+    const refused = await runInFakeTab(
+      { endpoint: "cart", project: "cart" },
+      {
+        body: { data: { errors: ["deliveryType must be a string"], name: "ValidationError" } },
+        status: 400,
+      },
+    ).result;
+    expect(refused).toMatchObject({
+      authorized: true,
+      data: null,
+      status: 400,
+      error: expect.stringContaining("deliveryType must be a string"),
+    });
   });
 
   it("reports a lost session and an unreadable answer without guessing", async () => {
-    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>login</html>", status: 401 }).result).toEqual({ authorized: false, data: null, error: "<html>login</html>", status: 401 });
-    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>captcha</html>", status: 200 }).result).toEqual({ authorized: true, data: null, error: null, status: 200 });
+    expect(
+      await runInFakeTab(
+        { endpoint: "cart", project: "cart" },
+        { body: "<html>login</html>", status: 401 },
+      ).result,
+    ).toEqual({ authorized: false, data: null, error: "<html>login</html>", status: 401 });
+    expect(
+      await runInFakeTab(
+        { endpoint: "cart", project: "cart" },
+        { body: "<html>captcha</html>", status: 200 },
+      ).result,
+    ).toEqual({ authorized: true, data: null, error: null, status: 200 });
   });
 
   it("sends submit and cancel through the site's providers and encodes the query of a GET", () => {
     // The order id travels in the body, as the site's orders.cancel({ orderId }) sends it.
-    expect(lavkaPageScript({ body: { orderId: "o/1" }, endpoint: "orderCancel", project: "raw" }, 12)).toContain("\"url\":\"/api/v1/providers/orders/v1/cancel\"");
-    expect(lavkaPageScript({ body: {}, endpoint: "orderSubmit", project: "submit" }, 12)).toContain("\"url\":\"/api/v1/providers/orders/v2/submit\"");
-    expect(lavkaPageScript({ endpoint: "serviceInfo", project: "serviceInfo", query: "a=1" }, 12)).toContain("\"url\":\"/api/v1/providers/v2/service-info?a=1\"");
+    expect(
+      lavkaPageScript({ body: { orderId: "o/1" }, endpoint: "orderCancel", project: "raw" }, 12),
+    ).toContain('"url":"/api/v1/providers/orders/v1/cancel"');
+    expect(lavkaPageScript({ body: {}, endpoint: "orderSubmit", project: "submit" }, 12)).toContain(
+      '"url":"/api/v1/providers/orders/v2/submit"',
+    );
+    expect(
+      lavkaPageScript({ endpoint: "serviceInfo", project: "serviceInfo", query: "a=1" }, 12),
+    ).toContain('"url":"/api/v1/providers/v2/service-info?a=1"');
   });
 });

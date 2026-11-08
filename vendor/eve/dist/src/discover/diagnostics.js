@@ -1,8 +1,5 @@
 import { z } from "#compiled/zod/index.js";
-const discoverDiagnosticSeveritySchema = z.union([
-    z.literal(`error`),
-    z.literal(`warning`),
-  ]),
+const discoverDiagnosticSeveritySchema = z.union([z.literal(`error`), z.literal(`warning`)]),
   discoverDiagnosticSchema = z
     .object({
       code: z.string(),
@@ -22,10 +19,10 @@ function createDiscoverWarningDiagnostic(e) {
   return { ...e, severity: `warning` };
 }
 function summarizeDiscoverDiagnostics(e) {
-  return e.reduce(
-    (e, t) => (t.severity === `error` ? (e.errors += 1) : (e.warnings += 1), e),
-    { errors: 0, warnings: 0 },
-  );
+  return e.reduce((e, t) => (t.severity === `error` ? (e.errors += 1) : (e.warnings += 1), e), {
+    errors: 0,
+    warnings: 0,
+  });
 }
 function hasDiscoverErrors(e) {
   return e.some((e) => e.severity === `error`);

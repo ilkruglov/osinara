@@ -51,4 +51,7 @@ export declare function getConnectionCallbackChannelNames(): ReadonlySet<string>
  * coverage; the framework channel resolver wires it into Nitro via
  * {@link getConnectionCallbackChannelDefinitions}.
  */
-export declare function handleConnectionCallbackRequest(request: Request, ctx: RouteContext): Promise<Response>;
+export declare function handleConnectionCallbackRequest(
+  request: Request,
+  ctx: RouteContext,
+): Promise<Response>;

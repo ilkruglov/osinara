@@ -1,8 +1,7 @@
 import { truncateDiagnostic } from "#evals/diagnostics.js";
 function formatAssertionFailureHeadline(t) {
   let n = t.threshold ?? (t.severity === `gate` ? 1 : void 0),
-    r =
-      n === void 0 ? `` : ` (${formatPercent(t.score)} < ${formatPercent(n)})`,
+    r = n === void 0 ? `` : ` (${formatPercent(t.score)} < ${formatPercent(n)})`,
     [i] =
       t.message?.split(`
 `) ?? [],

@@ -120,14 +120,17 @@ describe("Eve implicit agent policy patch", () => {
 
   it.each([
     ["authored tool", { name: "agent" }],
-    ["non-root subagent", {
-      name: "agent",
-      runtimeAction: {
-        kind: "subagent-call" as const,
-        nodeId: "review-specialist",
-        subagentName: "agent",
+    [
+      "non-root subagent",
+      {
+        name: "agent",
+        runtimeAction: {
+          kind: "subagent-call" as const,
+          nodeId: "review-specialist",
+          subagentName: "agent",
+        },
       },
-    }],
+    ],
   ])("does not remove an %s lookalike", async (_case, agentTool) => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
     const buildTools = extractRuntimeToolBuilder(runtime);

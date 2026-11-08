@@ -21,9 +21,8 @@ import {
   THREAD_TITLE_VECTOR as TITLE_VECTOR,
 } from "./memory-thread-repository.integration-fixtures.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("memory thread repositories", () => {
   beforeEach(async () => {
@@ -36,13 +35,15 @@ describeWithDatabase("memory thread repositories", () => {
     const fixture = await createFixture();
     const page = await createBroadThread(fixture);
 
-    expect(page.items).toEqual([expect.objectContaining({
-      parentThreadRef: null,
-      purpose: "Сохранять цели, решения и результаты ремонта",
-      status: "active",
-      threadRef: expect.stringMatching(/^thread_[0-9a-f]{32}$/u),
-      title: "Ремонт",
-    })]);
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        parentThreadRef: null,
+        purpose: "Сохранять цели, решения и результаты ремонта",
+        status: "active",
+        threadRef: expect.stringMatching(/^thread_[0-9a-f]{32}$/u),
+        title: "Ремонт",
+      }),
+    ]);
     const identity = await database().query<{ memory_project_id: string | null }>(
       "SELECT memory_project_id FROM memory_items WHERE id = $1",
       [fixture.claimId],
@@ -51,15 +52,18 @@ describeWithDatabase("memory thread repositories", () => {
 
     // A later main-agent claim attaches atomically without creating a duplicate thread.
     const additionalClaimId = await createAdditionalProjectClaim(fixture, page.items[0]!.threadRef);
-    expect((await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 })).items).toHaveLength(1);
+    expect(
+      (await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 })).items,
+    ).toHaveLength(1);
     const attachedIdentity = await database().query<{ memory_project_id: string | null }>(
       "SELECT memory_project_id FROM memory_items WHERE id = $1",
       [additionalClaimId],
     );
     expect(attachedIdentity.rows[0]!.memory_project_id).toBe(identity.rows[0]!.memory_project_id);
 
-    await expect(memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId))
-      .resolves.toBeNull();
+    await expect(
+      memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId),
+    ).resolves.toBeNull();
 
     const briefs = createMemoryThreadBriefRepository();
     const activation = {
@@ -82,7 +86,9 @@ describeWithDatabase("memory thread repositories", () => {
     expect(fromTitle.threads[0]?.title).toBe("Ремонт");
     expect(fromSkill.threads[0]?.title).toBe("Ремонт");
     expect(JSON.stringify(first)).toContain("Ремонт будет продолжаться поэтапно");
-    expect(JSON.stringify(first)).not.toMatch(/"(?:id|familyId|groupId|userId|scopePartitionKey)"/u);
+    expect(JSON.stringify(first)).not.toMatch(
+      /"(?:id|familyId|groupId|userId|scopePartitionKey)"/u,
+    );
     await database().query(
       "UPDATE memory_items SET content = 'Ремонт продолжается по новому плану' WHERE id = $1",
       [fixture.claimId],
@@ -98,10 +104,7 @@ describeWithDatabase("memory thread repositories", () => {
     const internal = await database().query<{
       id: string;
       memory_project_id: string;
-    }>(
-      "SELECT id, memory_project_id FROM memory_threads WHERE thread_ref = $1",
-      [rootRef],
-    );
+    }>("SELECT id, memory_project_id FROM memory_threads WHERE thread_ref = $1", [rootRef]);
     const child = await database().query<{ thread_ref: string }>(
       `INSERT INTO memory_threads
          (family_id, scope, scope_partition_key, memory_project_id, parent_thread_id, title, purpose)
@@ -115,25 +118,26 @@ describeWithDatabase("memory thread repositories", () => {
        FROM memory_threads WHERE thread_ref = $1`,
       [child.rows[0]!.thread_ref, fixture.claimId],
     );
-    const before = await memoryThreadQueryRepository.read(
-      fixture.auth,
-      child.rows[0]!.thread_ref,
-      { limit: 20 },
-    );
-      const completionMessage = await database().query<{ id: string }>(
-        `INSERT INTO telegram_group_messages
+    const before = await memoryThreadQueryRepository.read(fixture.auth, child.rows[0]!.thread_ref, {
+      limit: 20,
+    });
+    const completionMessage = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
           (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
            telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
         VALUES ($1, $2, 702, 2, 'user', 'telegram:thread-owner', 'thread-owner', 'Owner', false,
                 'text', 'Ремонт кухни завершён, всё работает', now()) RETURNING id`,
-        [fixture.conversationId, fixture.groupId],
+      [fixture.conversationId, fixture.groupId],
     );
     await memoryThreadLifecycleRepository.complete(fixture.auth, {
       authority: { kind: "current_user_statement" },
       operationKey: "complete-kitchen",
       sourceEntryRefs: [before.entries[0]!.entryRef],
       threadRef: child.rows[0]!.thread_ref,
-      turn: { conversationId: fixture.conversationId, timelineEntryId: completionMessage.rows[0]!.id },
+      turn: {
+        conversationId: fixture.conversationId,
+        timelineEntryId: completionMessage.rows[0]!.id,
+      },
     });
 
     const completed = await memoryThreadQueryRepository.read(
@@ -143,14 +147,19 @@ describeWithDatabase("memory thread repositories", () => {
     );
     expect(completed.thread.status).toBe("completed");
     expect(completed.entries).toHaveLength(2);
-    expect(completed.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ content: "Ремонт кухни завершён, всё работает", sourceType: "confirmed_outcome" }),
-      expect.objectContaining({
-        content: "Ремонт будет продолжаться поэтапно",
-        sourceEvidence: expect.objectContaining({ authorLabel: "Анна", kind: "reported" }),
-        sourceType: "claim",
-      }),
-    ]));
+    expect(completed.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: "Ремонт кухни завершён, всё работает",
+          sourceType: "confirmed_outcome",
+        }),
+        expect.objectContaining({
+          content: "Ремонт будет продолжаться поэтапно",
+          sourceEvidence: expect.objectContaining({ authorLabel: "Анна", kind: "reported" }),
+          sourceType: "claim",
+        }),
+      ]),
+    );
     const parentCompletion = await database().query<{ count: number }>(
       `SELECT count(*)::integer AS count FROM memory_thread_entries AS entry
        JOIN memory_threads AS parent ON parent.id = entry.thread_id
@@ -166,7 +175,9 @@ describeWithDatabase("memory thread repositories", () => {
       retrievedClaimIds: [fixture.claimId],
       skillHints: [],
     });
-    const completedContext = context.threads.find((thread) => thread.threadRef === child.rows[0]!.thread_ref);
+    const completedContext = context.threads.find(
+      (thread) => thread.threadRef === child.rows[0]!.thread_ref,
+    );
     const serializedContext = JSON.stringify(context);
     expect(serializedContext.match(/Ремонт кухни завершён, всё работает/gu)).toHaveLength(1);
     if (completedContext) {
@@ -185,16 +196,23 @@ describeWithDatabase("memory thread repositories", () => {
                 'text', 'Явно возобновляем старую нить ремонта кухни', now()) RETURNING id`,
       [fixture.conversationId, fixture.groupId],
     );
-    await expect(memoryThreadLifecycleRepository.reactivate(fixture.auth, {
-      operationKey: "reactivate-kitchen",
-      threadRef: child.rows[0]!.thread_ref,
-      turn: { conversationId: fixture.conversationId, timelineEntryId: reactivationMessage.rows[0]!.id },
-    })).resolves.toEqual({ status: "active", threadRef: child.rows[0]!.thread_ref });
-    expect((await memoryThreadQueryRepository.read(
-      fixture.auth,
-      child.rows[0]!.thread_ref,
-      { limit: 20 },
-    )).thread.status).toBe("active");
+    await expect(
+      memoryThreadLifecycleRepository.reactivate(fixture.auth, {
+        operationKey: "reactivate-kitchen",
+        threadRef: child.rows[0]!.thread_ref,
+        turn: {
+          conversationId: fixture.conversationId,
+          timelineEntryId: reactivationMessage.rows[0]!.id,
+        },
+      }),
+    ).resolves.toEqual({ status: "active", threadRef: child.rows[0]!.thread_ref });
+    expect(
+      (
+        await memoryThreadQueryRepository.read(fixture.auth, child.rows[0]!.thread_ref, {
+          limit: 20,
+        })
+      ).thread.status,
+    ).toBe("active");
   });
 
   it("rejects root completion and a current statement that does not explicitly prove completion", async () => {
@@ -211,13 +229,18 @@ describeWithDatabase("memory thread repositories", () => {
       [fixture.conversationId, fixture.groupId],
     );
 
-    await expect(memoryThreadLifecycleRepository.complete(fixture.auth, {
-      authority: { kind: "current_user_statement" },
-      operationKey: "complete-root-forbidden",
-      sourceEntryRefs: [root.entries[0]!.entryRef],
-      threadRef: rootRef,
-      turn: { conversationId: fixture.conversationId, timelineEntryId: continuingMessage.rows[0]!.id },
-    })).rejects.toThrowError(/AGENT_MEMORY_THREAD_ROOT_COMPLETION_FORBIDDEN/u);
+    await expect(
+      memoryThreadLifecycleRepository.complete(fixture.auth, {
+        authority: { kind: "current_user_statement" },
+        operationKey: "complete-root-forbidden",
+        sourceEntryRefs: [root.entries[0]!.entryRef],
+        threadRef: rootRef,
+        turn: {
+          conversationId: fixture.conversationId,
+          timelineEntryId: continuingMessage.rows[0]!.id,
+        },
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_THREAD_ROOT_COMPLETION_FORBIDDEN/u);
 
     const internal = await database().query<{ id: string; memory_project_id: string }>(
       "SELECT id, memory_project_id FROM memory_threads WHERE thread_ref = $1",
@@ -242,13 +265,18 @@ describeWithDatabase("memory thread repositories", () => {
       { limit: 20 },
     );
 
-    await expect(memoryThreadLifecycleRepository.complete(fixture.auth, {
-      authority: { kind: "current_user_statement" },
-      operationKey: "complete-without-semantic-proof",
-      sourceEntryRefs: [childHistory.entries[0]!.entryRef],
-      threadRef: child.rows[0]!.thread_ref,
-      turn: { conversationId: fixture.conversationId, timelineEntryId: continuingMessage.rows[0]!.id },
-    })).rejects.toThrowError(/AGENT_MEMORY_THREAD_COMPLETION_NOT_PROVEN/u);
+    await expect(
+      memoryThreadLifecycleRepository.complete(fixture.auth, {
+        authority: { kind: "current_user_statement" },
+        operationKey: "complete-without-semantic-proof",
+        sourceEntryRefs: [childHistory.entries[0]!.entryRef],
+        threadRef: child.rows[0]!.thread_ref,
+        turn: {
+          conversationId: fixture.conversationId,
+          timelineEntryId: continuingMessage.rows[0]!.id,
+        },
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_THREAD_COMPLETION_NOT_PROVEN/u);
   });
 
   it("does not activate an external origin thread from an inward personal claim projection", async () => {
@@ -301,8 +329,15 @@ describeWithDatabase("memory thread repositories", () => {
        VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, 'External', $3, $5, $6,
                'Owner', now(), 'Внешняя группа обсуждает отдельный проект', $7, 1, 705,
                '{"content":"Внешняя группа обсуждает отдельный проект"}'::jsonb)`,
-      [claim.rows[0]!.id, fixture.familyId, group.rows[0]!.id, conversation.rows[0]!.id,
-        participant.rows[0]!.id, fixture.userId, timeline.rows[0]!.id],
+      [
+        claim.rows[0]!.id,
+        fixture.familyId,
+        group.rows[0]!.id,
+        conversation.rows[0]!.id,
+        participant.rows[0]!.id,
+        fixture.userId,
+        timeline.rows[0]!.id,
+      ],
     );
     const thread = await database().query<{ id: string }>(
       `INSERT INTO memory_threads
@@ -318,11 +353,13 @@ describeWithDatabase("memory thread repositories", () => {
     );
 
     const briefs = createMemoryThreadBriefRepository();
-    await expect(briefs.activate({
-      auth: { ...fixture.auth, scopes: ["personal", "family"] },
-      queryEmbedding: TITLE_VECTOR,
-      retrievedClaimIds: [claim.rows[0]!.id],
-      skillHints: [],
-    })).resolves.toEqual({ threads: [], totalCharacters: 0 });
+    await expect(
+      briefs.activate({
+        auth: { ...fixture.auth, scopes: ["personal", "family"] },
+        queryEmbedding: TITLE_VECTOR,
+        retrievedClaimIds: [claim.rows[0]!.id],
+        skillHints: [],
+      }),
+    ).resolves.toEqual({ threads: [], totalCharacters: 0 });
   });
 });

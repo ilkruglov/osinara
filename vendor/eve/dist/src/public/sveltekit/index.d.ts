@@ -3,17 +3,17 @@ import type { Plugin } from "vite";
  * Options for the eve SvelteKit Vite plugin.
  */
 export interface EveSvelteKitPluginOptions {
-    /**
-     * Path to the eve application root, relative to the SvelteKit project root
-     * unless absolute. Defaults to the SvelteKit project root.
-     */
-    readonly eveRoot?: string;
-    /**
-     * Command that builds the eve app inside the generated Vercel eve service.
-     * Defaults to running the installed eve binary from the SvelteKit app's
-     * dependencies (`node <path-to>/eve/bin/eve.js build`).
-     */
-    readonly eveBuildCommand?: string;
+  /**
+   * Path to the eve application root, relative to the SvelteKit project root
+   * unless absolute. Defaults to the SvelteKit project root.
+   */
+  readonly eveRoot?: string;
+  /**
+   * Command that builds the eve app inside the generated Vercel eve service.
+   * Defaults to running the installed eve binary from the SvelteKit app's
+   * dependencies (`node <path-to>/eve/bin/eve.js build`).
+   */
+  readonly eveBuildCommand?: string;
 }
 /**
  * Vite plugin for running an eve agent alongside a SvelteKit app.

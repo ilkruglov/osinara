@@ -16,8 +16,7 @@ function projectSessionState(t) {
   };
 }
 async function readDurableSession(e) {
-  if (e.snapshot !== void 0)
-    return migrateDurableSessionSnapshot(e.snapshot).session;
+  if (e.snapshot !== void 0) return migrateDurableSessionSnapshot(e.snapshot).session;
   let t = getRun(e.sessionId)
       .getReadable({ namespace: EVE_SESSION_STREAM_NAMESPACE, startIndex: -1 })
       .getReader(),
@@ -27,10 +26,7 @@ async function readDurableSession(e) {
     let n = await Promise.race([
       t.read().then((e) => ({ kind: `read`, read: e })),
       new Promise((e) => {
-        i = setTimeout(
-          () => e({ kind: `timeout` }),
-          DURABLE_SESSION_READ_TIMEOUT_MS,
-        );
+        i = setTimeout(() => e({ kind: `timeout` }), DURABLE_SESSION_READ_TIMEOUT_MS);
       }),
     ]);
     if (n.kind === `timeout`)
@@ -50,9 +46,7 @@ async function readDurableSession(e) {
       migrateDurableSessionSnapshot(n.read.value).session
     );
   } finally {
-    (i !== void 0 && clearTimeout(i),
-      await t.cancel(r).catch(() => {}),
-      t.releaseLock());
+    (i !== void 0 && clearTimeout(i), await t.cancel(r).catch(() => {}), t.releaseLock());
   }
 }
 var DurableSessionReadTimeoutError = class extends Error {

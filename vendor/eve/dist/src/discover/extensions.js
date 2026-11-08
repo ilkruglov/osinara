@@ -153,21 +153,16 @@ async function locateExtensionMountPackage(t) {
         location: {
           namespace: o,
           specifier: c,
-          packageName:
-            typeof p.name == `string` && p.name.length > 0 ? p.name : c,
+          packageName: typeof p.name == `string` && p.name.length > 0 ? p.name : c,
           packageRoot: d,
-          ...(m.source === void 0
-            ? {}
-            : { authoredSourceRoot: resolve(d, m.source) }),
+          ...(m.source === void 0 ? {} : { authoredSourceRoot: resolve(d, m.source) }),
           distRoot: resolve(d, m.dist),
         },
         diagnostics: [],
       };
 }
 function formatSupportedVersions(e) {
-  return e.length === 0
-    ? `versions: none`
-    : `versions: ${e.map((e) => `v${e}`).join(`, `)}`;
+  return e.length === 0 ? `versions: none` : `versions: ${e.map((e) => `v${e}`).join(`, `)}`;
 }
 async function resolvePackageRoot(i) {
   if (i.specifier.startsWith(`.`)) {

@@ -49,31 +49,19 @@ async function prewarmMicrosandboxTemplate(a) {
     p = resolveMicrosandboxMetadataPath(d);
   a.prewarmInput.log?.(`checking cached snapshot`);
   let m = await readTemplateMetadata(p);
-  if (
-    m?.optionsHash === a.optionsHash &&
-    (await snapshotExists(o, m.snapshotName))
-  )
+  if (m?.optionsHash === a.optionsHash && (await snapshotExists(o, m.snapshotName)))
     return (
       a.prewarmInput.log?.(`reusing cached snapshot`),
       await touchDirectory(d),
       { reused: !0 }
     );
-  let g = createProviderName(
-      `eve-sbx-tpl`,
-      a.prewarmInput.templateKey,
-      a.optionsHash,
-    ),
+  let g = createProviderName(`eve-sbx-tpl`, a.prewarmInput.templateKey, a.optionsHash),
     v = `${d}.${randomUUID()}.tmp`,
-    y = createProviderName(
-      `eve-sbx-tpl-tmp`,
-      `${a.prewarmInput.templateKey}:${randomUUID()}`,
-    );
+    y = createProviderName(`eve-sbx-tpl-tmp`, `${a.prewarmInput.templateKey}:${randomUUID()}`);
   (await removeSnapshotIfExists(o, g),
     await rm(v, { force: !0, recursive: !0 }),
     await mkdir(v, { recursive: !0 }),
-    a.prewarmInput.log?.(
-      `creating template VM from image "${a.options.image}"`,
-    ));
+    a.prewarmInput.log?.(`creating template VM from image "${a.options.image}"`));
   let b = await createPreparedMicrosandbox({
       log: a.prewarmInput.log,
       module: o,
@@ -89,16 +77,13 @@ async function prewarmMicrosandboxTemplate(a) {
     });
   try {
     (a.prewarmInput.seedFiles.length > 0 &&
-      a.prewarmInput.log?.(
-        `writing ${a.prewarmInput.seedFiles.length} seed file(s)`,
-      ),
+      a.prewarmInput.log?.(`writing ${a.prewarmInput.seedFiles.length} seed file(s)`),
       await writeSandboxSeedFiles(x, a.prewarmInput.seedFiles),
       a.prewarmInput.bootstrap !== void 0 &&
         (a.prewarmInput.log?.(`running sandbox bootstrap`),
         await a.prewarmInput.bootstrap({
           use: async (e) => (
-            e?.networkPolicy !== void 0 &&
-              (await b.setNetworkPolicy(e.networkPolicy)),
+            e?.networkPolicy !== void 0 && (await b.setNetworkPolicy(e.networkPolicy)),
             createLoggingSandboxSession({ log: a.prewarmInput.log, session: x })
           ),
         })),
@@ -118,8 +103,7 @@ async function prewarmMicrosandboxTemplate(a) {
       throw e;
     }
   } finally {
-    (await b.removePersisted(),
-      await rm(v, { force: !0, recursive: !0 }).catch(() => {}));
+    (await b.removePersisted(), await rm(v, { force: !0, recursive: !0 }).catch(() => {}));
   }
   return { reused: !1 };
 }
@@ -134,15 +118,12 @@ async function createMicrosandboxHandle(t) {
     s = activeMicrosandboxSessionHandles.get(o);
   if (s !== void 0) return s;
   let c = resolveMicrosandboxMetadataPath(i),
-    l =
-      readSessionMetadataRecord(t.createInput.existingMetadata) ??
-      (await readSessionMetadata(c)),
+    l = readSessionMetadataRecord(t.createInput.existingMetadata) ?? (await readSessionMetadata(c)),
     u = withDevelopmentSandboxMetadataPathTag(t.createInput.tags, c);
   if (
     l?.optionsHash === t.optionsHash &&
     ((await sandboxExists(n, l.sandboxName)) ||
-      (l.stateSnapshotName !== void 0 &&
-        (await snapshotExists(n, l.stateSnapshotName))))
+      (l.stateSnapshotName !== void 0 && (await snapshotExists(n, l.stateSnapshotName))))
   ) {
     let e = await connectMicrosandbox({
       metadata: l,
@@ -167,21 +148,14 @@ async function createMicrosandboxHandle(t) {
         resolveMicrosandboxTemplateRootPath(r, t.createInput.templateKey),
       ),
     );
-    if (
-      e === null ||
-      e.optionsHash !== t.optionsHash ||
-      !(await snapshotExists(n, e.snapshotName))
-    )
+    if (e === null || e.optionsHash !== t.optionsHash || !(await snapshotExists(n, e.snapshotName)))
       throw new SandboxTemplateNotProvisionedError({
         backendName: t.backendName,
         templateKey: t.createInput.templateKey,
       });
     f = e.snapshotName;
   }
-  let h = createProviderName(
-      `eve-sbx-ses`,
-      `${t.createInput.sessionKey}:${randomUUID()}`,
-    ),
+  let h = createProviderName(`eve-sbx-ses`, `${t.createInput.sessionKey}:${randomUUID()}`),
     _;
   try {
     _ = await createPreparedMicrosandbox({
@@ -195,9 +169,7 @@ async function createMicrosandboxHandle(t) {
       tags: u,
     });
   } catch (e) {
-    throw f !== null &&
-      t.createInput.templateKey !== null &&
-      isMicrosandboxNotFoundError(e)
+    throw f !== null && t.createInput.templateKey !== null && isMicrosandboxNotFoundError(e)
       ? new SandboxTemplateNotProvisionedError({
           backendName: t.backendName,
           templateKey: t.createInput.templateKey,
@@ -216,15 +188,11 @@ async function createMicrosandboxHandle(t) {
 }
 function createHandle(e, t, n, r) {
   return {
-    session: buildSandboxSession(
-      createMicrosandboxInternalSession(e),
-      async (t) => {
-        await e.setNetworkPolicy(t);
-      },
-    ),
+    session: buildSandboxSession(createMicrosandboxInternalSession(e), async (t) => {
+      await e.setNetworkPolicy(t);
+    }),
     useSessionFn: async (t) => (
-      t?.networkPolicy !== void 0 &&
-        (await e.setNetworkPolicy(t.networkPolicy)),
+      t?.networkPolicy !== void 0 && (await e.setNetworkPolicy(t.networkPolicy)),
       buildSandboxSession(createMicrosandboxInternalSession(e), async (t) => {
         await e.setNetworkPolicy(t);
       })

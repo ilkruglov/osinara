@@ -24,14 +24,19 @@ export declare function genAiInputMessagesAttribute(messages: unknown): string |
 /** Serializes the system prompt using the OpenTelemetry GenAI instruction schema. */
 export declare function genAiSystemInstructionsAttribute(instructions: unknown): string | undefined;
 /** Serializes one model response using the OpenTelemetry GenAI message schema. */
-export declare function genAiOutputMessagesAttribute(content: readonly unknown[], finishReason: string): string | undefined;
+export declare function genAiOutputMessagesAttribute(
+  content: readonly unknown[],
+  finishReason: string,
+): string | undefined;
 /**
  * Serializes provider-executed tool results, keeping the attribute valid
  * JSON under the cap: when the full payload is too big, each entry's input
  * and output collapse to capped text at progressively smaller budgets
  * instead of cutting the JSON mid-string.
  */
-export declare function toolResultsContentAttribute(results: readonly Record<string, unknown>[]): string | undefined;
+export declare function toolResultsContentAttribute(
+  results: readonly Record<string, unknown>[],
+): string | undefined;
 /** Normalizes the AI SDK's `instructions` prompt to plain text for `ai.prompt.system`. */
 export declare function systemPromptAttribute(instructions: unknown): string | undefined;
 /** Caps plain text, marking the cut. */

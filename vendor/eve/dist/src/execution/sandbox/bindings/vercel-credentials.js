@@ -10,18 +10,14 @@ async function getVercelSandboxCredentials(t) {
       readNonEmptyString(t, `teamId`) ??
       readNonEmptyEnvironmentVariable(`VERCEL_TEAM_ID`) ??
       readNonEmptyEnvironmentVariable(`VERCEL_ORG_ID`),
-    r =
-      readNonEmptyString(t, `projectId`) ??
-      readNonEmptyEnvironmentVariable(`VERCEL_PROJECT_ID`),
+    r = readNonEmptyString(t, `projectId`) ?? readNonEmptyEnvironmentVariable(`VERCEL_PROJECT_ID`),
     i =
       readNonEmptyString(t, `token`) ??
       readNonEmptyEnvironmentVariable(`VERCEL_OIDC_TOKEN`) ??
       readNonEmptyEnvironmentVariable(`VERCEL_TOKEN`);
   return i && n && r
     ? { projectId: r, teamId: n, token: i }
-    : getVercelSandboxCredentialsFromOidcToken(
-        await getVercelOidcToken({ project: r, team: n }),
-      );
+    : getVercelSandboxCredentialsFromOidcToken(await getVercelOidcToken({ project: r, team: n }));
 }
 function readNonEmptyString(e, t) {
   let n = e[t];

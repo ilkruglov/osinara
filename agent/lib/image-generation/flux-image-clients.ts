@@ -12,8 +12,18 @@
  */
 import { AppError, isAppError } from "../app-error.js";
 import { readBoundedBody } from "../bounded-body.js";
-import type { GeneratedImage, ImageGenerationRequest, ImageMediaType, ProviderJob } from "./image-generation-client.js";
-import { assertReferenceCount, editingUnavailable, prepareCloudflareReference, prepareUploadReference } from "./image-editing-input.js";
+import type {
+  GeneratedImage,
+  ImageGenerationRequest,
+  ImageMediaType,
+  ProviderJob,
+} from "./image-generation-client.js";
+import {
+  assertReferenceCount,
+  editingUnavailable,
+  prepareCloudflareReference,
+  prepareUploadReference,
+} from "./image-editing-input.js";
 import { redactSecrets } from "../secret-redaction.js";
 
 // klein-9b and flux-2-dev are deliberately absent: they burn the free Workers AI quota in a few images.
@@ -42,8 +52,18 @@ export const PROVIDER_JOB_RECORD_TIMEOUT_MS = 5_000;
  * provider, model and job id, so a poll that times out can still be reconciled with the provider.
  * On 16 October 2026 four timed-out PlusVibe jobs could not be checked because nothing kept their ids.
  */
-export async function reportProviderJob(input: ImageGenerationRequest, job: ProviderJob): Promise<void> {
-  console.info(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_JOB", jobId: job.jobId, model: job.model, provider: job.provider }));
+export async function reportProviderJob(
+  input: ImageGenerationRequest,
+  job: ProviderJob,
+): Promise<void> {
+  console.info(
+    JSON.stringify({
+      code: "AGENT_IMAGE_GENERATION_JOB",
+      jobId: job.jobId,
+      model: job.model,
+      provider: job.provider,
+    }),
+  );
   if (input.onProviderJob === undefined) return;
   // The job is already running at the provider: a slow ledger must not delay collecting it. The
   // caller's hook keeps running on its own; the poll starts after this bounded wait.
@@ -52,9 +72,18 @@ export async function reportProviderJob(input: ImageGenerationRequest, job: Prov
     timer = setTimeout(() => resolve("timeout"), PROVIDER_JOB_RECORD_TIMEOUT_MS);
   });
   try {
-    const outcome = await Promise.race([input.onProviderJob(job).then(() => "recorded" as const), expired]);
+    const outcome = await Promise.race([
+      input.onProviderJob(job).then(() => "recorded" as const),
+      expired,
+    ]);
     if (outcome === "timeout") {
-      console.warn(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_JOB_RECORD_TIMEOUT", jobId: job.jobId, provider: job.provider }));
+      console.warn(
+        JSON.stringify({
+          code: "AGENT_IMAGE_GENERATION_JOB_RECORD_TIMEOUT",
+          jobId: job.jobId,
+          provider: job.provider,
+        }),
+      );
     }
   } finally {
     clearTimeout(timer);
@@ -72,7 +101,11 @@ export function scrubProviderText(text: unknown, apiKey: string, limit = 200): s
  * process memory. The caller classifies the oversized result (accepted request, unknown outcome).
  */
 export async function readImageBody(response: Response): Promise<Buffer> {
-  return await readBoundedBody(response, MAX_IMAGE_BYTES, () => new Error(`image body exceeds ${MAX_IMAGE_BYTES} bytes`));
+  return await readBoundedBody(
+    response,
+    MAX_IMAGE_BYTES,
+    () => new Error(`image body exceeds ${MAX_IMAGE_BYTES} bytes`),
+  );
 }
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/u;
 
@@ -89,10 +122,22 @@ interface FetchDependencies {
 }
 
 export function detectImageMediaType(bytes: Uint8Array): ImageMediaType | null {
-  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
-  if (bytes.length >= 12 && Buffer.from(bytes.subarray(0, 4)).toString("ascii") === "RIFF" &&
-    Buffer.from(bytes.subarray(8, 12)).toString("ascii") === "WEBP") return "image/webp";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  )
+    return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return "image/jpeg";
+  if (
+    bytes.length >= 12 &&
+    Buffer.from(bytes.subarray(0, 4)).toString("ascii") === "RIFF" &&
+    Buffer.from(bytes.subarray(8, 12)).toString("ascii") === "WEBP"
+  )
+    return "image/webp";
   return null;
 }
 
@@ -100,17 +145,26 @@ export function detectImageMediaType(bytes: Uint8Array): ImageMediaType | null {
  * Tool sizes map to small Flux dimensions: Workers AI bills per 512x512 tile, so a square is one
  * tile and the landscape/portrait variants are two. NeuralDeep only takes an aspect ratio.
  */
-function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string; height: number; width: number } {
+function dimensions(size: ImageGenerationRequest["size"]): {
+  aspectRatio: string;
+  height: number;
+  width: number;
+} {
   switch (size) {
-    case "1536x1024": return { aspectRatio: "3:2", height: 512, width: 768 };
-    case "1024x1536": return { aspectRatio: "3:5", height: 768, width: 512 };
+    case "1536x1024":
+      return { aspectRatio: "3:2", height: 512, width: 768 };
+    case "1024x1536":
+      return { aspectRatio: "3:5", height: 768, width: 512 };
     case "1024x1024":
-    case "auto": return { aspectRatio: "1:1", height: 512, width: 512 };
+    case "auto":
+      return { aspectRatio: "1:1", height: 512, width: 512 };
   }
 }
 
 export function unavailable(provider: string, detail: string): AppError {
-  console.error(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE", detail, provider }));
+  console.error(
+    JSON.stringify({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE", detail, provider }),
+  );
   return new AppError(
     "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE",
     "Сервис генерации изображений сейчас недоступен",
@@ -130,12 +184,13 @@ export function rejected(provider: string, detail: string): AppError {
   console.error(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_REJECTED", detail, provider }));
   return new AppError(
     "AGENT_IMAGE_GENERATION_REJECTED",
-    "Сервис генерации изображений отклонил запрос. Уберите названия брендов, марок и персон, "
-      + "опишите объект своими словами и попробуйте снова",
+    "Сервис генерации изображений отклонил запрос. Уберите названия брендов, марок и персон, " +
+      "опишите объект своими словами и попробуйте снова",
   );
 }
 
-export const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+export const defaultSleep = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
 /**
  * One deadline for a polled job: `remaining()` gives the signal for the next call and throws once the
@@ -161,7 +216,8 @@ export function pollDeadline(provider: string, timeoutMs: number) {
 }
 
 export function imageFromBytes(bytes: Buffer, model: string, provider: string): GeneratedImage {
-  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw ambiguous(provider, `image size ${bytes.length}`);
+  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES)
+    throw ambiguous(provider, `image size ${bytes.length}`);
   const mediaType = detectImageMediaType(bytes);
   if (mediaType === null) throw ambiguous(provider, "unknown image format");
   return { bytes, mediaType, model };
@@ -170,8 +226,12 @@ export function imageFromBytes(bytes: Buffer, model: string, provider: string): 
 /** Error codes from a Workers AI failure body, for the log line only; the body is never shown to the model. */
 async function cloudflareErrorCodes(response: Response): Promise<string> {
   try {
-    const payload = await response.json() as { errors?: readonly { code?: unknown }[] };
-    return (payload.errors ?? []).map((entry) => typeof entry.code === "string" || typeof entry.code === "number" ? String(entry.code) : "?").join(",");
+    const payload = (await response.json()) as { errors?: readonly { code?: unknown }[] };
+    return (payload.errors ?? [])
+      .map((entry) =>
+        typeof entry.code === "string" || typeof entry.code === "number" ? String(entry.code) : "?",
+      )
+      .join(",");
   } catch {
     return "";
   }
@@ -194,8 +254,15 @@ export function createCloudflareImageClient(
     name: "cloudflare",
     supportsEditing: true,
     assertConfigured() {
-      if (!/^[0-9a-f]{32}$/u.test(options.accountId) || !options.token || /\s/u.test(options.token)) {
-        throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Не настроен доступ к Cloudflare Workers AI");
+      if (
+        !/^[0-9a-f]{32}$/u.test(options.accountId) ||
+        !options.token ||
+        /\s/u.test(options.token)
+      ) {
+        throw new AppError(
+          "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+          "Не настроен доступ к Cloudflare Workers AI",
+        );
       }
     },
     async generate(input) {
@@ -204,13 +271,20 @@ export function createCloudflareImageClient(
       const model: CloudflareImageModel = CLOUDFLARE_IMAGE_MODELS[0];
       const url = `${CLOUDFLARE_API_BASE_URL}/accounts/${options.accountId}/ai/run/${model}`;
       const body = cloudflareRequestBody({
-        height: String(height), prompt: input.prompt, steps: "4", width: String(width),
+        height: String(height),
+        prompt: input.prompt,
+        steps: "4",
+        width: String(width),
       });
       if (input.referenceImages !== undefined) {
         assertReferenceCount(input.referenceImages);
         for (const [index, reference] of input.referenceImages.entries()) {
           const bytes = await prepareCloudflareReference(reference);
-          body.append(`input_image_${index}`, new Blob([new Uint8Array(bytes)], { type: "image/png" }), `reference-${index}.png`);
+          body.append(
+            `input_image_${index}`,
+            new Blob([new Uint8Array(bytes)], { type: "image/png" }),
+            `reference-${index}.png`,
+          );
         }
       }
       let response: Response;
@@ -225,7 +299,8 @@ export function createCloudflareImageClient(
         throw ambiguous("cloudflare", error instanceof Error ? error.message : String(error));
       }
       if (!response.ok) {
-        if (isAmbiguousStatus(response.status)) throw ambiguous("cloudflare", `create ${response.status}`);
+        if (isAmbiguousStatus(response.status))
+          throw ambiguous("cloudflare", `create ${response.status}`);
         const detail = `${model} ${response.status} ${await cloudflareErrorCodes(response)}`.trim();
         if (isProviderUnavailableStatus(response.status)) throw unavailable("cloudflare", detail);
         // 400 covers both bad parameters and the content filter (code 3030); the chain decides what is next.
@@ -236,9 +311,16 @@ export function createCloudflareImageClient(
       let bytes: Buffer;
       try {
         if (contentType.includes("application/json")) {
-          const payload = await response.json() as { result?: { image?: unknown }; success?: unknown };
+          const payload = (await response.json()) as {
+            result?: { image?: unknown };
+            success?: unknown;
+          };
           const encoded = payload.result?.image;
-          if (typeof encoded !== "string" || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
+          if (
+            typeof encoded !== "string" ||
+            encoded.length % 4 !== 0 ||
+            !BASE64_PATTERN.test(encoded)
+          ) {
             throw ambiguous("cloudflare", `${model} malformed image payload`);
           }
           bytes = Buffer.from(encoded, "base64");
@@ -264,12 +346,19 @@ export function createNeuralDeepImageClient(
   const authorization = `Bearer ${options.apiKey}`;
 
   /** Creates a task; the multipart edit body must not carry an explicit content type (boundary). */
-  async function createTask(path: string, body: BodyInit, contentType: string | null): Promise<string> {
+  async function createTask(
+    path: string,
+    body: BodyInit,
+    contentType: string | null,
+  ): Promise<string> {
     let created: Response;
     try {
       created = await fetchImplementation(`${baseUrl}${path}`, {
         body,
-        headers: { authorization, ...(contentType === null ? {} : { "content-type": contentType }) },
+        headers: {
+          authorization,
+          ...(contentType === null ? {} : { "content-type": contentType }),
+        },
         method: "POST",
         signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
       });
@@ -277,14 +366,15 @@ export function createNeuralDeepImageClient(
       throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
     }
     if (!created.ok) {
-      if (isAmbiguousStatus(created.status)) throw ambiguous("neuraldeep", `create ${created.status}`);
+      if (isAmbiguousStatus(created.status))
+        throw ambiguous("neuraldeep", `create ${created.status}`);
       throw isProviderUnavailableStatus(created.status)
         ? unavailable("neuraldeep", `create ${created.status}`)
         : rejected("neuraldeep", `create ${created.status}`);
     }
     let task: { task_uid?: unknown } | null;
     try {
-      task = await created.json() as typeof task;
+      task = (await created.json()) as typeof task;
     } catch (error) {
       throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
     }
@@ -301,14 +391,27 @@ export function createNeuralDeepImageClient(
     const { bounded, remaining } = pollDeadline("neuraldeep", pollTimeoutMs);
     for (;;) {
       await sleep(NEURALDEEP_POLL_INTERVAL_MS);
-      const status = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}`, { headers, method: "GET", signal }));
+      const status = await bounded((signal) =>
+        fetchImplementation(`${baseUrl}/images/tasks/${taskId}`, {
+          headers,
+          method: "GET",
+          signal,
+        }),
+      );
       if (!status.ok) throw ambiguous("neuraldeep", `status ${status.status}`);
-      const state = (await bounded(() => status.json()) as { error?: unknown; status?: unknown }).status;
+      const state = ((await bounded(() => status.json())) as { error?: unknown; status?: unknown })
+        .status;
       if (state === "finished") break;
       if (state === "failed" || state === "error") throw rejected("neuraldeep", "task failed");
       remaining();
     }
-    const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}/result`, { headers, method: "GET", signal }));
+    const result = await bounded((signal) =>
+      fetchImplementation(`${baseUrl}/images/tasks/${taskId}/result`, {
+        headers,
+        method: "GET",
+        signal,
+      }),
+    );
     if (!result.ok) throw ambiguous("neuraldeep", `result ${result.status}`);
     return await bounded(() => readImageBody(result));
   }
@@ -318,7 +421,10 @@ export function createNeuralDeepImageClient(
     supportsEditing: true,
     assertConfigured() {
       if (!options.apiKey || /\s/u.test(options.apiKey)) {
-        throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Не настроен доступ к NeuralDeep Image API");
+        throw new AppError(
+          "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+          "Не настроен доступ к NeuralDeep Image API",
+        );
       }
     },
     async generate(input) {
@@ -333,13 +439,25 @@ export function createNeuralDeepImageClient(
         form.append("options", JSON.stringify({ aspect_ratio: aspectRatio }));
         for (const [index, reference] of input.referenceImages.entries()) {
           const bytes = await prepareUploadReference(reference);
-          form.append("images", new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }), `reference-${index}.jpg`);
+          form.append(
+            "images",
+            new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }),
+            `reference-${index}.jpg`,
+          );
         }
         taskId = await createTask("/images/edit", form, null);
       } else {
-        taskId = await createTask("/images/generate", JSON.stringify({ options: { aspect_ratio: aspectRatio }, prompt: input.prompt }), "application/json");
+        taskId = await createTask(
+          "/images/generate",
+          JSON.stringify({ options: { aspect_ratio: aspectRatio }, prompt: input.prompt }),
+          "application/json",
+        );
       }
-      await reportProviderJob(input, { jobId: taskId, model: NEURALDEEP_IMAGE_MODEL, provider: "neuraldeep" });
+      await reportProviderJob(input, {
+        jobId: taskId,
+        model: NEURALDEEP_IMAGE_MODEL,
+        provider: "neuraldeep",
+      });
       return imageFromBytes(await awaitResult(taskId), NEURALDEEP_IMAGE_MODEL, "neuraldeep");
     },
   };
@@ -347,7 +465,10 @@ export function createNeuralDeepImageClient(
 
 export function createFallbackImageClient(clients: readonly FluxImageClient[]): FluxImageClient {
   if (clients.length === 0) {
-    throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Не настроен ни один сервис генерации изображений");
+    throw new AppError(
+      "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+      "Не настроен ни один сервис генерации изображений",
+    );
   }
   return {
     name: clients.map((client) => client.name).join(">"),
@@ -356,7 +477,9 @@ export function createFallbackImageClient(clients: readonly FluxImageClient[]): 
       for (const client of clients) client.assertConfigured();
     },
     async generate(input) {
-      const candidates = input.referenceImages?.length ? clients.filter((client) => client.supportsEditing) : clients;
+      const candidates = input.referenceImages?.length
+        ? clients.filter((client) => client.supportsEditing)
+        : clients;
       if (candidates.length === 0) throw editingUnavailable();
       let lastError: unknown = null;
       for (const client of candidates) {
@@ -368,15 +491,20 @@ export function createFallbackImageClient(clients: readonly FluxImageClient[]): 
           if (!isAppError(error)) {
             throw ambiguous(client.name, error instanceof Error ? error.message : String(error));
           }
-          if (error.code !== "AGENT_IMAGE_GENERATION_REJECTED" &&
-            error.code !== "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE") throw error;
+          if (
+            error.code !== "AGENT_IMAGE_GENERATION_REJECTED" &&
+            error.code !== "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE"
+          )
+            throw error;
           // Content filters and parameter rules differ per provider, so even a rejection moves on.
           lastError = error;
-          console.error(JSON.stringify({
-            code: "AGENT_IMAGE_GENERATION_FALLBACK",
-            from: client.name,
-            reason: isAppError(error) ? error.code : "unknown",
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_IMAGE_GENERATION_FALLBACK",
+              from: client.name,
+              reason: isAppError(error) ? error.code : "unknown",
+            }),
+          );
         }
       }
       throw lastError instanceof Error ? lastError : unavailable("chain", "all providers failed");

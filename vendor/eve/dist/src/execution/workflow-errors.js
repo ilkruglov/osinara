@@ -2,8 +2,7 @@ function normalizeSerializableError(e) {
   return e instanceof Error
     ? {
         ...Object.fromEntries(Object.entries(e)),
-        cause:
-          e.cause === void 0 ? void 0 : normalizeSerializableError(e.cause),
+        cause: e.cause === void 0 ? void 0 : normalizeSerializableError(e.cause),
         message: e.message,
         name: e.name,
         stack: e.stack,
@@ -16,17 +15,10 @@ function rebuildSerializableError(e) {
     n = Error(t);
   (typeof e.name == `string` && (n.name = e.name),
     typeof e.stack == `string` && (n.stack = e.stack),
-    `cause` in e &&
-      (n.cause = isRecord(e.cause)
-        ? rebuildSerializableError(e.cause)
-        : e.cause));
+    `cause` in e && (n.cause = isRecord(e.cause) ? rebuildSerializableError(e.cause) : e.cause));
   let r = n;
   for (let [t, n] of Object.entries(e))
-    t === `message` ||
-      t === `name` ||
-      t === `stack` ||
-      t === `cause` ||
-      (r[t] = n);
+    t === `message` || t === `name` || t === `stack` || t === `cause` || (r[t] = n);
   return n;
 }
 function isRecord(e) {

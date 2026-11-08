@@ -70,10 +70,7 @@ var SelectComponent = class extends m {
     return filterOptions(this.options, this.filter, this.searchAction);
   }
   onSubmitRow() {
-    return (
-      this.multiple &&
-      this.optionCursor === submitRowIndex(this.visibleOptions())
-    );
+    return this.multiple && this.optionCursor === submitRowIndex(this.visibleOptions());
   }
   submitLabel() {
     if (this.required) return `Submit`;
@@ -94,12 +91,8 @@ var SelectComponent = class extends m {
   }
   submitDisplay() {
     if (this.multiple) {
-      let e = this.options
-        .filter((e) => this.selectedSet.has(e.value))
-        .map((e) => e.label);
-      return e.length > 0
-        ? e.join(`, `)
-        : import_picocolors.default.dim(`(none selected)`);
+      let e = this.options.filter((e) => this.selectedSet.has(e.value)).map((e) => e.label);
+      return e.length > 0 ? e.join(`, `) : import_picocolors.default.dim(`(none selected)`);
     }
     let e = selectValueAtCursor(this.visibleOptions(), this.optionCursor);
     return e === void 0 ? `` : this.labelForValue(e);
@@ -190,8 +183,7 @@ async function runSelectComponent(e) {
   let t = createSelectOptionCodec(e.options),
     n = initialSelectState({
       options: t.options,
-      defaultValue:
-        e.defaultValue === void 0 ? void 0 : t.encode(e.defaultValue),
+      defaultValue: e.defaultValue === void 0 ? void 0 : t.encode(e.defaultValue),
       initialValues: e.initialValues?.map((e) => t.encode(e)),
       submitRow: e.multiple,
     }),
@@ -201,8 +193,7 @@ async function runSelectComponent(e) {
       options: t.options,
       multiple: e.multiple,
       search: e.search,
-      searchAction:
-        e.searchAction === void 0 ? void 0 : { label: e.searchAction.label },
+      searchAction: e.searchAction === void 0 ? void 0 : { label: e.searchAction.label },
       required: e.required,
       initial: n,
       render() {
@@ -222,8 +213,6 @@ async function runSelectComponent(e) {
   if (c === void 0) throw Error(`Select prompt returned no value.`);
   if (Array.isArray(c)) return c.map((e) => t.decode(e));
   let l = searchActionQuery(c);
-  return l !== void 0 && e.searchAction !== void 0
-    ? e.searchAction.value(l)
-    : t.decode(c);
+  return l !== void 0 && e.searchAction !== void 0 ? e.searchAction.value(l) : t.decode(c);
 }
 export { SelectComponent, runSelectComponent };

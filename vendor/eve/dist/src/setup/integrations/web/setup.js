@@ -1,8 +1,5 @@
 import { defineSetupIntegration } from "../types.js";
-import {
-  installScaffoldDependencies,
-  reportOverwrittenFiles,
-} from "../shared/scaffold.js";
+import { installScaffoldDependencies, reportOverwrittenFiles } from "../shared/scaffold.js";
 import { ensureChannel } from "#setup/scaffold/index.js";
 import { formatNodeEngineOverrideWarning } from "#setup/node-engine.js";
 import { detectPackageManager } from "#setup/package-manager.js";
@@ -39,17 +36,13 @@ async function applyWebSetup(e, t, r = defaultDeps) {
     a.kind === `web` &&
       a.action !== `skipped` &&
       a.nodeEngineOverride !== void 0 &&
-      t.presenter.log.warning(
-        formatNodeEngineOverrideWarning(a.nodeEngineOverride),
-      ),
+      t.presenter.log.warning(formatNodeEngineOverrideWarning(a.nodeEngineOverride)),
     reportCompetingNextConfigFiles(
       t.presenter.log,
       `competingNextConfigFiles` in a ? a.competingNextConfigFiles : void 0,
     ),
     a.action === `skipped`
-      ? (t.presenter.log.info(
-          `Next.js project detected. Skipping Web Chat scaffolding.`,
-        ),
+      ? (t.presenter.log.info(`Next.js project detected. Skipping Web Chat scaffolding.`),
         { facts: [] })
       : (t.presenter.log.success(`Scaffolded channel: web`),
         await r.installScaffoldDependencies({

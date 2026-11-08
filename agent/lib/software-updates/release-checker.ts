@@ -20,10 +20,7 @@ import { deliverSoftwareUpdateProposal } from "./proposal-delivery.js";
 import { softwareUpdateRepository } from "./repository.js";
 import type { TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
 import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
-import type {
-  DeliverSoftwareUpdateProposalInput,
-  SoftwareUpdateRepository,
-} from "./types.js";
+import type { DeliverSoftwareUpdateProposalInput, SoftwareUpdateRepository } from "./types.js";
 
 interface SoftwareUpdateCheckerDependencies {
   createCallbackToken(): string;
@@ -36,11 +33,7 @@ interface SoftwareUpdateCheckerDependencies {
 }
 
 export type SoftwareUpdateCheckResult =
-  | "duplicate"
-  | "no_owner"
-  | "no_update"
-  | "owner_unreachable"
-  | "proposed";
+  "duplicate" | "no_owner" | "no_update" | "owner_unreachable" | "proposed";
 
 export function createSoftwareUpdateChecker(dependencies: SoftwareUpdateCheckerDependencies) {
   return async function checkSoftwareUpdate(): Promise<SoftwareUpdateCheckResult> {
@@ -49,7 +42,8 @@ export function createSoftwareUpdateChecker(dependencies: SoftwareUpdateCheckerD
     const owner = await dependencies.repository.findCurrentOwner();
     if (!owner) return "no_owner";
     // Checked before the durable row: a skipped proposal must stay offerable at the next check.
-    if (await dependencies.unreachableOwner?.(owner.telegramUserId) != null) return "owner_unreachable";
+    if ((await dependencies.unreachableOwner?.(owner.telegramUserId)) != null)
+      return "owner_unreachable";
 
     // Only the hash crosses the durable boundary; the random token exists until initial delivery.
     const callbackToken = dependencies.createCallbackToken();

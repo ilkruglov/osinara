@@ -16,9 +16,8 @@ import type { PoolClient } from "pg";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_group_canonical_session_migration";
 
 async function createLegacySchema(client: PoolClient): Promise<void> {
@@ -158,10 +157,9 @@ describeWithDatabase("042 canonical group task session migration", () => {
           ('-1001:55:20', '00000000-0000-4000-8000-000000000020', now());
       `);
 
-      await client.query(await readFile(
-        resolve("migrations/042_canonical_group_task_sessions.sql"),
-        "utf8",
-      ));
+      await client.query(
+        await readFile(resolve("migrations/042_canonical_group_task_sessions.sql"), "utf8"),
+      );
 
       const sessions = await client.query(`
         SELECT id::text, kind::text, task_state::text, pending_operation,
@@ -203,9 +201,9 @@ describeWithDatabase("042 canonical group task session migration", () => {
           task_state: "running",
         }),
       ]);
-      await expect(client.query(
-        "SELECT base_continuation_token FROM conversation_session_routes ORDER BY 1",
-      )).resolves.toMatchObject({
+      await expect(
+        client.query("SELECT base_continuation_token FROM conversation_session_routes ORDER BY 1"),
+      ).resolves.toMatchObject({
         rows: [
           { base_continuation_token: "-1001::501" },
           { base_continuation_token: "-1001:55:500" },
@@ -244,10 +242,11 @@ describeWithDatabase("042 canonical group task session migration", () => {
            '-1001:not-a-topic:10', 'wrun_malformed', now(), now(), true);
       `);
 
-      await expect(client.query(await readFile(
-        resolve("migrations/042_canonical_group_task_sessions.sql"),
-        "utf8",
-      ))).rejects.toThrow("AGENT_MIGRATION_042_INVALID_TELEGRAM_ID");
+      await expect(
+        client.query(
+          await readFile(resolve("migrations/042_canonical_group_task_sessions.sql"), "utf8"),
+        ),
+      ).rejects.toThrow("AGENT_MIGRATION_042_INVALID_TELEGRAM_ID");
     } finally {
       try {
         await client.query("RESET search_path");

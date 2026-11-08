@@ -14,10 +14,7 @@ async function resolveLinearAccessToken(e) {
   return t;
 }
 async function resolveLinearWebhookSecret(e) {
-  let t =
-    typeof e == `function`
-      ? await e()
-      : (e ?? process.env.LINEAR_WEBHOOK_SECRET);
+  let t = typeof e == `function` ? await e() : (e ?? process.env.LINEAR_WEBHOOK_SECRET);
   if (!t)
     throw Error(
       `linearChannel: missing webhook secret. Pass credentials.webhookSecret, set LINEAR_WEBHOOK_SECRET, or supply credentials.webhookVerifier.`,

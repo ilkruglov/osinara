@@ -7,7 +7,11 @@
  *   draws 512 px and bounds edited references to 512.
  * - `IMAGE_GENERATION_AVAILABLE`: availability for the active validated runtime config.
  */
-import { createCloudflareImageClient, createNeuralDeepImageClient, type FluxImageClient } from "./flux-image-clients.js";
+import {
+  createCloudflareImageClient,
+  createNeuralDeepImageClient,
+  type FluxImageClient,
+} from "./flux-image-clients.js";
 import { createPlusVibeImageClient } from "./plusvibe-image-client.js";
 
 export type ImageGenerationEnvironment = Readonly<Record<string, string | undefined>>;
@@ -17,7 +21,9 @@ function configured(value: string | undefined): boolean {
 }
 
 function supportsCloudflareImageGeneration(environment: ImageGenerationEnvironment): boolean {
-  return configured(environment.CLOUDFLARE_ACCOUNT_ID) && configured(environment.CLOUDFLARE_AI_TOKEN);
+  return (
+    configured(environment.CLOUDFLARE_ACCOUNT_ID) && configured(environment.CLOUDFLARE_AI_TOKEN)
+  );
 }
 
 function supportsNeuralDeepImageGeneration(environment: ImageGenerationEnvironment): boolean {
@@ -35,20 +41,24 @@ export function resolveImageProviders(environment: ImageGenerationEnvironment): 
     : null;
   const cloudflare = supportsCloudflareImageGeneration(environment)
     ? createCloudflareImageClient({
-      accountId: environment.CLOUDFLARE_ACCOUNT_ID!.trim(),
-      token: environment.CLOUDFLARE_AI_TOKEN!.trim(),
-    })
+        accountId: environment.CLOUDFLARE_ACCOUNT_ID!.trim(),
+        token: environment.CLOUDFLARE_AI_TOKEN!.trim(),
+      })
     : null;
   const neuraldeep = supportsNeuralDeepImageGeneration(environment)
     ? createNeuralDeepImageClient({ apiKey: environment.NEURALDEEP_IMAGE_API_KEY!.trim() })
     : null;
-  return [plusvibe, neuraldeep, cloudflare].filter((client): client is FluxImageClient => client !== null);
+  return [plusvibe, neuraldeep, cloudflare].filter(
+    (client): client is FluxImageClient => client !== null,
+  );
 }
 
 export function supportsImageGeneration(environment: ImageGenerationEnvironment): boolean {
-  return supportsPlusVibeImageGeneration(environment) ||
+  return (
+    supportsPlusVibeImageGeneration(environment) ||
     supportsCloudflareImageGeneration(environment) ||
-    supportsNeuralDeepImageGeneration(environment);
+    supportsNeuralDeepImageGeneration(environment)
+  );
 }
 
 export const IMAGE_GENERATION_AVAILABLE = supportsImageGeneration(process.env);

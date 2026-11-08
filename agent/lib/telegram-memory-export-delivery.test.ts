@@ -15,7 +15,7 @@ const pacer = vi.hoisted(() => ({
   waitForPause: vi.fn(async () => undefined),
 }));
 vi.mock("eve/channels/telegram", async (importOriginal) => ({
-  ...await importOriginal<typeof import("eve/channels/telegram")>(),
+  ...(await importOriginal<typeof import("eve/channels/telegram")>()),
   telegramSendPacer: pacer,
 }));
 
@@ -31,9 +31,17 @@ afterEach(() => {
 describe("deliverMemoryExportFiles", () => {
   it("sends the export once more after Telegram's pause", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error_code: 429, ok: false, parameters: { retry_after: 2 } }), { status: 429 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error_code: 429, ok: false, parameters: { retry_after: 2 } }),
+          { status: 429 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 }),
+      );
 
     await deliverMemoryExportFiles({ chatId: "101", json: "{}", markdown: "# Память" }, fetchMock);
 
@@ -44,10 +52,10 @@ describe("deliverMemoryExportFiles", () => {
 
   it("sends both formats in one Telegram media group", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{\"ok\":true}", { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
 
     await deliverMemoryExportFiles(
-      { chatId: "101", json: "{\"schemaVersion\":1}", markdown: "# Память" },
+      { chatId: "101", json: '{"schemaVersion":1}', markdown: "# Память" },
       fetchMock,
     );
 

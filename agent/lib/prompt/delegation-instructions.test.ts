@@ -10,11 +10,25 @@ import { describe, expect, it } from "vitest";
 import delegation from "../../instructions/delegation.js";
 
 function resolve(attributes: Record<string, unknown>) {
-  return delegation.events["turn.started"]?.({} as never, {
-    channel: { kind: "telegram" },
-    messages: [],
-    session: { auth: { current: { attributes, authenticator: "telegram", principalId: "user-1", principalType: "user" }, initiator: null }, id: "s-1" },
-  } as never);
+  return delegation.events["turn.started"]?.(
+    {} as never,
+    {
+      channel: { kind: "telegram" },
+      messages: [],
+      session: {
+        auth: {
+          current: {
+            attributes,
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "s-1",
+      },
+    } as never,
+  );
 }
 
 describe("delegation instructions", () => {
@@ -23,6 +37,12 @@ describe("delegation instructions", () => {
   });
 
   it("gives a whisper no delegation guidance", async () => {
-    expect(await resolve({ groupType: "family_private", memoryScopes: ["family"], telegramWhisper: "true" })).toBeNull();
+    expect(
+      await resolve({
+        groupType: "family_private",
+        memoryScopes: ["family"],
+        telegramWhisper: "true",
+      }),
+    ).toBeNull();
   });
 });

@@ -16,7 +16,12 @@
  * under the key. `dim` styles de-emphasized parts (role prefixes, the
  * truncation notice), so callers pass their surface's dim style.
  */
-export declare function formatAttributeContent(key: string, value: unknown, dim: (text: string) => string, width: number): string[];
+export declare function formatAttributeContent(
+  key: string,
+  value: unknown,
+  dim: (text: string) => string,
+  width: number,
+): string[];
 /**
  * Wraps text to `width`, splitting on embedded newlines so a multi-line payload
  * keeps its shape, and stripping control bytes the frame must not carry.

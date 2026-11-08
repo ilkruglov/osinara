@@ -28,9 +28,11 @@ function response(body: BodyInit | null, init?: ResponseInit): Response {
 
 describe("controlled external-group web fetch", () => {
   it("preserves the Eve input contract and always dispatches through the fixed proxy", async () => {
-    const fetch = vi.fn(async () => response("<h1>Hello</h1>", {
-      headers: { "content-type": "text/html; charset=utf-8" },
-    }));
+    const fetch = vi.fn(async () =>
+      response("<h1>Hello</h1>", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
     const dispatcher = new ProxyAgent(CONTROLLED_WEB_FETCH_PROXY_URL);
     const execute = createControlledWebFetch({ dispatcher, fetch });
 
@@ -40,15 +42,19 @@ describe("controlled external-group web fetch", () => {
       url: "https://example.com/page",
     });
 
-    expect(CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
-      format: "extracted_text",
-      timeout: 120,
-      url: "https://example.com",
-    }).success).toBe(true);
-    expect(CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
-      format: "markdown",
-      url: "https://example.com",
-    }).success).toBe(false);
+    expect(
+      CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
+        format: "extracted_text",
+        timeout: 120,
+        url: "https://example.com",
+      }).success,
+    ).toBe(true);
+    expect(
+      CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
+        format: "markdown",
+        url: "https://example.com",
+      }).success,
+    ).toBe(false);
     expect(controlledWebFetchTool.execute).toBeTypeOf("function");
     expect(result.content).toBe("Hello");
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -88,7 +94,10 @@ describe("controlled external-group web fetch", () => {
     const fetch = vi.fn(async (input: URL | string) => {
       const current = new URL(input);
       const hop = Number(current.pathname.slice(1) || "0");
-      return response(null, { headers: { location: `https://example.com/${hop + 1}` }, status: 302 });
+      return response(null, {
+        headers: { location: `https://example.com/${hop + 1}` },
+        status: 302,
+      });
     });
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
@@ -103,10 +112,12 @@ describe("controlled external-group web fetch", () => {
   });
 
   it("rejects a forbidden redirect target before another request", async () => {
-    const fetch = vi.fn(async () => response(null, {
-      headers: { location: "http://user@example.com/private" },
-      status: 302,
-    }));
+    const fetch = vi.fn(async () =>
+      response(null, {
+        headers: { location: "http://user@example.com/private" },
+        status: 302,
+      }),
+    );
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
     await expect(execute({ url: "https://example.com" })).rejects.toThrowError(
@@ -117,9 +128,11 @@ describe("controlled external-group web fetch", () => {
 
   it("stops streaming once the five MiB response limit is exceeded", async () => {
     const oversized = new Uint8Array(CONTROLLED_WEB_FETCH_MAX_BODY_BYTES + 1);
-    const fetch = vi.fn(async () => response(oversized, {
-      headers: { "content-type": "text/plain" },
-    }));
+    const fetch = vi.fn(async () =>
+      response(oversized, {
+        headers: { "content-type": "text/plain" },
+      }),
+    );
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
     await expect(execute({ url: "https://example.com/large" })).rejects.toThrowError(
@@ -154,9 +167,11 @@ describe("controlled external-group web fetch", () => {
   it.each(["text/plain", "application/json", "application/problem+json", "application/xml"])(
     "accepts model-readable structured content type %s",
     async (contentType) => {
-      const fetch = vi.fn(async () => response("structured text", {
-        headers: { "content-type": contentType },
-      }));
+      const fetch = vi.fn(async () =>
+        response("structured text", {
+          headers: { "content-type": contentType },
+        }),
+      );
       const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
       await expect(execute({ url: "https://example.com/data" })).resolves.toMatchObject({
@@ -189,39 +204,46 @@ describe("controlled external-group web fetch", () => {
   });
 
   it("returns raw HTML only when requested and otherwise labels extraction as plain text", async () => {
-    const fetch = vi.fn(async () => response("<article><h1>Title</h1><p>Body</p></article>", {
-      headers: { "content-type": "text/html" },
-    }));
+    const fetch = vi.fn(async () =>
+      response("<article><h1>Title</h1><p>Body</p></article>", {
+        headers: { "content-type": "text/html" },
+      }),
+    );
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
-    await expect(execute({ format: "extracted_text", url: "https://example.com/article" }))
-      .resolves.toMatchObject({ content: "Title\nBody", finalUrl: "https://example.com/article" });
-    await expect(execute({ format: "html", url: "https://example.com/article" }))
-      .resolves.toMatchObject({
-        content: "<article><h1>Title</h1><p>Body</p></article>",
-        finalUrl: "https://example.com/article",
-      });
+    await expect(
+      execute({ format: "extracted_text", url: "https://example.com/article" }),
+    ).resolves.toMatchObject({ content: "Title\nBody", finalUrl: "https://example.com/article" });
+    await expect(
+      execute({ format: "html", url: "https://example.com/article" }),
+    ).resolves.toMatchObject({
+      content: "<article><h1>Title</h1><p>Body</p></article>",
+      finalUrl: "https://example.com/article",
+    });
   });
 
   // Security review, 5 October 2026: 64 KiB of `<` blocked the event loop for over a second
   // in the regex extraction, and no timeout could interrupt it.
   it("extracts text from a page of adversarial markup without blocking", async () => {
-    const fetch = vi.fn(async () => response("<".repeat(CONTROLLED_WEB_FETCH_MAX_BODY_BYTES - 1), {
-      headers: { "content-type": "text/html" },
-    }));
+    const fetch = vi.fn(async () =>
+      response("<".repeat(CONTROLLED_WEB_FETCH_MAX_BODY_BYTES - 1), {
+        headers: { "content-type": "text/html" },
+      }),
+    );
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
     const started = performance.now();
-    await expect(execute({ format: "extracted_text", url: "https://example.com/trap" }))
-      .resolves.toMatchObject({ finalUrl: "https://example.com/trap" });
+    await expect(
+      execute({ format: "extracted_text", url: "https://example.com/trap" }),
+    ).resolves.toMatchObject({ finalUrl: "https://example.com/trap" });
     // Tens of milliseconds now; generous so a loaded machine does not fail it, far under the old cost.
     expect(performance.now() - started).toBeLessThan(3_000);
   });
 
   it("bounds textual model content by line count", async () => {
-    const fetch = vi.fn(async () => response(
-      "line\n".repeat(CONTROLLED_WEB_FETCH_MAX_MODEL_LINES + 20),
-    ));
+    const fetch = vi.fn(async () =>
+      response("line\n".repeat(CONTROLLED_WEB_FETCH_MAX_MODEL_LINES + 20)),
+    );
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
     const result = await execute({ format: "extracted_text", url: "https://example.com/lines" });

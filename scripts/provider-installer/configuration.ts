@@ -40,9 +40,7 @@ export function requireCredential(value: string, label: string): string {
   return credential;
 }
 
-export function generateInternalSecrets(
-  generate: (purpose: string) => string,
-): InternalSecrets {
+export function generateInternalSecrets(generate: (purpose: string) => string): InternalSecrets {
   const secrets: InternalSecrets = {
     agentInternalToken: generate("agent-internal-token"),
     appDatabasePassword: generate("app-database-password"),

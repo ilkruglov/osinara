@@ -37,10 +37,7 @@ const authoredRuntimeModelMocks = new Map(),
     })
     .strict();
 function shouldMockAuthoredRuntimeModels() {
-  return (
-    process.env.NODE_ENV === `test` ||
-    process.env.EVE_MOCK_AUTHORED_MODELS === `1`
-  );
+  return process.env.NODE_ENV === `test` || process.env.EVE_MOCK_AUTHORED_MODELS === `1`;
 }
 function createMockAuthoredRuntimeModel(e) {
   let t = authoredRuntimeModelMocks.get(e.id);
@@ -49,8 +46,7 @@ function createMockAuthoredRuntimeModel(e) {
     modelId: e.id,
     provider: `eve-runtime-mock`,
     doGenerate: async (t) => createMockModelResult(t, e.id),
-    doStream: async (t) =>
-      createBootstrapStreamResult(createMockModelResult(t, e.id)),
+    doStream: async (t) => createBootstrapStreamResult(createMockModelResult(t, e.id)),
   });
   return (authoredRuntimeModelMocks.set(e.id, r), r);
 }
@@ -69,10 +65,7 @@ function createMockModelResult(e, t) {
   }
   let r = createFinalOutputResult(e, t);
   if (r !== null) return r;
-  let i =
-    n === null
-      ? createAssistantMessage(e.prompt)
-      : formatToolResultReply(n, e.prompt);
+  let i = n === null ? createAssistantMessage(e.prompt) : formatToolResultReply(n, e.prompt);
   return createBootstrapGenerateResult({
     inputTokens: estimateTokenCount(getPromptText(e.prompt)),
     modelId: t,
@@ -94,8 +87,7 @@ function createFinalOutputResult(e, t) {
   });
 }
 function resolveMockAuthoredRuntimeModel(e) {
-  return !shouldMockAuthoredRuntimeModels() ||
-    e.id === BOOTSTRAP_RUNTIME_MODEL_ID
+  return !shouldMockAuthoredRuntimeModels() || e.id === BOOTSTRAP_RUNTIME_MODEL_ID
     ? null
     : createMockAuthoredRuntimeModel(e);
 }
@@ -115,8 +107,7 @@ function createSkillLoadResult(e, n) {
       });
 }
 const SUBAGENT_TOOL_NAME = `agent`,
-  SUBAGENT_DELEGATION_DIRECTIVE =
-    /\bdelegate\s+to\s+a\s+subagent\s*:\s*(.+)$/iu,
+  SUBAGENT_DELEGATION_DIRECTIVE = /\bdelegate\s+to\s+a\s+subagent\s*:\s*(.+)$/iu,
   PARALLEL_AUTHORED_TOOLS_DIRECTIVE = /^call tools in parallel:\s*(.+)$/imu;
 function createParallelAuthoredToolCallsResult(e, t) {
   let n = getLastUserPromptText(e.prompt);
@@ -214,8 +205,7 @@ function createAssistantMessage(e) {
     : i;
 }
 function formatToolResultReply(e, t) {
-  if (e.isError)
-    return `Local weather tool failed: ${formatToolOutput(e.output)}`;
+  if (e.isError) return `Local weather tool failed: ${formatToolOutput(e.output)}`;
   if (isWeatherPayload(e.output))
     return `Used local weather tool for ${e.output.city}: ${e.output.condition}, ${e.output.temperatureF}F. ${e.output.summary}`;
   let n = getLastUserPromptText(t) ?? `Hello from eve`;
@@ -276,8 +266,7 @@ function getAvailableTools(e) {
 function getLastAuthoredToolResult(e) {
   for (let n of [...e].reverse()) {
     if (n.role === `user`) {
-      if (isAgentsAnnouncementText(getPromptContentText(n.content).trim()))
-        continue;
+      if (isAgentsAnnouncementText(getPromptContentText(n.content).trim())) continue;
       return null;
     }
     if (!(n.role !== `tool` && n.role !== `assistant`)) {
@@ -318,9 +307,7 @@ function findNextExplicitToolAfterResult(e) {
         .sort((e, t) => e.index - t.index)[0]?.tool ?? null);
 }
 function createFollowUpToolInput(e) {
-  return isRecord(e) && typeof e.stepKey == `string`
-    ? { stepKey: e.stepKey }
-    : null;
+  return isRecord(e) && typeof e.stepKey == `string` ? { stepKey: e.stepKey } : null;
 }
 function getSystemPromptLabels(e) {
   let t = e.filter((e) => e.role === `system`);
@@ -341,8 +328,7 @@ function getSystemPromptLabels(e) {
         .filter((e) => e.length > 0),
       r = [];
     for (let e of n) {
-      if (e === BOOTSTRAP_RUNTIME_SYSTEM_PROMPT || e === `Available skills`)
-        continue;
+      if (e === BOOTSTRAP_RUNTIME_SYSTEM_PROMPT || e === `Available skills`) continue;
       let t = /^System \((.+)\)$/.exec(e);
       if (t?.[1]) {
         r.push(t[1]);
@@ -352,9 +338,7 @@ function getSystemPromptLabels(e) {
       n?.[1] && r.push(n[1]);
     }
     if (r.length > 0) return r;
-    let i = n.find(
-      (e) => e !== BOOTSTRAP_RUNTIME_SYSTEM_PROMPT && e !== `Available skills`,
-    );
+    let i = n.find((e) => e !== BOOTSTRAP_RUNTIME_SYSTEM_PROMPT && e !== `Available skills`);
     return i === void 0 ? [] : [i];
   });
   return [...new Set(n)];
@@ -363,9 +347,7 @@ function findRelevantTool(e, n) {
   let r = normalizeText(n),
     i = e.find(
       (e) =>
-        e.name !== `agent` &&
-        e.name !== LOAD_SKILL_TOOL_NAME &&
-        r.includes(normalizeText(e.name)),
+        e.name !== `agent` && e.name !== LOAD_SKILL_TOOL_NAME && r.includes(normalizeText(e.name)),
     );
   return i === void 0
     ? /\b(forecast|temperature|weather|wind|rain|snow)\b/u.test(r)
@@ -392,9 +374,7 @@ function createToolCallId(e) {
   }`;
 }
 function resolveSystemProbe(e) {
-  let t = e
-    .filter((e) => e.role === `system`)
-    .map((e) => getPromptContentText(e.content)).join(`
+  let t = e.filter((e) => e.role === `system`).map((e) => getPromptContentText(e.content)).join(`
 `);
   return /hmr-probe:\s*([^\n]+)/iu.exec(t)?.[1]?.trim() || null;
 }

@@ -13,7 +13,11 @@
  * - `withPendingMarker`, `readTelegramPendingMarker`: marker transport through Eve's parsed update.
  * - `formatPendingMessagesContext`: the untrusted context block.
  */
-import { parseTelegramUpdate, type TelegramMessage, type TelegramUpdate } from "eve/channels/telegram";
+import {
+  parseTelegramUpdate,
+  type TelegramMessage,
+  type TelegramUpdate,
+} from "eve/channels/telegram";
 import { clipText } from "./display-text.js";
 
 import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
@@ -50,11 +54,14 @@ export function pendingMessagesFromPayloads(
     const message: TelegramMessage = update.message;
     const text = message.text.trim();
     const media = classifyTelegramInboundMedia(message);
-    const body = text.length > 0
-      ? clip(text)
-      : Object.hasOwn(message.raw, "voice") ? "[голосовое сообщение]"
-      : media !== "none" || message.attachments.length > 0 ? "[вложение]"
-      : "";
+    const body =
+      text.length > 0
+        ? clip(text)
+        : Object.hasOwn(message.raw, "voice")
+          ? "[голосовое сообщение]"
+          : media !== "none" || message.attachments.length > 0
+            ? "[вложение]"
+            : "";
     if (!body) continue;
     const from = message.from;
     messages.push({
@@ -62,7 +69,7 @@ export function pendingMessagesFromPayloads(
       messageId: message.messageId,
       receivedAt: row.receivedAt.toISOString(),
       replyToMessageId: message.replyToMessage?.messageId ?? null,
-      senderName: from?.username ?? from?.firstName ?? (message.chat.title ?? "участник"),
+      senderName: from?.username ?? from?.firstName ?? message.chat.title ?? "участник",
       text: body,
     });
     if (messages.length >= TELEGRAM_PENDING_MESSAGES_MAX) break;
@@ -86,14 +93,20 @@ export function readTelegramPendingMarker(raw: Record<string, unknown>): Telegra
     if (!item || typeof item !== "object") return [];
     const entry = item as Record<string, unknown>;
     if (
-      typeof entry.messageId !== "string" || typeof entry.senderName !== "string" ||
-      typeof entry.text !== "string" || typeof entry.receivedAt !== "string" ||
+      typeof entry.messageId !== "string" ||
+      typeof entry.senderName !== "string" ||
+      typeof entry.text !== "string" ||
+      typeof entry.receivedAt !== "string" ||
       typeof entry.isBot !== "boolean" ||
       (entry.replyToMessageId !== null && typeof entry.replyToMessageId !== "string")
-    ) return [];
+    )
+      return [];
     messages.push({
-      isBot: entry.isBot, messageId: entry.messageId, receivedAt: entry.receivedAt,
-      replyToMessageId: entry.replyToMessageId as string | null, senderName: entry.senderName,
+      isBot: entry.isBot,
+      messageId: entry.messageId,
+      receivedAt: entry.receivedAt,
+      replyToMessageId: entry.replyToMessageId as string | null,
+      senderName: entry.senderName,
       text: entry.text,
     });
   }
@@ -106,12 +119,15 @@ function timeOfDay(iso: string): string {
 }
 
 /** One context line per queued message; the block is data, never instructions. */
-export function formatPendingMessagesContext(pending: readonly TelegramPendingMessage[]): string | null {
+export function formatPendingMessagesContext(
+  pending: readonly TelegramPendingMessage[],
+): string | null {
   if (pending.length === 0) return null;
-  const lines = pending.map((message) =>
-    `- ${message.messageId} [${message.isBot ? "bot" : "user"}] ${message.senderName}` +
-    `${message.replyToMessageId === null ? "" : ` (reply→${message.replyToMessageId})`} ` +
-    `${timeOfDay(message.receivedAt)}: ${message.text.replaceAll("<", "‹").replaceAll(">", "›")}`
+  const lines = pending.map(
+    (message) =>
+      `- ${message.messageId} [${message.isBot ? "bot" : "user"}] ${message.senderName}` +
+      `${message.replyToMessageId === null ? "" : ` (reply→${message.replyToMessageId})`} ` +
+      `${timeOfDay(message.receivedAt)}: ${message.text.replaceAll("<", "‹").replaceAll(">", "›")}`,
   );
   return [
     "<pending_telegram_messages>",

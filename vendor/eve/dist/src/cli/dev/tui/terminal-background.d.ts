@@ -9,9 +9,9 @@
  */
 /** An sRGB color with 8-bit channels. */
 export interface RgbColor {
-    readonly r: number;
-    readonly g: number;
-    readonly b: number;
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
 }
 /** Asks the terminal for its default background color (OSC 11 query). */
 export declare const BACKGROUND_COLOR_QUERY = "\u001B]11;?\u0007";

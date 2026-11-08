@@ -31,47 +31,77 @@ describe("workflow queue loopback patch", () => {
   it("waits for a step longer than any step may run", async () => {
     const queue = await readFile(QUEUE_PATH, "utf8");
 
-    expect(codeText(queue)).toContain(codeText("import { Agent as OsinaraLoopbackAgent, fetch as osinaraLoopbackFetch, } from \"undici\""));
-    expect(codeText(queue)).toContain(codeText("const OSINARA_LOOPBACK_TIMEOUT_MS = 20 * 60 * 1000"));
+    expect(codeText(queue)).toContain(
+      codeText(
+        'import { Agent as OsinaraLoopbackAgent, fetch as osinaraLoopbackFetch } from "undici"',
+      ),
+    );
+    expect(codeText(queue)).toContain(
+      codeText("const OSINARA_LOOPBACK_TIMEOUT_MS = 20 * 60 * 1000"),
+    );
     expect(codeText(queue)).toContain(codeText("headersTimeout: OSINARA_LOOPBACK_TIMEOUT_MS"));
     expect(codeText(queue)).toContain(codeText("bodyTimeout: OSINARA_LOOPBACK_TIMEOUT_MS"));
-    expect(codeText(queue)).toContain(codeText("const response = await osinaraLoopbackFetch( createWorkflowUrl(baseUrl, { type: \"flow\" }), {"));
+    expect(codeText(queue)).toContain(
+      codeText(
+        'const response = await osinaraLoopbackFetch( createWorkflowUrl(baseUrl, { type: "flow" }), {',
+      ),
+    );
     expect(codeText(queue)).toContain(codeText("dispatcher: OSINARA_LOOPBACK_DISPATCHER"));
-    expect(codeShape(queue)).not.toContain(codeShape("const response = await fetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {"));
+    expect(codeShape(queue)).not.toContain(
+      codeShape("const response = await fetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {"),
+    );
   });
 
   it("re-enqueues runs whose retry job was lost without waiting for a restart", async () => {
     const index = await readFile(INDEX_PATH, "utf8");
 
-    expect(codeText(index)).toContain(codeText("import { releaseDeadWorkerLocks, requeueInFlightRuns, startStuckRunRecovery } from \"./osinara-stuck-run-recovery.js\""));
+    expect(codeText(index)).toContain(
+      codeText(
+        'import { releaseDeadWorkerLocks, requeueInFlightRuns, startStuckRunRecovery, } from "./osinara-stuck-run-recovery.js"',
+      ),
+    );
     // Locks of the previous process's workers are released before anything is re-enqueued.
     expect(codeText(index)).toContain(codeText("await releaseDeadWorkerLocks(pool, startedAt);"));
     // Startup re-enqueues the interrupted runs only; parked sessions wake on their hook.
     expect(codeText(index)).toContain(codeText("await requeueInFlightRuns({"));
     expect(index).not.toContain("reenqueueActiveRuns");
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery ??= startStuckRunRecovery({"));
-    expect(codeText(index)).toContain(codeText("queuePrefix: getQueueTopicPrefix( \"workflow\", resolveQueueNamespace(config.namespace"));
+    expect(codeText(index)).toContain(
+      codeText(
+        'queuePrefix: getQueueTopicPrefix( "workflow", resolveQueueNamespace(config.namespace',
+      ),
+    );
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery?."));
   });
 
   it("opens the flow route with the internal token only", async () => {
     const queue = await readFile(QUEUE_PATH, "utf8");
     // The queue sends the token with every flow request.
-    expect(codeText(queue)).toContain(codeText('"x-osinara-internal-token": requireInternalToken(),'));
+    expect(codeText(queue)).toContain(
+      codeText('"x-osinara-internal-token": requireInternalToken(),'),
+    );
     // The handler refuses before the official one parses anything; a wrong or missing token is 401.
     expect(codeText(queue)).toContain(codeText("const createQueueHandler = (prefix, handle) => {"));
-    expect(codeText(queue)).toContain(codeText('if (!isInternalTokenAuthorized(request.headers.get("x-osinara-internal-token")))'));
+    expect(codeText(queue)).toContain(
+      codeText('if (!isInternalTokenAuthorized(request.headers.get("x-osinara-internal-token")))'),
+    );
     expect(codeText(queue)).toContain(codeText("return new Response(null, { status: 401 });"));
     // The official handler is built once per route, not per request.
-    expect(codeText(queue)).toContain(codeText("const official = localWorld.createQueueHandler(prefix, handle);"));
+    expect(codeText(queue)).toContain(
+      codeText("const official = localWorld.createQueueHandler(prefix, handle);"),
+    );
     expect(codeText(queue)).toContain(codeText("return official(request);"));
     expect(codeText(queue)).toContain(codeText("timingSafeEqual"));
-    expect(codeShape(queue)).not.toContain(codeShape("const createQueueHandler = localWorld.createQueueHandler;"));
+    expect(codeShape(queue)).not.toContain(
+      codeShape("const createQueueHandler = localWorld.createQueueHandler;"),
+    );
   });
 
   it("keeps the patched modules syntactically valid", async () => {
     for (const path of [QUEUE_PATH, INDEX_PATH, RECOVERY_PATH]) {
-      await expect(execFileAsync(process.execPath, ["--check", path])).resolves.toMatchObject({ stderr: "" });
+      await expect(execFileAsync(process.execPath, ["--check", path])).resolves.toMatchObject({
+        stderr: "",
+      });
     }
   });
 });

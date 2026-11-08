@@ -19,8 +19,8 @@ import { type GitHubWebhookSecret } from "#public/channels/github/auth.js";
 export type GitHubWebhookVerifier = (request: Request, body: string) => unknown | Promise<unknown>;
 /** Options for {@link verifyGitHubRequest}. */
 export interface GitHubVerifyOptions {
-    readonly webhookSecret?: GitHubWebhookSecret;
-    readonly webhookVerifier?: GitHubWebhookVerifier;
+  readonly webhookSecret?: GitHubWebhookSecret;
+  readonly webhookVerifier?: GitHubWebhookVerifier;
 }
 /**
  * Verifies a GitHub webhook request and returns its raw body. The raw body is
@@ -30,6 +30,9 @@ export interface GitHubVerifyOptions {
  * HMAC check: GitHub's webhook secret is never read and the verifier owns the
  * accept/reject decision.
  */
-export declare function verifyGitHubRequest(request: Request, options: GitHubVerifyOptions): Promise<string>;
+export declare function verifyGitHubRequest(
+  request: Request,
+  options: GitHubVerifyOptions,
+): Promise<string>;
 /** Signs a raw GitHub webhook body for tests and local fixtures. */
 export declare function signGitHubWebhookBody(body: string, secret: string): string;

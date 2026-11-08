@@ -82,33 +82,44 @@ describeWithDatabase("proactive delivery repository", () => {
     expect(pending?.context).toContain("Сводка по искусственному интеллекту");
 
     await proactiveDeliveryRepository.advanceSessionCursor(session.rows[0]!.id, pending!.cursor);
-    await expect(proactiveDeliveryRepository.listPendingContext({
-      ...authorization,
-      applicationSessionId: session.rows[0]!.id,
-      now: new Date("2026-07-17T07:01:00.000Z"),
-    })).resolves.toBeNull();
+    await expect(
+      proactiveDeliveryRepository.listPendingContext({
+        ...authorization,
+        applicationSessionId: session.rows[0]!.id,
+        now: new Date("2026-07-17T07:01:00.000Z"),
+      }),
+    ).resolves.toBeNull();
 
-    await expect(proactiveDeliveryRepository.list({
-      ...authorization,
-      deliveredAfter: null,
-      deliveredBefore: null,
-      limit: 10,
-      query: "искусственный интеллект",
-      sourceKind: "agent_schedule",
-    })).resolves.toMatchObject({ items: [expect.objectContaining({
-      deliveryId: expect.any(String),
-      sourceId: "00000000-0000-4000-8000-000000000101",
-    })], nextCursor: null });
-    await expect(proactiveDeliveryRepository.list({
-      ...authorization,
-      deliveredAfter: null,
-      deliveredBefore: null,
-      limit: 10,
-      ownerUserId: memberId,
-      telegramChatId: "delivery-member",
-      query: null,
-      sourceKind: null,
-    })).resolves.toEqual({ items: [], nextCursor: null });
+    await expect(
+      proactiveDeliveryRepository.list({
+        ...authorization,
+        deliveredAfter: null,
+        deliveredBefore: null,
+        limit: 10,
+        query: "искусственный интеллект",
+        sourceKind: "agent_schedule",
+      }),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          deliveryId: expect.any(String),
+          sourceId: "00000000-0000-4000-8000-000000000101",
+        }),
+      ],
+      nextCursor: null,
+    });
+    await expect(
+      proactiveDeliveryRepository.list({
+        ...authorization,
+        deliveredAfter: null,
+        deliveredBefore: null,
+        limit: 10,
+        ownerUserId: memberId,
+        telegramChatId: "delivery-member",
+        query: null,
+        sourceKind: null,
+      }),
+    ).resolves.toEqual({ items: [], nextCursor: null });
 
     // Family deliveries are shared only through the exact registered group and topic.
     const group = await database().query<{ id: string }>(
@@ -132,19 +143,21 @@ describeWithDatabase("proactive delivery repository", () => {
       telegramMessageId: "502",
       title: null,
     });
-    await expect(proactiveDeliveryRepository.list({
-      familyId: family.rows[0]!.id,
-      groupId: group.rows[0]!.id,
-      messageThreadId: "77",
-      ownerUserId: null,
-      deliveredAfter: null,
-      deliveredBefore: null,
-      limit: 10,
-      query: null,
-      scope: "family",
-      sourceKind: "reminder",
-      telegramChatId: "-100-delivery",
-    })).resolves.toMatchObject({
+    await expect(
+      proactiveDeliveryRepository.list({
+        familyId: family.rows[0]!.id,
+        groupId: group.rows[0]!.id,
+        messageThreadId: "77",
+        ownerUserId: null,
+        deliveredAfter: null,
+        deliveredBefore: null,
+        limit: 10,
+        query: null,
+        scope: "family",
+        sourceKind: "reminder",
+        telegramChatId: "-100-delivery",
+      }),
+    ).resolves.toMatchObject({
       items: [expect.objectContaining({ content: "Семейное напоминание", sourceKind: "reminder" })],
       nextCursor: null,
     });
@@ -198,15 +211,24 @@ describeWithDatabase("proactive delivery repository", () => {
     const items = [...first.items, ...second.items, ...third.items];
 
     expect(items.map((item) => item.content)).toEqual([
-      "Доставка 11", "Доставка 10", "Доставка 9", "Доставка 8", "Доставка 7",
-      "Доставка 6", "Доставка 5", "Доставка 4", "Доставка 3", "Доставка 2",
+      "Доставка 11",
+      "Доставка 10",
+      "Доставка 9",
+      "Доставка 8",
+      "Доставка 7",
+      "Доставка 6",
+      "Доставка 5",
+      "Доставка 4",
+      "Доставка 3",
+      "Доставка 2",
     ]);
     expect(new Set(items.map((item) => item.deliveryId))).toHaveLength(10);
     expect(items.at(-1)).toMatchObject({
       sourceId: "00000000-0000-4000-8000-000000000002",
     });
     expect(third.nextCursor).toBeNull();
-    await expect(proactiveDeliveryRepository.list({ ...base, cursor: "invalid" }))
-      .rejects.toMatchObject({ code: "AGENT_PROACTIVE_DELIVERY_CURSOR_INVALID" });
+    await expect(
+      proactiveDeliveryRepository.list({ ...base, cursor: "invalid" }),
+    ).rejects.toMatchObject({ code: "AGENT_PROACTIVE_DELIVERY_CURSOR_INVALID" });
   });
 });

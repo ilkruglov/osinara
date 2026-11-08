@@ -31,14 +31,19 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function idText(value: unknown): string | null {
-  return typeof value === "number" && Number.isSafeInteger(value) ? String(value)
-    : typeof value === "string" && /^-?\d{1,20}$/u.test(value) ? value : null;
+  return typeof value === "number" && Number.isSafeInteger(value)
+    ? String(value)
+    : typeof value === "string" && /^-?\d{1,20}$/u.test(value)
+      ? value
+      : null;
 }
 
 function reactionEmoji(value: unknown): string | null {
   if (!isObject(value)) return null;
-  if (value.type === "emoji" && typeof value.emoji === "string" && value.emoji.length > 0) return value.emoji.replace(/\uFE0F/gu, "");
-  if (value.type === "custom_emoji" && typeof value.custom_emoji_id === "string") return `custom:${value.custom_emoji_id}`;
+  if (value.type === "emoji" && typeof value.emoji === "string" && value.emoji.length > 0)
+    return value.emoji.replace(/\uFE0F/gu, "");
+  if (value.type === "custom_emoji" && typeof value.custom_emoji_id === "string")
+    return `custom:${value.custom_emoji_id}`;
   if (value.type === "paid") return "paid";
   return null;
 }
@@ -51,27 +56,47 @@ export function parseTelegramReactionUpdate(raw: unknown): TelegramReactionUpdat
   const messageId = idText(reaction.message_id);
   // A reaction by an anonymous channel identity has no person behind it to measure.
   const userId = isObject(reaction.user) ? idText(reaction.user.id) : null;
-  if (updateId === null || chatId === null || messageId === null || userId === null || !Array.isArray(reaction.new_reaction)) return null;
+  if (
+    updateId === null ||
+    chatId === null ||
+    messageId === null ||
+    userId === null ||
+    !Array.isArray(reaction.new_reaction)
+  )
+    return null;
   const changedAt = typeof reaction.date === "number" ? new Date(reaction.date * 1000) : null;
   if (changedAt === null || Number.isNaN(changedAt.getTime())) return null;
-  const emojis = reaction.new_reaction.slice(0, MAX_EMOJIS).map(reactionEmoji).filter((emoji): emoji is string => emoji !== null);
-  return { changedAt, emojis, telegramChatId: chatId, telegramMessageId: messageId, telegramUserId: userId, updateId };
+  const emojis = reaction.new_reaction
+    .slice(0, MAX_EMOJIS)
+    .map(reactionEmoji)
+    .filter((emoji): emoji is string => emoji !== null);
+  return {
+    changedAt,
+    emojis,
+    telegramChatId: chatId,
+    telegramMessageId: messageId,
+    telegramUserId: userId,
+    updateId,
+  };
 }
 
 export async function handleTelegramUnparsedUpdate(
   raw: unknown,
-  record: (update: TelegramReactionUpdate) => Promise<void> = (update) => turnEvaluationRepository.recordReaction(update),
+  record: (update: TelegramReactionUpdate) => Promise<void> = (update) =>
+    turnEvaluationRepository.recordReaction(update),
 ): Promise<Response> {
   const update = parseTelegramReactionUpdate(raw);
   if (update === null) return new Response("ok");
   try {
     await record(update);
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_TELEGRAM_REACTION_RECORD_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-      telegramChatId: update.telegramChatId,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_REACTION_RECORD_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+        telegramChatId: update.telegramChatId,
+      }),
+    );
   }
   return new Response("ok");
 }

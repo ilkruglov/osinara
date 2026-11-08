@@ -12,7 +12,4 @@ function createOptionalEngineDependencyPlugin(e) {
     },
   };
 }
-export {
-  OPTIONAL_ENGINE_PACKAGES_BY_BACKEND_NAME,
-  createOptionalEngineDependencyPlugin,
-};
+export { OPTIONAL_ENGINE_PACKAGES_BY_BACKEND_NAME, createOptionalEngineDependencyPlugin };

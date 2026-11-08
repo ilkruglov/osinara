@@ -19,7 +19,6 @@ function resolveVercelProjectIdFromEnvironment() {
   let e = process.env.VERCEL_PROJECT_ID?.trim();
   if (e !== void 0 && e.length > 0) return e;
   let t = process.env.VERCEL_OIDC_TOKEN?.trim();
-  if (!(t === void 0 || t.length === 0))
-    return decodeVercelOidcTokenClaims(t).projectId;
+  if (!(t === void 0 || t.length === 0)) return decodeVercelOidcTokenClaims(t).projectId;
 }
 export { decodeVercelOidcTokenClaims, resolveVercelProjectIdFromEnvironment };

@@ -1,20 +1,20 @@
 /** Parsed Commander options accepted by {@link runEvalCommand}. */
 export interface EvalCliOptions {
-    url?: string;
-    timeout?: string;
-    maxConcurrency?: string;
-    json?: boolean;
-    junit?: string;
-    skipReport?: boolean;
-    strict?: boolean;
-    list?: boolean;
-    tag?: string[];
-    excludeTag?: string[];
-    verbose?: boolean;
+  url?: string;
+  timeout?: string;
+  maxConcurrency?: string;
+  json?: boolean;
+  junit?: string;
+  skipReport?: boolean;
+  strict?: boolean;
+  list?: boolean;
+  tag?: string[];
+  excludeTag?: string[];
+  verbose?: boolean;
 }
 type EvalCliLogger = {
-    log(message: string): void;
-    error(message: string): void;
+  log(message: string): void;
+  error(message: string): void;
 };
 /**
  * Runs the `eve eval` command with already-parsed Commander options.
@@ -25,5 +25,10 @@ type EvalCliLogger = {
  * When `--exclude-tag` removes every matching eval the run succeeds with
  * nothing executed.
  */
-export declare function runEvalCommand(evalIds: readonly string[], options: EvalCliOptions, logger: EvalCliLogger, appRoot?: string): Promise<void>;
+export declare function runEvalCommand(
+  evalIds: readonly string[],
+  options: EvalCliOptions,
+  logger: EvalCliLogger,
+  appRoot?: string,
+): Promise<void>;
 export {};

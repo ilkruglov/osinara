@@ -29,8 +29,7 @@ function deployProject(s) {
     shouldRun(e) {
       return s.skip || !e.deploymentPending
         ? !1
-        : hasVercelProject(e) ||
-            s.ensureLinkedProject === `interactive-vercel-link`;
+        : hasVercelProject(e) || s.ensureLinkedProject === `interactive-vercel-link`;
     },
     async gather() {
       return { headless: s.headless ?? !1 };
@@ -48,9 +47,7 @@ function deployProject(s) {
             reason: `Deployment needs this directory linked to a Vercel project.`,
           });
         if (
-          (a.message(
-            `Linking this directory to a Vercel project before deployment...`,
-          ),
+          (a.message(`Linking this directory to a Vercel project before deployment...`),
           !(await c.runVercel([`link`], { cwd: i, signal: r })))
         )
           throw (
@@ -60,23 +57,14 @@ function deployProject(s) {
         if (
           ((l = mergeProjectResolution(
             l,
-            projectResolutionFromDeployment(
-              await c.detectDeployment(i, { signal: r }),
-            ),
+            projectResolutionFromDeployment(await c.detectDeployment(i, { signal: r })),
           )),
           !isProjectResolved(l))
         )
-          throw Error(
-            `Vercel project linking failed. Deployment did not start.`,
-          );
+          throw Error(`Vercel project linking failed. Deployment did not start.`);
       }
       if (
-        (await c.syncHostFrameworkPreset(
-          s.prompter,
-          i,
-          o,
-          r ? { signal: r } : {},
-        ),
+        (await c.syncHostFrameworkPreset(s.prompter, i, o, r ? { signal: r } : {}),
         !e.deploymentDependenciesInstalled)
       ) {
         let e = await c.detectPackageManager(i);
@@ -98,23 +86,15 @@ function deployProject(s) {
             Error(`Dependency installation failed. Deployment did not start.`)
           );
       }
-      let u = [
-          `deploy`,
-          `--prod`,
-          `--yes`,
-          ...(n.headless ? [`--non-interactive`] : []),
-        ],
-        d = await withPhase(
-          a,
-          `Deploying the agent to Vercel production...`,
-          () =>
-            c.runVercel(u, {
-              cwd: i,
-              extraEnv: VERCEL_DEPLOY_ENV,
-              nonInteractive: n.headless,
-              onOutput: o,
-              signal: r,
-            }),
+      let u = [`deploy`, `--prod`, `--yes`, ...(n.headless ? [`--non-interactive`] : [])],
+        d = await withPhase(a, `Deploying the agent to Vercel production...`, () =>
+          c.runVercel(u, {
+            cwd: i,
+            extraEnv: VERCEL_DEPLOY_ENV,
+            nonInteractive: n.headless,
+            onOutput: o,
+            signal: r,
+          }),
         );
       if ((r?.throwIfAborted(), !d))
         throw (
@@ -123,16 +103,13 @@ function deployProject(s) {
           ),
           Error(`Deployment failed after channel setup.`)
         );
-      let f = await withPhase(
-        a,
-        `Pulling Vercel environment variables into .env.local...`,
-        () =>
-          c.runVercel([`env`, `pull`, `--yes`], {
-            cwd: i,
-            nonInteractive: n.headless,
-            onOutput: o,
-            signal: r,
-          }),
+      let f = await withPhase(a, `Pulling Vercel environment variables into .env.local...`, () =>
+        c.runVercel([`env`, `pull`, `--yes`], {
+          cwd: i,
+          nonInteractive: n.headless,
+          onOutput: o,
+          signal: r,
+        }),
       );
       (r?.throwIfAborted(),
         f ||
@@ -143,9 +120,7 @@ function deployProject(s) {
         m = p.state === `deployed` ? p.productionUrl : void 0;
       return (
         m === void 0
-          ? a.warning(
-              `Deployment succeeded, but eve could not verify its production URL.`,
-            )
+          ? a.warning(`Deployment succeeded, but eve could not verify its production URL.`)
           : a.info(`Production URL: ${m}`),
         {
           project: projectResolutionFromDeployResult(l, {

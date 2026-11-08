@@ -18,7 +18,10 @@
  *   Such a message is logged at most once an hour (per process), not on every tick.
  */
 import { database } from "./database.js";
-import { ownerHealthDigestRepository, type OwnerHealthRecipient } from "./health/owner-health-digest-repository.js";
+import {
+  ownerHealthDigestRepository,
+  type OwnerHealthRecipient,
+} from "./health/owner-health-digest-repository.js";
 import {
   memoryReviewOwnerAlertTransport,
   TelegramRecipientUnreachableError,
@@ -40,7 +43,11 @@ export interface StalledIngress {
 export async function claimStalledIngress(
   stallAfterMs: number = TELEGRAM_INGRESS_STALL_ALERT_AFTER_MS,
 ): Promise<StalledIngress[]> {
-  const result = await database().query<{ chat_type: string | null; received_at: Date; update_id: string }>(
+  const result = await database().query<{
+    chat_type: string | null;
+    received_at: Date;
+    update_id: string;
+  }>(
     `UPDATE telegram_ingress_updates
         SET stall_alerted_at = now()
       WHERE status = 'processing' AND stall_alerted_at IS NULL
@@ -67,49 +74,63 @@ export async function releaseStalledIngress(updateId: string): Promise<void> {
 function alertText(stalled: StalledIngress, now: Date): string {
   const minutes = Math.round((now.getTime() - stalled.receivedAt.getTime()) / 60_000);
   const where = stalled.chatType === "private" ? "в личном чате" : "в группе";
-  return `Мия не ответила на сообщение ${where} уже ${minutes} мин (пришло в ` +
+  return (
+    `Мия не ответила на сообщение ${where} уже ${minutes} мин (пришло в ` +
     `${stalled.receivedAt.toISOString().slice(11, 16)} UTC): ход, похоже, завис. ` +
-    "Если ответа не будет, поможет перезапуск agent.";
+    "Если ответа не будет, поможет перезапуск agent."
+  );
 }
 
-export async function dispatchIngressStallAlerts(dependencies: {
-  claim: () => Promise<StalledIngress[]>;
-  deliver: (input: { chatId: string; text: string }) => Promise<void>;
-  now?: () => Date;
-  /** Gives the claim back when no owner could be told; absent in tests that do not need it. */
-  release?: (updateId: string) => Promise<void>;
-  recipients: () => Promise<OwnerHealthRecipient[]>;
-  /** The reason an owner chat is skipped, read without a log line of its own. */
-  unreachable?: (chatId: string) => Promise<TelegramRecipientUnreachableReason | null>;
-  quietUntil?: Map<string, number>;
-} = {
-  claim: () => claimStalledIngress(),
-  deliver: (input) => memoryReviewOwnerAlertTransport.deliver(input),
-  recipients: () => ownerHealthDigestRepository.recipients(),
-  release: (updateId) => releaseStalledIngress(updateId),
-  unreachable: (chatId) => telegramReachabilityRepository.unreachableReason(chatId),
-}): Promise<number> {
+export async function dispatchIngressStallAlerts(
+  dependencies: {
+    claim: () => Promise<StalledIngress[]>;
+    deliver: (input: { chatId: string; text: string }) => Promise<void>;
+    now?: () => Date;
+    /** Gives the claim back when no owner could be told; absent in tests that do not need it. */
+    release?: (updateId: string) => Promise<void>;
+    recipients: () => Promise<OwnerHealthRecipient[]>;
+    /** The reason an owner chat is skipped, read without a log line of its own. */
+    unreachable?: (chatId: string) => Promise<TelegramRecipientUnreachableReason | null>;
+    quietUntil?: Map<string, number>;
+  } = {
+    claim: () => claimStalledIngress(),
+    deliver: (input) => memoryReviewOwnerAlertTransport.deliver(input),
+    recipients: () => ownerHealthDigestRepository.recipients(),
+    release: (updateId) => releaseStalledIngress(updateId),
+    unreachable: (chatId) => telegramReachabilityRepository.unreachableReason(chatId),
+  },
+): Promise<number> {
   const stalled = await dependencies.claim();
   if (stalled.length === 0) return 0;
   // One installation serves one family in practice, so every owner hears about every stuck chat.
   const owners = await dependencies.recipients();
   const now = (dependencies.now ?? (() => new Date()))();
   const quietUntil = dependencies.quietUntil ?? deferredQuietUntil;
-  for (const [updateId, until] of quietUntil) if (until <= now.getTime()) quietUntil.delete(updateId);
+  for (const [updateId, until] of quietUntil)
+    if (until <= now.getTime()) quietUntil.delete(updateId);
   for (const item of stalled) {
     const quiet = quietUntil.has(item.updateId);
     if (!quiet) {
-      console.error(JSON.stringify({ code: "AGENT_TELEGRAM_INGRESS_STALLED", receivedAt: item.receivedAt, updateId: item.updateId }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_TELEGRAM_INGRESS_STALLED",
+          receivedAt: item.receivedAt,
+          updateId: item.updateId,
+        }),
+      );
     }
     let delivered = false;
     let skipped = 0;
     for (const owner of owners) {
-      if (await dependencies.unreachable?.(owner.ownerTelegramUserId) != null) {
+      if ((await dependencies.unreachable?.(owner.ownerTelegramUserId)) != null) {
         skipped += 1;
         continue;
       }
       try {
-        await dependencies.deliver({ chatId: owner.ownerTelegramUserId, text: alertText(item, now) });
+        await dependencies.deliver({
+          chatId: owner.ownerTelegramUserId,
+          text: alertText(item, now),
+        });
         delivered = true;
       } catch (error) {
         if (!(error instanceof TelegramRecipientUnreachableError)) throw error;
@@ -123,7 +144,13 @@ export async function dispatchIngressStallAlerts(dependencies: {
     // Nobody could be told: the alert must not be spent on unreachable owners.
     await dependencies.release?.(item.updateId);
     if (!quiet) {
-      console.warn(JSON.stringify({ code: "AGENT_TELEGRAM_INGRESS_STALL_ALERT_DEFERRED", owners: skipped, updateId: item.updateId }));
+      console.warn(
+        JSON.stringify({
+          code: "AGENT_TELEGRAM_INGRESS_STALL_ALERT_DEFERRED",
+          owners: skipped,
+          updateId: item.updateId,
+        }),
+      );
       quietUntil.set(item.updateId, now.getTime() + UNREACHABLE_LOG_INTERVAL_MS);
     }
   }

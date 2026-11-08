@@ -12,4 +12,6 @@ import type { SandboxBackend } from "#public/definitions/sandbox-backend.js";
  * still preserving backend-internal state (such as the Vercel backend's
  * prewarmed-templates map) across every framework call.
  */
-export declare function lazyBackend<BO, SO>(factory: () => SandboxBackend<BO, SO>): SandboxBackend<BO, SO>;
+export declare function lazyBackend<BO, SO>(
+  factory: () => SandboxBackend<BO, SO>,
+): SandboxBackend<BO, SO>;

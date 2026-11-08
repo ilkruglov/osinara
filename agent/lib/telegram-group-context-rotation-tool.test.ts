@@ -48,9 +48,11 @@ function context(): ToolContext {
 }
 
 function approvalFor(input: Record<string, unknown>) {
-  const approval = (manageTelegramGroup as unknown as {
-    approval: (context: { toolInput: Record<string, unknown> }) => unknown;
-  }).approval;
+  const approval = (
+    manageTelegramGroup as unknown as {
+      approval: (context: { toolInput: Record<string, unknown> }) => unknown;
+    }
+  ).approval;
   return approval({ toolInput: input });
 }
 
@@ -64,10 +66,15 @@ describe("manage_telegram_group.start_new_context", () => {
   });
 
   it("requests a fresh canonical context for every topic of the exact family group", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "start_new_context",
-      telegramChatId: "-1001234567890",
-    }, context())).resolves.toEqual({
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "start_new_context",
+          telegramChatId: "-1001234567890",
+        },
+        context(),
+      ),
+    ).resolves.toEqual({
       groupId: "group-1",
       newContextStartsWithNextMessage: true,
       pendingTasksPreserved: true,
@@ -83,39 +90,53 @@ describe("manage_telegram_group.start_new_context", () => {
   });
 
   it("does not require HITL for a non-destructive context rotation", () => {
-    expect(approvalFor({
-      action: "start_new_context",
-      telegramChatId: "-1001234567890",
-    })).toBe("not-applicable");
+    expect(
+      approvalFor({
+        action: "start_new_context",
+        telegramChatId: "-1001234567890",
+      }),
+    ).toBe("not-applicable");
   });
 
   it("ignores known fields that MiniMax materializes beside the exact rotation target", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "start_new_context",
-      messageMode: "owner_only",
-      registration: {
-        messageMode: "all",
-        telegramChatId: "-1009999999999",
-        title: "Не используется",
-        toolAllowlist: [],
-        type: "external",
-      },
-      telegramChatId: "-1001234567890",
-      toolAllowlist: ["search_memories"],
-    }, context())).resolves.toMatchObject({
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "start_new_context",
+          messageMode: "owner_only",
+          registration: {
+            messageMode: "all",
+            telegramChatId: "-1009999999999",
+            title: "Не используется",
+            toolAllowlist: [],
+            type: "external",
+          },
+          telegramChatId: "-1001234567890",
+          toolAllowlist: ["search_memories"],
+        },
+        context(),
+      ),
+    ).resolves.toMatchObject({
       newContextStartsWithNextMessage: true,
       telegramChatId: "-1001234567890",
     });
-    expect(requestGroupSessionRotation).toHaveBeenCalledWith(expect.objectContaining({
-      telegramChatId: "-1001234567890",
-    }));
+    expect(requestGroupSessionRotation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramChatId: "-1001234567890",
+      }),
+    );
   });
 
   it("returns a corrective status-first instruction instead of inviting a chat ID guess", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "start_new_context",
-      telegramChatId: "Остриков пилит агентов",
-    }, context())).rejects.toThrowError(
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "start_new_context",
+          telegramChatId: "Остриков пилит агентов",
+        },
+        context(),
+      ),
+    ).rejects.toThrowError(
       /Не угадывайте ID.*\{"action":"status"\}.*\{"action":"start_new_context","telegramChatId":"-100/u,
     );
     expect(requestGroupSessionRotation).not.toHaveBeenCalled();
@@ -129,6 +150,8 @@ describe("manage_telegram_group.start_new_context", () => {
     expect(instructions).toContain("скопируй `startNewContextInput`");
     expect(instructions).toContain("не заполняй optional-поля других actions");
     expect(instructions).toContain("всех forum-тем");
-    expect(instructions).toContain("Если запрос указывает другую группу, не вызывай `start_new_context`");
+    expect(instructions).toContain(
+      "Если запрос указывает другую группу, не вызывай `start_new_context`",
+    );
   });
 });

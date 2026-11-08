@@ -25,9 +25,7 @@ const BOLD_OR_DIM_CLOSE = `\x1B[22m`,
   DIM_OPEN = `\x1B[2m`,
   ANSI_FOREGROUND_COLOR = RegExp(`\x1B\\[(?:3[0-9]|9[0-7])m`, `g`);
 function dimWithEmphasis(e, t) {
-  return t.colors.dim(
-    e.replaceAll(BOLD_OR_DIM_CLOSE, `${BOLD_OR_DIM_CLOSE}${DIM_OPEN}`),
-  );
+  return t.colors.dim(e.replaceAll(BOLD_OR_DIM_CLOSE, `${BOLD_OR_DIM_CLOSE}${DIM_OPEN}`));
 }
 function solidWithinDim(e, t) {
   return t.color ? `${BOLD_OR_DIM_CLOSE}${e}${DIM_OPEN}` : e;
@@ -37,11 +35,7 @@ function foregroundWithEmphasis(e) {
   return e
     .replaceAll(DIM_OPEN, ``)
     .replace(ANSI_FOREGROUND_COLOR, (e) =>
-      e === `\x1B[34m`
-        ? ((t = !0), e)
-        : e === `\x1B[39m` && t
-          ? ((t = !1), e)
-          : ``,
+      e === `\x1B[34m` ? ((t = !0), e) : e === `\x1B[39m` && t ? ((t = !1), e) : ``,
     );
 }
 function toneGlyph(e, t) {
@@ -58,9 +52,7 @@ function toneGlyph(e, t) {
   }
 }
 function renderIndicator(e, t) {
-  return e.color === `green`
-    ? t.colors.green(e.glyph)
-    : t.colors.yellow(e.glyph);
+  return e.color === `green` ? t.colors.green(e.glyph) : t.colors.yellow(e.glyph);
 }
 function renderStatusText(e, t) {
   if (e.kind === `progress`) return t.colors.dim(e.text);
@@ -88,15 +80,11 @@ function renderFlowPanel(e, t, n) {
   }
   switch ((a.length > 0 && i.push(``), e.content.kind)) {
     case `question`:
-      (e.content.status !== void 0 &&
-        i.push(`  ${renderFlowPanelStatus(e.content.status, t)}`, ``),
+      (e.content.status !== void 0 && i.push(`  ${renderFlowPanelStatus(e.content.status, t)}`, ``),
         i.push(...e.content.rows));
       break;
     case `status`:
-      if (
-        (i.push(`  ${renderFlowPanelStatus(e.content.status, t)}`),
-        e.content.preview !== void 0)
-      )
+      if ((i.push(`  ${renderFlowPanelStatus(e.content.status, t)}`), e.content.preview !== void 0))
         for (let t of e.content.preview.split(`
 `))
           i.push(`    ${r.dim(t)}`);
@@ -109,14 +97,10 @@ function renderFlowPanel(e, t, n) {
       break;
     }
     case `idle`:
-      i.push(
-        `  ${renderIndicator(e.content.indicator, t)} ${r.dim(`Working…`)}`,
-      );
+      i.push(`  ${renderIndicator(e.content.indicator, t)} ${r.dim(`Working…`)}`);
       break;
   }
-  return i.map((e, t) =>
-    t === 0 || e.length === 0 ? clip(e, n) : clip(` ${e}`, n),
-  );
+  return i.map((e, t) => (t === 0 || e.length === 0 ? clip(e, n) : clip(` ${e}`, n)));
 }
 function optionRow(e) {
   let { option: t, theme: n } = e,
@@ -218,10 +202,7 @@ function searchFilter(e, t, n, r, i) {
 }
 function isRailedSearch(e) {
   return (
-    e.filter !== void 0 &&
-    e.layout === `plain` &&
-    e.selection === `single` &&
-    e.edit === void 0
+    e.filter !== void 0 && e.layout === `plain` && e.selection === `single` && e.edit === void 0
   );
 }
 function selectViewSize(e) {
@@ -242,17 +223,11 @@ function noticeBody(e, t, n) {
 }
 function renameHint(e, n, r, i) {
   let a = renderInputWithBlockCursor({
-    ...visibleLine(
-      { text: r.editor.text || r.defaultValue, cursor: r.editor.cursor },
-      1 / 0,
-    ),
+    ...visibleLine({ text: r.editor.text || r.defaultValue, cursor: r.editor.cursor }, 1 / 0),
     visible: n,
     inverse: i.colors.inverse,
   });
-  return (
-    r.editor.text.length > 0 && (a = solidWithinDim(a, i)),
-    { ...e, hint: r.formatHint(a) }
-  );
+  return (r.editor.text.length > 0 && (a = solidWithinDim(a, i)), { ...e, hint: r.formatHint(a) });
 }
 function keyHint(n, r, i, c, l) {
   let u = i.phase;
@@ -265,8 +240,7 @@ function keyHint(n, r, i, c, l) {
     ? (m = `  ${enterBadge(c, `validate`)}`)
     : u.kind === `validating`
       ? (m = `  ${d.yellow(c.glyph.validating)} ${d.dim(`validating`)}`)
-      : u.kind === `invalid` &&
-        (m = `  ${d.red(`${c.glyph.error} API key is not valid`)}`);
+      : u.kind === `invalid` && (m = `  ${d.red(`${c.glyph.error} API key is not valid`)}`);
   let h = `${c.glyph.elbow} `,
     g = u.editor.text.length === 0 ? `type your key` : void 0,
     _ = visibleLine(
@@ -293,8 +267,7 @@ function inlineEditOption(e, t, n, r, i) {
   }
 }
 function optionWithoutStackedHint(e, t) {
-  if (t !== `stacked` || e.hint === void 0)
-    return { option: e, stackedHint: void 0 };
+  if (t !== `stacked` || e.hint === void 0) return { option: e, stackedHint: void 0 };
   let { hint: n, ...r } = e;
   return { option: r, stackedHint: n };
 }
@@ -365,9 +338,7 @@ function appendSelectOptionRows(e) {
 function appendSubmitRow(e, t, n, r) {
   if (n < 0) return;
   let i = t === n,
-    a = i
-      ? `${r.glyph.selectedPointer} ${r.colors.bold(`Submit`)}`
-      : `  Submit`;
+    a = i ? `${r.glyph.selectedPointer} ${r.colors.bold(`Submit`)}` : `  Submit`;
   e.push(``, `  ${renderCursorRow(a, i, r.colors)}`);
 }
 function appendSelectNotices(e, t, n, r, i) {
@@ -393,9 +364,7 @@ function selectFooterHints(e, t, n) {
     if (a.editor.kind === `key`) {
       let e = a.editor.phase;
       if (
-        (e.kind !== `inactive` &&
-          e.editor.text.length > 0 &&
-          (i = `esc to clear`),
+        (e.kind !== `inactive` && e.editor.text.length > 0 && (i = `esc to clear`),
         e.kind === `validating`)
       )
         return [i];
@@ -417,9 +386,7 @@ function renderActionQuestion(e, t, n) {
       `  ${optionRow({ option: i, isCursor: n === e.cursor, isChecked: !1, placeholder: !0, hintPadding: 0, theme: t })}`,
     );
   return (
-    r.push(
-      ...questionFooter([`↑/↓ move`, `enter to select`, `esc to cancel`], t),
-    ),
+    r.push(...questionFooter([`↑/↓ move`, `enter to select`, `esc to cancel`], t)),
     r.map((e) => clip(e, n))
   );
 }
@@ -427,23 +394,19 @@ function renderSelectQuestion(e, t, n) {
   if (e.kind === `actions`) return renderActionQuestion(e, t, n);
   let r = t.colors,
     i = selectPresentation(e),
-    a = i.filter
-      ? filterOptions(e.options, e.select.filter, e.searchAction)
-      : e.options,
+    a = i.filter ? filterOptions(e.options, e.select.filter, e.searchAction) : e.options,
     o = i.selection === `multiple` ? submitRowIndex(a) : -1,
     s = e.select.cursor,
     l = isRailedSearch(i),
     u = selectMessageRows(e.message, i.layout, t);
   if (e.description !== void 0 || e.metadata !== void 0) {
     if ((u.at(-1) === `` && u.pop(), e.description !== void 0))
-      for (let t of wrapVisibleLine(e.description, Math.max(1, n - 4)))
-        u.push(`  ${r.dim(t)}`);
+      for (let t of wrapVisibleLine(e.description, Math.max(1, n - 4))) u.push(`  ${r.dim(t)}`);
     for (let { label: t, value: i } of e.metadata ?? []) {
       let e = `${t}: `,
         a = wrapVisibleLine(i, Math.max(1, n - 4 - e.length));
       u.push(`  ${r.dim(`${e}${a[0] ?? ``}`)}`);
-      for (let t of a.slice(1))
-        u.push(`  ${r.dim(`${` `.repeat(e.length)}${t}`)}`);
+      for (let t of a.slice(1)) u.push(`  ${r.dim(`${` `.repeat(e.length)}${t}`)}`);
     }
     u.push(``);
   }
@@ -452,7 +415,7 @@ function renderSelectQuestion(e, t, n) {
       `  ${l ? ` ` : ``}${searchFilter(e.select.filter, i.filter.placeholder, e.loadingFrame, t, l)}`,
     );
   let d = 0;
-  for (; a[d]?.featured; ) d += 1;
+  for (; a[d]?.featured;) d += 1;
   let f = selectViewSize({
       search: i.filter !== void 0,
       filter: e.select.filter,
@@ -481,14 +444,10 @@ function renderSelectQuestion(e, t, n) {
   });
   return (
     appendSubmitRow(u, s, o, t),
-    !l &&
-      a.length > g - h &&
-      u.push(`  ${r.dim(`↑↓ ${a.length} options, showing ${h + 1}–${g}`)}`),
+    !l && a.length > g - h && u.push(`  ${r.dim(`↑↓ ${a.length} options, showing ${h + 1}–${g}`)}`),
     v || appendSelectNotices(u, e.notices, i.layout, t, n),
     e.error !== void 0 && u.push(``, `  ${r.red(e.error)}`),
-    u.push(
-      ...questionFooter(l ? [`esc to cancel`] : selectFooterHints(i, a, s), t),
-    ),
+    u.push(...questionFooter(l ? [`esc to cancel`] : selectFooterHints(i, a, s), t)),
     u.map((e) => clip(e, n))
   );
 }
@@ -501,8 +460,7 @@ function reasoningTrack(e) {
     a = i.trackLine.repeat(e.connectorWidth),
     o = [];
   for (let e = 0; e < t; e += 1)
-    (e > 0 && o.push(a),
-      o.push(e < n ? i.trackFilled : e === n ? i.trackCurrent : i.trackEmpty));
+    (e > 0 && o.push(a), o.push(e < n ? i.trackFilled : e === n ? i.trackCurrent : i.trackEmpty));
   if (!e.accent || n < 0) return o.join(``);
   let s = o.slice(0, 2 * n + 1).join(``);
   return `${r.colors.blue(s)}${o.slice(2 * n + 1).join(``)}`;
@@ -598,11 +556,7 @@ function renderTextQuestion(n, r, i, s) {
     d = n.mask ? maskLine(n.editor) : n.editor,
     f = n.editor.text.length === 0 ? n.placeholder : void 0,
     p = renderInputWithBlockCursor({
-      ...visibleLine(
-        f === void 0 ? d : { text: f, cursor: 0 },
-        u,
-        r.glyph.ellipsis,
-      ),
+      ...visibleLine(f === void 0 ? d : { text: f, cursor: 0 }, u, r.glyph.ellipsis),
       visible: s,
       inverse: c.inverse,
       render: f === void 0 ? renderInputText : (e) => c.dim(renderInputText(e)),
@@ -621,10 +575,7 @@ function renderAcknowledgeQuestion(e, t, n) {
     i.push(``);
     for (let t of e.lines) i.push(`  ${r.dim(t)}`);
   }
-  return (
-    i.push(...questionFooter([`enter to continue`], t)),
-    i.map((e) => clip(e, n))
-  );
+  return (i.push(...questionFooter([`enter to continue`], t)), i.map((e) => clip(e, n)));
 }
 export {
   enterBadge,

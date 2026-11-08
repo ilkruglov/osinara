@@ -8,16 +8,22 @@ import type { ResolvedToolDefinition } from "#runtime/types.js";
  * `WRITE_FILE_TOOL_DEFINITION` use the exact same schema object — keeping
  * model input contracts in sync without duplication.
  */
-export declare const WRITE_FILE_INPUT_SCHEMA: z.ZodObject<{
+export declare const WRITE_FILE_INPUT_SCHEMA: z.ZodObject<
+  {
     content: z.ZodString;
     filePath: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Shared output schema used by the framework `write_file` tool and any author
  * tool constructed via {@link defineWriteFileTool}.
  */
-export declare const WRITE_FILE_OUTPUT_SCHEMA: z.ZodObject<{
+export declare const WRITE_FILE_OUTPUT_SCHEMA: z.ZodObject<
+  {
     existed: z.ZodBoolean;
     path: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 export declare const WRITE_FILE_TOOL_DEFINITION: ResolvedToolDefinition;

@@ -2,10 +2,13 @@ import { type ChannelSetupLog, createPromptCommandOutput } from "#setup/cli/inde
 import type { Prompter } from "./prompter.js";
 import { type VercelProjectOperationOptions } from "./vercel-project-api.js";
 export interface CreatedProjectFrameworkOptions extends VercelProjectOperationOptions {
-    /** Detects whether project sources already use the eve integration for a host framework. */
-    detectFrameworkIntegrationImport?: (projectRoot: string, importSpecifier: string) => Promise<boolean>;
-    /** Never prompt; ambiguous host framework detections fall back to the eve preset. */
-    headless?: boolean;
+  /** Detects whether project sources already use the eve integration for a host framework. */
+  detectFrameworkIntegrationImport?: (
+    projectRoot: string,
+    importSpecifier: string,
+  ) => Promise<boolean>;
+  /** Never prompt; ambiguous host framework detections fall back to the eve preset. */
+  headless?: boolean;
 }
 /**
  * Best-effort alignment of a linked Vercel project's Framework Preset with the
@@ -18,7 +21,19 @@ export interface CreatedProjectFrameworkOptions extends VercelProjectOperationOp
  * change. No host framework, an unlinked directory, or an already-correct preset
  * is a no-op; a Vercel API failure warns rather than aborting the deploy.
  */
-export declare function syncHostFrameworkPreset(prompter: {
+export declare function syncHostFrameworkPreset(
+  prompter: {
     log: Pick<ChannelSetupLog, "info" | "warning">;
-}, projectRoot: string, onOutput: ReturnType<typeof createPromptCommandOutput>, options: VercelProjectOperationOptions): Promise<void>;
-export declare function ensureCreatedProjectFramework(prompter: Prompter, projectRoot: string, team: string, projectId: string, onOutput: ReturnType<typeof createPromptCommandOutput>, options: CreatedProjectFrameworkOptions): Promise<void>;
+  },
+  projectRoot: string,
+  onOutput: ReturnType<typeof createPromptCommandOutput>,
+  options: VercelProjectOperationOptions,
+): Promise<void>;
+export declare function ensureCreatedProjectFramework(
+  prompter: Prompter,
+  projectRoot: string,
+  team: string,
+  projectId: string,
+  onOutput: ReturnType<typeof createPromptCommandOutput>,
+  options: CreatedProjectFrameworkOptions,
+): Promise<void>;

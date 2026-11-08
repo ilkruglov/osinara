@@ -1,11 +1,5 @@
-import {
-  expectFunction,
-  expectObjectRecord,
-} from "../internal/authored-module.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "./resolve-helpers.js";
+import { expectFunction, expectObjectRecord } from "../internal/authored-module.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "./resolve-helpers.js";
 import { toErrorMessage } from "../shared/errors.js";
 async function resolveHookDefinition(a, o, s) {
   try {
@@ -21,16 +15,10 @@ async function resolveHookDefinition(a, o, s) {
       i = {},
       c = n.events;
     if (c !== void 0) {
-      let n = expectObjectRecord(
-        c,
-        describe(a, "to expose `events` as an object"),
-      );
+      let n = expectObjectRecord(c, describe(a, "to expose `events` as an object"));
       for (let [t, r] of Object.entries(n))
         r !== void 0 &&
-          (i[t] = expectFunction(
-            r,
-            describe(a, `to provide a function for "events.${t}"`),
-          ));
+          (i[t] = expectFunction(r, describe(a, `to provide a function for "events.${t}"`)));
     }
     return {
       events: i,

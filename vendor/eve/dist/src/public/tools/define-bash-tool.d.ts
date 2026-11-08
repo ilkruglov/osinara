@@ -3,11 +3,11 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * Input shape accepted by {@link defineBashTool}.
  */
 export interface DefineBashToolInput {
-    /**
-     * Optional model-facing description. Defaults to a generic
-     * "Execute a shell command in the workspace sandbox." line.
-     */
-    readonly description?: string;
+  /**
+   * Optional model-facing description. Defaults to a generic
+   * "Execute a shell command in the workspace sandbox." line.
+   */
+  readonly description?: string;
 }
 /**
  * Defines a model-visible shell-runner tool that executes commands

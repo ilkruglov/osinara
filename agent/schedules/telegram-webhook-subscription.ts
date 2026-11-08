@@ -19,26 +19,39 @@ export default defineSchedule({
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN;
     if (!botToken || !secretToken) return;
-    waitUntil(ensureTelegramWebhookSubscription({
-      botToken,
-      ipAddress: process.env.TELEGRAM_WEBHOOK_IP_ADDRESS,
-      publicBaseUrl: process.env.PUBLIC_BASE_URL,
-      secretToken,
-    }).then((outcome) => {
-      if (outcome === "unchanged") return;
-      const log = outcome === "updated" ? console.info : console.warn;
-      log(JSON.stringify({ code: "AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_CHECKED", outcome }));
-    }).catch((error: unknown) => {
-      console.error(JSON.stringify({
-        code: "AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_FAILED",
-        errorCode: error instanceof Error && "code" in error ? String(error.code) : null,
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      }));
-    }));
+    waitUntil(
+      ensureTelegramWebhookSubscription({
+        botToken,
+        ipAddress: process.env.TELEGRAM_WEBHOOK_IP_ADDRESS,
+        publicBaseUrl: process.env.PUBLIC_BASE_URL,
+        secretToken,
+      })
+        .then((outcome) => {
+          if (outcome === "unchanged") return;
+          const log = outcome === "updated" ? console.info : console.warn;
+          log(JSON.stringify({ code: "AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_CHECKED", outcome }));
+        })
+        .catch((error: unknown) => {
+          console.error(
+            JSON.stringify({
+              code: "AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_FAILED",
+              errorCode: error instanceof Error && "code" in error ? String(error.code) : null,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            }),
+          );
+        }),
+    );
     // The ephemeral `/whisper` exists for group members only once Telegram knows it; the failure
     // is logged by the check itself.
-    waitUntil(ensureTelegramWhisperCommand({ botToken }).then((outcome) => {
-      if (outcome === "updated") console.info(JSON.stringify({ code: "AGENT_TELEGRAM_WHISPER_COMMAND_CHECKED", outcome }));
-    }).catch(() => undefined));
+    waitUntil(
+      ensureTelegramWhisperCommand({ botToken })
+        .then((outcome) => {
+          if (outcome === "updated")
+            console.info(
+              JSON.stringify({ code: "AGENT_TELEGRAM_WHISPER_COMMAND_CHECKED", outcome }),
+            );
+        })
+        .catch(() => undefined),
+    );
   },
 });

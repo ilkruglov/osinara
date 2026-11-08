@@ -49,48 +49,96 @@ describeWithDatabase("memoryReinforcementRepository", () => {
       reason: "model_used",
     });
 
-    expect(result).toEqual({ reinforced: [memoryRef], unknown: ["mem_00000000000000000000000000000000"] });
-    await expect(database().query(
-      "SELECT reinforcement_count, last_reinforced_at IS NOT NULL AS stamped, use_count, last_used_at IS NOT NULL AS used FROM memory_items WHERE id = $1",
-      [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1, stamped: true, use_count: 1, used: true }] });
-    await expect(database().query(
-      "SELECT metadata->>'reason' AS reason FROM audit_events WHERE event_type = 'memory.reinforced' AND subject_id = $1",
-      [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reason: "model_used" }] });
+    expect(result).toEqual({
+      reinforced: [memoryRef],
+      unknown: ["mem_00000000000000000000000000000000"],
+    });
+    await expect(
+      database().query(
+        "SELECT reinforcement_count, last_reinforced_at IS NOT NULL AS stamped, use_count, last_used_at IS NOT NULL AS used FROM memory_items WHERE id = $1",
+        [inserted.rows[0]!.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ reinforcement_count: 1, stamped: true, use_count: 1, used: true }],
+    });
+    await expect(
+      database().query(
+        "SELECT metadata->>'reason' AS reason FROM audit_events WHERE event_type = 'memory.reinforced' AND subject_id = $1",
+        [inserted.rows[0]!.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ reason: "model_used" }] });
 
     await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
-      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1" }, reason: "model_used",
+      memoryRefs: [memoryRef],
+      provenance: { sessionId: "eve-1", turnId: "turn-1" },
+      reason: "model_used",
     });
-    expect((await database().query("SELECT use_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
-      .toEqual([{ use_count: 1 }]);
+    expect(
+      (
+        await database().query("SELECT use_count FROM memory_items WHERE id = $1", [
+          inserted.rows[0]!.id,
+        ])
+      ).rows,
+    ).toEqual([{ use_count: 1 }]);
 
     // A second use inside the window counts as use, not as reinforcement; past the window it does both.
     await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
-      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1b" }, reason: "model_used",
+      memoryRefs: [memoryRef],
+      provenance: { sessionId: "eve-1", turnId: "turn-1b" },
+      reason: "model_used",
     });
-    expect((await database().query("SELECT use_count, reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
-      .toEqual([{ reinforcement_count: 1, use_count: 2 }]);
-    await database().query("UPDATE memory_items SET last_reinforced_at = now() - interval '8 days' WHERE id = $1", [inserted.rows[0]!.id]);
+    expect(
+      (
+        await database().query(
+          "SELECT use_count, reinforcement_count FROM memory_items WHERE id = $1",
+          [inserted.rows[0]!.id],
+        )
+      ).rows,
+    ).toEqual([{ reinforcement_count: 1, use_count: 2 }]);
+    await database().query(
+      "UPDATE memory_items SET last_reinforced_at = now() - interval '8 days' WHERE id = $1",
+      [inserted.rows[0]!.id],
+    );
     await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
-      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1c" }, reason: "model_used",
+      memoryRefs: [memoryRef],
+      provenance: { sessionId: "eve-1", turnId: "turn-1c" },
+      reason: "model_used",
     });
-    expect((await database().query("SELECT use_count, reinforcement_count, last_reinforced_at > now() - interval '1 minute' AS fresh FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
-      .toEqual([{ fresh: true, reinforcement_count: 2, use_count: 3 }]);
+    expect(
+      (
+        await database().query(
+          "SELECT use_count, reinforcement_count, last_reinforced_at > now() - interval '1 minute' AS fresh FROM memory_items WHERE id = $1",
+          [inserted.rows[0]!.id],
+        )
+      ).rows,
+    ).toEqual([{ fresh: true, reinforcement_count: 2, use_count: 3 }]);
 
     // A personal-only caller cannot reinforce a family record.
     const personalOnly = { ...fixture.auth, scopes: ["personal" as const] };
-    await expect(memoryReinforcementRepository.reinforceByRefs(personalOnly, {
-      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-2" }, reason: "model_used",
-    })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
+    await expect(
+      memoryReinforcementRepository.reinforceByRefs(personalOnly, {
+        memoryRefs: [memoryRef],
+        provenance: { sessionId: "eve-1", turnId: "turn-2" },
+        reason: "model_used",
+      }),
+    ).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
 
     // Revoked membership closes reinforcement too: the session's scopes are not a live grant.
-    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [fixture.familyId, fixture.userId]);
-    await expect(memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
-      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-3" }, reason: "model_used",
-    })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
-    await expect(database().query(
-      "SELECT reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 2 }] });
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.userId,
+    ]);
+    await expect(
+      memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
+        memoryRefs: [memoryRef],
+        provenance: { sessionId: "eve-1", turnId: "turn-3" },
+        reason: "model_used",
+      }),
+    ).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
+    await expect(
+      database().query("SELECT reinforcement_count FROM memory_items WHERE id = $1", [
+        inserted.rows[0]!.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ reinforcement_count: 2 }] });
   });
 });

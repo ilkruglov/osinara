@@ -1,18 +1,8 @@
 import { z } from "#compiled/zod/index.js";
 import { resolveInstalledPackageInfo } from "#internal/application/package.js";
-import {
-  inputRequestSchema,
-  inputResponseSchema,
-} from "#runtime/input/types.js";
+import { inputRequestSchema, inputResponseSchema } from "#runtime/input/types.js";
 import { parseJsonObject } from "#shared/json.js";
-import {
-  DELETE,
-  GET,
-  HEAD,
-  OPTIONS,
-  POST,
-  defineChannel,
-} from "#public/definitions/channel.js";
+import { DELETE, GET, HEAD, OPTIONS, POST, defineChannel } from "#public/definitions/channel.js";
 import {
   escapeAuthChallengeParameter,
   readOAuthResourceOptions,
@@ -24,10 +14,7 @@ import {
   readRouteSessionCreator,
 } from "#internal/nitro/routes/channel-route-context.js";
 import { WorkflowAgentInvocationExecution } from "#internal/invocation/workflow-execution.js";
-import {
-  validateMcpHttpRequest,
-  validateMcpMetadataRequest,
-} from "#internal/mcp/http-security.js";
+import { validateMcpHttpRequest, validateMcpMetadataRequest } from "#internal/mcp/http-security.js";
 import {
   createMcpStreamableHttpServer,
   defineMcpTool,
@@ -38,9 +25,7 @@ import {
 } from "#internal/mcp/protected-resource.js";
 function mcpChannel(e) {
   if (e?.auth === void 0)
-    throw Error(
-      `mcpChannel requires auth. Use none() for explicit public access.`,
-    );
+    throw Error(`mcpChannel requires auth. Use none() for explicit public access.`);
   let t = e.route ?? `/eve/v1/mcp`,
     n = readOAuthResourceOptions(e.auth),
     r = [
@@ -99,8 +84,7 @@ function protectedResourceMetadataOptionsResponse(e) {
     r = e.headers.get(`access-control-request-headers`);
   return (
     r !== null &&
-      (n.set(`access-control-allow-headers`, r),
-      n.set(`vary`, `Access-Control-Request-Headers`)),
+      (n.set(`access-control-allow-headers`, r), n.set(`vary`, `Access-Control-Request-Headers`)),
     new Response(null, { headers: n, status: 204 })
   );
 }
@@ -111,8 +95,7 @@ function addResourceChallenge(e, t, n) {
     a = new URL(r, i).toString(),
     o = new Headers(e.headers),
     s = o.get(`www-authenticate`);
-  if (e.status === 401)
-    o.set(`www-authenticate`, mergeMcpBearerChallenge(s, a, n.scopes));
+  if (e.status === 401) o.set(`www-authenticate`, mergeMcpBearerChallenge(s, a, n.scopes));
   else {
     let t = augmentInsufficientScopeChallenge(s, a);
     if (t === void 0) return e;
@@ -127,17 +110,12 @@ function addResourceChallenge(e, t, n) {
 function mergeMcpBearerChallenge(e, t, n) {
   let r = parseAuthChallenges(e),
     i =
-      r.find(
-        (e) =>
-          e.scheme.toLowerCase() === `bearer` &&
-          hasAuthParameter(e.value, `error`),
-      ) ?? r.find((e) => e.scheme.toLowerCase() === `bearer`);
+      r.find((e) => e.scheme.toLowerCase() === `bearer` && hasAuthParameter(e.value, `error`)) ??
+      r.find((e) => e.scheme.toLowerCase() === `bearer`);
   return replaceBearerChallenges(
     r,
     i,
-    i === void 0
-      ? createMcpResourceChallenge(t, n)
-      : augmentBearerChallenge(i.value, t, n),
+    i === void 0 ? createMcpResourceChallenge(t, n) : augmentBearerChallenge(i.value, t, n),
   );
 }
 function augmentInsufficientScopeChallenge(e, t) {
@@ -147,8 +125,7 @@ function augmentInsufficientScopeChallenge(e, t) {
         e.scheme.toLowerCase() === `bearer` &&
         hasAuthParameter(e.value, `error`, `insufficient_scope`),
     );
-  if (r !== void 0)
-    return replaceBearerChallenges(n, r, augmentBearerChallenge(r.value, t));
+  if (r !== void 0) return replaceBearerChallenges(n, r, augmentBearerChallenge(r.value, t));
 }
 function replaceBearerChallenges(e, t, n) {
   let r = [],
@@ -180,10 +157,7 @@ function hasAuthParameter(e, t, n) {
   let r = t.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`);
   if (n === void 0) return RegExp(`(?:^|[\\s,])${r}\\s*=`, `i`).test(e);
   let i = n.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`);
-  return RegExp(
-    `(?:^|[\\s,])${r}\\s*=\\s*(?:"${i}"|${i})(?=$|[\\s,])`,
-    `i`,
-  ).test(e);
+  return RegExp(`(?:^|[\\s,])${r}\\s*=\\s*(?:"${i}"|${i})(?=$|[\\s,])`, `i`).test(e);
 }
 function parseAuthChallenges(e) {
   if (e === null) return [];
@@ -221,8 +195,7 @@ function readChallengeScheme(e) {
   let t = /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)(?:\s+|$)/.exec(e);
   if (t === null) return;
   let n = t[1];
-  if (n !== void 0)
-    return e.slice(n.length).trimStart().startsWith(`=`) ? void 0 : n;
+  if (n !== void 0) return e.slice(n.length).trimStart().startsWith(`=`) ? void 0 : n;
 }
 async function authenticateMcpRequest(e, t, n, r) {
   let i = validateMcpHttpRequest(e);
@@ -239,18 +212,12 @@ async function handleMcpRequest(e, n, r) {
     a = readRouteChannelName(n),
     o = readAgentInfoRouteResponse(n);
   if (a === void 0 || i === void 0 || o === void 0)
-    return Response.json(
-      { error: `MCP requires agent route context.` },
-      { status: 500 },
-    );
+    return Response.json({ error: `MCP requires agent route context.` }, { status: 500 });
   let s = await o();
   if (!s.ok) return s;
   let c = await s.json();
   if (typeof c.agent?.name != `string`)
-    return Response.json(
-      { error: `MCP requires compiled agent metadata.` },
-      { status: 500 },
-    );
+    return Response.json({ error: `MCP requires compiled agent metadata.` }, { status: 500 });
   let l = typeof c.agent.description == `string` ? c.agent.description : void 0,
     u = new WorkflowAgentInvocationExecution({
       createSession: i,
@@ -314,9 +281,7 @@ function createInvocationTools(t, n, i) {
       },
       async call(e, n) {
         return invocationResult(
-          requiredInvocation(
-            await t.read({ auth: n.auth, invocationId: e.invocationId }),
-          ),
+          requiredInvocation(await t.read({ auth: n.auth, invocationId: e.invocationId })),
         );
       },
     }),
@@ -363,9 +328,7 @@ function createInvocationTools(t, n, i) {
       },
       async call(e, n) {
         return invocationResult(
-          requiredInvocation(
-            await t.cancel({ auth: n.auth, invocationId: e.invocationId }),
-          ),
+          requiredInvocation(await t.cancel({ auth: n.auth, invocationId: e.invocationId })),
         );
       },
     }),
@@ -459,8 +422,7 @@ function validateOutputSchemaComplexity(e) {
     throw Error(`outputSchema must be at most 65536 bytes.`);
   let t = 0,
     visit = (e, n) => {
-      if ((t++, t > 2048))
-        throw Error(`outputSchema must contain at most 2048 nodes.`);
+      if ((t++, t > 2048)) throw Error(`outputSchema must contain at most 2048 nodes.`);
       if (n > 32) throw Error(`outputSchema must be at most 32 levels deep.`);
       if (Array.isArray(e)) {
         for (let t of e) visit(t, n + 1);

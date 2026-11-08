@@ -68,7 +68,10 @@ describe("Telegram group journal topic isolation", () => {
       },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.session.hasRoute).toHaveBeenCalled();
     expect(result?.auth).not.toBeNull();
@@ -80,13 +83,17 @@ describe("Telegram group journal topic isolation", () => {
 
     const result = await handler(telegramContext().context, addressedThreadMessage());
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      messageThreadId: null,
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:main",
-      telegramForumTopicId: null,
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageThreadId: null,
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:main",
+        telegramForumTopicId: null,
+      }),
+    );
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });
   });
 
@@ -96,13 +103,17 @@ describe("Telegram group journal topic isolation", () => {
 
     const result = await handler(telegramContext().context, addressedThreadMessage(true));
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      messageThreadId: "310",
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:group:group-1:topic:310",
-      telegramForumTopicId: 310,
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageThreadId: "310",
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:group:group-1:topic:310",
+        telegramForumTopicId: 310,
+      }),
+    );
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });
   });
 });

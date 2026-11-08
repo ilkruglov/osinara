@@ -11,9 +11,13 @@ export declare function shouldMockAuthoredRuntimeModels(): boolean;
 /**
  * Creates a deterministic authored-model mock for one runtime model reference.
  */
-export declare function createMockAuthoredRuntimeModel(reference: RuntimeModelReference): LanguageModel;
+export declare function createMockAuthoredRuntimeModel(
+  reference: RuntimeModelReference,
+): LanguageModel;
 /**
  * Resolves the current authored runtime model onto the deterministic mock
  * adapter when the test seam is active.
  */
-export declare function resolveMockAuthoredRuntimeModel(reference: RuntimeModelReference): LanguageModel | null;
+export declare function resolveMockAuthoredRuntimeModel(
+  reference: RuntimeModelReference,
+): LanguageModel | null;

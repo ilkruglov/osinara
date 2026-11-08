@@ -12,10 +12,7 @@ import type {
   DecryptedGoogleAccount,
   GoogleIntegrationAuthorization,
 } from "./google-integration-contract.js";
-import {
-  type CredentialRow,
-  googleAccountFromRow,
-} from "./google-integration-persistence.js";
+import { type CredentialRow, googleAccountFromRow } from "./google-integration-persistence.js";
 import { decryptGoogleToken } from "./google-token-crypto.js";
 
 const GOOGLE_WORKSPACE_PROVIDER = "google_workspace";
@@ -23,17 +20,23 @@ const GOOGLE_WORKSPACE_PROVIDER = "google_workspace";
 function decryptedAccount(row: CredentialRow, encryptionKey: string): DecryptedGoogleAccount {
   return {
     ...googleAccountFromRow(row),
-    accessToken: decryptGoogleToken({
-      authTag: row.access_token_auth_tag,
-      ciphertext: row.access_token_ciphertext,
-      nonce: row.access_token_nonce,
-    }, encryptionKey),
+    accessToken: decryptGoogleToken(
+      {
+        authTag: row.access_token_auth_tag,
+        ciphertext: row.access_token_ciphertext,
+        nonce: row.access_token_nonce,
+      },
+      encryptionKey,
+    ),
     accessTokenExpiresAt: row.access_token_expires_at,
-    refreshToken: decryptGoogleToken({
-      authTag: row.refresh_token_auth_tag,
-      ciphertext: row.refresh_token_ciphertext,
-      nonce: row.refresh_token_nonce,
-    }, encryptionKey),
+    refreshToken: decryptGoogleToken(
+      {
+        authTag: row.refresh_token_auth_tag,
+        ciphertext: row.refresh_token_ciphertext,
+        nonce: row.refresh_token_nonce,
+      },
+      encryptionKey,
+    ),
     scopes: row.scopes,
   };
 }
@@ -48,10 +51,10 @@ export async function withGoogleWorkspaceExecutionAccount<T>(
   try {
     // One connection owns both the profile advisory lock and row-level authorization locks. This
     // avoids nested pool acquisition while the credentialed command is running.
-    await client.query(
-      "SELECT pg_advisory_lock(hashtextextended($1, $2))",
-      [auth.workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
-    );
+    await client.query("SELECT pg_advisory_lock(hashtextextended($1, $2))", [
+      auth.workspaceId,
+      GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED,
+    ]);
     profileLocked = true;
     await client.query("BEGIN");
     await assertGoogleWorkspaceAccess(client, auth, false);
@@ -79,10 +82,10 @@ export async function withGoogleWorkspaceExecutionAccount<T>(
   } finally {
     try {
       if (profileLocked) {
-        await client.query(
-          "SELECT pg_advisory_unlock(hashtextextended($1, $2))",
-          [auth.workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
-        );
+        await client.query("SELECT pg_advisory_unlock(hashtextextended($1, $2))", [
+          auth.workspaceId,
+          GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED,
+        ]);
       }
     } finally {
       client.release();

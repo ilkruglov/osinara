@@ -215,7 +215,9 @@ function nextContent(current: string, input: BehaviorPreferenceMutation): string
   if (input.action === "clear") return "";
   if (input.action === "replace") return requireChatOperationalPromptText(input.content);
   const addition = requireChatOperationalPromptText(input.content);
-  return requireChatOperationalPromptText(current.length === 0 ? addition : `${current}\n${addition}`);
+  return requireChatOperationalPromptText(
+    current.length === 0 ? addition : `${current}\n${addition}`,
+  );
 }
 
 async function currentPrompt(client: PoolClient, conversationId: string, lock = false) {
@@ -256,8 +258,8 @@ export const behaviorPreferenceRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-       // The conversation row exists before the prompt row and serializes concurrent first writes.
-       const boundary = await requireLiveBoundary(client, auth, "write");
+      // The conversation row exists before the prompt row and serializes concurrent first writes.
+      const boundary = await requireLiveBoundary(client, auth, "write");
       const current = await currentPrompt(client, auth.conversationId, true);
       const hash = operationHash(input);
 
@@ -299,16 +301,29 @@ export const behaviorPreferenceRepository = {
              updated_at = now()
          RETURNING content, revision, last_source_sequence::text,
                    last_operation_hash, updated_at`,
-        [auth.conversationId, content, revision, auth.timelineEntryId,
-          auth.sourceSequence, auth.telegramUserId, hash],
+        [
+          auth.conversationId,
+          content,
+          revision,
+          auth.timelineEntryId,
+          auth.sourceSequence,
+          auth.telegramUserId,
+          hash,
+        ],
       );
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'chat_operational_instructions_updated', $3,
                  jsonb_build_object('action', $4::text, 'revision', $5::integer,
                                     'sourceSequence', $6::text))`,
-        [boundary.familyId, boundary.actorUserId, auth.conversationId,
-          input.action, revision, auth.sourceSequence],
+        [
+          boundary.familyId,
+          boundary.actorUserId,
+          auth.conversationId,
+          input.action,
+          revision,
+          auth.sourceSequence,
+        ],
       );
       await client.query("COMMIT");
       return project(saved.rows[0]);

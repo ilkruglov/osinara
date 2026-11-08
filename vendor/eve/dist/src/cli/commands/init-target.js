@@ -1,10 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { PROJECT_NAME_ERROR, parseProjectName } from "#setup/project-name.js";
-import {
-  classifyAgentRootEntry,
-  getDirectoryEntryType,
-} from "#discover/filesystem.js";
+import { classifyAgentRootEntry, getDirectoryEntryType } from "#discover/filesystem.js";
 const ENVIRONMENT_ONLY_ENTRIES = new Set([
   `.DS_Store`,
   `.editorconfig`,
@@ -26,9 +23,7 @@ function isEnvironmentOnly(e) {
 async function isAgentRoot(t) {
   return (await readdir(t, { withFileTypes: !0 }).catch(() => [])).some((e) => {
     let t = classifyAgentRootEntry(e.name, getDirectoryEntryType(e));
-    return (
-      t !== `unknown` && t !== `ignored-directory` && t !== `lib-directory`
-    );
+    return t !== `unknown` && t !== `ignored-directory` && t !== `lib-directory`;
   });
 }
 async function isExistingEveProject(e, t) {
@@ -54,10 +49,7 @@ async function resolveInitTarget(t) {
   assertTargetStaysWithinParent(r, t.target, o);
   let s = o === r,
     c = await pathKind(o);
-  if (c === `other`)
-    throw Error(
-      `Cannot initialize an agent because "${o}" is not a directory.`,
-    );
+  if (c === `other`) throw Error(`Cannot initialize an agent because "${o}" is not a directory.`);
   if (c === `missing`)
     return {
       createInPlace: !1,

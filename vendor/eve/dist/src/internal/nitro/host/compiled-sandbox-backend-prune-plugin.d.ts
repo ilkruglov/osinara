@@ -1,9 +1,16 @@
 interface BundlerPluginShape {
-    readonly name: string;
-    load?(id: string): string | null | undefined;
-    resolveId?(source: string, importer: string | undefined): string | {
+  readonly name: string;
+  load?(id: string): string | null | undefined;
+  resolveId?(
+    source: string,
+    importer: string | undefined,
+  ):
+    | string
+    | {
         id: string;
-    } | null | undefined;
+      }
+    | null
+    | undefined;
 }
 /**
  * Creates the bundler plugin that prunes the local sandbox backends

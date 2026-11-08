@@ -5,15 +5,18 @@ import { type TokenUsage } from "#shared/token-usage.js";
  * What one delegated child turn produced, independent of whether the child
  * session survived it.
  */
-export type AgentTurnResult = {
-    readonly kind: "succeeded";
-    readonly output: JsonValue;
-} | {
-    readonly kind: "failed";
-    readonly error: JsonValue;
-} | {
-    readonly kind: "cancelled";
-};
+export type AgentTurnResult =
+  | {
+      readonly kind: "succeeded";
+      readonly output: JsonValue;
+    }
+  | {
+      readonly kind: "failed";
+      readonly error: JsonValue;
+    }
+  | {
+      readonly kind: "cancelled";
+    };
 /**
  * How one delegated child turn settled.
  *
@@ -29,15 +32,17 @@ export type AgentTurnResult = {
  * delta exactly once, so repeated turns of a persistent child never re-report
  * earlier turns.
  */
-export type AgentTurnOutcome = {
-    readonly kind: "parked";
-    readonly result: AgentTurnResult;
-    readonly usageDelta: TokenUsage;
-} | {
-    readonly kind: "terminal";
-    readonly result: AgentTurnResult;
-    readonly usageDelta: TokenUsage;
-};
+export type AgentTurnOutcome =
+  | {
+      readonly kind: "parked";
+      readonly result: AgentTurnResult;
+      readonly usageDelta: TokenUsage;
+    }
+  | {
+      readonly kind: "terminal";
+      readonly result: AgentTurnResult;
+      readonly usageDelta: TokenUsage;
+    };
 /**
  * Zod schema for {@link AgentTurnOutcome}.
  *

@@ -1,13 +1,9 @@
 import { loadContext } from "#context/container.js";
 import { ContextKey } from "#context/key.js";
-const PendingTurnSleepDurationKey = new ContextKey(
-  `eve.pendingTurnSleepDuration`,
-);
+const PendingTurnSleepDurationKey = new ContextKey(`eve.pendingTurnSleepDuration`);
 function requestTurnSleep(t) {
   if (!Number.isSafeInteger(t) || t <= 0)
-    throw Error(
-      `Sleep duration must resolve to a positive safe integer of milliseconds.`,
-    );
+    throw Error(`Sleep duration must resolve to a positive safe integer of milliseconds.`);
   let n = loadContext(),
     r = n.get(PendingTurnSleepDurationKey) ?? 0;
   asContainer(n).setVirtualContext(PendingTurnSleepDurationKey, Math.max(r, t));

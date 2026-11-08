@@ -2,23 +2,18 @@ import { isObject } from "#shared/guards.js";
 function migrateSessionInboxWireV0(t) {
   let n = t;
   if (n.kind === `send`) return migrateLegacySend(n);
-  if (
-    n.kind === `deliver` &&
-    !(Array.isArray(n.payloads) && n.payloads.every(isObject))
-  )
+  if (n.kind === `deliver` && !(Array.isArray(n.payloads) && n.payloads.every(isObject)))
     throw Error(`legacy deliver payload has no object-array payloads field.`);
   return { ...n, version: 1 };
 }
 function migrateLegacySend(t) {
-  if (!isObject(t.payload))
-    throw Error(`legacy send command has no object payload field.`);
+  if (!isObject(t.payload)) throw Error(`legacy send command has no object payload field.`);
   if (t.delivery !== void 0 && !isObject(t.delivery))
     throw Error(`legacy send command has a non-object delivery field.`);
   return {
     auth: t.auth,
     caller: t.caller,
-    deliveryMetadata:
-      t.delivery === void 0 ? void 0 : [{ ...t.delivery, payloadIndex: 0 }],
+    deliveryMetadata: t.delivery === void 0 ? void 0 : [{ ...t.delivery, payloadIndex: 0 }],
     kind: `deliver`,
     payload: t.payload,
     payloads: [t.payload],

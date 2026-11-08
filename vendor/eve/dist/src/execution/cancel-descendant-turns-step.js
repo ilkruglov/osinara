@@ -16,8 +16,7 @@ async function cancelDescendantTurnsStep(e) {
   let r;
   try {
     r = (
-      getAgentHandleStore((await readDurableSession(e.sessionState)).state)
-        ?.handles ?? []
+      getAgentHandleStore((await readDurableSession(e.sessionState)).state)?.handles ?? []
     ).filter((e) => e.phase === `running`);
   } catch (n) {
     logError(log, `failed to read pending descendants during cancellation`, n, {
@@ -26,10 +25,9 @@ async function cancelDescendantTurnsStep(e) {
     return;
   }
   if (r.length === 0) {
-    log.warn(
-      `no running agent handles found while cancelling descendants; nothing to cancel`,
-      { sessionId: e.sessionState.sessionId },
-    );
+    log.warn(`no running agent handles found while cancelling descendants; nothing to cancel`, {
+      sessionId: e.sessionState.sessionId,
+    });
     return;
   }
   let i,
@@ -53,20 +51,16 @@ async function cancelLocalDescendant(e) {
   let { handle: n } = e;
   try {
     let e = await requestCancellationWithRetry({
-      request: () =>
-        requestWorkflowTurnCancellation({ sessionId: n.address.sessionId }),
+      request: () => requestWorkflowTurnCancellation({ sessionId: n.address.sessionId }),
       shouldRetryError: () => !1,
     });
     e.status !== `accepted` &&
-      log.warn(
-        `descendant cancel was never accepted; the child may run to completion`,
-        {
-          callId: n.operation.callId,
-          childSessionId: n.address.sessionId,
-          finalStatus: e.status,
-          subagentName: n.identity.name,
-        },
-      );
+      log.warn(`descendant cancel was never accepted; the child may run to completion`, {
+        callId: n.operation.callId,
+        childSessionId: n.address.sessionId,
+        finalStatus: e.status,
+        subagentName: n.identity.name,
+      });
   } catch (e) {
     logError(log, `failed to cancel local descendant turn`, e, {
       callId: n.operation.callId,
@@ -92,20 +86,16 @@ async function cancelRemoteDescendant(e) {
         url: a,
       },
       l = await requestCancellationWithRetry({
-        request: () =>
-          cancelRemoteAgentTurn({ remote: c, sessionId: n.address.sessionId }),
+        request: () => cancelRemoteAgentTurn({ remote: c, sessionId: n.address.sessionId }),
         shouldRetryError: isRetryableRemoteAgentCancelError,
       });
     l.status !== `accepted` &&
-      log.warn(
-        `remote descendant cancel was never accepted; the child may run to completion`,
-        {
-          callId: n.operation.callId,
-          childSessionId: n.address.sessionId,
-          finalStatus: l.status,
-          remoteAgentName: n.identity.name,
-        },
-      );
+      log.warn(`remote descendant cancel was never accepted; the child may run to completion`, {
+        callId: n.operation.callId,
+        childSessionId: n.address.sessionId,
+        finalStatus: l.status,
+        remoteAgentName: n.identity.name,
+      });
   } catch (e) {
     logError(log, `failed to cancel remote descendant turn`, e, {
       callId: n.operation.callId,
@@ -119,8 +109,7 @@ async function requestCancellationWithRetry(e) {
     n = { status: `no_active_turn` };
   for (let r = 1; r <= 8; r += 1) {
     try {
-      if (((n = await e.request()), n.status === `accepted` || r === 8))
-        return n;
+      if (((n = await e.request()), n.status === `accepted` || r === 8)) return n;
     } catch (t) {
       if (!e.shouldRetryError(t) || r === 8) throw t;
     }

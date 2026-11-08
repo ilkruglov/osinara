@@ -78,23 +78,18 @@ function readAgentSession(t) {
   if (!isObject(t) || typeof t.id != `string`) return null;
   let n = { id: t.id };
   (typeof t.appUserId == `string` && (n.appUserId = t.appUserId),
-    (typeof t.commentId == `string` || t.commentId === null) &&
-      (n.commentId = t.commentId),
+    (typeof t.commentId == `string` || t.commentId === null) && (n.commentId = t.commentId),
     (n.creator = readUser(t.creator)),
-    (typeof t.creatorId == `string` || t.creatorId === null) &&
-      (n.creatorId = t.creatorId));
+    (typeof t.creatorId == `string` || t.creatorId === null) && (n.creatorId = t.creatorId));
   let r = readIssue(t.issue);
   return (
     r !== void 0 && (n.issue = r),
-    (typeof t.issueId == `string` || t.issueId === null) &&
-      (n.issueId = t.issueId),
-    typeof t.organizationId == `string` &&
-      (n.organizationId = t.organizationId),
+    (typeof t.issueId == `string` || t.issueId === null) && (n.issueId = t.issueId),
+    typeof t.organizationId == `string` && (n.organizationId = t.organizationId),
     (typeof t.sourceCommentId == `string` || t.sourceCommentId === null) &&
       (n.sourceCommentId = t.sourceCommentId),
     typeof t.status == `string` && (n.status = t.status),
-    (typeof t.summary == `string` || t.summary === null) &&
-      (n.summary = t.summary),
+    (typeof t.summary == `string` || t.summary === null) && (n.summary = t.summary),
     (typeof t.url == `string` || t.url === null) && (n.url = t.url),
     n
   );
@@ -105,8 +100,7 @@ function readAgentActivity(t) {
     i = { body: readActivityBody(t.content), content: r, id: t.id };
   return (
     (typeof t.signal == `string` || t.signal === null) && (i.signal = t.signal),
-    isObject(t.signalMetadata) &&
-      (i.signalMetadata = parseJsonObject(t.signalMetadata)),
+    isObject(t.signalMetadata) && (i.signalMetadata = parseJsonObject(t.signalMetadata)),
     t.signalMetadata === null && (i.signalMetadata = null),
     (typeof t.sourceCommentId == `string` || t.sourceCommentId === null) &&
       (i.sourceCommentId = t.sourceCommentId),
@@ -144,11 +138,7 @@ function readPreviousComments(t) {
   return Array.isArray(t)
     ? t
         .map((t) =>
-          typeof t == `string`
-            ? t
-            : isObject(t) && typeof t.body == `string`
-              ? t.body
-              : null,
+          typeof t == `string` ? t : isObject(t) && typeof t.body == `string` ? t.body : null,
         )
         .filter((e) => e !== null)
     : [];

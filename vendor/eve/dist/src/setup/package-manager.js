@@ -14,8 +14,7 @@ function isPackageManagerKind(e) {
 }
 function resolvePackageManager(e) {
   let t = e.packageManagerField?.split(`@`, 1)[0]?.trim();
-  if (t !== void 0 && isPackageManagerKind(t))
-    return { kind: t, source: `package-manager-field` };
+  if (t !== void 0 && isPackageManagerKind(t)) return { kind: t, source: `package-manager-field` };
   for (let [t, n] of LOCKFILE_MANAGERS)
     if (e.lockfiles.includes(t)) return { kind: n, source: `lockfile` };
   return { kind: `pnpm`, source: `default` };
@@ -38,8 +37,7 @@ async function detectPackageManagerInDirectory(n) {
       (i = e.packageManager);
   } catch {}
   let a = [];
-  for (let [t] of LOCKFILE_MANAGERS)
-    (await pathExists(join(n, t))) && a.push(t);
+  for (let [t] of LOCKFILE_MANAGERS) (await pathExists(join(n, t))) && a.push(t);
   let o = resolvePackageManager({ packageManagerField: i, lockfiles: a });
   return o.source === "default" ? void 0 : o;
 }

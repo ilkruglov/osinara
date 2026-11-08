@@ -5,10 +5,7 @@ import {
   writeAiGatewayApiKey,
 } from "../ai-gateway-api-key.js";
 import { withSpinner } from "../with-spinner.js";
-import {
-  getVercelAuthStatus,
-  vercelAuthBlockerReason,
-} from "../vercel-project.js";
+import { getVercelAuthStatus, vercelAuthBlockerReason } from "../vercel-project.js";
 import { WizardCancelledError } from "../step.js";
 import { runLinkFlow } from "./link.js";
 import { validateGatewayApiKey } from "../validate-gateway-key.js";
@@ -48,8 +45,7 @@ function providerOptions(e, t) {
       {
         value: `chatgpt`,
         label: `ChatGPT subscription`,
-        hint:
-          t === `chatgpt` ? `Current` : `Authenticate through the Codex CLI`,
+        hint: t === `chatgpt` ? `Current` : `Authenticate through the Codex CLI`,
         checked: t === `chatgpt` || void 0,
       },
       {
@@ -68,8 +64,7 @@ async function selectProvider(e) {
     initialValue: e.initialValue,
     validateInlineKey: e.validateInlineKey,
   };
-  if (e.picker === void 0)
-    throw Error(`The provider flow requires the Dev TUI provider picker.`);
+  if (e.picker === void 0) throw Error(`The provider flow requires the Dev TUI provider picker.`);
   let n = await e.picker(t);
   if (n === void 0) throw new WizardCancelledError();
   return n;
@@ -94,10 +89,7 @@ async function runProviderFlow(t) {
         options: providerOptions(l, d),
         initialValue: f,
         validateInlineKey: (e, t) =>
-          c.validateGatewayApiKey(
-            e,
-            s === void 0 ? t : AbortSignal.any([s, t]),
-          ),
+          c.validateGatewayApiKey(e, s === void 0 ? t : AbortSignal.any([s, t])),
       });
       if (e.kind === `external`)
         return (
@@ -118,14 +110,11 @@ async function runProviderFlow(t) {
         p = e;
         break;
       }
-      if (d !== `ai-gateway-project` && u.includes(`ai-gateway-project`))
-        return e;
+      if (d !== `ai-gateway-project` && u.includes(`ai-gateway-project`)) return e;
       let r = await withSpinner(o, `Checking your Vercel login…`, () =>
         c.getVercelAuthStatus(n, { signal: s }),
       );
-      if (
-        (s?.throwIfAborted(), (l = r), vercelAuthBlockerReason(l) !== void 0)
-      ) {
+      if ((s?.throwIfAborted(), (l = r), vercelAuthBlockerReason(l) !== void 0)) {
         f = `ai-gateway-key`;
         continue;
       }

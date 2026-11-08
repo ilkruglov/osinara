@@ -48,9 +48,9 @@ import manageFamilyInvitation from "./tools/manage_family_invitation.js";
 const context = { callId: "call-1" } as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return (manageFamilyInvitation.approval as (context: never) => unknown)(
-    { toolInput: input } as never,
-  );
+  return (manageFamilyInvitation.approval as (context: never) => unknown)({
+    toolInput: input,
+  } as never);
 }
 
 describe("manage_family_invitation model input", () => {
@@ -99,24 +99,30 @@ describe("manage_family_invitation model input", () => {
     };
     createInvitation
       .mockResolvedValueOnce(invitation)
-      .mockRejectedValueOnce(new Error(
-        "AGENT_INVITATION_DELIVERY_AMBIGUOUS: Не удалось подтвердить отправку приглашения",
-      ));
-    markInvitationDelivered.mockRejectedValueOnce(new Error(
-      "AGENT_INVITATION_DELIVERY_AMBIGUOUS: Не удалось подтвердить отправку приглашения",
-    ));
+      .mockRejectedValueOnce(
+        new Error(
+          "AGENT_INVITATION_DELIVERY_AMBIGUOUS: Не удалось подтвердить отправку приглашения",
+        ),
+      );
+    markInvitationDelivered.mockRejectedValueOnce(
+      new Error("AGENT_INVITATION_DELIVERY_AMBIGUOUS: Не удалось подтвердить отправку приглашения"),
+    );
 
-    await expect(manageFamilyInvitation.execute({ action: "create" }, context))
-      .rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
-    await expect(manageFamilyInvitation.execute({ action: "create" }, context))
-      .rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      manageFamilyInvitation.execute({ action: "create" }, context),
+    ).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      manageFamilyInvitation.execute({ action: "create" }, context),
+    ).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
 
     expect(markInvitationDeliveryStarted).toHaveBeenCalledTimes(1);
     expect(deliverFamilyInvitation).toHaveBeenCalledTimes(1);
-    expect(markInvitationDeliveryStarted.mock.invocationCallOrder[0])
-      .toBeLessThan(deliverFamilyInvitation.mock.invocationCallOrder[0]!);
-    expect(deliverFamilyInvitation.mock.invocationCallOrder[0])
-      .toBeLessThan(markInvitationDelivered.mock.invocationCallOrder[0]!);
+    expect(markInvitationDeliveryStarted.mock.invocationCallOrder[0]).toBeLessThan(
+      deliverFamilyInvitation.mock.invocationCallOrder[0]!,
+    );
+    expect(deliverFamilyInvitation.mock.invocationCallOrder[0]).toBeLessThan(
+      markInvitationDelivered.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("ignores only known approve siblings when MiniMax materializes them for create", async () => {
@@ -151,6 +157,7 @@ describe("manage_family_invitation model input", () => {
       "candidateTelegramUserId",
       "candidateDisplayName",
       "берутся точно из list_pending_family_invitations",
-    ]) expect(description).toContain(fragment);
+    ])
+      expect(description).toContain(fragment);
   });
 });

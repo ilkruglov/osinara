@@ -9,21 +9,37 @@ describe("Postgres stream wakeups", () => {
     // package loader does not reliably honor Vitest's pg mock across the world's module boundary.
     const root = resolve("node_modules/@workflow/world-postgres/dist");
     let source = await readFile(resolve(root, "streamer.js"), "utf8");
-    source = source.replace(/import \{ Client \} from ["']pg["'];/u, `export const testClients=[];
-      class Client extends EventEmitter {constructor(){super();testClients.push(this)} async connect(){} async query(){} async end(){}}`);
-    source = source.replace(/from ["']([^"']+)["']/g, (match, specifier: string) => specifier.startsWith("node:") ? match
-      : `from ${JSON.stringify(specifier.startsWith(".") ? pathToFileURL(resolve(root, specifier)).href : import.meta.resolve(specifier))}`);
-    const { createStreamer, testClients: clients } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
-    const select = vi.fn(() => { throw new Error("No payload query expected without demand"); });
+    source = source.replace(
+      /import \{ Client \} from ["']pg["'];/u,
+      `export const testClients=[];
+      class Client extends EventEmitter {constructor(){super();testClients.push(this)} async connect(){} async query(){} async end(){}}`,
+    );
+    source = source.replace(/from ["']([^"']+)["']/g, (match, specifier: string) =>
+      specifier.startsWith("node:")
+        ? match
+        : `from ${JSON.stringify(specifier.startsWith(".") ? pathToFileURL(resolve(root, specifier)).href : import.meta.resolve(specifier))}`,
+    );
+    const { createStreamer, testClients: clients } = await import(
+      "data:text/javascript;base64," + Buffer.from(source).toString("base64")
+    );
+    const select = vi.fn(() => {
+      throw new Error("No payload query expected without demand");
+    });
     const streamer = createStreamer({ options: {} } as never, { select } as never);
     const stream = await streamer.streams.get("run", "strm_test", 0);
     try {
       const client = clients.at(-1)!;
       await vi.waitFor(() => expect(client.listenerCount("notification")).toBe(1));
-      for (let i = 0; i < 500; i++) client.emit("notification", { payload: JSON.stringify({ streamId: "strm_test", chunkId: `chnk_${i}` }) });
-      await new Promise(resolve => setTimeout(resolve, 0));
+      for (let i = 0; i < 500; i++)
+        client.emit("notification", {
+          payload: JSON.stringify({ streamId: "strm_test", chunkId: `chnk_${i}` }),
+        });
+      await new Promise((resolve) => setTimeout(resolve, 0));
       expect(select).not.toHaveBeenCalled();
-    } finally { await stream.cancel(); await streamer.close(); }
+    } finally {
+      await stream.cancel();
+      await streamer.close();
+    }
     expect(clients.at(-1)!.listenerCount("notification")).toBe(0);
   });
 });

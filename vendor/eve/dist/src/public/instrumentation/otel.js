@@ -6,10 +6,7 @@ import {
   otelIntegration,
   otelIntegration as otelIntegration$1,
 } from "#tracing/otel-declaration.js";
-import {
-  createLocalTracesProcessor,
-  resolveLocalTracesContent,
-} from "#tracing/local-traces.js";
+import { createLocalTracesProcessor, resolveLocalTracesContent } from "#tracing/local-traces.js";
 function agentRuns(t = {}) {
   return agentRunsIntegration(t);
 }
@@ -19,11 +16,4 @@ function localTraces(e = {}) {
     spanProcessors: [createLocalTracesProcessor()],
   });
 }
-export {
-  agentRuns,
-  isOtelDeclaration,
-  isOtelIntegration,
-  localTraces,
-  otel,
-  otelIntegration,
-};
+export { agentRuns, isOtelDeclaration, isOtelIntegration, localTraces, otel, otelIntegration };

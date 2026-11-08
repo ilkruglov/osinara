@@ -1,13 +1,5 @@
 import { getChannelInstrumentationKind } from "#channel/compiled-channel.js";
-import {
-  DELETE,
-  GET,
-  PATCH,
-  POST,
-  PUT,
-  WS,
-  defineChannel,
-} from "#public/definitions/channel.js";
+import { DELETE, GET, PATCH, POST, PUT, WS, defineChannel } from "#public/definitions/channel.js";
 import { createWebSocketUpgradeServer } from "#channel/websocket-upgrade-server.js";
 function isChannel(e, t) {
   return e.kind === getChannelInstrumentationKind(t);

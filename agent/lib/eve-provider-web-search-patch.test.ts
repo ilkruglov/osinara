@@ -22,8 +22,12 @@ describe("eve provider web-search backend patch", () => {
   it("selects the native backend from the model id when the reference has no source", async () => {
     const runtime = await readFile(PROVIDER_TOOLS_PATH, "utf8");
 
-    expect(codeText(runtime)).toContain(codeText("let n = e.id.split(`/`)[0] ?? ``; if ( e.source === void 0 && !( n === `openai`"));
-    expect(codeShape(runtime)).not.toContain(codeShape("function resolveWebSearchBackend(e,t=`exa`){if(e.source===void 0)return t;"));
+    expect(codeText(runtime)).toContain(
+      codeText("let n = e.id.split(`/`)[0] ?? ``; if ( e.source === void 0 && !( n === `openai`"),
+    );
+    expect(codeShape(runtime)).not.toContain(
+      codeShape("function resolveWebSearchBackend(e,t=`exa`){if(e.source===void 0)return t;"),
+    );
   });
 
   // DeepSeek serves the Anthropic server-side search at its compatibility endpoint under the id
@@ -31,11 +35,17 @@ describe("eve provider web-search backend patch", () => {
   it("lets an explicit backend override the prefix rule", async () => {
     const runtime = await readFile(PROVIDER_TOOLS_PATH, "utf8");
 
-    expect(codeText(runtime)).toContain(codeText("function resolveWebSearchBackend(e, t = `exa`) { let o = process.env.OSINARA_WEB_SEARCH_BACKEND; if (o) return o"));
+    expect(codeText(runtime)).toContain(
+      codeText(
+        "function resolveWebSearchBackend(e, t = `exa`) { let o = process.env.OSINARA_WEB_SEARCH_BACKEND; if (o) return o",
+      ),
+    );
   });
 
   it("keeps the patched provider-tools runtime syntactically valid", async () => {
-    await expect(execFileAsync(process.execPath, ["--check", PROVIDER_TOOLS_PATH])).resolves.toMatchObject({
+    await expect(
+      execFileAsync(process.execPath, ["--check", PROVIDER_TOOLS_PATH]),
+    ).resolves.toMatchObject({
       stderr: "",
     });
   });

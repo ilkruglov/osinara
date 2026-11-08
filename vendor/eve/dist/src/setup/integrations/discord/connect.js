@@ -4,10 +4,7 @@ import {
   string,
 } from "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/schemas.js";
 import "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
-import {
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 import { replaceConnectTrigger } from "#setup/connect-provisioning.js";
 const DISCORD_TRIGGER_PATH = `/eve/v1/discord`,
@@ -55,18 +52,13 @@ async function provisionDiscordConnector(e) {
       ),
     );
   if ((e.signal?.throwIfAborted(), !r.ok)) {
-    let e = [r.stderr, r.stdout].find(
-      (e) => e !== void 0 && e.trim().length > 0,
-    );
+    let e = [r.stderr, r.stdout].find((e) => e !== void 0 && e.trim().length > 0);
     throw Error(
-      e
-        ? `Discord connector creation failed:\n${e}`
-        : `Discord connector creation failed.`,
+      e ? `Discord connector creation failed:\n${e}` : `Discord connector creation failed.`,
     );
   }
   let i = parseCreatedDiscordConnector(r.stdout);
-  if (i === void 0)
-    throw Error(`Vercel returned an invalid Discord connector.`);
+  if (i === void 0) throw Error(`Vercel returned an invalid Discord connector.`);
   if (
     (
       await withPhase(e.log, `Connecting Discord interactions...`, () =>
@@ -89,8 +81,4 @@ async function provisionDiscordConnector(e) {
     );
   return i;
 }
-export {
-  DISCORD_TRIGGER_PATH,
-  parseCreatedDiscordConnector,
-  provisionDiscordConnector,
-};
+export { DISCORD_TRIGGER_PATH, parseCreatedDiscordConnector, provisionDiscordConnector };

@@ -20,11 +20,17 @@ export const removeGroupFileTool = defineTool({
     "Безвозвратно удалить один файл из workspace текущей внешней группы.",
     "Передавай path относительно корня group scope, например reports/result.pdf; не добавляй group в начало пути.",
   ].join(" "),
-  inputSchema: z.object({
-    path: z.string().min(1).max(512).describe(
-      "Относительный путь внутри group workspace без /workspace/group, например reports/result.md.",
-    ),
-  }).strict(),
+  inputSchema: z
+    .object({
+      path: z
+        .string()
+        .min(1)
+        .max(512)
+        .describe(
+          "Относительный путь внутри group workspace без /workspace/group, например reports/result.md.",
+        ),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await workspaceRepository.deleteFile(
       requireWorkspaceAuthorization(ctx),

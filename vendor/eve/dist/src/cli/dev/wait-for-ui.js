@@ -14,10 +14,7 @@ async function waitForUiOrServer(e) {
       (e) => ({ type: `server`, error: e }),
     ),
   ]);
-  if (
-    n.type === `server` &&
-    (e.lifecycle.requestStop(), await t, n.error !== void 0)
-  )
+  if (n.type === `server` && (e.lifecycle.requestStop(), await t, n.error !== void 0))
     throw n.error;
 }
 export { waitForServerOrStop, waitForUiOrServer };

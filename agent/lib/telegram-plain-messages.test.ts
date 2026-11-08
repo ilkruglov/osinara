@@ -22,11 +22,12 @@ describe("plain Telegram messages", () => {
       telegram: { request },
     } as unknown as TelegramEventContext;
 
-    await expect(postTelegramPlainMessageChunk(
-      "да, работает",
-      channel,
-      { allow_sending_without_reply: true, message_id: 55 },
-    )).resolves.toEqual({ chatType: "private", messageId: "71" });
+    await expect(
+      postTelegramPlainMessageChunk("да, работает", channel, {
+        allow_sending_without_reply: true,
+        message_id: 55,
+      }),
+    ).resolves.toEqual({ chatType: "private", messageId: "71" });
     expect(request).toHaveBeenCalledWith("sendMessage", {
       chat_id: "101",
       reply_parameters: { allow_sending_without_reply: true, message_id: 55 },
@@ -47,8 +48,10 @@ describe("plain Telegram messages", () => {
       telegram: { request },
     } as unknown as TelegramEventContext;
 
-    await expect(postTelegramPlainMessageChunk("ответ расписания", channel))
-      .resolves.toEqual({ chatType: "private", messageId: "72" });
+    await expect(postTelegramPlainMessageChunk("ответ расписания", channel)).resolves.toEqual({
+      chatType: "private",
+      messageId: "72",
+    });
     expect(request).toHaveBeenCalledOnce();
   });
 
@@ -57,15 +60,16 @@ describe("plain Telegram messages", () => {
       state: { chatId: "101", chatType: "private", messageThreadId: null },
       telegram: {
         request: vi.fn().mockResolvedValue({
-          body: { ok: true, result: {} }, ok: true, status: 200,
+          body: { ok: true, result: {} },
+          ok: true,
+          status: 200,
         }),
       },
     } as unknown as TelegramEventContext;
 
-    await expect(postTelegramPlainMessageChunk(
-      "ответ",
-      channel,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS/u);
+    await expect(postTelegramPlainMessageChunk("ответ", channel)).rejects.toThrowError(
+      /AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS/u,
+    );
   });
 
   it("rejects a chunk that Eve would split behind the durable outbox", async () => {
@@ -75,10 +79,9 @@ describe("plain Telegram messages", () => {
       telegram: { request },
     } as unknown as TelegramEventContext;
 
-    await expect(postTelegramPlainMessageChunk(
-      "🙂".repeat(2_049),
-      channel,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_PLAIN_MESSAGE_INPUT_INVALID/u);
+    await expect(postTelegramPlainMessageChunk("🙂".repeat(2_049), channel)).rejects.toThrowError(
+      /AGENT_TELEGRAM_PLAIN_MESSAGE_INPUT_INVALID/u,
+    );
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -87,12 +90,15 @@ describe("plain Telegram messages", () => {
       state: { chatId: "101", chatType: "private", messageThreadId: null },
       telegram: {
         request: vi.fn().mockResolvedValue({
-          body: { description: "Bad Request", ok: false }, ok: false, status: 400,
+          body: { description: "Bad Request", ok: false },
+          ok: false,
+          status: 400,
         }),
       },
     } as unknown as TelegramEventContext;
 
-    await expect(postTelegramPlainMessageChunk("ответ", channel))
-      .rejects.toThrowError(/AGENT_TELEGRAM_MESSAGE_DELIVERY_FAILED/u);
+    await expect(postTelegramPlainMessageChunk("ответ", channel)).rejects.toThrowError(
+      /AGENT_TELEGRAM_MESSAGE_DELIVERY_FAILED/u,
+    );
   });
 });

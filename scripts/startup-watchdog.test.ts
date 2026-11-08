@@ -69,12 +69,14 @@ describe("startup watchdog", () => {
     server.kill("SIGKILL");
     await once(server, "exit");
 
-    await expect(watchStartup({
-      deadlineMs: 2_000,
-      healthUrl: "http://127.0.0.1:9/eve/v1/health",
-      killAfterMs: 1_000,
-      pollMs: 50,
-      serverPid: server.pid!,
-    })).resolves.toBe("server-gone");
+    await expect(
+      watchStartup({
+        deadlineMs: 2_000,
+        healthUrl: "http://127.0.0.1:9/eve/v1/health",
+        killAfterMs: 1_000,
+        pollMs: 50,
+        serverPid: server.pid!,
+      }),
+    ).resolves.toBe("server-gone");
   });
 });

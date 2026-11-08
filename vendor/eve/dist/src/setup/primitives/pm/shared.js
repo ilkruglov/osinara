@@ -2,9 +2,7 @@ import { extname } from "node:path";
 function resolveStandardInvocation(e, t) {
   let n = process.env.npm_execpath,
     r = n?.toLowerCase(),
-    i =
-      r !== void 0 &&
-      (e === `npm` ? r.includes(`npm`) && !r.includes(`pnpm`) : r.includes(e));
+    i = r !== void 0 && (e === `npm` ? r.includes(`npm`) && !r.includes(`pnpm`) : r.includes(e));
   if (n !== void 0 && i) {
     let e = extname(n).toLowerCase();
     return e === `.cjs` || e === `.js`

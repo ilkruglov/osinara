@@ -9,25 +9,25 @@ import type { InputResponse } from "#runtime/input/types.js";
  * entries route the eventual response back down to the child.
  */
 export declare function emitProxiedInputRequest(input: {
-    readonly emit: HarnessEmitFn;
-    readonly hookPayload: SubagentInputRequestHookPayload;
-    readonly mode: RunMode;
-    readonly session: HarnessSession;
+  readonly emit: HarnessEmitFn;
+  readonly hookPayload: SubagentInputRequestHookPayload;
+  readonly mode: RunMode;
+  readonly session: HarnessSession;
 }): Promise<{
-    readonly entries: readonly (readonly [requestId: string, route: ProxyInputRequest])[];
-    readonly session: HarnessSession;
+  readonly entries: readonly (readonly [requestId: string, route: ProxyInputRequest])[];
+  readonly session: HarnessSession;
 }>;
 /** One proxied-child bucket of a routed deliver payload. */
 export interface RoutedChildDelivery {
-    readonly childContinuationToken: string;
-    readonly childResponseUrl?: string;
-    readonly payload: {
-        readonly inputResponses: readonly InputResponse[];
-    };
-    /** Parent-visible request IDs safe to retire once this bucket is forwarded. */
-    readonly retireRequestIds: readonly string[];
-    /** Present when the child is owned by a task run, which delivers on the parent's behalf. */
-    readonly taskId?: string;
+  readonly childContinuationToken: string;
+  readonly childResponseUrl?: string;
+  readonly payload: {
+    readonly inputResponses: readonly InputResponse[];
+  };
+  /** Parent-visible request IDs safe to retire once this bucket is forwarded. */
+  readonly retireRequestIds: readonly string[];
+  /** Present when the child is owned by a task run, which delivers on the parent's behalf. */
+  readonly taskId?: string;
 }
 /**
  * Outcome of splitting one deliver payload by the session's proxy map.
@@ -35,15 +35,17 @@ export interface RoutedChildDelivery {
  * routed); `forChildren` carries one entry per descendant token.
  */
 export interface RoutedDeliverPayload {
-    readonly forChildren: readonly RoutedChildDelivery[];
-    readonly forSelf: DeliverPayload | undefined;
-    readonly parentAction: {
+  readonly forChildren: readonly RoutedChildDelivery[];
+  readonly forSelf: DeliverPayload | undefined;
+  readonly parentAction:
+    | {
         readonly kind: "cancel-turn";
-    } | undefined;
+      }
+    | undefined;
 }
 /** Splits a deliver payload into parent-local and proxied-child buckets. */
 export declare function routeDeliverPayload(input: {
-    readonly allowRoute?: (requestId: string, route: ProxyInputRequest) => boolean;
-    readonly payload: DeliverPayload;
-    readonly state: SessionStateMap | undefined;
+  readonly allowRoute?: (requestId: string, route: ProxyInputRequest) => boolean;
+  readonly payload: DeliverPayload;
+  readonly state: SessionStateMap | undefined;
 }): RoutedDeliverPayload;

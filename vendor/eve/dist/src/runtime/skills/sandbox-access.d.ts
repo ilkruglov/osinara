@@ -14,7 +14,11 @@ export declare function assertSafeSkillId(id: string): asserts id is string;
  * to the model as a tool-error result. `availableNames`, when given, is
  * listed in the not-found error so the model can correct a wrong id.
  */
-export declare function loadSkillFromSandbox(access: SandboxAccess, id: string, availableNames?: readonly string[]): Promise<string>;
+export declare function loadSkillFromSandbox(
+  access: SandboxAccess,
+  id: string,
+  availableNames?: readonly string[],
+): Promise<string>;
 /**
  * Creates the public runtime skill handle. Existence is checked lazily by
  * each file read against the sandbox.

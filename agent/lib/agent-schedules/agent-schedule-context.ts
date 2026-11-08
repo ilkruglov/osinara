@@ -56,14 +56,14 @@ export function requireAgentScheduleAuthorization(
 
   return {
     familyId: attributes.familyId,
-    forumTopicId: typeof attributes.telegramForumTopicId === "string"
-      ? attributes.telegramForumTopicId
-      : null,
+    forumTopicId:
+      typeof attributes.telegramForumTopicId === "string" ? attributes.telegramForumTopicId : null,
     groupId: typeof attributes.groupId === "string" ? attributes.groupId : null,
     groupType: groupType === "family_private" ? groupType : null,
-    messageThreadId: typeof attributes.telegramMessageThreadId === "string"
-      ? attributes.telegramMessageThreadId
-      : null,
+    messageThreadId:
+      typeof attributes.telegramMessageThreadId === "string"
+        ? attributes.telegramMessageThreadId
+        : null,
     role: role as AgentScheduleAuthorization["role"],
     telegramChatId: attributes.telegramChatId,
     telegramChatType: chatType as AgentScheduleAuthorization["telegramChatType"],

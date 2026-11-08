@@ -36,9 +36,11 @@ function isErrnoException(error: unknown, code: string): boolean {
 }
 
 function isCredentialStoreEntry(entry: Dirent): boolean {
-  return entry.name === CREDENTIAL_FILE_NAME ||
+  return (
+    entry.name === CREDENTIAL_FILE_NAME ||
     (entry.name.startsWith(TEMPORARY_CREDENTIAL_PREFIX) &&
-      entry.name.endsWith(TEMPORARY_CREDENTIAL_SUFFIX));
+      entry.name.endsWith(TEMPORARY_CREDENTIAL_SUFFIX))
+  );
 }
 
 export function createGoogleWorkspaceProfileStore(root: string) {
@@ -64,9 +66,11 @@ export function createGoogleWorkspaceProfileStore(root: string) {
       }
 
       // Keep the directory itself stable because active sandboxes bind-mount this exact inode.
-      await Promise.all(entries.filter(isCredentialStoreEntry).map((entry) =>
-        rm(join(directory, entry.name), { force: true })
-      ));
+      await Promise.all(
+        entries
+          .filter(isCredentialStoreEntry)
+          .map((entry) => rm(join(directory, entry.name), { force: true })),
+      );
     },
 
     async write(

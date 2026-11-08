@@ -76,12 +76,18 @@ function requirePositiveBigint(value: string, field: string): string {
 }
 
 function requireAuthorization(input: ProactiveDeliveryAuthorization): void {
-  const validPersonal = input.scope === "personal" && input.ownerUserId !== null &&
-    input.groupId === null && input.messageThreadId === null;
-  const validFamily = input.scope === "family" && input.ownerUserId === null &&
-    input.groupId !== null;
-  const validGroup = input.scope === "group" && input.ownerUserId === null &&
-    input.groupId !== null && input.messageThreadId === null;
+  const validPersonal =
+    input.scope === "personal" &&
+    input.ownerUserId !== null &&
+    input.groupId === null &&
+    input.messageThreadId === null;
+  const validFamily =
+    input.scope === "family" && input.ownerUserId === null && input.groupId !== null;
+  const validGroup =
+    input.scope === "group" &&
+    input.ownerUserId === null &&
+    input.groupId !== null &&
+    input.messageThreadId === null;
   if (!validPersonal && !validFamily && !validGroup) {
     throw new AppError(
       "AGENT_PROACTIVE_DELIVERY_SCOPE_INVALID",
@@ -247,7 +253,11 @@ export const proactiveDeliveryRepository = {
     },
   ): Promise<{ items: ProactiveDeliveryRecord[]; nextCursor: string | null }> {
     requireAuthorization(input);
-    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT) {
+    if (
+      !Number.isInteger(input.limit) ||
+      input.limit < 1 ||
+      input.limit > PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT
+    ) {
       throw new AppError(
         "AGENT_PROACTIVE_DELIVERY_LIMIT_INVALID",
         "Некорректный размер страницы истории уведомлений",
@@ -261,7 +271,11 @@ export const proactiveDeliveryRepository = {
         );
       }
     }
-    if (input.deliveredAfter && input.deliveredBefore && input.deliveredAfter > input.deliveredBefore) {
+    if (
+      input.deliveredAfter &&
+      input.deliveredBefore &&
+      input.deliveredAfter > input.deliveredBefore
+    ) {
       throw new AppError(
         "AGENT_PROACTIVE_DELIVERY_DATE_RANGE_INVALID",
         "Начало периода истории уведомлений не может быть позже его окончания",
@@ -322,9 +336,8 @@ export const proactiveDeliveryRepository = {
     const last = rows.at(-1);
     return {
       items: mapRows(rows),
-      nextCursor: hasNext && last
-        ? encodeDateBigintCursor(last.delivered_at, last.id, cursorBinding)
-        : null,
+      nextCursor:
+        hasNext && last ? encodeDateBigintCursor(last.delivered_at, last.id, cursorBinding) : null,
     };
   },
 };

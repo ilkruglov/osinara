@@ -10,10 +10,10 @@ import type { CompiledRuntimeModelCatalogLoader } from "#compiler/model-catalog.
  * reuses the cache across all of its child compilations.
  */
 export interface ManifestCompileContext {
-    readonly modelCatalog: CompiledRuntimeModelCatalogLoader;
+  readonly modelCatalog: CompiledRuntimeModelCatalogLoader;
 }
 export interface ModuleBackedDefinitionLoadOptions {
-    readonly externalDependencies?: AuthoredModuleLoadOptions["externalDependencies"];
+  readonly externalDependencies?: AuthoredModuleLoadOptions["externalDependencies"];
 }
 /**
  * Loads one authored module's value for a given source reference and
@@ -25,9 +25,9 @@ export interface ModuleBackedDefinitionLoadOptions {
  * authored file failed.
  */
 export declare function loadModuleBackedDefinition(input: {
-    readonly agentRoot: string;
-    readonly displayPath?: string;
-    readonly externalDependencies?: ModuleBackedDefinitionLoadOptions["externalDependencies"];
-    readonly kind: string;
-    readonly source: ModuleSourceRef;
+  readonly agentRoot: string;
+  readonly displayPath?: string;
+  readonly externalDependencies?: ModuleBackedDefinitionLoadOptions["externalDependencies"];
+  readonly kind: string;
+  readonly source: ModuleSourceRef;
 }): Promise<unknown>;

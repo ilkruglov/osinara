@@ -3,10 +3,7 @@ import { EVE_BASE_URL_ENV, resolveSharedEveDevServer } from "./dev-server.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { EVE_ROUTE_PREFIX } from "#protocol/routes.js";
 import { isAbsolute, join, resolve } from "node:path";
-import {
-  ensureEveVercelServicesConfig,
-  mergeEveVercelConfig,
-} from "#shared/vercel-services.js";
+import { ensureEveVercelServicesConfig, mergeEveVercelConfig } from "#shared/vercel-services.js";
 function resolveApplicationRoot(e, t) {
   return t === void 0 || t.length === 0 ? e : isAbsolute(t) ? t : resolve(e, t);
 }
@@ -15,9 +12,7 @@ function mergeProxyConfig(e, t) {
 }
 async function resolveEveDevProxyTarget(r) {
   let i = process.env[EVE_BASE_URL_ENV]?.trim();
-  return i && i.length > 0
-    ? normalizeOrigin(i)
-    : (await resolveSharedEveDevServer(r)).origin;
+  return i && i.length > 0 ? normalizeOrigin(i) : (await resolveSharedEveDevServer(r)).origin;
 }
 function isRecord(e) {
   return typeof e == `object` && !!e && !Array.isArray(e);
@@ -31,8 +26,7 @@ async function mergeGeneratedVercelServicesConfig(e) {
     throw e;
   }
   let n = JSON.parse(t);
-  if (!isRecord(n))
-    throw Error(`Vercel Build Output config.json must contain a JSON object.`);
+  if (!isRecord(n)) throw Error(`Vercel Build Output config.json must contain a JSON object.`);
   let a = mergeEveVercelConfig(n, e.generated);
   await writeFile(e.outputConfigPath, `${JSON.stringify(a, null, 2)}\n`);
 }
@@ -46,8 +40,7 @@ function eveSvelteKit(e = {}) {
     name: `eve:sveltekit`,
     async config(r, a) {
       if (
-        ((t =
-          r.root === void 0 ? process.cwd() : resolve(process.cwd(), r.root)),
+        ((t = r.root === void 0 ? process.cwd() : resolve(process.cwd(), r.root)),
         (n = resolveApplicationRoot(t, e.eveRoot)),
         a.command === `build` && process.env.VERCEL)
       ) {

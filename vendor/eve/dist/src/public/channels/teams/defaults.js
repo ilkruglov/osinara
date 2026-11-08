@@ -84,9 +84,7 @@ const defaultEvents = {
   async "authorization.required"(e, t, r) {
     let i = e.authorization?.displayName ?? formatConnectionDisplayName(e.name),
       a = e.authorization?.url,
-      o = a
-        ? `Authorization required for ${i}: ${a}`
-        : `Authorization required for ${i}.`,
+      o = a ? `Authorization required for ${i}: ${a}` : `Authorization required for ${i}.`,
       s = await t.thread.post({
         attachments: [
           {
@@ -131,8 +129,7 @@ const defaultEvents = {
     let r = t.state.pendingAuthActivityId;
     if (!r) return;
     let a = buildAuthCompletedText({
-      displayName:
-        e.authorization?.displayName ?? formatConnectionDisplayName(e.name),
+      displayName: e.authorization?.displayName ?? formatConnectionDisplayName(e.name),
       outcome: e.outcome,
       reason: e.reason,
     });

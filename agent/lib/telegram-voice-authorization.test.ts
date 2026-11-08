@@ -74,10 +74,12 @@ describe("createTelegramVoiceAuthorizer", () => {
     };
     const authorize = createTelegramVoiceAuthorizer(telegram);
 
-    await expect(authorize({
-      chat: { id: "-1001", type: "supergroup" },
-      from: { id: "202", isBot: false },
-    })).resolves.toBe(false);
+    await expect(
+      authorize({
+        chat: { id: "-1001", type: "supergroup" },
+        from: { id: "202", isBot: false },
+      }),
+    ).resolves.toBe(false);
     expect(telegram.findIdentity).not.toHaveBeenCalled();
   });
 });

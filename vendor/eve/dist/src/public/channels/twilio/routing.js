@@ -20,10 +20,7 @@ async function verifyTwilioInbound(e, r) {
   }
 }
 async function buildTwilioActionUrl(e, t, n) {
-  let r =
-    typeof t.publicBaseUrl == `function`
-      ? await t.publicBaseUrl(e)
-      : t.publicBaseUrl;
+  let r = typeof t.publicBaseUrl == `function` ? await t.publicBaseUrl(e) : t.publicBaseUrl;
   if (r) return new URL(n, ensureTrailingSlash(r)).toString();
   let i = new URL(e.url);
   return ((i.pathname = n), (i.search = ``), i.toString());

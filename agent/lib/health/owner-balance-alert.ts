@@ -24,9 +24,16 @@ import {
 } from "../memory-review/memory-review-owner-alert-transport.js";
 import type { TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
 import { telegramReachabilityRepository } from "../telegram-reachability/reachability-repository.js";
-import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
+import {
+  type DeepSeekBalance,
+  formatDeepSeekBalance,
+  readConfiguredDeepSeekBalance,
+} from "./deepseek-balance.js";
 import { ownerBalanceAlertRepository } from "./owner-balance-alert-repository.js";
-import { type OwnerHealthRecipient, ownerHealthDigestRepository } from "./owner-health-digest-repository.js";
+import {
+  type OwnerHealthRecipient,
+  ownerHealthDigestRepository,
+} from "./owner-health-digest-repository.js";
 
 interface OwnerBalanceAlertDependencies {
   abandon(familyId: string, alertDate: string, diagnosticCode: string): Promise<void>;
@@ -54,20 +61,28 @@ export function createOwnerBalanceAlertDispatcher(dependencies: OwnerBalanceAler
     const quietUntil = dependencies.quietUntil ?? skippedQuietUntil;
     let sent = 0;
     for (const recipient of await dependencies.recipients()) {
-      const reason = await dependencies.unreachable?.(recipient.ownerTelegramUserId) ?? null;
+      const reason = (await dependencies.unreachable?.(recipient.ownerTelegramUserId)) ?? null;
       if (reason !== null) {
         if ((quietUntil.get(recipient.familyId) ?? 0) <= now.getTime()) {
-          console.warn(JSON.stringify({ code: "AGENT_OWNER_BALANCE_ALERT_DEFERRED", familyId: recipient.familyId, reason }));
+          console.warn(
+            JSON.stringify({
+              code: "AGENT_OWNER_BALANCE_ALERT_DEFERRED",
+              familyId: recipient.familyId,
+              reason,
+            }),
+          );
           quietUntil.set(recipient.familyId, now.getTime() + UNREACHABLE_LOG_INTERVAL_MS);
         }
         continue;
       }
       quietUntil.delete(recipient.familyId);
-      if (!await dependencies.claim(recipient.familyId, alertDate, now)) continue;
+      if (!(await dependencies.claim(recipient.familyId, alertDate, now))) continue;
       try {
         await dependencies.deliver({ chatId: recipient.ownerTelegramUserId, text: line.text });
         await dependencies.complete(recipient.familyId, alertDate, now);
-        console.info(JSON.stringify({ code: "AGENT_OWNER_BALANCE_ALERT_SENT", familyId: recipient.familyId }));
+        console.info(
+          JSON.stringify({ code: "AGENT_OWNER_BALANCE_ALERT_SENT", familyId: recipient.familyId }),
+        );
         sent += 1;
       } catch (error) {
         // Marked between the check and the send: nothing was sent, the next tick checks again.
@@ -77,12 +92,21 @@ export function createOwnerBalanceAlertDispatcher(dependencies: OwnerBalanceAler
         }
         const refused = error instanceof MemoryReviewOwnerAlertTransportError;
         if (refused) await dependencies.release(recipient.familyId, alertDate);
-        else await dependencies.abandon(recipient.familyId, alertDate, "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS");
-        console.error(JSON.stringify({
-          code: refused ? "AGENT_OWNER_BALANCE_ALERT_FAILED" : "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS",
-          error: error instanceof Error ? error.message : String(error),
-          familyId: recipient.familyId,
-        }));
+        else
+          await dependencies.abandon(
+            recipient.familyId,
+            alertDate,
+            "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS",
+          );
+        console.error(
+          JSON.stringify({
+            code: refused
+              ? "AGENT_OWNER_BALANCE_ALERT_FAILED"
+              : "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS",
+            error: error instanceof Error ? error.message : String(error),
+            familyId: recipient.familyId,
+          }),
+        );
       }
     }
     return sent;
@@ -91,10 +115,12 @@ export function createOwnerBalanceAlertDispatcher(dependencies: OwnerBalanceAler
 
 export function dispatchOwnerBalanceAlerts(now = new Date()): Promise<number> {
   return createOwnerBalanceAlertDispatcher({
-    abandon: (familyId, alertDate, code) => ownerBalanceAlertRepository.abandon(familyId, alertDate, code),
+    abandon: (familyId, alertDate, code) =>
+      ownerBalanceAlertRepository.abandon(familyId, alertDate, code),
     balance: readConfiguredDeepSeekBalance,
     claim: (familyId, alertDate, at) => ownerBalanceAlertRepository.claim(familyId, alertDate, at),
-    complete: (familyId, alertDate, at) => ownerBalanceAlertRepository.complete(familyId, alertDate, at),
+    complete: (familyId, alertDate, at) =>
+      ownerBalanceAlertRepository.complete(familyId, alertDate, at),
     deliver: (input) => memoryReviewOwnerAlertTransport.deliver(input),
     recipients: () => ownerHealthDigestRepository.recipients(),
     release: (familyId, alertDate) => ownerBalanceAlertRepository.release(familyId, alertDate),

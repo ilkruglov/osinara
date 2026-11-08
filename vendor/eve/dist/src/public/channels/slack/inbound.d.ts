@@ -12,17 +12,20 @@
  *    attributed model message so speaker identity cannot drift away from
  *    the content it describes.
  */
-import type { SlackAppMentionPayload, SlackDirectMessagePayload } from "#compiled/@chat-adapter/slack/webhook.js";
+import type {
+  SlackAppMentionPayload,
+  SlackDirectMessagePayload,
+} from "#compiled/@chat-adapter/slack/webhook.js";
 /**
  * Author metadata for an inbound Slack message. Channel-owned shape;
  * does not depend on the chat SDK's `Author` interface.
  */
 export interface SlackAuthor {
-    readonly userId: string;
-    readonly userName: string | undefined;
-    readonly fullName: string | undefined;
-    readonly isBot: boolean;
-    readonly isMe: boolean;
+  readonly userId: string;
+  readonly userName: string | undefined;
+  readonly fullName: string | undefined;
+  readonly isBot: boolean;
+  readonly isMe: boolean;
 }
 /**
  * Inbound Slack file attachment. The channel reads only `type`, `url`,
@@ -30,12 +33,12 @@ export interface SlackAuthor {
  * available on {@link SlackMessage.raw}.
  */
 export interface SlackAttachment {
-    readonly id: string;
-    readonly type: "image" | "file" | "video" | "audio";
-    readonly url: string | undefined;
-    readonly name: string | undefined;
-    readonly mimeType: string | undefined;
-    readonly size: number | undefined;
+  readonly id: string;
+  readonly type: "image" | "file" | "video" | "audio";
+  readonly url: string | undefined;
+  readonly name: string | undefined;
+  readonly mimeType: string | undefined;
+  readonly size: number | undefined;
 }
 /**
  * Channel-owned representation of one inbound Slack message.
@@ -45,24 +48,24 @@ export interface SlackAttachment {
  * `onAppMention(ctx, message)`).
  */
 export interface SlackMessage {
-    /** The original Slack text (mrkdwn). */
-    readonly text: string;
-    /** {@link text} re-rendered as GFM markdown for the agent. */
-    readonly markdown: string;
-    /** Slack message ts. */
-    readonly ts: string;
-    /** Thread parent ts (root). Equals {@link ts} for non-thread events. */
-    readonly threadTs: string;
-    /** Slack channel id. */
-    readonly channelId: string;
-    /** Slack team id, when the envelope carried one. */
-    readonly teamId: string | undefined;
-    /** Author of the message. May be `undefined` for system events. */
-    readonly author: SlackAuthor | undefined;
-    /** File / image attachments on the inbound message. */
-    readonly attachments: readonly SlackAttachment[];
-    /** Raw inbound event payload from Slack. */
-    readonly raw: Record<string, unknown>;
+  /** The original Slack text (mrkdwn). */
+  readonly text: string;
+  /** {@link text} re-rendered as GFM markdown for the agent. */
+  readonly markdown: string;
+  /** Slack message ts. */
+  readonly ts: string;
+  /** Thread parent ts (root). Equals {@link ts} for non-thread events. */
+  readonly threadTs: string;
+  /** Slack channel id. */
+  readonly channelId: string;
+  /** Slack team id, when the envelope carried one. */
+  readonly teamId: string | undefined;
+  /** Author of the message. May be `undefined` for system events. */
+  readonly author: SlackAuthor | undefined;
+  /** File / image attachments on the inbound message. */
+  readonly attachments: readonly SlackAttachment[];
+  /** Raw inbound event payload from Slack. */
+  readonly raw: Record<string, unknown>;
 }
 /**
  * Open-ended Slack Events API payload handed to `slackChannel({ onEvent })`.
@@ -70,8 +73,8 @@ export interface SlackMessage {
  * through unchanged from the signed webhook body.
  */
 export interface SlackEvent {
-    readonly type: string;
-    readonly [key: string]: unknown;
+  readonly type: string;
+  readonly [key: string]: unknown;
 }
 /**
  * Slack webhook envelope for an `event_callback`. The channel cares
@@ -79,18 +82,18 @@ export interface SlackEvent {
  * `event` payload.
  */
 export interface SlackEventCallback {
-    readonly type: "event_callback";
-    readonly team_id?: string;
-    readonly authorizations?: readonly {
-        readonly is_bot?: boolean;
-        readonly user_id?: string;
-    }[];
-    readonly event?: {
-        readonly type?: string;
-    } & Record<string, unknown>;
-    readonly event_id?: string;
-    readonly event_time?: number;
-    readonly [key: string]: unknown;
+  readonly type: "event_callback";
+  readonly team_id?: string;
+  readonly authorizations?: readonly {
+    readonly is_bot?: boolean;
+    readonly user_id?: string;
+  }[];
+  readonly event?: {
+    readonly type?: string;
+  } & Record<string, unknown>;
+  readonly event_id?: string;
+  readonly event_time?: number;
+  readonly [key: string]: unknown;
 }
 /**
  * Validated Slack Events API callback envelope handed to `onEvent` through
@@ -98,7 +101,7 @@ export interface SlackEventCallback {
  * this shape always carries an event with a non-empty `type` discriminator.
  */
 export interface SlackEventEnvelope extends SlackEventCallback {
-    readonly event: SlackEvent;
+  readonly event: SlackEvent;
 }
 /**
  * Parses a raw JSON webhook body into an open-ended Slack Events API envelope.
@@ -131,7 +134,9 @@ export declare function slackEventBotUserId(envelope: SlackEventCallback): strin
 /** Parses a Slack message event without applying bot or subtype policy. */
 export declare function parseMessageEvent(envelope: SlackEventCallback): SlackMessage | null;
 export declare function parseDirectMessageEvent(envelope: SlackEventCallback): SlackMessage | null;
-export declare function slackMessageFromWebhookPayload(payload: SlackAppMentionPayload | SlackDirectMessagePayload): SlackMessage | null;
+export declare function slackMessageFromWebhookPayload(
+  payload: SlackAppMentionPayload | SlackDirectMessagePayload,
+): SlackMessage | null;
 /**
  * Verified inbound identity used to attribute a model-visible Slack message.
  *
@@ -139,10 +144,10 @@ export declare function slackMessageFromWebhookPayload(payload: SlackAppMentionP
  * `SlackMessage` and is therefore trivially testable in isolation.
  */
 export interface SlackInboundContext {
-    readonly userId: string;
-    readonly userName?: string;
-    readonly fullName?: string;
-    readonly channelId: string;
-    readonly threadTs: string;
-    readonly teamId?: string;
+  readonly userId: string;
+  readonly userName?: string;
+  readonly fullName?: string;
+  readonly channelId: string;
+  readonly threadTs: string;
+  readonly teamId?: string;
 }

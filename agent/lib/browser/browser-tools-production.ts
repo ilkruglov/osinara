@@ -14,13 +14,18 @@ import { sandboxSessionId } from "../sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { inspectWorkspaceImage } from "../workspaces/workspace-image-inspection.js";
 import { createBrowserTools } from "./browser-tools.js";
-import { loadFormProfile, requireFormProfileAccess, saveFormProfileField } from "./form-profile-repository.js";
+import {
+  loadFormProfile,
+  requireFormProfileAccess,
+  saveFormProfileField,
+} from "./form-profile-repository.js";
 import { lookRepository } from "./look-repository.js";
 import { productionBrowserDriver } from "./production-browser-driver.js";
 
 export const browserTools = createBrowserTools({
   approvalEvidence: (ctx, input) => requireToolApprovalEvidence(ctx, "browser_confirm", input),
-  driver: (ctx, sandbox) => productionBrowserDriver({ sandboxSessionId: sandbox, signal: ctx.abortSignal }),
+  driver: (ctx, sandbox) =>
+    productionBrowserDriver({ sandboxSessionId: sandbox, signal: ctx.abortSignal }),
   loadProfile: loadFormProfile,
   log: (event) => console.info(JSON.stringify(event)),
   looks: lookRepository,
@@ -34,7 +39,12 @@ export const browserTools = createBrowserTools({
   },
 });
 
-export interface BrowserConfirmApprovalSubject { button: string; entered: string[]; site: string; url: string; }
+export interface BrowserConfirmApprovalSubject {
+  button: string;
+  entered: string[];
+  site: string;
+  url: string;
+}
 
 /** The parked click of this conversation's browser, or nothing: the window never guesses. */
 export async function loadBrowserConfirmApproval(
@@ -44,11 +54,24 @@ export async function loadBrowserConfirmApproval(
   const auth = requireWorkspaceAuthorization(ctx);
   const look = await lookRepository.get(sandboxSessionId(ctx), auth.familyId);
   const pending = look?.pending;
-  if (!look || !pending || pending.epoch !== input.epoch || pending.n !== input.n || look.epoch !== input.epoch) {
-    throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "В браузере нет шага, ждущего подтверждения");
+  if (
+    !look ||
+    !pending ||
+    pending.epoch !== input.epoch ||
+    pending.n !== input.n ||
+    look.epoch !== input.epoch
+  ) {
+    throw new AppError(
+      "AGENT_APPROVAL_SUBJECT_NOT_FOUND",
+      "В браузере нет шага, ждущего подтверждения",
+    );
   }
   // The window is shown to the person who made the look; nobody confirms another member's click.
-  if (look.userId !== auth.userId) throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Этот шаг в браузере начал другой участник");
+  if (look.userId !== auth.userId)
+    throw new AppError(
+      "AGENT_APPROVAL_SUBJECT_NOT_FOUND",
+      "Этот шаг в браузере начал другой участник",
+    );
   // The value as it was typed, so the person confirms data, not only field names.
   const entered = look.entered.map((e) => (e.value ? `${e.label}: ${e.value}` : e.label));
   return { button: pending.element.text, entered, site: new URL(look.url).hostname, url: look.url };

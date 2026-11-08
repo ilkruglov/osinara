@@ -11,16 +11,11 @@ async function createAgentInfoPayload(e) {
   let n = await loadAgentInfoManifestData({
       compiledArtifactsSource: resolveAgentInfoCompiledArtifactsSource(e),
     }),
-    i =
-      n.manifest.config.dynamicModel === void 0
-        ? n.manifest.config.model.routing
-        : void 0;
+    i = n.manifest.config.dynamicModel === void 0 ? n.manifest.config.model.routing : void 0;
   return buildAgentInfoResponseFromManifest(n, {
     mode: e.kind,
     gatewayCredentials:
-      i === void 0
-        ? { apiKey: !1, oidc: !1 }
-        : await resolveGatewayCredentialPresence(i),
+      i === void 0 ? { apiKey: !1, oidc: !1 } : await resolveGatewayCredentialPresence(i),
     ...(isChatGptModelRouting(i)
       ? { chatgptAuth: await getDefaultCodexTokenBroker().refreshState() }
       : {}),

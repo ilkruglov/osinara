@@ -7,10 +7,7 @@
  */
 import type { PoolClient } from "pg";
 
-import {
-  THREAD_BRIEF_MAX_ITEMS,
-  THREAD_SOURCE_INPUT_MAX_CHARACTERS,
-} from "./memory-config.js";
+import { THREAD_BRIEF_MAX_ITEMS, THREAD_SOURCE_INPUT_MAX_CHARACTERS } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { MemoryThreadBriefSource } from "./memory-thread-brief-generator.js";
@@ -81,26 +78,33 @@ export async function loadMemoryThreadSources(
   }
 
   const selectedRefs = new Set(bounded.map((row) => row.entry_ref));
-  const evidence = new Map((await loadMemoryThreadSourceEvidence(client, threadId, auth))
-    .map((item) => [item.sourceEntryRef, item]));
+  const evidence = new Map(
+    (await loadMemoryThreadSourceEvidence(client, threadId, auth)).map((item) => [
+      item.sourceEntryRef,
+      item,
+    ]),
+  );
   return bounded.flatMap((row): MemoryThreadBriefSource[] => {
-    const conflictingRefs = (row.conflicting_entry_refs ?? [])
-      .filter((entryRef) => selectedRefs.has(entryRef));
+    const conflictingRefs = (row.conflicting_entry_refs ?? []).filter((entryRef) =>
+      selectedRefs.has(entryRef),
+    );
     const sourceEvidence = evidence.get(row.entry_ref);
     // Authorization may be revoked between source and evidence reads; omit content fail-closed.
     if (!sourceEvidence) return [];
     const { sourceEntryRef: _sourceEntryRef, ...modelEvidence } = sourceEvidence;
-    return [{
-      ...(conflictingRefs.length === 0 ? {} : { conflictingEntryRefs: conflictingRefs }),
-      content: row.content,
-      evidence: modelEvidence,
-      occurredAt: row.occurred_at.toISOString(),
-      ref: row.entry_ref,
-      role: row.role,
-      sourceRef: row.source_ref,
-      ...((row.unresolved_conflict_refs?.length ?? 0) === 0 || conflictingRefs.length === 0
-        ? {}
-        : { unresolvedConflictRefs: row.unresolved_conflict_refs }),
-    }];
+    return [
+      {
+        ...(conflictingRefs.length === 0 ? {} : { conflictingEntryRefs: conflictingRefs }),
+        content: row.content,
+        evidence: modelEvidence,
+        occurredAt: row.occurred_at.toISOString(),
+        ref: row.entry_ref,
+        role: row.role,
+        sourceRef: row.source_ref,
+        ...((row.unresolved_conflict_refs?.length ?? 0) === 0 || conflictingRefs.length === 0
+          ? {}
+          : { unresolvedConflictRefs: row.unresolved_conflict_refs }),
+      },
+    ];
   });
 }

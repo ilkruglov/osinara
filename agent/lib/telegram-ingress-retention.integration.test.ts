@@ -26,7 +26,11 @@ const RECENT = new Date(NOW.getTime() - (TELEGRAM_INGRESS_RETENTION_DAYS - 1) * 
 
 let queueId = "";
 
-async function insertUpdate(updateId: number, status: string, completedAt: Date | null): Promise<void> {
+async function insertUpdate(
+  updateId: number,
+  status: string,
+  completedAt: Date | null,
+): Promise<void> {
   const leased = status === "processing";
   await database().query(
     `INSERT INTO telegram_ingress_updates
@@ -34,8 +38,15 @@ async function insertUpdate(updateId: number, status: string, completedAt: Date 
         lease_token, lease_expires_at)
      VALUES ($1, $2, 'telegram:1', '{"message":{"chat":{"id":"1","type":"private"},"text":"x"}}',
              $3, $4, $5, $6, $7)`,
-    [updateId, queueId, status, completedAt, completedAt ?? OLD,
-      leased ? "00000000-0000-4000-8000-000000000009" : null, leased ? new Date(NOW.getTime() + 60_000) : null],
+    [
+      updateId,
+      queueId,
+      status,
+      completedAt,
+      completedAt ?? OLD,
+      leased ? "00000000-0000-4000-8000-000000000009" : null,
+      leased ? new Date(NOW.getTime() + 60_000) : null,
+    ],
   );
 }
 

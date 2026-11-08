@@ -3,7 +3,11 @@ export type { ReadFileStamp, ReadFileState } from "#runtime/framework-tools/file
 export { ReadFileStateKey } from "#runtime/framework-tools/file-state.js";
 export type { TodoItem, TodoState } from "#runtime/framework-tools/todo.js";
 export { TodoStateKey } from "#runtime/framework-tools/todo.js";
-import type { ResolvedDynamicToolResolver, ResolvedSkillDefinition, ResolvedToolDefinition } from "#runtime/types.js";
+import type {
+  ResolvedDynamicToolResolver,
+  ResolvedSkillDefinition,
+  ResolvedToolDefinition,
+} from "#runtime/types.js";
 /**
  * Returns framework-owned tool definitions registered in the tool registry
  * alongside authored tools during graph resolution.
@@ -12,7 +16,7 @@ import type { ResolvedDynamicToolResolver, ResolvedSkillDefinition, ResolvedTool
  * registers it as a framework dynamic tool resolver.
  */
 export declare function getFrameworkToolDefinitions(config?: {
-    readonly authoredSkills?: readonly ResolvedSkillDefinition[];
+  readonly authoredSkills?: readonly ResolvedSkillDefinition[];
 }): readonly ResolvedToolDefinition[];
 /**
  * Returns framework-owned dynamic tool resolvers.

@@ -16,11 +16,7 @@ import { join } from "node:path";
 import { SLACK_CHANNEL_DEFAULT_ROUTE } from "#setup/scaffold/index.js";
 import { performance } from "node:perf_hooks";
 import { readProjectLink } from "#setup/project-resolution.js";
-import {
-  captureVercel,
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { captureVercel, runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { setTimeout } from "node:timers/promises";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 import { updateSlackChannelConnectorUid } from "#setup/scaffold/update/update-slack-channel.js";
@@ -51,24 +47,13 @@ async function pollSlackWorkspace(e, t, n, i, a, s) {
   }
 }
 function isAbortFromSignal(e, t) {
-  return (
-    t?.aborted === !0 &&
-    (e === t.reason || (e instanceof Error && e.name === `AbortError`))
-  );
+  return t?.aborted === !0 && (e === t.reason || (e instanceof Error && e.name === `AbortError`));
 }
 function cleanupFailureResult(e) {
   return { state: `cleanup-failed`, connectorUids: e.connectorUids };
 }
 async function runAttempt(e) {
-  let {
-      log: t,
-      deps: n,
-      projectRoot: r,
-      orgId: a,
-      onOutput: o,
-      signal: s,
-      phase: c,
-    } = e,
+  let { log: t, deps: n, projectRoot: r, orgId: a, onOutput: o, signal: s, phase: c } = e,
     u,
     d;
   if (e.source.state === `existing`) u = e.source.ref;
@@ -102,8 +87,7 @@ async function runAttempt(e) {
       pollSlackWorkspace(n, r, u.id, a, o, s),
     );
     if (e.state === `timed-out`) return { state: `timed-out`, ref: u };
-    if (e.state === `failed`)
-      return { state: `failed`, ref: u, message: e.message };
+    if (e.state === `failed`) return { state: `failed`, ref: u, message: e.message };
     d = e.workspace;
   }
   let f = await c(`Configuring Slack event delivery for this agent...`, () =>
@@ -223,18 +207,11 @@ async function provisionSlackbot(e, t, n, r = defaultDeps, i = {}) {
               };
         case `failed`:
           return (
-            e.warning(
-              `Could not verify the Slack workspace connection. ${t.message}`,
-            ),
+            e.warning(`Could not verify the Slack workspace connection. ${t.message}`),
             { state: `installation-check-failed`, connectorUid: t.ref.uid }
           );
         case `timed-out`:
-          if (
-            (e.warning(
-              `The Slackbot did not connect to a Slack workspace in time.`,
-            ),
-            i)
-          ) {
+          if ((e.warning(`The Slackbot did not connect to a Slack workspace in time.`), i)) {
             let e = await r();
             if (e.state === `failed`) return cleanupFailureResult(e);
           }
@@ -268,9 +245,7 @@ async function provisionSlackbot(e, t, n, r = defaultDeps, i = {}) {
         { state: `existing-not-installed`, connectorUid: t.ref.uid }
       ),
       finishExistingOutcome = async (e) =>
-        e.state === `timed-out`
-          ? notInstalled()
-          : finishOutcome(e, t, cleanupCurrentAttempt);
+        e.state === `timed-out` ? notInstalled() : finishOutcome(e, t, cleanupCurrentAttempt);
     if (i.awaitChoice !== void 0) {
       let e = await raceAttemptAgainstChoice({
         prompt: i.awaitChoice({
@@ -338,10 +313,7 @@ async function provisionSlackbot(e, t, n, r = defaultDeps, i = {}) {
               s = e;
             }),
             signal: t,
-            phase:
-              e.spinner === void 0
-                ? (e, t) => t()
-                : (t, n) => withPhase(e, t, n),
+            phase: e.spinner === void 0 ? (e, t) => t() : (t, n) => withPhase(e, t, n),
           }),
       });
     } catch (e) {
@@ -358,8 +330,7 @@ async function provisionSlackbot(e, t, n, r = defaultDeps, i = {}) {
         result: await finishOutcome(u.settled, n, cleanupCurrentAttempt),
       };
     let d = await cleanupCurrentAttempt();
-    if (d.state === `failed`)
-      return { state: `finished`, result: cleanupFailureResult(d) };
+    if (d.state === `failed`) return { state: `finished`, result: cleanupFailureResult(d) };
     if (u.choice === `retry`) {
       let n = await withPhase(e, `Checking existing Slack connectors...`, () =>
         listSlackConnectors(r, t, o, i.signal),

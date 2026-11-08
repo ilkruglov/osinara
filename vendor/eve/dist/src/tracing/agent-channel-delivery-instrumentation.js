@@ -25,9 +25,7 @@ function createAgentChannelDeliveryInstrumentation(e) {
             traceFlags: r.context.traceFlags,
             traceId: r.context.traceId,
           },
-          spanId: e.idGenerator.deriveSpanId(
-            `channel-delivery:${t.idempotencyKey}`,
-          ),
+          spanId: e.idGenerator.deriveSpanId(`channel-delivery:${t.idempotencyKey}`),
           startTimeMs: Date.now(),
           window: r.window,
         };
@@ -43,10 +41,7 @@ function createAgentChannelDeliveryInstrumentation(e) {
     onTerminal = async (n, r) => {
       let i = readState(r.state.get());
       if (i === void 0) return;
-      let a =
-          n.turnId === void 0
-            ? void 0
-            : await e.stateStore.getTurn(n.sessionId, n.turnId),
+      let a = n.turnId === void 0 ? void 0 : await e.stateStore.getTurn(n.sessionId, n.turnId),
         o = await e.stateStore.getSession(n.sessionId),
         s =
           a === void 0
@@ -57,8 +52,7 @@ function createAgentChannelDeliveryInstrumentation(e) {
                 traceFlags: a.context.traceFlags,
                 traceId: a.context.traceId,
               },
-        c =
-          a === void 0 ? i.startTimeMs : Math.max(i.startTimeMs, a.startTimeMs),
+        c = a === void 0 ? i.startTimeMs : Math.max(i.startTimeMs, a.startTimeMs),
         l = i.requestTraceContext,
         u = e.idGenerator.withSpanId(i.spanId, () =>
           e.tracer.startSpan(
@@ -101,8 +95,7 @@ function createAgentChannelDeliveryInstrumentation(e) {
           u.setAttribute(`agent.channel.delivery.input`, i.inputAttribute),
         n.outcome === `failed`)
       ) {
-        let e =
-          n.errorCode ?? (n.error instanceof Error ? n.error.name : `Error`);
+        let e = n.errorCode ?? (n.error instanceof Error ? n.error.name : `Error`);
         (u.setAttribute(`error.type`, e),
           n.errorCode !== void 0 &&
             u.setAttribute(`agent.channel.delivery.error.code`, n.errorCode),
@@ -128,8 +121,7 @@ function readState(e) {
     return;
   let t = isSpanContext(e.requestTraceContext) ? e.requestTraceContext : void 0;
   return {
-    inputAttribute:
-      typeof e.inputAttribute == `string` ? e.inputAttribute : void 0,
+    inputAttribute: typeof e.inputAttribute == `string` ? e.inputAttribute : void 0,
     parent: e.parent,
     requestTraceContext: t,
     spanId: e.spanId,
@@ -153,8 +145,7 @@ function contextFromSpanContext(t) {
 }
 function recordError(e, t) {
   t instanceof Error
-    ? (e.recordException(t),
-      e.setStatus({ code: SpanStatusCode.ERROR, message: t.message }))
+    ? (e.recordException(t), e.setStatus({ code: SpanStatusCode.ERROR, message: t.message }))
     : e.setStatus({ code: SpanStatusCode.ERROR });
 }
 export { createAgentChannelDeliveryInstrumentation };

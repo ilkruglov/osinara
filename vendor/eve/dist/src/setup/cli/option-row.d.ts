@@ -12,61 +12,65 @@
  */
 /** The color primitives the row painter needs; satisfied by both the TUI theme and the CLI palette. */
 export interface RowColors {
-    blue(text: string): string;
-    dim(text: string): string;
-    green(text: string): string;
-    inverse(text: string): string;
-    yellow(text: string): string;
+  blue(text: string): string;
+  dim(text: string): string;
+  green(text: string): string;
+  inverse(text: string): string;
+  yellow(text: string): string;
 }
 /** The glyphs the row painter draws; the TUI passes theme-derived values, the CLI the unicode set. */
 export interface RowGlyphs {
-    /** Hollow cursor marker for an inert row. */
-    pointer: string;
-    /** Filled cursor marker for an actionable row. */
-    selectedPointer: string;
-    /** Completed / checked marker. */
-    success: string;
-    /** Available, un-hovered marker. */
-    placeholder: string;
-    /** Separator before an inline hint. */
-    dot: string;
-    /** Attention marker for an unavailable option with actionable guidance. */
-    warning: string;
+  /** Hollow cursor marker for an inert row. */
+  pointer: string;
+  /** Filled cursor marker for an actionable row. */
+  selectedPointer: string;
+  /** Completed / checked marker. */
+  success: string;
+  /** Available, un-hovered marker. */
+  placeholder: string;
+  /** Separator before an inline hint. */
+  dot: string;
+  /** Attention marker for an unavailable option with actionable guidance. */
+  warning: string;
 }
 /** Canonical unicode glyphs; the CLI prompts render with these. */
 export declare const UNICODE_ROW_GLYPHS: RowGlyphs;
-export type OptionRowState = {
-    kind: "available";
-    checked: boolean;
-} | {
-    kind: "completed";
-} | {
-    kind: "disabled";
-    reason?: string;
-    reasonTone?: "warning";
-} | {
-    kind: "locked";
-    reason?: string;
-};
+export type OptionRowState =
+  | {
+      kind: "available";
+      checked: boolean;
+    }
+  | {
+      kind: "completed";
+    }
+  | {
+      kind: "disabled";
+      reason?: string;
+      reasonTone?: "warning";
+    }
+  | {
+      kind: "locked";
+      reason?: string;
+    };
 interface OptionRowInput {
-    colors: RowColors;
-    glyphs: RowGlyphs;
-    label: string;
-    /** Inline annotation shown whenever the row is in view. */
-    hint?: string;
-    /** Inline annotation shown only while the cursor is on this row. */
-    focusHint?: string;
-    isCursor: boolean;
-    state: OptionRowState;
-    /** Whether an un-hovered, selectable row draws the placeholder glyph. */
-    placeholder: boolean;
-    /** Spaces inserted before the hint's dot so hints tab-align to a shared column. */
-    hintPadding?: number;
-    /**
-     * Accent for an available row. "warning" keeps an attention row yellow at
-     * rest and under the cursor highlight.
-     */
-    accent?: "warning";
+  colors: RowColors;
+  glyphs: RowGlyphs;
+  label: string;
+  /** Inline annotation shown whenever the row is in view. */
+  hint?: string;
+  /** Inline annotation shown only while the cursor is on this row. */
+  focusHint?: string;
+  isCursor: boolean;
+  state: OptionRowState;
+  /** Whether an un-hovered, selectable row draws the placeholder glyph. */
+  placeholder: boolean;
+  /** Spaces inserted before the hint's dot so hints tab-align to a shared column. */
+  hintPadding?: number;
+  /**
+   * Accent for an available row. "warning" keeps an attention row yellow at
+   * rest and under the cursor highlight.
+   */
+  accent?: "warning";
 }
 /**
  * Resolves legacy option flags into one render state. The public prompt shape
@@ -74,16 +78,24 @@ interface OptionRowInput {
  * this boundary instead of producing a glyph from one flag and a label from
  * another.
  */
-export declare function resolveOptionRowState(option: {
+export declare function resolveOptionRowState(
+  option: {
     disabled?: boolean;
     disabledReason?: string;
     disabledReasonTone?: "warning";
     completed?: boolean;
     locked?: boolean;
     lockedReason?: string;
-}, checked: boolean): OptionRowState;
+  },
+  checked: boolean,
+): OptionRowState;
 /** Paints a row with the shared leading cell and optional cursor highlight. */
-export declare function renderCursorRow(text: string, selected: boolean, colors: Pick<RowColors, "blue" | "inverse" | "yellow">, accent?: "warning"): string;
+export declare function renderCursorRow(
+  text: string,
+  selected: boolean,
+  colors: Pick<RowColors, "blue" | "inverse" | "yellow">,
+  accent?: "warning",
+): string;
 /** Prefixes a continuation line so its text starts in the option label column. */
 export declare function renderOptionRowContinuation(text: string): string;
 /**

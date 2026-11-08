@@ -1,5 +1,9 @@
 import type { SandboxBackend } from "#public/definitions/sandbox-backend.js";
-import type { VercelSandboxBootstrapUseOptions, VercelSandboxOptions, VercelSandboxSessionUseOptions } from "#public/sandbox/vercel-sandbox.js";
+import type {
+  VercelSandboxBootstrapUseOptions,
+  VercelSandboxOptions,
+  VercelSandboxSessionUseOptions,
+} from "#public/sandbox/vercel-sandbox.js";
 /**
  * Constructs the [Vercel Sandbox](https://vercel.com/docs/sandbox)
  * backend. Configuring this backend pins it unconditionally —
@@ -27,4 +31,6 @@ import type { VercelSandboxBootstrapUseOptions, VercelSandboxOptions, VercelSand
  * from `opts`. `sessionCreateOptions`, when provided, is resolved only
  * when creating a fresh live session and can attach session-specific Drives.
  */
-export declare function vercel(opts?: VercelSandboxOptions): SandboxBackend<VercelSandboxBootstrapUseOptions, VercelSandboxSessionUseOptions>;
+export declare function vercel(
+  opts?: VercelSandboxOptions,
+): SandboxBackend<VercelSandboxBootstrapUseOptions, VercelSandboxSessionUseOptions>;

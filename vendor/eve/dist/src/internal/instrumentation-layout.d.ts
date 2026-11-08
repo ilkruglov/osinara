@@ -7,13 +7,15 @@
  * is decided by `experimental.instrumentationProviders`, never by what happens
  * to be on disk.
  */
-export type InstrumentationLayout = {
-    readonly kind: "file";
-    readonly modulePath: string;
-} | {
-    readonly kind: "directory";
-    readonly modulePathsBySlot: Readonly<Record<string, string>>;
-};
+export type InstrumentationLayout =
+  | {
+      readonly kind: "file";
+      readonly modulePath: string;
+    }
+  | {
+      readonly kind: "directory";
+      readonly modulePathsBySlot: Readonly<Record<string, string>>;
+    };
 /**
  * Resolves the instrumentation layout for one agent root.
  *
@@ -23,6 +25,6 @@ export type InstrumentationLayout = {
  * quietly does nothing is the failure this whole surface exists to prevent.
  */
 export declare function resolveInstrumentationLayout(input: {
-    readonly agentRoot: string;
-    readonly providersEnabled: boolean;
+  readonly agentRoot: string;
+  readonly providersEnabled: boolean;
 }): InstrumentationLayout | undefined;

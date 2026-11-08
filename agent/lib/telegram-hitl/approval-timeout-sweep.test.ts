@@ -31,8 +31,9 @@ describe("createApprovalTimeoutSweep", () => {
     expect(String(url)).toContain(APPROVAL_TIMEOUT_ROUTE);
     expect(String(url).startsWith("http://127.0.0.1:3000")).toBe(true);
     expect((init as RequestInit).method).toBe("POST");
-    expect((init as { headers: Record<string, string> }).headers[APPROVAL_TIMEOUT_TOKEN_HEADER])
-      .toBe("secret");
+    expect(
+      (init as { headers: Record<string, string> }).headers[APPROVAL_TIMEOUT_TOKEN_HEADER],
+    ).toBe("secret");
   });
 
   it("reports a rejected cycle without breaking the minute schedule", async () => {

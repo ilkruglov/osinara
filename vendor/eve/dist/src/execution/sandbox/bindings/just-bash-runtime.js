@@ -104,8 +104,7 @@ async function createBashSandbox(t) {
     async writeFiles(e) {
       for (let t of e) {
         let e = dirname(t.path);
-        (await l.mkdir(e, { recursive: !0 }),
-          await l.writeFile(t.path, t.content));
+        (await l.mkdir(e, { recursive: !0 }), await l.writeFile(t.path, t.content));
       }
     },
   };
@@ -150,9 +149,7 @@ async function ensureLocalSandboxDirectories(e) {
 async function readLocalMetadata(e) {
   if (!(await pathExists(e))) return null;
   let n = JSON.parse(await readFile(e, `utf8`));
-  return n.version !== 1 || !isStringRecord(n.env)
-    ? null
-    : { env: n.env, version: 1 };
+  return n.version !== 1 || !isStringRecord(n.env) ? null : { env: n.env, version: 1 };
 }
 async function writeLocalMetadata(t, r) {
   (await mkdir(dirname(t), { recursive: !0 }),
@@ -166,8 +163,4 @@ function isStringRecord(e) {
     Object.values(e).every((e) => typeof e == `string`)
   );
 }
-export {
-  createBashSandbox,
-  createJustBashHandle,
-  justBashSetNetworkPolicyUnsupported,
-};
+export { createBashSandbox, createJustBashHandle, justBashSetNetworkPolicyUnsupported };

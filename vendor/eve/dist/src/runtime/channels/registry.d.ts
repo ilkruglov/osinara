@@ -6,7 +6,7 @@ import type { ResolvedChannelDefinition } from "#runtime/types.js";
  * workflow step boundaries.
  */
 export interface RuntimeAdapterRegistry {
-    readonly adaptersByKind: ReadonlyMap<string, ChannelAdapter>;
+  readonly adaptersByKind: ReadonlyMap<string, ChannelAdapter>;
 }
 /**
  * Builds the runtime-owned adapter registry from framework adapters plus any
@@ -15,7 +15,7 @@ export interface RuntimeAdapterRegistry {
  * Route-declared adapters may share framework kinds only as pass-throughs.
  */
 export declare function createRuntimeAdapterRegistry(input: {
-    readonly channels: readonly ResolvedChannelDefinition[];
+  readonly channels: readonly ResolvedChannelDefinition[];
 }): RuntimeAdapterRegistry;
 /**
  * Rehydrates one serialized adapter from the runtime-owned registry.
@@ -24,4 +24,7 @@ export declare function createRuntimeAdapterRegistry(input: {
  * onto it. The result is a full adapter with behavior functions and
  * restored state.
  */
-export declare function deserializeRuntimeAdapter(registry: RuntimeAdapterRegistry, data: unknown): ChannelAdapter;
+export declare function deserializeRuntimeAdapter(
+  registry: RuntimeAdapterRegistry,
+  data: unknown,
+): ChannelAdapter;

@@ -16,7 +16,10 @@
  *   family owner's own personal schedules and the shared ones are named (`schedule-run-failures.ts`).
  */
 import { database } from "../database.js";
-import { turnEvaluationRepository, type TurnQualitySummary } from "../turn-quality/turn-evaluation-repository.js";
+import {
+  turnEvaluationRepository,
+  type TurnQualitySummary,
+} from "../turn-quality/turn-evaluation-repository.js";
 import { type ScheduleRunFailures, summarizeScheduleRunFailures } from "./schedule-run-failures.js";
 
 export interface OwnerHealthReport {
@@ -52,7 +55,10 @@ export const ownerHealthDigestRepository = {
         WHERE membership.role = 'owner' AND owner.telegram_user_id IS NOT NULL
         ORDER BY membership.family_id`,
     );
-    return result.rows.map((row) => ({ familyId: row.family_id, ownerTelegramUserId: row.telegram_user_id }));
+    return result.rows.map((row) => ({
+      familyId: row.family_id,
+      ownerTelegramUserId: row.telegram_user_id,
+    }));
   },
 
   async report(familyId: string, windowStart: Date, now: Date): Promise<OwnerHealthReport> {
@@ -124,7 +130,12 @@ export const ownerHealthDigestRepository = {
       [familyId, windowStart],
     );
     // A run is terminal once failed or ambiguous and is not touched again, so `updated_at` is when it ended.
-    const scheduleRuns = await client.query<{ code: string | null; count: string; schedule_id: string; title: string | null }>(
+    const scheduleRuns = await client.query<{
+      code: string | null;
+      count: string;
+      schedule_id: string;
+      title: string | null;
+    }>(
       `SELECT schedule.id AS schedule_id,
               CASE WHEN schedule.scope <> 'personal' OR schedule.owner_user_id = owner.user_id
                    THEN schedule.title END AS title,
@@ -141,29 +152,51 @@ export const ownerHealthDigestRepository = {
     for (const lane of lanes.rows) {
       const waiting = Number(lane.waiting);
       if (lane.head_status === "failed" || lane.head_status === "ambiguous") {
-        blocked.push({ code: lane.diagnostic_code, headStatus: lane.head_status, label: lane.label, waiting });
+        blocked.push({
+          code: lane.diagnostic_code,
+          headStatus: lane.head_status,
+          label: lane.label,
+          waiting,
+        });
       } else if (
-        waiting >= OWNER_HEALTH_LAGGING_MIN_WAITING && lane.oldest_at !== null &&
+        waiting >= OWNER_HEALTH_LAGGING_MIN_WAITING &&
+        lane.oldest_at !== null &&
         now.getTime() - lane.oldest_at.getTime() >= OWNER_HEALTH_LAGGING_MIN_AGE_MILLISECONDS
       ) {
         lagging.push({ label: lane.label, oldestAt: lane.oldest_at, waiting });
       }
     }
-    const status = (name: string) => Number(batches.rows.find((row) => row.status === name)?.count ?? 0);
+    const status = (name: string) =>
+      Number(batches.rows.find((row) => row.status === name)?.count ?? 0);
     const turnQuality = await turnEvaluationRepository.summary(familyId, windowStart, now);
     return {
       alertDeliveryFailures: Number(alerts.rows[0]?.count ?? 0),
       ingressFailures: {
-        codes: ingress.rows.map((row) => ({ code: row.code ?? "unknown", count: Number(row.count) })),
+        codes: ingress.rows.map((row) => ({
+          code: row.code ?? "unknown",
+          count: Number(row.count),
+        })),
         count: Number(ingressTotal.rows[0]?.count ?? 0),
       },
       lanes: { blocked, lagging },
-      memoryWritten: written.rows.map((row) => ({ count: Number(row.count), kind: row.kind, scope: row.scope })),
+      memoryWritten: written.rows.map((row) => ({
+        count: Number(row.count),
+        kind: row.kind,
+        scope: row.scope,
+      })),
       reviewBatches: { ambiguous: status("ambiguous"), failed: status("failed") },
-      rotations: { count: Number(rotations.rows[0]?.count ?? 0), latestAt: rotations.rows[0]?.latest_at ?? null },
-      scheduleFailures: summarizeScheduleRunFailures(scheduleRuns.rows.map((row) => ({
-        code: row.code, count: Number(row.count), scheduleId: row.schedule_id, title: row.title,
-      }))),
+      rotations: {
+        count: Number(rotations.rows[0]?.count ?? 0),
+        latestAt: rotations.rows[0]?.latest_at ?? null,
+      },
+      scheduleFailures: summarizeScheduleRunFailures(
+        scheduleRuns.rows.map((row) => ({
+          code: row.code,
+          count: Number(row.count),
+          scheduleId: row.schedule_id,
+          title: row.title,
+        })),
+      ),
       turnQuality,
       windowStart,
     };
@@ -196,7 +229,13 @@ export const ownerHealthDigestRepository = {
     }
   },
 
-  async complete(familyId: string, digestDate: string, now: Date, textLength: number, balanceUsd: number | null = null): Promise<void> {
+  async complete(
+    familyId: string,
+    digestDate: string,
+    now: Date,
+    textLength: number,
+    balanceUsd: number | null = null,
+  ): Promise<void> {
     await database().query(
       `UPDATE owner_health_digests SET sent_at = $3, text_length = $4, balance_usd = $5
         WHERE family_id = $1 AND digest_date = $2`,

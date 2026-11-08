@@ -1,14 +1,8 @@
 import { expectObjectRecord } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
 import { normalizeAuthorizationSpec } from "#runtime/connections/validate-authorization.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
-import {
-  registerDefinitionSource,
-  stampDefinitionKey,
-} from "#public/tool-result-narrowing.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+import { registerDefinitionSource, stampDefinitionKey } from "#public/tool-result-narrowing.js";
 async function resolveConnectionDefinition(t, n, r) {
   try {
     let i = expectObjectRecord(

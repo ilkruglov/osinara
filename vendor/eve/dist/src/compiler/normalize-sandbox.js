@@ -71,13 +71,9 @@ async function resolveSandboxRevalidationKey(e) {
     );
   }
   if (typeof t != `string`)
-    throw Error(
-      `${e.message} The "revalidationKey" function must return a string.`,
-    );
+    throw Error(`${e.message} The "revalidationKey" function must return a string.`);
   if (t.trim().length === 0)
-    throw Error(
-      `${e.message} The "revalidationKey" function must return a non-empty string.`,
-    );
+    throw Error(`${e.message} The "revalidationKey" function must return a non-empty string.`);
   return t;
 }
 async function resolveSandboxSourceHash(r, i) {

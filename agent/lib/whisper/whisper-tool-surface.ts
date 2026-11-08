@@ -41,7 +41,13 @@ export const WHISPER_TOOL_NAMES = [
   "web_search",
 ] as const;
 
-export const WHISPER_DENIED_FRAMEWORK_TOOLS = ["agent", "ask_question", "bash", "todo", "write_file"] as const;
+export const WHISPER_DENIED_FRAMEWORK_TOOLS = [
+  "agent",
+  "ask_question",
+  "bash",
+  "todo",
+  "write_file",
+] as const;
 
 const ALLOWED = new Set<string>(WHISPER_TOOL_NAMES);
 

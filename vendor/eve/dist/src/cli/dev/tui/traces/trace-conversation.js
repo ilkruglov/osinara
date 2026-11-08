@@ -2,11 +2,7 @@ import { formatCompactTokenCount } from "../stream-format.js";
 import { formatPayloadContent, wrapPlainText } from "./trace-content.js";
 import { SURFACE_CLOSE } from "./trace-surfaces.js";
 import { formatElapsed } from "#cli/format-elapsed.js";
-import {
-  clipVisible,
-  stripTerminalControls,
-  visibleLength,
-} from "#cli/ui/terminal-text.js";
+import { clipVisible, stripTerminalControls, visibleLength } from "#cli/ui/terminal-text.js";
 import { compareLocalTraceSpans } from "#tracing/local-trace-reader.js";
 function buildConversationItems(e) {
   let t = new Map(e.spans.map((e) => [e.spanId, e])),
@@ -20,10 +16,7 @@ function buildConversationItems(e) {
   let r = [],
     i = [...e.spans]
       .sort(compareLocalTraceSpans)
-      .find(
-        (e) =>
-          isModelSpan(e) && typeof e.attributes[`ai.prompt.system`] == `string`,
-      ),
+      .find((e) => isModelSpan(e) && typeof e.attributes[`ai.prompt.system`] == `string`),
     a = i?.attributes[`ai.prompt.system`];
   i !== void 0 &&
     typeof a == `string` &&
@@ -91,9 +84,7 @@ function buildConversationItems(e) {
         },
         order: i.startTimeNs,
       });
-      for (let t of parseProviderToolResults(
-        stringAttribute(i, `ai.response.tool_results`),
-      ))
+      for (let t of parseProviderToolResults(stringAttribute(i, `ai.response.tool_results`)))
         r.push({
           item: {
             kind: `tool`,
@@ -116,12 +107,8 @@ function buildConversationItems(e) {
           args: stringAttribute(i, `gen_ai.tool.call.arguments`),
           durationMs: spanDurationMs(i),
           error: i.statusCode === 2,
-          name: stripTerminalControls(
-            stringAttribute(i, `agent.action.name`) ?? `action`,
-          ),
-          result: unwrapJsonString(
-            stringAttribute(i, `gen_ai.tool.call.result`),
-          ),
+          name: stripTerminalControls(stringAttribute(i, `agent.action.name`) ?? `action`),
+          result: unwrapJsonString(stringAttribute(i, `gen_ai.tool.call.result`)),
           span: i,
           subagent: e,
         },
@@ -134,7 +121,7 @@ function buildConversationItems(e) {
 }
 function subagentFor(e, t, n) {
   let r = e;
-  for (; r !== void 0; ) {
+  for (; r !== void 0;) {
     let e = stringAttribute(r, `agent.turn.id`);
     if (e !== void 0) return t.get(e);
     r = r.parentSpanId === void 0 ? void 0 : n.get(r.parentSpanId);
@@ -171,9 +158,7 @@ function renderConversationItem(r, a, s, c, l, u) {
       c.length > 0 && y.push(``, d.dim(`Output:`), ``, ...c));
   } else if (r.kind === `system`) {
     ((_ = `${foldMarker(l, m, s)}${d.bold(g(`system`))}`),
-      (v = d.dim(
-        `~${formatCompactTokenCount(estimateTokens(r.text ?? ``))} tokens`,
-      )));
+      (v = d.dim(`~${formatCompactTokenCount(estimateTokens(r.text ?? ``))} tokens`)));
     let t = wrapPlainText(r.text ?? ``, p);
     y.push(...(l ? t : capLines(t, p)));
   } else if (r.kind === `assistant`) {
@@ -183,15 +168,11 @@ function renderConversationItem(r, a, s, c, l, u) {
         r.reasoning === void 0 || r.reasoning.trim().length === 0
           ? []
           : wrapPlainText(r.reasoning, p),
-      t =
-        r.text === void 0 || r.text.trim().length === 0
-          ? []
-          : wrapPlainText(r.text, p),
+      t = r.text === void 0 || r.text.trim().length === 0 ? [] : wrapPlainText(r.text, p),
       i = (l ? e : capLines(e, p)).map((e) => d.dim(e)),
       a = l ? t : capLines(t, p);
     if (
-      (i.length > 0 &&
-        (y.push(d.dim(`Thought:`), ``, ...i), a.length > 0 && y.push(``)),
+      (i.length > 0 && (y.push(d.dim(`Thought:`), ``, ...i), a.length > 0 && y.push(``)),
       y.push(...a),
       (r.text === void 0 || r.text.trim().length === 0) &&
         r.toolCallNames !== void 0 &&
@@ -203,15 +184,11 @@ function renderConversationItem(r, a, s, c, l, u) {
   } else {
     let e = r.kind === `user` && r.subagent !== void 0 ? `task` : r.kind;
     ((_ = `${foldMarker(l, m, s)}${d.bold(g(e))}`), (v = ``));
-    let t =
-      r.text === void 0 || r.text.trim().length === 0
-        ? []
-        : wrapPlainText(r.text, p);
+    let t = r.text === void 0 || r.text.trim().length === 0 ? [] : wrapPlainText(r.text, p);
     y.push(...(l ? t : capLines(t, p)));
   }
   if (r.subagent !== void 0) {
-    let e =
-      r.subagent.name === void 0 ? `subagent` : `subagent:${r.subagent.name}`;
+    let e = r.subagent.name === void 0 ? `subagent` : `subagent:${r.subagent.name}`;
     _ += d.dim(` · ${e}`);
   }
   (r.error && (_ += ` ${d.red(f.error)}`),
@@ -250,22 +227,14 @@ function cardSplitRow(e, t, n, r, i, o) {
   let c = Math.max(1, n - 8),
     l = visibleLength(t),
     u = clipVisible(e, Math.max(1, c - l - 2));
-  return cardRow(
-    `${u}${` `.repeat(Math.max(2, c - visibleLength(u) - l))}${t}`,
-    n,
-    r,
-    i,
-    o,
-  );
+  return cardRow(`${u}${` `.repeat(Math.max(2, c - visibleLength(u) - l))}${t}`, n, r, i, o);
 }
 function assistantMetrics(t, n, r) {
   let a = [];
   return (
     t.durationMs > 0 && a.push(formatElapsed(t.durationMs)),
-    t.inputTokens !== void 0 &&
-      a.push(`${n.arrowUp}${formatCompactTokenCount(t.inputTokens)}`),
-    t.outputTokens !== void 0 &&
-      a.push(`${n.arrowDown}${formatCompactTokenCount(t.outputTokens)}`),
+    t.inputTokens !== void 0 && a.push(`${n.arrowUp}${formatCompactTokenCount(t.inputTokens)}`),
+    t.outputTokens !== void 0 && a.push(`${n.arrowDown}${formatCompactTokenCount(t.outputTokens)}`),
     t.costUsd !== void 0 && a.push(formatCost(t.costUsd)),
     a.length === 0 ? `` : r.dim(a.join(` · `))
   );
@@ -275,7 +244,7 @@ function formatCost(e) {
 }
 function stepCostUsd(e, t) {
   let n = e;
-  for (; n.parentSpanId !== void 0; ) {
+  for (; n.parentSpanId !== void 0;) {
     if (((n = t.get(n.parentSpanId)), n === void 0)) return;
     if (n.name === `agent.step`) return numberAttribute(n, `gen_ai.usage.cost`);
   }
@@ -284,9 +253,7 @@ function foldMarker(e, t, n) {
   return e ? `${n.colors.dim(`▾`)} ` : t ? `${n.colors.dim(`▸`)} ` : ``;
 }
 function capLines(e, t) {
-  return e.length <= 3
-    ? [...e]
-    : [...e.slice(0, 2), clipVisible(e[2], Math.max(1, t))];
+  return e.length <= 3 ? [...e] : [...e.slice(0, 2), clipVisible(e[2], Math.max(1, t))];
 }
 function conversationItemLineCount(e, t, n, r) {
   return renderConversationItem(e, t, n, !1, r).length;
@@ -295,25 +262,19 @@ function conversationItemExpandable(e, r) {
   let i = Math.max(8, r - 8);
   if (e.kind === `tool`) {
     let n = e.args === void 0 ? 0 : formatPayloadContent(e.args, i - 2).length,
-      r =
-        e.result === void 0 ? 0 : formatPayloadContent(e.result, i - 2).length;
+      r = e.result === void 0 ? 0 : formatPayloadContent(e.result, i - 2).length;
     return n > 3 || r > 3;
   }
   if (e.kind === `system`) return wrapPlainText(e.text ?? ``, i).length > 3;
   if (e.kind === `user`)
     return (
-      (e.text === void 0 || e.text.trim().length === 0
-        ? 0
-        : wrapPlainText(e.text, i).length) > 3
+      (e.text === void 0 || e.text.trim().length === 0 ? 0 : wrapPlainText(e.text, i).length) > 3
     );
   let a =
       e.reasoning === void 0 || e.reasoning.trim().length === 0
         ? 0
         : wrapPlainText(e.reasoning, i).length,
-    o =
-      e.text === void 0 || e.text.trim().length === 0
-        ? 0
-        : wrapPlainText(e.text, i).length;
+    o = e.text === void 0 || e.text.trim().length === 0 ? 0 : wrapPlainText(e.text, i).length;
   return a > 3 || o > 3;
 }
 function estimateTokens(e) {
@@ -348,9 +309,7 @@ function parseToolCallNames(e) {
     try {
       let t = JSON.parse(e);
       return Array.isArray(t)
-        ? t
-            .filter((e) => isRecord(e) && typeof e.toolName == `string`)
-            .map((e) => e.toolName)
+        ? t.filter((e) => isRecord(e) && typeof e.toolName == `string`).map((e) => e.toolName)
         : void 0;
     } catch {
       return;
@@ -361,8 +320,7 @@ function parseProviderToolResults(e) {
   try {
     let t = JSON.parse(e);
     if (!Array.isArray(t)) return [];
-    let asText = (e) =>
-      typeof e == `string` ? e : e === void 0 ? void 0 : JSON.stringify(e);
+    let asText = (e) => (typeof e == `string` ? e : e === void 0 ? void 0 : JSON.stringify(e));
     return t.filter(isRecord).map((e) => {
       let t = `error` in e;
       return {

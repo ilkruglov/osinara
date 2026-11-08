@@ -17,11 +17,7 @@ async function inspectVerifiedRemoteAgent(e) {
   try {
     return inspection(await t.createClient(n.options).info(), verifiedScope(n));
   } catch (t) {
-    if (
-      e.prompter === void 0 ||
-      !isAuthenticationFailure(t) ||
-      !canAuthenticateInteractively(t, n)
-    )
+    if (e.prompter === void 0 || !isAuthenticationFailure(t) || !canAuthenticateInteractively(t, n))
       throw t;
   }
   let r = await t.runRemoteAuthFlow({
@@ -39,10 +35,7 @@ async function inspectVerifiedRemoteAgent(e) {
     host: e.serverUrl,
     redirect: `manual`,
   };
-  return inspection(
-    await t.createClient(i).info(),
-    r.target.deployment.ownerId,
-  );
+  return inspection(await t.createClient(i).info(), r.target.deployment.ownerId);
 }
 function inspection(e, t) {
   return t === void 0 ? { info: e } : { info: e, vercelScope: t };
@@ -54,9 +47,7 @@ function verifiedScope(e) {
 function isAuthenticationFailure(e) {
   return (
     e instanceof ClientError &&
-    ((e.status >= 300 && e.status < 400) ||
-      e.status === 401 ||
-      e.status === 403)
+    ((e.status >= 300 && e.status < 400) || e.status === 401 || e.status === 403)
   );
 }
 function canAuthenticateInteractively(e, t) {
@@ -64,7 +55,6 @@ function canAuthenticateInteractively(e, t) {
     e.status < 400 &&
     (e.headers.location ?? ``).includes(`vercel.com/sso-api`)
     ? !0
-    : t.deploymentResolution?.kind === `resolved` ||
-        t.deploymentResolution?.kind === `forbidden`;
+    : t.deploymentResolution?.kind === `resolved` || t.deploymentResolution?.kind === `forbidden`;
 }
 export { inspectVerifiedRemoteAgent };

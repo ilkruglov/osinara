@@ -42,9 +42,7 @@ function setupQuestionToWire(t) {
       i = { ...n, kind: `multi-select`, options: wireOptions(r) };
     return (
       r.recommended !== void 0 &&
-        (i.recommended = r.recommended.map((t) =>
-          requiredOptionId(r, t, `recommendation`),
-        )),
+        (i.recommended = r.recommended.map((t) => requiredOptionId(r, t, `recommendation`))),
       i
     );
   }

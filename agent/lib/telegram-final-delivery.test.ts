@@ -72,8 +72,9 @@ describe("Telegram final delivery", () => {
     });
     const sendChunk = vi.fn();
 
-    await expect(deliverTelegramFinalOutput({ ...base, sendChunk }))
-      .rejects.toThrowError(/AGENT_TELEGRAM_FINAL_DELIVERY_AMBIGUOUS/u);
+    await expect(deliverTelegramFinalOutput({ ...base, sendChunk })).rejects.toThrowError(
+      /AGENT_TELEGRAM_FINAL_DELIVERY_AMBIGUOUS/u,
+    );
     expect(sendChunk).not.toHaveBeenCalled();
   });
 
@@ -83,11 +84,14 @@ describe("Telegram final delivery", () => {
       deliveryToken: "00000000-0000-4000-8000-000000000003",
       status: "started",
     });
-    repository.confirmChunk.mockRejectedValue(new Error("database disconnected after Telegram accepted"));
+    repository.confirmChunk.mockRejectedValue(
+      new Error("database disconnected after Telegram accepted"),
+    );
     const sendChunk = vi.fn().mockResolvedValue({ chatType: "private", messageId: "502" });
 
-    await expect(deliverTelegramFinalOutput({ ...base, sendChunk }))
-      .rejects.toThrowError("database disconnected after Telegram accepted");
+    await expect(deliverTelegramFinalOutput({ ...base, sendChunk })).rejects.toThrowError(
+      "database disconnected after Telegram accepted",
+    );
     expect(sendChunk).toHaveBeenCalledTimes(1);
     expect(sendChunk).toHaveBeenCalledWith(
       { format: "plain", pacing: "immediate", text: "Готово" },

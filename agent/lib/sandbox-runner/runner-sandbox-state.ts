@@ -5,10 +5,7 @@
  * - `StoredSandboxMetadata`: mounted legacy/current state or disabled internal-session state.
  * - `parseStoredSandboxMetadata`: validates reconnect metadata before backend reuse.
  */
-import type {
-  SandboxAccess,
-  WorkspaceSandboxMount,
-} from "./sandbox-runner-contract.js";
+import type { SandboxAccess, WorkspaceSandboxMount } from "./sandbox-runner-contract.js";
 import {
   parseCreateSandboxRequest,
   parseWorkspaceSandboxUseOptions,
@@ -30,9 +27,7 @@ interface StoredDisabledSandboxMetadata {
   version: number;
 }
 
-export type StoredSandboxMetadata =
-  | StoredDisabledSandboxMetadata
-  | StoredMountedSandboxMetadata;
+export type StoredSandboxMetadata = StoredDisabledSandboxMetadata | StoredMountedSandboxMetadata;
 
 export function parseStoredSandboxMetadata(
   value: Record<string, unknown> | undefined,

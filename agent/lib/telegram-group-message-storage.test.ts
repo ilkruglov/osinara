@@ -8,10 +8,7 @@
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
 
-import {
-  telegramForumTopicId,
-  telegramMessageContent,
-} from "./telegram-group-message-storage.js";
+import { telegramForumTopicId, telegramMessageContent } from "./telegram-group-message-storage.js";
 
 function message(input: { isTopicMessage?: boolean; threadId?: number }): TelegramMessage {
   return {
@@ -23,9 +20,7 @@ function message(input: { isTopicMessage?: boolean; threadId?: number }): Telegr
     ...(input.threadId === undefined ? {} : { messageThreadId: input.threadId }),
     raw: {
       date: 1_700_000_000,
-      ...(input.isTopicMessage === undefined
-        ? {}
-        : { is_topic_message: input.isTopicMessage }),
+      ...(input.isTopicMessage === undefined ? {} : { is_topic_message: input.isTopicMessage }),
     },
     text: "сообщение",
   };
@@ -33,10 +28,12 @@ function message(input: { isTopicMessage?: boolean; threadId?: number }): Telegr
 
 describe("telegramForumTopicId", () => {
   it("redacts credentials from durable timeline content", () => {
-    expect(telegramMessageContent({
-      ...message({}),
-      text: "Пароль: correct-horse-battery-staple",
-    })).toBeNull();
+    expect(
+      telegramMessageContent({
+        ...message({}),
+        text: "Пароль: correct-horse-battery-staple",
+      }),
+    ).toBeNull();
   });
 
   it("ignores a delivery thread on an ordinary supergroup reply", () => {

@@ -36,10 +36,21 @@ export function reserveCall(role: "agent" | "judge" = "agent") {
   if ((job().deadlineAt ?? 0) <= Date.now()) throw new Error("AGENT_SKILL_LAB_DEADLINE");
   const path = process.env.SKILL_LAB_JOURNAL!;
   let entries: string[] = [];
-  try { entries = readFileSync(path, "utf8").split("\n"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  try {
+    entries = readFileSync(path, "utf8").split("\n");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   // Eve may retry a failed hook. A judge with an ambiguous/invalid result is never called twice.
-  if (role === "judge" && entries.some((line) => line && JSON.parse(line).kind === "call" && JSON.parse(line).role === "judge")) throw new Error("AGENT_SKILL_LAB_JUDGE_ALREADY_STARTED");
-  if (entries.filter((line) => line && JSON.parse(line).kind === "call").length >= job().maxCalls) throw new Error("AGENT_SKILL_LAB_CALL_LIMIT");
+  if (
+    role === "judge" &&
+    entries.some(
+      (line) => line && JSON.parse(line).kind === "call" && JSON.parse(line).role === "judge",
+    )
+  )
+    throw new Error("AGENT_SKILL_LAB_JUDGE_ALREADY_STARTED");
+  if (entries.filter((line) => line && JSON.parse(line).kind === "call").length >= job().maxCalls)
+    throw new Error("AGENT_SKILL_LAB_CALL_LIMIT");
   journal({ kind: "call", role, at: Date.now() });
 }
 

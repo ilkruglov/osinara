@@ -8,4 +8,10 @@ import { yarnPackageManager } from "./yarn.js";
 export declare function getPackageManagerStrategy(kind: PackageManagerKind): PackageManagerStrategy;
 export { bunPackageManager, npmPackageManager, pnpmPackageManager, yarnPackageManager };
 export { PNPM_WORKSPACE_CONTENT, PNPM_WORKSPACE_PATH } from "./pnpm.js";
-export type { PackageManagerConfigurationResult, PackageManagerConfigurationOptions, PackageManagerInstallOptions, PackageManagerInvocation, PackageManagerStrategy, } from "./types.js";
+export type {
+  PackageManagerConfigurationResult,
+  PackageManagerConfigurationOptions,
+  PackageManagerInstallOptions,
+  PackageManagerInvocation,
+  PackageManagerStrategy,
+} from "./types.js";

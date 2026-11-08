@@ -7,8 +7,7 @@ function buildAuthRequiredPublicText(e) {
     : `Authorization required for ${e.displayName} (no triggering user)`;
 }
 function buildAuthCompletedText(e) {
-  if (e.outcome === `authorized`)
-    return `:white_check_mark: ${e.displayName} connected`;
+  if (e.outcome === `authorized`) return `:white_check_mark: ${e.displayName} connected`;
   let t = e.reason === void 0 ? `` : ` (${e.reason})`;
   return `:x: ${e.displayName} authorization ${e.outcome}${t}`;
 }

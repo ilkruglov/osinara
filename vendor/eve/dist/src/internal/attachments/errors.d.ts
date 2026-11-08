@@ -14,10 +14,10 @@ type EveAttachmentErrorKind = "resolver-threw";
  * constructor signature.
  */
 interface EveAttachmentErrorInput {
-    readonly kind: EveAttachmentErrorKind;
-    readonly message: string;
-    readonly adapterKind?: string;
-    readonly cause?: unknown;
+  readonly kind: EveAttachmentErrorKind;
+  readonly message: string;
+  readonly adapterKind?: string;
+  readonly cause?: unknown;
 }
 /**
  * Error surfaced when an attachment resolver fails to produce bytes for
@@ -30,9 +30,9 @@ interface EveAttachmentErrorInput {
  * observability can surface the upstream error without losing context.
  */
 export declare class EveAttachmentError extends Error {
-    readonly kind: EveAttachmentErrorKind;
-    readonly adapterKind?: string;
-    readonly cause?: unknown;
-    constructor(input: EveAttachmentErrorInput);
+  readonly kind: EveAttachmentErrorKind;
+  readonly adapterKind?: string;
+  readonly cause?: unknown;
+  constructor(input: EveAttachmentErrorInput);
 }
 export {};

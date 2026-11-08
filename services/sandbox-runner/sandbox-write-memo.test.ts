@@ -56,7 +56,9 @@ describe("createSandboxWriteMemo", () => {
     memo.rememberSkillFile(generation, SKILL_PATH, CONTENT);
     memo.rememberSkillFile(generation, "/workspace/group/report.md", CONTENT);
 
-    expect(memo.hasSkillFile(generation, SKILL_PATH, new TextEncoder().encode("other"))).toBe(false);
+    expect(memo.hasSkillFile(generation, SKILL_PATH, new TextEncoder().encode("other"))).toBe(
+      false,
+    );
     expect(memo.hasSkillFile(null, SKILL_PATH, CONTENT)).toBe(false);
     expect(memo.hasSkillFile(generation, "/workspace/group/report.md", CONTENT)).toBe(false);
   });

@@ -1,7 +1,19 @@
-export { createDockerSandboxBackend, DOCKER_BACKEND_NAME, pruneDockerSandboxTemplates, } from "#execution/sandbox/bindings/docker.js";
+export {
+  createDockerSandboxBackend,
+  DOCKER_BACKEND_NAME,
+  pruneDockerSandboxTemplates,
+} from "#execution/sandbox/bindings/docker.js";
 export { isLinuxDockerDaemonAvailableSync } from "#execution/sandbox/bindings/docker-cli.js";
-export { createJustBashSandboxBackend, JUST_BASH_BACKEND_NAME, pruneJustBashSandboxTemplates, } from "#execution/sandbox/bindings/just-bash.js";
-export { createMicrosandboxSandboxBackend, MICROSANDBOX_BACKEND_NAME, pruneMicrosandboxTemplates, } from "#execution/sandbox/bindings/microsandbox.js";
+export {
+  createJustBashSandboxBackend,
+  JUST_BASH_BACKEND_NAME,
+  pruneJustBashSandboxTemplates,
+} from "#execution/sandbox/bindings/just-bash.js";
+export {
+  createMicrosandboxSandboxBackend,
+  MICROSANDBOX_BACKEND_NAME,
+  pruneMicrosandboxTemplates,
+} from "#execution/sandbox/bindings/microsandbox.js";
 export { isMicrosandboxPlatformSupported } from "#execution/sandbox/bindings/microsandbox-platform.js";
 export { stopDevelopmentSandboxResources } from "#execution/sandbox/development-cleanup.js";
 /**
@@ -12,10 +24,10 @@ export { stopDevelopmentSandboxResources } from "#execution/sandbox/development-
  * no Docker runtime is reachable so docker-less setups stay quiet.
  */
 export declare function pruneLocalSandboxTemplates(input: {
-    readonly appRoot: string;
-    readonly now?: number;
-    readonly recentWindowMs?: number;
-    readonly retainCount?: number;
+  readonly appRoot: string;
+  readonly now?: number;
+  readonly recentWindowMs?: number;
+  readonly retainCount?: number;
 }): Promise<void>;
 /**
  * Starts best-effort cleanup for stale local sandbox templates without

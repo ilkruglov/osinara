@@ -23,9 +23,7 @@ async function resumeDevelopmentRuntimeArtifacts(e) {
     let n = new URL(EVE_DEV_RUNTIME_ARTIFACTS_RESUME_ROUTE_PATH, e.serverUrl);
     return (
       e.silent === !0 && n.searchParams.set(`silent`, `1`),
-      await parseDevelopmentRuntimeArtifactsRevision(
-        await fetch(n, { method: `POST` }),
-      )
+      await parseDevelopmentRuntimeArtifactsRevision(await fetch(n, { method: `POST` }))
     );
   } catch {
     return;
@@ -43,9 +41,7 @@ async function rebuildDevelopmentRuntimeArtifacts(t) {
     let n = new URL(EVE_DEV_RUNTIME_ARTIFACTS_REBUILD_ROUTE_PATH, t.serverUrl);
     return (
       t.force === !0 && n.searchParams.set(`force`, `1`),
-      await parseDevelopmentRuntimeArtifactsRevision(
-        await fetch(n, { method: `POST` }),
-      )
+      await parseDevelopmentRuntimeArtifactsRevision(await fetch(n, { method: `POST` }))
     );
   } catch {
     return;
@@ -54,9 +50,7 @@ async function rebuildDevelopmentRuntimeArtifacts(t) {
 async function parseDevelopmentRuntimeArtifactsRevision(e) {
   if (!e.ok) return;
   let t = await e.json();
-  return typeof t.revision == `string` && t.revision.length > 0
-    ? t.revision
-    : void 0;
+  return typeof t.revision == `string` && t.revision.length > 0 ? t.revision : void 0;
 }
 export {
   readDevelopmentRuntimeArtifactsRevision,

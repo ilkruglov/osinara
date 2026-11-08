@@ -26,22 +26,36 @@ const answer = { result: { content: [{ text: '{"ok":true,"data":{"link":"x"}}', 
 
 describe("grocery catalog client", () => {
   it("recognizes a rate limit inside an HTTP-success MCP payload without retrying", async () => {
-    const {call, grocery} = client({result:{content:[{text:JSON.stringify({
-      ok:false, code:'rate_limited', error:{http_status:429},
-    })}]}});
-    await expect(grocery('vkusvill_products_search',{q:'молоко'}))
-      .rejects.toMatchObject({code:'AGENT_GROCERY_RATE_LIMITED'});
+    const { call, grocery } = client({
+      result: {
+        content: [
+          {
+            text: JSON.stringify({
+              ok: false,
+              code: "rate_limited",
+              error: { http_status: 429 },
+            }),
+          },
+        ],
+      },
+    });
+    await expect(grocery("vkusvill_products_search", { q: "молоко" })).rejects.toMatchObject({
+      code: "AGENT_GROCERY_RATE_LIMITED",
+    });
     expect(call).toHaveBeenCalledOnce();
   });
   it("sends one JSON-RPC call and returns the parsed payload", async () => {
     const { call, grocery } = client(answer);
 
-    await expect(grocery("vkusvill_cart_link_create", { products: [] }))
-      .resolves.toEqual({ data: { link: "x" }, ok: true });
+    await expect(grocery("vkusvill_cart_link_create", { products: [] })).resolves.toEqual({
+      data: { link: "x" },
+      ok: true,
+    });
     expect(call).toHaveBeenCalledOnce();
     const body = JSON.parse((call.mock.calls[0]![1] as { body: string }).body);
     expect(body).toMatchObject({
-      jsonrpc: "2.0", method: "tools/call",
+      jsonrpc: "2.0",
+      method: "tools/call",
       params: { arguments: { products: [] }, name: "vkusvill_cart_link_create" },
     });
   });
@@ -54,8 +68,9 @@ describe("grocery catalog client", () => {
       [{ result: { content: [] } }, true],
     ] as const) {
       const { call, grocery } = client(response, ok);
-      await expect(grocery("vkusvill_products_search", { q: "творог" }))
-        .rejects.toThrowError(/AGENT_GROCERY_UNAVAILABLE/);
+      await expect(grocery("vkusvill_products_search", { q: "творог" })).rejects.toThrowError(
+        /AGENT_GROCERY_UNAVAILABLE/,
+      );
       expect(call).toHaveBeenCalledOnce();
     }
   });
@@ -63,7 +78,8 @@ describe("grocery catalog client", () => {
   it("reports a non-JSON tool payload separately from an unavailable source", async () => {
     const { grocery } = client({ result: { content: [{ text: "не json", type: "text" }] } });
 
-    await expect(grocery("vkusvill_products_search", { q: "творог" }))
-      .rejects.toThrowError(/AGENT_GROCERY_RESPONSE_INVALID/);
+    await expect(grocery("vkusvill_products_search", { q: "творог" })).rejects.toThrowError(
+      /AGENT_GROCERY_RESPONSE_INVALID/,
+    );
   });
 });

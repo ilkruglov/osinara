@@ -18,13 +18,17 @@ import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 import { toModelMemory } from "./model-memory.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const QUERY_VECTOR = Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0);
 
 interface Fixture {
-  externalA: { conversationId: string; groupId: string; otherParticipantId: string; selfParticipantId: string };
+  externalA: {
+    conversationId: string;
+    groupId: string;
+    otherParticipantId: string;
+    selfParticipantId: string;
+  };
   externalB: { conversationId: string; groupId: string; selfParticipantId: string };
   otherUserId: string;
   ownerAuth: MemoryAuthorization;
@@ -81,8 +85,8 @@ async function createFixture(): Promise<Fixture> {
     [conversationA.id, conversationB.id, owner.id, other.id],
   );
   const participant = (conversationId: string, telegramUserId: string) =>
-    participants.rows.find((row) =>
-      row.conversation_id === conversationId && row.telegram_user_id === telegramUserId
+    participants.rows.find(
+      (row) => row.conversation_id === conversationId && row.telegram_user_id === telegramUserId,
     )!.id;
   return {
     externalA: {
@@ -128,8 +132,15 @@ async function insertGroupClaim(input: {
         subject_participant_id, subject_conversation_id, profile_eligible)
      VALUES ($1, $2, $3, 'group', 'fact', $4, 'r3:retrieval', 'model_high', 'normal',
              $5, 'evidenced', $6, $7, $6, true) RETURNING id`,
-    [input.familyId, input.groupId, input.telegramUserId, input.content,
-      input.operationKey, input.conversationId, input.participantId],
+    [
+      input.familyId,
+      input.groupId,
+      input.telegramUserId,
+      input.content,
+      input.operationKey,
+      input.conversationId,
+      input.participantId,
+    ],
   );
   const reference = await database().query<{ memory_ref: string }>(
     "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
@@ -144,8 +155,9 @@ async function enablePolicy(
   label: string,
   operationKey: string,
 ): Promise<void> {
-  const policy = (await profileProjectionPolicyRepository.list(auth))
-    .find((candidate) => candidate.label === label)!;
+  const policy = (await profileProjectionPolicyRepository.list(auth)).find(
+    (candidate) => candidate.label === label,
+  )!;
   await profileProjectionPolicyRepository.update(auth, {
     enabled: true,
     groupRef: policy.groupRef,
@@ -171,32 +183,46 @@ describeWithDatabase("R3 external projection retrieval", () => {
   it("retrieves only enabled self claims privately while external groups remain isolated", async () => {
     const fixture = await createFixture();
     const selfA = await insertGroupClaim({
-      content: "Анна использует проектор Альфа", conversationId: fixture.externalA.conversationId,
-      familyId: fixture.ownerAuth.familyId, groupId: fixture.externalA.groupId,
-      operationKey: "self-a", participantId: fixture.externalA.selfParticipantId,
+      content: "Анна использует проектор Альфа",
+      conversationId: fixture.externalA.conversationId,
+      familyId: fixture.ownerAuth.familyId,
+      groupId: fixture.externalA.groupId,
+      operationKey: "self-a",
+      participantId: fixture.externalA.selfParticipantId,
       telegramUserId: "9701",
     });
     const otherA = await insertGroupClaim({
-      content: "Пётр использует проектор Бета", conversationId: fixture.externalA.conversationId,
-      familyId: fixture.ownerAuth.familyId, groupId: fixture.externalA.groupId,
-      operationKey: "other-a", participantId: fixture.externalA.otherParticipantId,
+      content: "Пётр использует проектор Бета",
+      conversationId: fixture.externalA.conversationId,
+      familyId: fixture.ownerAuth.familyId,
+      groupId: fixture.externalA.groupId,
+      operationKey: "other-a",
+      participantId: fixture.externalA.otherParticipantId,
       telegramUserId: "9702",
     });
     await insertGroupClaim({
-      content: "Анна использует проектор Гамма", conversationId: fixture.externalB.conversationId,
-      familyId: fixture.ownerAuth.familyId, groupId: fixture.externalB.groupId,
-      operationKey: "self-b", participantId: fixture.externalB.selfParticipantId,
+      content: "Анна использует проектор Гамма",
+      conversationId: fixture.externalB.conversationId,
+      familyId: fixture.ownerAuth.familyId,
+      groupId: fixture.externalB.groupId,
+      operationKey: "self-b",
+      participantId: fixture.externalB.selfParticipantId,
       telegramUserId: "9701",
     });
 
-    await expect(memoryRetrievalRepository.search(
-      fixture.ownerAuth, "проектор", QUERY_VECTOR,
-    )).resolves.toEqual([]);
+    await expect(
+      memoryRetrievalRepository.search(fixture.ownerAuth, "проектор", QUERY_VECTOR),
+    ).resolves.toEqual([]);
     await enablePolicy(
-      fixture.ownerAuth, fixture.externalA.groupId, "External A", "enable-a-retrieval",
+      fixture.ownerAuth,
+      fixture.externalA.groupId,
+      "External A",
+      "enable-a-retrieval",
     );
     const enabledA = await memoryRetrievalRepository.search(
-      fixture.ownerAuth, "проектор", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор",
+      QUERY_VECTOR,
     );
     expect(enabledA.map((result) => result.memory.content)).toEqual([
       "Анна использует проектор Альфа",
@@ -209,11 +235,14 @@ describeWithDatabase("R3 external projection retrieval", () => {
       [selfA.id, otherA.id, fixture.ownerAuth.familyId, fixture.externalA.groupId],
     );
     const unauthorizedClosure = await memoryRetrievalRepository.searchWithConflictClosure(
-      fixture.ownerAuth, "проектор", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор",
+      QUERY_VECTOR,
     );
     expect(unauthorizedClosure.conflicts).toEqual([]);
-    expect(unauthorizedClosure.results.map((result) => result.memory.content))
-      .not.toContain("Анна использует проектор Альфа");
+    expect(unauthorizedClosure.results.map((result) => result.memory.content)).not.toContain(
+      "Анна использует проектор Альфа",
+    );
     expect(unauthorizedClosure.relatedClaimIds).not.toContain(selfA.id);
     expect(JSON.stringify(unauthorizedClosure)).not.toMatch(
       new RegExp([otherA.id, otherA.memoryRef, "Пётр использует проектор Бета"].join("|"), "u"),
@@ -232,22 +261,28 @@ describeWithDatabase("R3 external projection retrieval", () => {
       [fixture.ownerAuth.familyId, fixture.ownerUserId, fixture.personalConversationId],
     );
     const independent = await memoryRetrievalRepository.search(
-      fixture.ownerAuth, "проектор Альфа", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор Альфа",
+      QUERY_VECTOR,
     );
-    expect(independent.map((result) => result.memory.content)).toEqual(expect.arrayContaining([
-      "Анна использует проектор Альфа",
-      "Анна не использует проектор Альфа",
-    ]));
-    await expect(database().query(
-      `SELECT
+    expect(independent.map((result) => result.memory.content)).toEqual(
+      expect.arrayContaining([
+        "Анна использует проектор Альфа",
+        "Анна не использует проектор Альфа",
+      ]),
+    );
+    await expect(
+      database().query(
+        `SELECT
          (SELECT count(*)::integer FROM claim_relations
           WHERE (source_claim_id = $1 AND target_claim_id = $2)
              OR (source_claim_id = $2 AND target_claim_id = $1)) AS relations,
          (SELECT count(*)::integer FROM claim_conflicts
           WHERE claim_a_id = LEAST($1::uuid, $2::uuid)
             AND claim_b_id = GREATEST($1::uuid, $2::uuid)) AS conflicts`,
-      [selfA.id, personalDisagreement.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ conflicts: 0, relations: 0 }] });
+        [selfA.id, personalDisagreement.rows[0]!.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ conflicts: 0, relations: 0 }] });
 
     // A former participant needs no live external membership row; exact durable binding remains.
     await database().query(
@@ -267,71 +302,115 @@ describeWithDatabase("R3 external projection retrieval", () => {
       telegramUserId: "9702",
     });
     const afterDeparture = await memoryRetrievalRepository.search(
-      fixture.ownerAuth, "проектор", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор",
+      QUERY_VECTOR,
     );
-    expect(afterDeparture.map((result) => result.memory.content)).toEqual(expect.arrayContaining([
-      "Анна использует проектор Альфа",
-      "После ухода Анна выбирает проектор Дельта",
-    ]));
-    expect((await memoryRepository.list(fixture.ownerAuth, { limit: 50 })).items
-      .map((item) => item.content)).toEqual(["Анна не использует проектор Альфа"]);
+    expect(afterDeparture.map((result) => result.memory.content)).toEqual(
+      expect.arrayContaining([
+        "Анна использует проектор Альфа",
+        "После ухода Анна выбирает проектор Дельта",
+      ]),
+    );
+    expect(
+      (await memoryRepository.list(fixture.ownerAuth, { limit: 50 })).items.map(
+        (item) => item.content,
+      ),
+    ).toEqual(["Анна не использует проектор Альфа"]);
 
     const externalAAuth: MemoryAuthorization = {
-      ...fixture.ownerAuth, groupId: fixture.externalA.groupId, scopes: ["group"],
+      ...fixture.ownerAuth,
+      groupId: fixture.externalA.groupId,
+      scopes: ["group"],
     };
     const externalAResults = await memoryRetrievalRepository.search(
-      externalAAuth, "проектор", QUERY_VECTOR,
+      externalAAuth,
+      "проектор",
+      QUERY_VECTOR,
     );
-    expect(externalAResults.map((result) => result.memory.content)).toEqual(expect.arrayContaining([
-      "Анна использует проектор Альфа",
-      "Пётр использует проектор Бета",
-      "После ухода Анна выбирает проектор Дельта",
-    ]));
+    expect(externalAResults.map((result) => result.memory.content)).toEqual(
+      expect.arrayContaining([
+        "Анна использует проектор Альфа",
+        "Пётр использует проектор Бета",
+        "После ухода Анна выбирает проектор Дельта",
+      ]),
+    );
     expect(JSON.stringify(externalAResults)).not.toContain("проектор Гамма");
 
     await enablePolicy(
-      fixture.ownerAuth, fixture.externalB.groupId, "External B", "enable-b-retrieval",
+      fixture.ownerAuth,
+      fixture.externalB.groupId,
+      "External B",
+      "enable-b-retrieval",
     );
     const bothEnabled = await memoryRetrievalRepository.search(
-      fixture.ownerAuth, "проектор", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор",
+      QUERY_VECTOR,
     );
     const privateContents = bothEnabled.map((result) => result.memory.content);
-    expect(privateContents).toEqual(expect.arrayContaining([
-      "Анна использует проектор Альфа",
-      "Анна использует проектор Гамма",
-      "После ухода Анна выбирает проектор Дельта",
-    ]));
+    expect(privateContents).toEqual(
+      expect.arrayContaining([
+        "Анна использует проектор Альфа",
+        "Анна использует проектор Гамма",
+        "После ухода Анна выбирает проектор Дельта",
+      ]),
+    );
     expect(privateContents).not.toContain("Пётр использует проектор Бета");
-    const safeModels = bothEnabled.map((result) => toModelMemory(result.memory, result.sourceEvidence));
+    const safeModels = bothEnabled.map((result) =>
+      toModelMemory(result.memory, result.sourceEvidence),
+    );
     const safe = JSON.stringify(safeModels);
-    expect(safeModels).toEqual(expect.arrayContaining([
-      // Пояснение вида evidence живёт один раз в шапке блока, в записи остаётся только kind.
-      expect.objectContaining({ evidence: expect.objectContaining({ kind: "unresolved" }) }),
-    ]));
-    expect(safe).not.toMatch(new RegExp([
-      selfA.id, later.id, fixture.externalA.groupId, fixture.externalB.groupId,
-      personalDisagreement.rows[0]!.id,
-      fixture.externalA.selfParticipantId, fixture.ownerUserId, fixture.otherUserId,
-      "-1009701", "-1009702",
-    ].join("|"), "u"));
+    expect(safeModels).toEqual(
+      expect.arrayContaining([
+        // Пояснение вида evidence живёт один раз в шапке блока, в записи остаётся только kind.
+        expect.objectContaining({ evidence: expect.objectContaining({ kind: "unresolved" }) }),
+      ]),
+    );
+    expect(safe).not.toMatch(
+      new RegExp(
+        [
+          selfA.id,
+          later.id,
+          fixture.externalA.groupId,
+          fixture.externalB.groupId,
+          personalDisagreement.rows[0]!.id,
+          fixture.externalA.selfParticipantId,
+          fixture.ownerUserId,
+          fixture.otherUserId,
+          "-1009701",
+          "-1009702",
+        ].join("|"),
+        "u",
+      ),
+    );
     expect(safe).not.toMatch(/"(?:id|groupId|participantId|userId|telegramUserId)"/u);
   });
 
   it("closes an authorized incoming conflict with both versions and no silent winner", async () => {
     const fixture = await createFixture();
     await enablePolicy(
-      fixture.ownerAuth, fixture.externalA.groupId, "External A", "enable-a-conflict",
+      fixture.ownerAuth,
+      fixture.externalA.groupId,
+      "External A",
+      "enable-a-conflict",
     );
     const first = await insertGroupClaim({
-      content: "Анна хранит проектор дома", conversationId: fixture.externalA.conversationId,
-      familyId: fixture.ownerAuth.familyId, groupId: fixture.externalA.groupId,
-      operationKey: "conflict-a", participantId: fixture.externalA.selfParticipantId,
+      content: "Анна хранит проектор дома",
+      conversationId: fixture.externalA.conversationId,
+      familyId: fixture.ownerAuth.familyId,
+      groupId: fixture.externalA.groupId,
+      operationKey: "conflict-a",
+      participantId: fixture.externalA.selfParticipantId,
       telegramUserId: "9701",
     });
     const second = await insertGroupClaim({
-      content: "Анна не хранит проектор дома", conversationId: fixture.externalA.conversationId,
-      familyId: fixture.ownerAuth.familyId, groupId: fixture.externalA.groupId,
-      operationKey: "conflict-b", participantId: fixture.externalA.selfParticipantId,
+      content: "Анна не хранит проектор дома",
+      conversationId: fixture.externalA.conversationId,
+      familyId: fixture.ownerAuth.familyId,
+      groupId: fixture.externalA.groupId,
+      operationKey: "conflict-b",
+      participantId: fixture.externalA.selfParticipantId,
       telegramUserId: "9702",
     });
     await database().query(
@@ -343,7 +422,9 @@ describeWithDatabase("R3 external projection retrieval", () => {
     );
 
     const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(
-      fixture.ownerAuth, "проектор дома", QUERY_VECTOR,
+      fixture.ownerAuth,
+      "проектор дома",
+      QUERY_VECTOR,
     );
 
     expect(retrieval.conflicts).toHaveLength(1);
@@ -351,15 +432,22 @@ describeWithDatabase("R3 external projection retrieval", () => {
       "Анна не хранит проектор дома",
       "Анна хранит проектор дома",
     ]);
-    expect(retrieval.results.map((result) => result.memory.memoryRef))
-      .not.toEqual(expect.arrayContaining([first.memoryRef, second.memoryRef]));
-    expect(JSON.stringify(retrieval.conflicts)).not.toMatch(
-      new RegExp([first.id, second.id, fixture.externalA.groupId,
-        fixture.externalA.selfParticipantId].join("|"), "u"),
+    expect(retrieval.results.map((result) => result.memory.memoryRef)).not.toEqual(
+      expect.arrayContaining([first.memoryRef, second.memoryRef]),
     );
-    await expect(database().query(
-      "SELECT claim_status::text FROM memory_items WHERE id = ANY($1::uuid[]) ORDER BY id",
-      [[first.id, second.id]],
-    )).resolves.toMatchObject({ rows: [{ claim_status: "active" }, { claim_status: "active" }] });
+    expect(JSON.stringify(retrieval.conflicts)).not.toMatch(
+      new RegExp(
+        [first.id, second.id, fixture.externalA.groupId, fixture.externalA.selfParticipantId].join(
+          "|",
+        ),
+        "u",
+      ),
+    );
+    await expect(
+      database().query(
+        "SELECT claim_status::text FROM memory_items WHERE id = ANY($1::uuid[]) ORDER BY id",
+        [[first.id, second.id]],
+      ),
+    ).resolves.toMatchObject({ rows: [{ claim_status: "active" }, { claim_status: "active" }] });
   });
 });

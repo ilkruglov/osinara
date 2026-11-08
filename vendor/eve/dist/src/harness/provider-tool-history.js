@@ -29,12 +29,9 @@ function normalizeProviderToolHistory(e) {
         ? (flushAssistant(), c.push(n))
         : (flushTool(),
           s.push(
-            n.type === `tool-call` && t.has(n.toolCallId)
-              ? { ...n, providerExecuted: !1 }
-              : n,
+            n.type === `tool-call` && t.has(n.toolCallId) ? { ...n, providerExecuted: !1 } : n,
           )),
-        n.type === `tool-result` &&
-        e.providerExecutedOutcomeIds.has(n.toolCallId)
+        n.type === `tool-result` && e.providerExecutedOutcomeIds.has(n.toolCallId)
           ? (r = a)
           : n.type === `text` && n.text.trim().length > 0 && (i = a),
         (a += 1));

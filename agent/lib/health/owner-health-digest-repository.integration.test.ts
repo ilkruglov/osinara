@@ -14,14 +14,16 @@
 import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
-import { createMemoryFamilyFixture, createMemoryInput } from "../memory-repository.integration-fixtures.js";
+import {
+  createMemoryFamilyFixture,
+  createMemoryInput,
+} from "../memory-repository.integration-fixtures.js";
 import { memoryRepository } from "../memory-repository.js";
 import { ownerBalanceAlertRepository } from "./owner-balance-alert-repository.js";
 import { ownerHealthDigestRepository } from "./owner-health-digest-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("ownerHealthDigestRepository", () => {
   afterAll(closeDatabase);
@@ -33,9 +35,15 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
     const windowStart = new Date(now.getTime() - 60 * 60 * 1_000);
 
     const recipients = await ownerHealthDigestRepository.recipients();
-    expect(recipients).toContainEqual({ familyId: family.familyId, ownerTelegramUserId: `owner-${suffix}` });
+    expect(recipients).toContainEqual({
+      familyId: family.familyId,
+      ownerTelegramUserId: `owner-${suffix}`,
+    });
 
-    await memoryRepository.create(family.owner, createMemoryInput("family", `${suffix}-fact`, "Семья любит гречку"));
+    await memoryRepository.create(
+      family.owner,
+      createMemoryInput("family", `${suffix}-fact`, "Семья любит гречку"),
+    );
     await database().query(
       `INSERT INTO conversation_sessions
          (thread_id, generation, family_id, owner_user_id, scope, conversation_key, continuation_token,
@@ -71,21 +79,34 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
 
     const report = await ownerHealthDigestRepository.report(family.familyId, windowStart, now);
     expect(report.rotations.count).toBe(1);
-    expect(report.memoryWritten).toContainEqual(expect.objectContaining({ count: 1, scope: "family" }));
+    expect(report.memoryWritten).toContainEqual(
+      expect.objectContaining({ count: 1, scope: "family" }),
+    );
     expect(report.lanes.blocked).toContainEqual({
-      code: "MODEL_CALL_FAILED", headStatus: "failed", label, waiting: 0,
+      code: "MODEL_CALL_FAILED",
+      headStatus: "failed",
+      label,
+      waiting: 0,
     });
     expect(report.reviewBatches.failed).toBe(1);
     expect(report.turnQuality).toMatchObject({ failed: 0, turns: 0, versions: [] });
 
     const digestDate = "2026-09-09";
-    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(true);
-    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(false);
+    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(
+      true,
+    );
+    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(
+      false,
+    );
     await ownerHealthDigestRepository.release(family.familyId, digestDate);
-    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(true);
+    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(
+      true,
+    );
     await ownerHealthDigestRepository.complete(family.familyId, digestDate, now, 42);
     await ownerHealthDigestRepository.release(family.familyId, digestDate);
-    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(false);
+    await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(
+      false,
+    );
   });
 
   it("reports the family's failed scheduled runs in the window, naming only schedules the owner may see", async () => {
@@ -113,13 +134,27 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
          VALUES ($1, $2::uuid, COALESCE($2::uuid, $3::uuid), $4, $5, $6, 'Запрос', 'Сценарий', 'UTC', 'daily', 1,
                  timestamp '2026-01-01 00:00:00', timestamptz '2026-01-01 00:00:00+00', $7, $8)
          RETURNING id`,
-        [familyId, ownerUserId, family.owner.userId, groupId, scope, title,
-          `chat-${title}-${suffix}`, scope === "personal" ? "private" : "supergroup"],
+        [
+          familyId,
+          ownerUserId,
+          family.owner.userId,
+          groupId,
+          scope,
+          title,
+          `chat-${title}-${suffix}`,
+          scope === "personal" ? "private" : "supergroup",
+        ],
       );
       return result.rows[0]!.id;
     }
     let occurrence = 0;
-    async function run(scheduleId: string, familyId: string, status: string, code: string | null, updatedAt: Date) {
+    async function run(
+      scheduleId: string,
+      familyId: string,
+      status: string,
+      code: string | null,
+      updatedAt: Date,
+    ) {
       occurrence += 1;
       await database().query(
         `INSERT INTO agent_schedule_runs (schedule_id, family_id, scheduled_for, status, lease_token, error_code, updated_at)
@@ -127,14 +162,56 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
         [scheduleId, familyId, status, code, updatedAt, occurrence],
       );
     }
-    const ownerOwn = await schedule(family.familyId, "personal", "Мои новости", family.owner.userId, null);
-    const memberOwn = await schedule(family.familyId, "personal", "Тайна участника", family.member.userId, null);
-    const familyWide = await schedule(family.familyId, "family", "Семейный план", null, group.rows[0]!.id);
-    const foreign = await schedule(other.familyId, "personal", "Чужая семья", other.owner.userId, null);
-    await run(ownerOwn, family.familyId, "failed", "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", now);
-    await run(ownerOwn, family.familyId, "failed", "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", now);
+    const ownerOwn = await schedule(
+      family.familyId,
+      "personal",
+      "Мои новости",
+      family.owner.userId,
+      null,
+    );
+    const memberOwn = await schedule(
+      family.familyId,
+      "personal",
+      "Тайна участника",
+      family.member.userId,
+      null,
+    );
+    const familyWide = await schedule(
+      family.familyId,
+      "family",
+      "Семейный план",
+      null,
+      group.rows[0]!.id,
+    );
+    const foreign = await schedule(
+      other.familyId,
+      "personal",
+      "Чужая семья",
+      other.owner.userId,
+      null,
+    );
+    await run(
+      ownerOwn,
+      family.familyId,
+      "failed",
+      "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING",
+      now,
+    );
+    await run(
+      ownerOwn,
+      family.familyId,
+      "failed",
+      "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING",
+      now,
+    );
     await run(ownerOwn, family.familyId, "completed", null, now);
-    await run(ownerOwn, family.familyId, "failed", "OLD_FAILURE", new Date(windowStart.getTime() - 60_000));
+    await run(
+      ownerOwn,
+      family.familyId,
+      "failed",
+      "OLD_FAILURE",
+      new Date(windowStart.getTime() - 60_000),
+    );
     await run(familyWide, family.familyId, "ambiguous", "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", now);
     await run(memberOwn, family.familyId, "failed", "AGENT_SCHEDULE_DESTINATION_REVOKED", now);
     await run(foreign, other.familyId, "failed", "FOREIGN_FAILURE", now);
@@ -152,7 +229,12 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
           otherCodes: 0,
           title: "Мои новости",
         },
-        { codes: [{ code: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", count: 1 }], count: 1, otherCodes: 0, title: "Семейный план" },
+        {
+          codes: [{ code: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", count: 1 }],
+          count: 1,
+          otherCodes: 0,
+          title: "Семейный план",
+        },
       ],
     });
     expect(JSON.stringify(report)).not.toContain("Тайна участника");
@@ -162,23 +244,39 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const family = await createMemoryFamilyFixture(suffix);
     const now = new Date("2026-09-26T06:10:00.000Z");
-    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27")).toBeNull();
+    expect(
+      await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27"),
+    ).toBeNull();
     expect(await ownerHealthDigestRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
     await ownerHealthDigestRepository.complete(family.familyId, "2026-09-26", now, 120, 12.5);
     // Only yesterday's balance makes a day's change: a gap of a day yields no comparison.
-    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27")).toBe(12.5);
-    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-28")).toBeNull();
+    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27")).toBe(
+      12.5,
+    );
+    expect(
+      await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-28"),
+    ).toBeNull();
 
     expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
     expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(false);
     await ownerBalanceAlertRepository.release(family.familyId, "2026-09-26");
     expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
-    await ownerBalanceAlertRepository.abandon(family.familyId, "2026-09-26", "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS");
+    await ownerBalanceAlertRepository.abandon(
+      family.familyId,
+      "2026-09-26",
+      "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS",
+    );
     await ownerBalanceAlertRepository.release(family.familyId, "2026-09-26");
     expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(false);
     // A claim left behind by a dead dispatcher is ambiguous, not free: the alert is not sent twice.
     expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-27", now)).toBe(true);
-    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-27", new Date(now.getTime() + 2 * 60 * 60 * 1_000))).toBe(false);
+    expect(
+      await ownerBalanceAlertRepository.claim(
+        family.familyId,
+        "2026-09-27",
+        new Date(now.getTime() + 2 * 60 * 60 * 1_000),
+      ),
+    ).toBe(false);
 
     expect(await ownerHealthDigestRepository.databaseBytes()).toBeGreaterThan(0);
   });

@@ -14,9 +14,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "../database.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const MIGRATION_NAME = "069_memory_review_sandbox_recovery.sql";
 const MIGRATION_ORDINAL = 69;
 const TEST_SCHEMA = "test_memory_review_sandbox_recovery";
@@ -117,9 +116,14 @@ describeWithDatabase("069 memory review sandbox recovery migration", () => {
             last_activity_at, retired_at, delete_after, memory_review_batch_id)
          VALUES ($1::uuid, gen_random_uuid(), 0, $2, $3, 'family', 'proactive', 'failed',
                  $4, $5, $6, now(), now(), now(), now() + interval '90 days', NULL)`,
-        [ORIGINAL_APPLICATION_SESSION_ID, family.rows[0]!.id, group.rows[0]!.id,
-          BATCH_ID, `retired-memory-review:${ORIGINAL_APPLICATION_SESSION_ID}`,
-          ORIGINAL_EVE_SESSION_ID],
+        [
+          ORIGINAL_APPLICATION_SESSION_ID,
+          family.rows[0]!.id,
+          group.rows[0]!.id,
+          BATCH_ID,
+          `retired-memory-review:${ORIGINAL_APPLICATION_SESSION_ID}`,
+          ORIGINAL_EVE_SESSION_ID,
+        ],
       );
       await client.query(
         `INSERT INTO conversation_sessions
@@ -128,8 +132,15 @@ describeWithDatabase("069 memory review sandbox recovery migration", () => {
             last_activity_at, retired_at, delete_after, memory_review_batch_id)
          VALUES ($1::uuid, gen_random_uuid(), 1, $2, $3, 'family', 'proactive', 'failed',
                  $4, $5, $6, now(), now(), now(), now() + interval '90 days', $7::uuid)`,
-        [RECOVERY_APPLICATION_SESSION_ID, family.rows[0]!.id, group.rows[0]!.id,
-          BATCH_ID, `memory-review:${BATCH_ID}`, RECOVERY_EVE_SESSION_ID, BATCH_ID],
+        [
+          RECOVERY_APPLICATION_SESSION_ID,
+          family.rows[0]!.id,
+          group.rows[0]!.id,
+          BATCH_ID,
+          `memory-review:${BATCH_ID}`,
+          RECOVERY_EVE_SESSION_ID,
+          BATCH_ID,
+        ],
       );
       await client.query(
         "UPDATE memory_review_batches SET application_session_id = $2 WHERE id = $1",
@@ -155,23 +166,31 @@ describeWithDatabase("069 memory review sandbox recovery migration", () => {
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));
 
-      await expect(client.query(
-        `SELECT status::text, recovery_attempts, application_session_id, eve_session_id,
+      await expect(
+        client.query(
+          `SELECT status::text, recovery_attempts, application_session_id, eve_session_id,
                 diagnostic_code FROM memory_review_batches WHERE id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{
-        application_session_id: null,
-        diagnostic_code: null,
-        eve_session_id: null,
-        recovery_attempts: 2,
-        status: "pending",
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            application_session_id: null,
+            diagnostic_code: null,
+            eve_session_id: null,
+            recovery_attempts: 2,
+            status: "pending",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
                 max(timeline_sequence)::text AS last
            FROM memory_review_batch_sources WHERE batch_id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 50, first: "5540", last: "5589" }] });
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 50, first: "5540", last: "5589" }] });
 
       // A later terminal outcome must not be hidden by the already-delivered generation-one alert.
       await client.query(
@@ -180,19 +199,14 @@ describeWithDatabase("069 memory review sandbox recovery migration", () => {
           WHERE id = $1`,
         [BATCH_ID],
       );
-      await enqueueMemoryReviewOwnerAlert(
-        client,
-        BATCH_ID,
-        "AGENT_MEMORY_REVIEW_TEST_TERMINAL",
-      );
-      await expect(client.query(
-        `SELECT recovery_generation FROM memory_review_owner_alerts
+      await enqueueMemoryReviewOwnerAlert(client, BATCH_ID, "AGENT_MEMORY_REVIEW_TEST_TERMINAL");
+      await expect(
+        client.query(
+          `SELECT recovery_generation FROM memory_review_owner_alerts
           WHERE batch_id = $1 ORDER BY recovery_generation`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [
-        { recovery_generation: 1 },
-        { recovery_generation: 2 },
-      ] });
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ recovery_generation: 1 }, { recovery_generation: 2 }] });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

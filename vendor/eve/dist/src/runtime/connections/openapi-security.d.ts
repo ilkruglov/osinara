@@ -12,15 +12,18 @@ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
  * - `apiKey` — the token is placed in the named header, query param, or
  *   cookie instead of `Authorization`.
  */
-export type SecurityPlacement = {
-    readonly kind: "bearer";
-} | {
-    readonly kind: "basic";
-} | {
-    readonly kind: "apiKey";
-    readonly in: "header" | "query" | "cookie";
-    readonly name: string;
-};
+export type SecurityPlacement =
+  | {
+      readonly kind: "bearer";
+    }
+  | {
+      readonly kind: "basic";
+    }
+  | {
+      readonly kind: "apiKey";
+      readonly in: "header" | "query" | "cookie";
+      readonly name: string;
+    };
 /**
  * Resolves how an operation's credential should be placed, from its
  * effective `security` requirement (operation-level overrides the
@@ -30,7 +33,10 @@ export type SecurityPlacement = {
  * default `Authorization: Bearer` behavior is used. The first recognized
  * scheme in the first requirement object wins.
  */
-export declare function resolveSecurity(document: Record<string, unknown>, operation: Record<string, unknown>): SecurityPlacement | undefined;
+export declare function resolveSecurity(
+  document: Record<string, unknown>,
+  operation: Record<string, unknown>,
+): SecurityPlacement | undefined;
 /**
  * Reshapes the resolved credential according to the operation's
  * {@link SecurityPlacement}. The credential is resolved once by
@@ -39,4 +45,10 @@ export declare function resolveSecurity(document: Record<string, unknown>, opera
  * `Authorization` scheme (basic). A `bearer` placement, a missing
  * placement, or a connection without `authorization` is a no-op.
  */
-export declare function applySecurity(placement: SecurityPlacement | undefined, connection: ResolvedConnectionDefinition, headers: Record<string, string>, query: URLSearchParams, cookies: string[]): void;
+export declare function applySecurity(
+  placement: SecurityPlacement | undefined,
+  connection: ResolvedConnectionDefinition,
+  headers: Record<string, string>,
+  query: URLSearchParams,
+  cookies: string[],
+): void;

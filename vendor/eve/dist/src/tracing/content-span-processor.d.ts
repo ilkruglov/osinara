@@ -16,4 +16,7 @@ import { type ResolvedContentOptions } from "#tracing/content-attributes.js";
  *
  * @internal
  */
-export declare function contentFilteringProcessor(downstream: SpanProcessor, content: ResolvedContentOptions): SpanProcessor;
+export declare function contentFilteringProcessor(
+  downstream: SpanProcessor,
+  content: ResolvedContentOptions,
+): SpanProcessor;

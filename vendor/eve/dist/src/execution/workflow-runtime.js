@@ -139,15 +139,10 @@ function createWorkflowRuntime(e) {
       return await dispatchWorkflowCommand(e.continuationToken, e.command);
     },
     async dispatchSession(e) {
-      return await dispatchWorkflowCommand(
-        sessionCommandHookToken(e.sessionId),
-        e.command,
-      );
+      return await dispatchWorkflowCommand(sessionCommandHookToken(e.sessionId), e.command);
     },
     async getEventStream(e, t) {
-      return parseNdjsonStream(() =>
-        getRun(e).getReadable({ startIndex: t?.startIndex }),
-      );
+      return parseNdjsonStream(() => getRun(e).getReadable({ startIndex: t?.startIndex }));
     },
     async getStreamTailIndex(e) {
       let t = getRun(e).getReadable();
@@ -188,10 +183,7 @@ async function dispatchWorkflowCommand(e, n) {
   }
   return (
     n.kind === `reset` &&
-      (await waitForCommandHookRelease(
-        sessionCommandHookToken(i.runId),
-        i.runId,
-      )),
+      (await waitForCommandHookRelease(sessionCommandHookToken(i.runId), i.runId)),
     activeCommandResult(n, i.runId)
   );
 }
@@ -218,11 +210,7 @@ async function requestWorkflowTurnCancellation(e) {
 function isInactiveCommandTarget(e) {
   if (HookNotFoundError.is(e)) return !0;
   for (let t of walkCauseChain(e))
-    if (
-      WorkflowRunNotFoundError.is(t) ||
-      RunExpiredError.is(t) ||
-      EntityConflictError.is(t)
-    )
+    if (WorkflowRunNotFoundError.is(t) || RunExpiredError.is(t) || EntityConflictError.is(t))
       return !0;
   return !1;
 }
@@ -255,9 +243,7 @@ async function waitForCommandHookRelease(e, t) {
       throw e;
     }
     if (Date.now() >= n)
-      throw Error(
-        `Timed out waiting for session "${t}" to release its command inbox.`,
-      );
+      throw Error(`Timed out waiting for session "${t}" to release its command inbox.`);
     await new Promise((e) => setTimeout(e, 20));
   }
 }

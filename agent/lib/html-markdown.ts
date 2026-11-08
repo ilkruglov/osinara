@@ -17,7 +17,12 @@
  *   regular expression that can backtrack.
  * - The writer holds the budget itself: no write passes it, and a cut sets `truncated`.
  */
-import { decodeHtmlEntities, INLINE_ELEMENTS, MARKDOWN_SKIPPED_ELEMENTS, tokens } from "./html-text.js";
+import {
+  decodeHtmlEntities,
+  INLINE_ELEMENTS,
+  MARKDOWN_SKIPPED_ELEMENTS,
+  tokens,
+} from "./html-text.js";
 
 // The model sees at most 50 KB of Markdown; the conversion stops well past that.
 export const MARKDOWN_MAX_OUTPUT_CHARACTERS = 500_000;
@@ -31,8 +36,24 @@ const MAX_QUOTE_PREFIX = 4;
 const MAX_TRACKED_LISTS = 32;
 const HEADINGS: Readonly<Record<string, number>> = { h1: 1, h2: 2, h3: 3, h4: 4, h5: 5, h6: 6 };
 const BLOCKS = new Set([
-  "address", "article", "aside", "details", "div", "dl", "fieldset", "figcaption", "figure",
-  "footer", "form", "header", "main", "nav", "p", "section", "summary", "table",
+  "address",
+  "article",
+  "aside",
+  "details",
+  "div",
+  "dl",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "header",
+  "main",
+  "nav",
+  "p",
+  "section",
+  "summary",
+  "table",
 ]);
 const STRONG = new Set(["b", "strong"]);
 const EMPHASIS = new Set(["cite", "dfn", "em", "i"]);
@@ -54,7 +75,7 @@ function attribute(raw: string, wanted: string): string | null {
       index += 1;
       while (index < raw.length && /\s/u.test(raw[index]!)) index += 1;
       const quote = raw[index];
-      if (quote === "\"" || quote === "'") {
+      if (quote === '"' || quote === "'") {
         const end = raw.indexOf(quote, index + 1);
         const stop = end === -1 ? raw.length : end;
         value = raw.slice(index + 1, stop);
@@ -77,13 +98,21 @@ function attribute(raw: string, wanted: string): string | null {
  * reads it, with tabs and line breaks removed and leading controls skipped.
  */
 function markdownUrl(raw: string | null): string {
-  const url = decodeHtmlEntities(raw ?? "").trim().slice(0, MARKDOWN_MAX_URL);
-  // oxlint-disable-next-line no-control-regex -- leading C0 controls are skipped by browsers.
-  const scheme = url.replace(/[\t\n\r]/gu, "").replace(/^[\u0000- ]+/u, "").slice(0, 16).toLowerCase();
+  const url = decodeHtmlEntities(raw ?? "")
+    .trim()
+    .slice(0, MARKDOWN_MAX_URL);
+  const scheme = url
+    .replace(/[\t\n\r]/gu, "")
+    // oxlint-disable-next-line no-control-regex -- leading C0 controls are skipped by browsers.
+    .replace(/^[\u0000- ]+/u, "")
+    .slice(0, 16)
+    .toLowerCase();
   if (/^(?:javascript|vbscript|data):/u.test(scheme)) return "";
   return url.replace(/[\s()<>[\]]/gu, (character) => {
     const code = character.charCodeAt(0);
-    return code < 0x80 ? `%${code.toString(16).toUpperCase().padStart(2, "0")}` : encodeURIComponent(character);
+    return code < 0x80
+      ? `%${code.toString(16).toUpperCase().padStart(2, "0")}`
+      : encodeURIComponent(character);
   });
 }
 
@@ -150,7 +179,9 @@ class MarkdownWriter {
     }
     let index = piece.length;
     while (index > 0 && piece.charCodeAt(index - 1) === 0x0a) index -= 1;
-    this.newlinesAfter.push(index === 0 ? this.trailingNewlines + piece.length : piece.length - index);
+    this.newlinesAfter.push(
+      index === 0 ? this.trailingNewlines + piece.length : piece.length - index,
+    );
     this.parts.push(piece);
     this.length += piece.length;
   }
@@ -206,9 +237,18 @@ class MarkdownWriter {
   }
 }
 
-interface Span { handle: number }
-interface LinkSpan extends Span { href: string; inPre: boolean }
-interface OpenList { ordered: boolean; count: number; content: number }
+interface Span {
+  handle: number;
+}
+interface LinkSpan extends Span {
+  href: string;
+  inPre: boolean;
+}
+interface OpenList {
+  ordered: boolean;
+  count: number;
+  content: number;
+}
 
 export function htmlToMarkdown(
   html: string,
@@ -297,8 +337,18 @@ export function htmlToMarkdown(
     }
     const fence = backtickFence(content, 3);
     const prefix = continuation();
-    const lines = `${fence}\n${content}${content.endsWith("\n") || content === "" ? "" : "\n"}${fence}`.split("\n");
-    out.write(lines.map((line, index) => (index === 0 && !out.atLineStart ? "" : line === "" ? prefix.trimEnd() : prefix) + line).join("\n"));
+    const lines =
+      `${fence}\n${content}${content.endsWith("\n") || content === "" ? "" : "\n"}${fence}`.split(
+        "\n",
+      );
+    out.write(
+      lines
+        .map(
+          (line, index) =>
+            (index === 0 && !out.atLineStart ? "" : line === "" ? prefix.trimEnd() : prefix) + line,
+        )
+        .join("\n"),
+    );
     freshItem = false;
     out.breakLines(2);
   };
@@ -413,11 +463,17 @@ export function htmlToMarkdown(
       }
       if (!closing) {
         startLine();
-        link = { handle: out.open(), href: markdownUrl(attribute(token.raw, "href")), inPre: preDepth > 0 };
+        link = {
+          handle: out.open(),
+          href: markdownUrl(attribute(token.raw, "href")),
+          inPre: preDepth > 0,
+        };
       }
     } else if (name === "img" && !closing) {
       const src = markdownUrl(attribute(token.raw, "src"));
-      const alt = collapseWhitespace(decodeHtmlEntities(attribute(token.raw, "alt") ?? "")).trim().slice(0, MARKDOWN_MAX_ALT);
+      const alt = collapseWhitespace(decodeHtmlEntities(attribute(token.raw, "alt") ?? ""))
+        .trim()
+        .slice(0, MARKDOWN_MAX_ALT);
       if (preDepth > 0) out.write(alt);
       else if (src !== "") writeText(`![${alt}](${src})`);
       else if (alt !== "") writeText(alt);

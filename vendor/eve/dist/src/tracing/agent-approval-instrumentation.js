@@ -1,19 +1,10 @@
-import {
-  ROOT_CONTEXT,
-  SpanStatusCode,
-  trace,
-} from "#compiled/@opentelemetry/api/index.js";
+import { ROOT_CONTEXT, SpanStatusCode, trace } from "#compiled/@opentelemetry/api/index.js";
 import { contentAttribute } from "#tracing/agent-otel-content.js";
 function createAgentApprovalInstrumentation(t) {
   return {
     "input.requested": async (e, n) => {
-      if (e.kind !== `tool-approval` || readState(n.state.get()) !== void 0)
-        return;
-      let i = await t.actionContextFor(
-        e.scope.sessionId,
-        e.scope.turnId,
-        e.action.callId,
-      );
+      if (e.kind !== `tool-approval` || readState(n.state.get()) !== void 0) return;
+      let i = await t.actionContextFor(e.scope.sessionId, e.scope.turnId, e.action.callId);
       if (i === void 0) return;
       let a = {
           actionCallId: e.action.callId,
@@ -59,10 +50,7 @@ function createAgentApprovalInstrumentation(t) {
               },
               startTime: o.startTimeMs,
             },
-            trace.setSpan(
-              ROOT_CONTEXT,
-              trace.wrapSpanContext({ ...o.parent, isRemote: !1 }),
-            ),
+            trace.setSpan(ROOT_CONTEXT, trace.wrapSpanContext({ ...o.parent, isRemote: !1 })),
           ),
       );
       if (
@@ -121,8 +109,7 @@ function readState(e) {
 }
 function recordError(e, n) {
   n instanceof Error
-    ? (e.recordException(n),
-      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    ? (e.recordException(n), e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
     : e.setStatus({ code: SpanStatusCode.ERROR });
 }
 export { createAgentApprovalInstrumentation };

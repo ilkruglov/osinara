@@ -106,15 +106,19 @@ describeWithDatabase("session route and retention isolation", () => {
       [replacement.continuationToken, parked.id],
     );
 
-    await expect(sessionRepository.recordSessionFailedByContinuationToken(
-      replacement.continuationToken,
-      "wrun_replacement_failure_token",
-    )).resolves.toBe("recorded");
-    await expect(database().query(
-      `SELECT id, pending_operation, rotation_requested_at IS NOT NULL AS rotation_requested
+    await expect(
+      sessionRepository.recordSessionFailedByContinuationToken(
+        replacement.continuationToken,
+        "wrun_replacement_failure_token",
+      ),
+    ).resolves.toBe("recorded");
+    await expect(
+      database().query(
+        `SELECT id, pending_operation, rotation_requested_at IS NOT NULL AS rotation_requested
          FROM conversation_sessions WHERE id = ANY($1::uuid[]) ORDER BY id`,
-      [[parked.id, replacement.id]],
-    )).resolves.toMatchObject({
+        [[parked.id, replacement.id]],
+      ),
+    ).resolves.toMatchObject({
       rows: expect.arrayContaining([
         expect.objectContaining({ id: parked.id, pending_operation: true }),
         expect.objectContaining({ id: replacement.id, rotation_requested: true }),

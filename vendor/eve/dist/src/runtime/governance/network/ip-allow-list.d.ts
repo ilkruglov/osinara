@@ -3,8 +3,8 @@ import { BlockList } from "node:net";
  * Parsed runtime-owned IP allowlist.
  */
 export interface RuntimeIpAllowList {
-    readonly blockList: BlockList;
-    readonly entries: readonly string[];
+  readonly blockList: BlockList;
+  readonly entries: readonly string[];
 }
 /**
  * Parses exact IP and CIDR entries into a reusable runtime-owned allowlist.

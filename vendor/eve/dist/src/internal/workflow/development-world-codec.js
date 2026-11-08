@@ -54,9 +54,7 @@ function encodeValue(n) {
           : isRecord(n)
             ? {
                 [VALUE_TYPE_KEY]: OBJECT_MARKER,
-                data: Object.fromEntries(
-                  Object.entries(n).map(([e, t]) => [e, encodeValue(t)]),
-                ),
+                data: Object.fromEntries(Object.entries(n).map(([e, t]) => [e, encodeValue(t)])),
               }
             : n;
 }
@@ -64,30 +62,23 @@ function decodeTransportValue(n) {
   if (Array.isArray(n)) return n.map((e) => decodeTransportValue(e));
   if (!isRecord(n)) return n;
   if (n[VALUE_TYPE_KEY] !== UNDEFINED_MARKER) {
-    if (n[VALUE_TYPE_KEY] === DATE_MARKER && typeof n.data == `string`)
-      return new Date(n.data);
+    if (n[VALUE_TYPE_KEY] === DATE_MARKER && typeof n.data == `string`) return new Date(n.data);
     if (n[VALUE_TYPE_KEY] === UINT8_ARRAY_MARKER && typeof n.data == `string`)
       return Uint8Array.from(Buffer.from(n.data, `base64`));
     if (n[VALUE_TYPE_KEY] === OBJECT_MARKER && isRecord(n.data))
       return Object.fromEntries(
         Object.entries(n.data).map(([e, t]) => [e, decodeTransportValue(t)]),
       );
-    throw Error(
-      `Development Workflow World transport contained an invalid encoded value.`,
-    );
+    throw Error(`Development Workflow World transport contained an invalid encoded value.`);
   }
 }
 function decodeWorkflowJsonValue(e) {
   return Array.isArray(e)
     ? e.map((e) => decodeWorkflowJsonValue(e))
     : isRecord(e)
-      ? Object.keys(e).length === 2 &&
-        e.__type === `Uint8Array` &&
-        typeof e.data == `string`
+      ? Object.keys(e).length === 2 && e.__type === `Uint8Array` && typeof e.data == `string`
         ? Uint8Array.from(Buffer.from(e.data, `base64`))
-        : Object.fromEntries(
-            Object.entries(e).map(([e, t]) => [e, decodeWorkflowJsonValue(t)]),
-          )
+        : Object.fromEntries(Object.entries(e).map(([e, t]) => [e, decodeWorkflowJsonValue(t)]))
       : e;
 }
 function isRecord(e) {

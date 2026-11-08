@@ -17,9 +17,7 @@ async function inspectExistingChannelRegistrations(a) {
       i = Array.isArray(r) ? r : [r];
     for (let n of i)
       n.kind === `channel` &&
-        (n.method === `POST` &&
-          n.urlPath === EVE_SESSION_ROUTE_PATH &&
-          l.add(t.logicalPath),
+        (n.method === `POST` && n.urlPath === EVE_SESSION_ROUTE_PATH && l.add(t.logicalPath),
         n.adapterKind === `slack` && u.add(t.logicalPath));
   }
   let d = {};
@@ -37,9 +35,7 @@ async function inspectExistingChannelRegistrations(a) {
 }
 function assertCanAddSelectedChannels(t, n) {
   if (t.includes(`web`)) {
-    let t = n.webRouteOwners.find(
-      (e) => e !== SCAFFOLDED_WEB_CHANNEL_LOGICAL_PATH,
-    );
+    let t = n.webRouteOwners.find((e) => e !== SCAFFOLDED_WEB_CHANNEL_LOGICAL_PATH);
     if (t !== void 0)
       throw Error(
         `Cannot scaffold Web Chat because agent/${t} already defines POST ${EVE_SESSION_ROUTE_PATH}. Web Chat scaffolds the same eve session routes.`,

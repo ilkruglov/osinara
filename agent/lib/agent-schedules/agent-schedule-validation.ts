@@ -13,7 +13,11 @@ import {
   AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH,
   AGENT_SCHEDULE_WEEKDAYS,
 } from "./agent-schedule-config.js";
-import { AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, type AgentScheduleRecurrence, type AgentScheduleSimpleRecurrenceKind } from "./agent-schedule-record.js";
+import {
+  AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS,
+  type AgentScheduleRecurrence,
+  type AgentScheduleSimpleRecurrenceKind,
+} from "./agent-schedule-record.js";
 
 export type AgentScheduleInputRecurrence = AgentScheduleRecurrence;
 
@@ -65,11 +69,7 @@ export function requireAgentScheduleDate(value: Date): Date {
 }
 
 function requireInterval(value: number): number {
-  if (
-    !Number.isInteger(value) ||
-    value < 1 ||
-    value > AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX
-  ) {
+  if (!Number.isInteger(value) || value < 1 || value > AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX) {
     throw new AppError(
       "AGENT_SCHEDULE_RECURRENCE_INVALID",
       `Интервал повтора должен быть от 1 до ${AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX}`,
@@ -82,7 +82,12 @@ export function requireAgentScheduleRecurrence(
   recurrence: AgentScheduleInputRecurrence,
 ): AgentScheduleRecurrence {
   if (recurrence.kind === "once") return { kind: "once" };
-  if (recurrence.kind !== "weekly" && AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS.includes(recurrence.kind as AgentScheduleSimpleRecurrenceKind)) {
+  if (
+    recurrence.kind !== "weekly" &&
+    AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS.includes(
+      recurrence.kind as AgentScheduleSimpleRecurrenceKind,
+    )
+  ) {
     return { interval: requireInterval(recurrence.interval), kind: recurrence.kind };
   }
   if (recurrence.kind !== "weekly") {

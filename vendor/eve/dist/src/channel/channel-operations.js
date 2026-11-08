@@ -13,8 +13,7 @@ function createChannelOperations(n) {
           );
         },
         async respond(e, t) {
-          if (e.length === 0)
-            throw Error(`respond() requires at least one input response.`);
+          if (e.length === 0) throw Error(`respond() requires at least one input response.`);
           return await n.deliver(
             {
               context: t.context,

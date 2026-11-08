@@ -19,9 +19,8 @@ const TEST_SCHEMA = "berta_memory_embeddings_migration_test";
 const ITEM = "10000000-0000-4000-8000-000000000001";
 const THREAD = "20000000-0000-4000-8000-000000000001";
 const HIDDEN = "10000000-0000-4000-8000-000000000002";
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("BERTA memory embeddings migration", () => {
   afterAll(closeDatabase);
@@ -79,39 +78,55 @@ describeWithDatabase("BERTA memory embeddings migration", () => {
         VALUES ('${THREAD}', 'Ремонт', array_fill(0.1, ARRAY[384])::vector, 'e5@rev');
       `);
 
-      await client.query(await readFile(resolve("migrations/123_berta_memory_embeddings.sql"), "utf8"));
+      await client.query(
+        await readFile(resolve("migrations/123_berta_memory_embeddings.sql"), "utf8"),
+      );
 
       const retired = await client.query(
         "SELECT embedding_model, vector_dims(embedding) AS dims FROM retired_e5_memory_embedding_chunks",
       );
       expect(retired.rows).toEqual([{ dims: 384, embedding_model: "e5@rev" }]);
-      expect((await client.query("SELECT count(*)::int AS n FROM memory_embedding_chunks")).rows)
-        .toEqual([{ n: 0 }]);
-      await expect(client.query(
-        `INSERT INTO memory_embedding_chunks
+      expect(
+        (await client.query("SELECT count(*)::int AS n FROM memory_embedding_chunks")).rows,
+      ).toEqual([{ n: 0 }]);
+      await expect(
+        client.query(
+          `INSERT INTO memory_embedding_chunks
            (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
          VALUES ('${ITEM}', 0, 'факт', 0, 4, array_fill(0.1, ARRAY[768])::vector, 'berta@rev')`,
-      )).resolves.toBeDefined();
-      expect((await client.query("SELECT DISTINCT embedding_status FROM memory_items_all")).rows)
-        .toEqual([{ embedding_status: "pending" }]);
-      expect((await client.query("SELECT count(*)::int AS n FROM memory_embedding_jobs")).rows).toEqual([{ n: 2 }]);
+        ),
+      ).resolves.toBeDefined();
+      expect(
+        (await client.query("SELECT DISTINCT embedding_status FROM memory_items_all")).rows,
+      ).toEqual([{ embedding_status: "pending" }]);
+      expect(
+        (await client.query("SELECT count(*)::int AS n FROM memory_embedding_jobs")).rows,
+      ).toEqual([{ n: 2 }]);
 
-      await client.query(await readFile(resolve("migrations/124_drop_embedding_jobs_of_hidden_records.sql"), "utf8"));
+      await client.query(
+        await readFile(resolve("migrations/124_drop_embedding_jobs_of_hidden_records.sql"), "utf8"),
+      );
       // Only the visible record keeps its job, with the record's creation time for the newest-first worker.
-      expect((await client.query(
-        "SELECT memory_item_id, status, created_at = '2026-09-01T10:00:00Z' AS record_time FROM memory_embedding_jobs",
-      )).rows).toEqual([{ memory_item_id: ITEM, record_time: true, status: "pending" }]);
+      expect(
+        (
+          await client.query(
+            "SELECT memory_item_id, status, created_at = '2026-09-01T10:00:00Z' AS record_time FROM memory_embedding_jobs",
+          )
+        ).rows,
+      ).toEqual([{ memory_item_id: ITEM, record_time: true, status: "pending" }]);
       const thread = await client.query(
         `SELECT retired_e5_title_embedding_model, vector_dims(retired_e5_title_embedding) AS dims,
                 title_embedding, title_embedding_model
          FROM memory_threads`,
       );
-      expect(thread.rows).toEqual([{
-        dims: 384,
-        retired_e5_title_embedding_model: "e5@rev",
-        title_embedding: null,
-        title_embedding_model: null,
-      }]);
+      expect(thread.rows).toEqual([
+        {
+          dims: 384,
+          retired_e5_title_embedding_model: "e5@rev",
+          title_embedding: null,
+          title_embedding_model: null,
+        },
+      ]);
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`).catch(() => undefined);
       await client.query("SET search_path TO public");

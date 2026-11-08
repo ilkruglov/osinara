@@ -11,23 +11,13 @@ function readLocalProductionPort() {
   if (e === void 0 || e.trim().length === 0) return 4274;
   let n = Number.parseInt(e, 10);
   if (String(n) !== e.trim() || n < 1 || n > 65535)
-    throw Error(
-      `${EVE_NUXT_PRODUCTION_PORT_ENV} must be an integer between 1 and 65535.`,
-    );
+    throw Error(`${EVE_NUXT_PRODUCTION_PORT_ENV} must be an integer between 1 and 65535.`);
   return n;
 }
 function resolveProductionTarget() {
   let t = process.env.EVE_NUXT_PRODUCTION_ORIGIN;
   return t !== void 0 && t.trim().length > 0
     ? joinRoutePrefix(normalizeOrigin(t), EVE_ROUTE_PREFIX)
-    : joinRoutePrefix(
-        `http://127.0.0.1:${String(readLocalProductionPort())}`,
-        EVE_ROUTE_PREFIX,
-      );
+    : joinRoutePrefix(`http://127.0.0.1:${String(readLocalProductionPort())}`, EVE_ROUTE_PREFIX);
 }
-export {
-  joinRoutePrefix,
-  normalizeOrigin,
-  readLocalProductionPort,
-  resolveProductionTarget,
-};
+export { joinRoutePrefix, normalizeOrigin, readLocalProductionPort, resolveProductionTarget };

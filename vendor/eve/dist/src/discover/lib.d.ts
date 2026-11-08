@@ -15,20 +15,22 @@ export declare const DISCOVER_LIB_ENTRY_UNSUPPORTED = "discover/lib-entry-unsupp
  * Input for discovering authored helper modules under `lib/`.
  */
 interface DiscoverLibSourcesInput {
-    agentRoot: string;
-    rootEntries: readonly ProjectSourceEntry[];
-    source: ProjectSource;
+  agentRoot: string;
+  rootEntries: readonly ProjectSourceEntry[];
+  source: ProjectSource;
 }
 /**
  * Result of recursively discovering authored helper modules under `lib/`.
  */
 interface DiscoverLibSourcesResult {
-    diagnostics: DiscoverDiagnostic[];
-    lib: ModuleSourceRef[];
+  diagnostics: DiscoverDiagnostic[];
+  lib: ModuleSourceRef[];
 }
 /**
  * Discovers module-only helper sources under `lib/` without executing
  * authored modules.
  */
-export declare function discoverLibSources(input: DiscoverLibSourcesInput): Promise<DiscoverLibSourcesResult>;
+export declare function discoverLibSources(
+  input: DiscoverLibSourcesInput,
+): Promise<DiscoverLibSourcesResult>;
 export {};

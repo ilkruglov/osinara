@@ -42,16 +42,12 @@ function prepareAgentContinuation(e, t) {
   };
 }
 function findActiveHandle(e, t) {
-  return e.find(
-    (e) =>
-      (e.phase === `starting` || e.phase === `running`) && e.operation.id === t,
-  );
+  return e.find((e) => (e.phase === `starting` || e.phase === `running`) && e.operation.id === t);
 }
 function confirmAgentStarted(e, t) {
   let n = getAgentHandleStore(e.state)?.handles ?? [],
     i = findActiveHandle(n, t.operationId);
-  if (i === void 0)
-    throw Error(`No prepared agent handle for operation "${t.operationId}".`);
+  if (i === void 0) throw Error(`No prepared agent handle for operation "${t.operationId}".`);
   return i.phase === `running`
     ? e
     : writeHandles(
@@ -71,19 +67,12 @@ function confirmAgentStarted(e, t) {
 function confirmTaskAgentAddress(e, t) {
   let n = getAgentHandleStore(e.state)?.handles ?? [],
     i = findActiveHandle(n, t.operationId);
-  if (i === void 0)
-    throw Error(`No prepared agent handle for operation "${t.operationId}".`);
+  if (i === void 0) throw Error(`No prepared agent handle for operation "${t.operationId}".`);
   if (i.phase === `running`)
-    throw Error(
-      `Task agent operation "${t.operationId}" was confirmed as a running handle.`,
-    );
+    throw Error(`Task agent operation "${t.operationId}" was confirmed as a running handle.`);
   return writeHandles(
     e,
-    n.map((e) =>
-      e === i
-        ? { address: t.address, identity: i.identity, phase: `addressed` }
-        : e,
-    ),
+    n.map((e) => (e === i ? { address: t.address, identity: i.identity, phase: `addressed` } : e)),
   );
 }
 function removeTaskAgentAddress(e, t) {
@@ -94,9 +83,7 @@ function removeTaskAgentAddressFromState(n, i) {
   return {
     ...n,
     [AGENT_HANDLES_STATE_KEY]: assertPersistableAgentHandleStore({
-      handles: a.filter(
-        (e) => !(e.phase === `addressed` && e.identity.id === i),
-      ),
+      handles: a.filter((e) => !(e.phase === `addressed` && e.identity.id === i)),
     }),
   };
 }
@@ -146,9 +133,7 @@ function abandonRunningAgentTurns(e) {
 }
 function settleAgentTurn(e, t) {
   let i = getAgentHandleStore(e.state)?.handles ?? [],
-    a = i.find(
-      (e) => e.phase === `running` && e.operation.id === t.operationId,
-    );
+    a = i.find((e) => e.phase === `running` && e.operation.id === t.operationId);
   if (a === void 0 || a.phase !== `running`)
     return { kind: `ignored`, reason: `unknown-operation` };
   if (t.outcome.kind === `terminal`)

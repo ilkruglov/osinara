@@ -7,9 +7,7 @@ function isMicrosandboxStillRunningError(e) {
 function isMicrosandboxSnapshotSourceRunningError(e) {
   return (
     e instanceof Error &&
-    /snapshot source sandbox .*not stopped|SnapshotSandboxRunning/i.test(
-      e.message,
-    )
+    /snapshot source sandbox .*not stopped|SnapshotSandboxRunning/i.test(e.message)
   );
 }
 async function snapshotExists(e, t) {

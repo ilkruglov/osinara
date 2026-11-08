@@ -42,8 +42,8 @@ function nextFenceState(line: string, open: FenceState | null): FenceState | nul
   const character = fence[0] ?? "";
   // A closing fence repeats the opening character, is at least as long, and carries no info string.
   if (open) {
-    const closes = character === open.character && fence.length >= open.length &&
-      info.trim().length === 0;
+    const closes =
+      character === open.character && fence.length >= open.length && info.trim().length === 0;
     return closes ? null : open;
   }
   // Markdown forbids a backtick inside the info string of a backtick fence.
@@ -53,7 +53,10 @@ function nextFenceState(line: string, open: FenceState | null): FenceState | nul
 
 function withoutInlineDirective(line: string): string {
   if (!line.includes(TELEGRAM_ASIDE_DIRECTIVE) || INDENTED_CODE_PATTERN.test(line)) return line;
-  return line.replace(INLINE_DIRECTIVE_PATTERN, "").replace(/[ \t]{2,}/gu, " ").trimEnd();
+  return line
+    .replace(INLINE_DIRECTIVE_PATTERN, "")
+    .replace(/[ \t]{2,}/gu, " ")
+    .trimEnd();
 }
 
 function authoredParts(markdown: string): string[] {

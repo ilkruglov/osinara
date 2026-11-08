@@ -102,8 +102,7 @@ function findPromptBlocks(e) {
     if (typeof n != `object` || !n) continue;
     let e = n.type;
     if (e === `actions`) break;
-    (e === `section` || e === `context` || e === `divider` || e === `image`) &&
-      t.push(n);
+    (e === `section` || e === `context` || e === `divider` || e === `image`) && t.push(n);
   }
   return t;
 }
@@ -131,25 +130,18 @@ function buildAnsweredHitlMessageBlocks(e) {
         answerLabel: e.answerLabel,
         userId: e.userId,
       });
-  return [
-    ...e.messageBlocks.slice(0, t),
-    ...r,
-    ...e.messageBlocks.slice(t + 1),
-  ];
+  return [...e.messageBlocks.slice(0, t), ...r, ...e.messageBlocks.slice(t + 1)];
 }
 function findActionBlockIndex(e, t) {
   return e.findIndex((e) => blockContainsActionId(e, t));
 }
 function blockContainsActionId(e, t) {
   return isObjectRecord(e)
-    ? actionsContainActionId(e.elements, t) ||
-        actionsContainActionId(e.actions, t)
+    ? actionsContainActionId(e.elements, t) || actionsContainActionId(e.actions, t)
     : !1;
 }
 function actionsContainActionId(e, t) {
-  return Array.isArray(e)
-    ? e.some((e) => isObjectRecord(e) && e.action_id === t)
-    : !1;
+  return Array.isArray(e) ? e.some((e) => isObjectRecord(e) && e.action_id === t) : !1;
 }
 function isObjectRecord(e) {
   return typeof e == `object` && !!e;
@@ -170,9 +162,7 @@ function answeredBlocksFromActionBlock(e) {
 function formatAnsweredCardSubtext(e) {
   let r = e.userId.length > 0 ? ` by <@${e.userId}>` : ``,
     i = SLACK_CARD_SUBTEXT_MAX_LENGTH - 20 - 1 - r.length;
-  return truncateCardSubtext(
-    `:white_check_mark: *${truncateWithEllipsis(e.answerLabel, i)}*${r}`,
-  );
+  return truncateCardSubtext(`:white_check_mark: *${truncateWithEllipsis(e.answerLabel, i)}*${r}`);
 }
 function truncateWithEllipsis(e, t) {
   if (t <= 0) return ``;
@@ -289,12 +279,7 @@ async function dispatchBlockInputResponses(e) {
   if (t !== null) {
     try {
       await e.ctx
-        .from(
-          slackContinuationToken(
-            e.interaction.channelId,
-            e.interaction.threadTs,
-          ),
-        )
+        .from(slackContinuationToken(e.interaction.channelId, e.interaction.threadTs))
         .respond(e.submission.inputResponses, {
           auth: t.auth,
           state: approvalResponderStatePatch(e.submission, t.auth),
@@ -303,11 +288,7 @@ async function dispatchBlockInputResponses(e) {
       log.error(`HITL interaction delivery failed`, { error: e });
       return;
     }
-    if (
-      !e.submission.actions.some(
-        (e) => deriveHitlResponse(e)?.kind === `tool-approval`,
-      )
-    )
+    if (!e.submission.actions.some((e) => deriveHitlResponse(e)?.kind === `tool-approval`))
       try {
         await updateAnsweredHitlCard(e.interaction, e.deps);
       } catch (e) {
@@ -321,9 +302,7 @@ async function openFreeformModal(e) {
     log.warn(`freeform button click missing trigger_id — cannot open modal`);
     return;
   }
-  let n =
-    freeformRequestIdFromActionId(e.freeformAction.actionId) ??
-    e.freeformAction.value;
+  let n = freeformRequestIdFromActionId(e.freeformAction.actionId) ?? e.freeformAction.value;
   if (!n) {
     log.warn(`freeform button click missing requestId`);
     return;
@@ -335,10 +314,7 @@ async function openFreeformModal(e) {
   }
   let o = buildFreeformModalView({
       metadata: {
-        continuationToken: slackContinuationToken(
-          e.interaction.channelId,
-          e.interaction.threadTs,
-        ),
+        continuationToken: slackContinuationToken(e.interaction.channelId, e.interaction.threadTs),
         channelId: e.interaction.channelId,
         threadTs: e.interaction.threadTs,
         messageTs: r,
@@ -364,24 +340,13 @@ async function handleViewSubmission(e, t, n) {
   try {
     i = JSON.parse(e.privateMetadata ?? ``);
   } catch {
-    return (
-      log.warn(`freeform view_submission carries invalid private_metadata`),
-      r
-    );
+    return (log.warn(`freeform view_submission carries invalid private_metadata`), r);
   }
-  if (
-    !i.continuationToken ||
-    !i.requestId ||
-    !i.messageTs ||
-    !i.channelId ||
-    !i.threadTs
-  )
-    return r;
+  if (!i.continuationToken || !i.requestId || !i.messageTs || !i.channelId || !i.threadTs) return r;
   let a =
     e.values?.find(
       (e) =>
-        e.blockId === HITL_FREEFORM_MODAL_BLOCK_ID &&
-        e.actionId === HITL_FREEFORM_MODAL_ACTION_ID,
+        e.blockId === HITL_FREEFORM_MODAL_BLOCK_ID && e.actionId === HITL_FREEFORM_MODAL_ACTION_ID,
     )?.value ?? ``;
   if (a.length === 0) return r;
   let o = e.user,

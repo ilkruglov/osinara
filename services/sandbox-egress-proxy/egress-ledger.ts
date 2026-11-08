@@ -33,11 +33,13 @@ export interface EgressMeter {
   close(target: EgressTarget): void;
 }
 
-export function createEgressLedger(input: {
-  dailyBytes?: number;
-  log?: (line: string) => void;
-  now?: () => number;
-} = {}) {
+export function createEgressLedger(
+  input: {
+    dailyBytes?: number;
+    log?: (line: string) => void;
+    now?: () => number;
+  } = {},
+) {
   const dailyBytes = input.dailyBytes ?? SANDBOX_EGRESS_DAILY_BYTES;
   const now = input.now ?? Date.now;
   const log = input.log ?? ((line: string) => console.info(line));
@@ -55,7 +57,8 @@ export function createEgressLedger(input: {
     while (days.size > MAX_TRACKED_CLIENTS) days.delete(days.keys().next().value!);
     return total;
   };
-  const refuse = (client: string) => log(JSON.stringify({ client, code: "SANDBOX_EGRESS_DAILY_LIMIT", dailyBytes }));
+  const refuse = (client: string) =>
+    log(JSON.stringify({ client, code: "SANDBOX_EGRESS_DAILY_LIMIT", dailyBytes }));
   return {
     /** A meter for a new connection, or null once the client spent its day's budget. */
     open(client: string): EgressMeter | null {
@@ -80,7 +83,16 @@ export function createEgressLedger(input: {
         close(target) {
           if (closed) return;
           closed = true;
-          log(JSON.stringify({ code: "SANDBOX_EGRESS_CONNECTION", bytesDown, bytesUp, client, ...target, ms: now() - startedAt }));
+          log(
+            JSON.stringify({
+              code: "SANDBOX_EGRESS_CONNECTION",
+              bytesDown,
+              bytesUp,
+              client,
+              ...target,
+              ms: now() - startedAt,
+            }),
+          );
         },
       };
     },

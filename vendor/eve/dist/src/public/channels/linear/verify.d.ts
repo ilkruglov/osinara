@@ -11,12 +11,15 @@ import { type LinearWebhookSecret } from "#public/channels/linear/auth.js";
  */
 export type LinearWebhookVerifier = (request: Request, body: string) => unknown | Promise<unknown>;
 export interface LinearVerifyOptions {
-    /** Max allowed webhook timestamp skew in milliseconds. Defaults to 60s. */
-    readonly maxSkewMs?: number;
-    readonly webhookSecret?: LinearWebhookSecret;
-    readonly webhookVerifier?: LinearWebhookVerifier;
+  /** Max allowed webhook timestamp skew in milliseconds. Defaults to 60s. */
+  readonly maxSkewMs?: number;
+  readonly webhookSecret?: LinearWebhookSecret;
+  readonly webhookVerifier?: LinearWebhookVerifier;
 }
 /** Verifies a Linear webhook request and returns its raw body. */
-export declare function verifyLinearRequest(request: Request, options: LinearVerifyOptions): Promise<string>;
+export declare function verifyLinearRequest(
+  request: Request,
+  options: LinearVerifyOptions,
+): Promise<string>;
 /** Signs a raw Linear webhook body for tests and local fixtures. */
 export declare function signLinearWebhookBody(body: string, secret: string): string;

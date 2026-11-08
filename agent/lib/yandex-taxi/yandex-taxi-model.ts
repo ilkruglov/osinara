@@ -23,7 +23,10 @@ import { createHmac } from "node:crypto";
 
 import { AppError } from "../app-error.js";
 import { requireInvitationSigningSecret } from "../invitation-code.js";
-import { YANDEX_TAXI_FINISHED_STATUSES, YANDEX_TAXI_PRICE_RISE_PERCENT } from "./yandex-taxi-config.js";
+import {
+  YANDEX_TAXI_FINISHED_STATUSES,
+  YANDEX_TAXI_PRICE_RISE_PERCENT,
+} from "./yandex-taxi-config.js";
 
 export interface YandexTaxiPoint {
   city: string;
@@ -42,11 +45,20 @@ export type YandexTaxiPointFields = Omit<YandexTaxiPoint, "key">;
  * derived key signs route points only, so a key never doubles as an invitation signature.
  */
 function pointSigningKey(): Buffer {
-  return createHmac("sha256", requireInvitationSigningSecret()).update("osinara/yandex-taxi-point/v1", "utf8").digest();
+  return createHmac("sha256", requireInvitationSigningSecret())
+    .update("osinara/yandex-taxi-point/v1", "utf8")
+    .digest();
 }
 
 export function yandexTaxiPointKey(point: YandexTaxiPointFields): string {
-  const fields = JSON.stringify([point.shortText, point.fullText, point.lon.toFixed(6), point.lat.toFixed(6), point.uri, point.city]);
+  const fields = JSON.stringify([
+    point.shortText,
+    point.fullText,
+    point.lon.toFixed(6),
+    point.lat.toFixed(6),
+    point.uri,
+    point.city,
+  ]);
   return createHmac("sha256", pointSigningKey()).update(fields, "utf8").digest("hex").slice(0, 16);
 }
 
@@ -55,7 +67,10 @@ export function withYandexTaxiPointKey(point: YandexTaxiPointFields): YandexTaxi
 }
 
 /** A point exactly as a tool result gave it; anything edited on the way is refused. */
-export function requireYandexTaxiPoint(point: YandexTaxiPoint, role: "from" | "to"): YandexTaxiPoint {
+export function requireYandexTaxiPoint(
+  point: YandexTaxiPoint,
+  role: "from" | "to",
+): YandexTaxiPoint {
   if (yandexTaxiPointKey(point) !== point.key) {
     throw new AppError(
       "AGENT_YANDEX_TAXI_POINT_REF_INVALID",
@@ -70,7 +85,9 @@ const PRICE_NUMBER = /\d[\d\s   ]*(?:[.,]\d+)?/gu;
 export function yandexTaxiPriceValue(template: string): number | null {
   // Placeholders like $SIGN$$CURRENCY$ and markup tags carry no digits of the price.
   const cleaned = template.replace(/\$[A-Z_]+\$/gu, " ").replace(/<[^>]*>/gu, " ");
-  const numbers = (cleaned.match(PRICE_NUMBER) ?? []).map((group) => group.replace(/[\s   ]/gu, "").replace(",", "."));
+  const numbers = (cleaned.match(PRICE_NUMBER) ?? []).map((group) =>
+    group.replace(/[\s   ]/gu, "").replace(",", "."),
+  );
   if (numbers.length !== 1) return null;
   const value = Number(numbers[0]);
   return Number.isFinite(value) ? value : null;
@@ -78,17 +95,24 @@ export function yandexTaxiPriceValue(template: string): number | null {
 
 /** The ceiling the confirmation window names and the order enforces; both derive it from the input. */
 export function yandexTaxiMaxPrice(price: number): number {
-  return Math.floor(price * (100 + YANDEX_TAXI_PRICE_RISE_PERCENT) / 100);
+  return Math.floor((price * (100 + YANDEX_TAXI_PRICE_RISE_PERCENT)) / 100);
 }
 
-export interface YandexTaxiLaunchOrder { orderId: string; status: string; }
+export interface YandexTaxiLaunchOrder {
+  orderId: string;
+  status: string;
+}
 
 /**
  * Orders that block a new one. The site skips drafts and the finished statuses; an unknown status
  * counts as active, because refusing a second car is cheaper than ordering one.
  */
-export function activeYandexTaxiOrders(orders: readonly YandexTaxiLaunchOrder[]): YandexTaxiLaunchOrder[] {
-  return orders.filter((order) => order.status !== "draft" && !YANDEX_TAXI_FINISHED_STATUSES.has(order.status));
+export function activeYandexTaxiOrders(
+  orders: readonly YandexTaxiLaunchOrder[],
+): YandexTaxiLaunchOrder[] {
+  return orders.filter(
+    (order) => order.status !== "draft" && !YANDEX_TAXI_FINISHED_STATUSES.has(order.status),
+  );
 }
 
 const STATUS_LABELS: Readonly<Record<string, string>> = {
@@ -115,10 +139,14 @@ export function yandexTaxiStatusLabel(status: string): string {
 export type YandexTaxiCancelState = "disabled" | "free" | "minimal" | "paid" | "unknown";
 
 export function yandexTaxiCancelState(value: string): YandexTaxiCancelState {
-  return value === "free" || value === "minimal" || value === "paid" || value === "disabled" ? value : "unknown";
+  return value === "free" || value === "minimal" || value === "paid" || value === "disabled"
+    ? value
+    : "unknown";
 }
 
-export const YANDEX_TAXI_CANCEL_LABELS: Readonly<Record<Exclude<YandexTaxiCancelState, "disabled">, string>> = {
+export const YANDEX_TAXI_CANCEL_LABELS: Readonly<
+  Record<Exclude<YandexTaxiCancelState, "disabled">, string>
+> = {
   free: "бесплатно",
   minimal: "с минимальной платой",
   paid: "платно",

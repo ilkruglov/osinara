@@ -3,9 +3,7 @@ import { isLocalEveServerUrl } from "#services/dev-client/local-host.js";
 const DEVELOPMENT_SERVER_PROTOCOLS = new Set([`http:`, `https:`]);
 function assertDevelopmentServerProtocol(t, r) {
   if (!DEVELOPMENT_SERVER_PROTOCOLS.has(t.protocol))
-    throw new InvalidArgumentError(
-      `Expected an absolute http(s) URL, received "${r}".`,
-    );
+    throw new InvalidArgumentError(`Expected an absolute http(s) URL, received "${r}".`);
 }
 function assertSecureRemoteProtocol(n, r) {
   if (n.protocol === `http:` && !isLocalEveServerUrl(n))
@@ -26,9 +24,7 @@ function parseDevelopmentServerUrl(t) {
   } catch (n) {
     throw n instanceof InvalidArgumentError
       ? n
-      : new InvalidArgumentError(
-          `Expected an absolute http(s) URL, received "${t}".`,
-        );
+      : new InvalidArgumentError(`Expected an absolute http(s) URL, received "${t}".`);
   }
 }
 export { parseDevelopmentServerUrl };

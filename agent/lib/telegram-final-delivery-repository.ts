@@ -31,8 +31,13 @@ export const telegramFinalDeliveryRepository = {
         `INSERT INTO telegram_final_deliveries
            (eve_session_id, eve_turn_id, application_session_id, output_hash, expected_chunk_count)
          VALUES ($1, $2, $3, $4, $5) ON CONFLICT (eve_session_id, eve_turn_id) DO NOTHING`,
-        [input.eveSessionId, input.eveTurnId, input.applicationSessionId,
-          input.outputHash, input.chunkCount],
+        [
+          input.eveSessionId,
+          input.eveTurnId,
+          input.applicationSessionId,
+          input.outputHash,
+          input.chunkCount,
+        ],
       );
       const current = await client.query<{
         diagnostic_code: string | null;
@@ -47,9 +52,11 @@ export const telegramFinalDeliveryRepository = {
         [input.eveSessionId, input.eveTurnId],
       );
       const delivery = current.rows[0]!;
-      const exactContract = delivery.output_hash === input.outputHash &&
+      const exactContract =
+        delivery.output_hash === input.outputHash &&
         delivery.expected_chunk_count === input.chunkCount;
-      const legacyContract = delivery.output_hash === input.legacyOutputHash &&
+      const legacyContract =
+        delivery.output_hash === input.legacyOutputHash &&
         delivery.expected_chunk_count === input.legacyChunkCount;
       if (!exactContract && !legacyContract) {
         throw new AppError(
@@ -138,8 +145,14 @@ export const telegramFinalDeliveryRepository = {
        FROM telegram_final_deliveries
        WHERE id = $1 AND status = 'started' AND delivery_token = $2
          AND $3 >= 0 AND $3 < expected_chunk_count`,
-      [input.deliveryId, input.deliveryToken, input.ordinal, input.contentHash,
-        input.messageId, input.chatType],
+      [
+        input.deliveryId,
+        input.deliveryToken,
+        input.ordinal,
+        input.contentHash,
+        input.messageId,
+        input.chatType,
+      ],
     );
     if (!result.rowCount) {
       throw new AppError(

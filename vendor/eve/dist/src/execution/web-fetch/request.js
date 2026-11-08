@@ -1,7 +1,4 @@
-import {
-  isLoopbackHostname,
-  isPrivateOrReservedIpAddress,
-} from "#shared/network-address.js";
+import { isLoopbackHostname, isPrivateOrReservedIpAddress } from "#shared/network-address.js";
 import { lookup } from "node:dns";
 import { isIP } from "node:net";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]),
@@ -14,9 +11,7 @@ async function requestPublicUrl(e, t) {
     if (e !== null && REDIRECT_STATUSES.has(a.status)) {
       await cancelResponseBody(a);
       let t = parseHttpsUrl(new URL(e, n).toString());
-      throw Error(
-        `Request redirected to ${t.toString()}. Call web_fetch again with that URL.`,
-      );
+      throw Error(`Request redirected to ${t.toString()}. Call web_fetch again with that URL.`);
     }
     return await consumeResponse(a, t.maxResponseSize);
   } finally {
@@ -79,13 +74,9 @@ function createPublicLookup() {
         return;
       }
       let a =
-        t.family === void 0 || t.family === 0
-          ? i
-          : i.filter(({ family: e }) => e === t.family);
+        t.family === void 0 || t.family === 0 ? i : i.filter(({ family: e }) => e === t.family);
       if (a.length === 0) {
-        let t = Error(
-          `Unable to resolve URL hostname "${e}" in the requested IP family.`,
-        );
+        let t = Error(`Unable to resolve URL hostname "${e}" in the requested IP family.`);
         (Object.assign(t, { code: `ENOTFOUND` }), r(t, ``, 0));
         return;
       }
@@ -100,8 +91,7 @@ function createPublicLookup() {
 }
 async function consumeResponse(e, t) {
   let n = parseContentLength(e.headers.get(`content-length`));
-  if (n !== void 0 && n > t)
-    throw (await cancelResponseBody(e), createResponseTooLargeError());
+  if (n !== void 0 && n > t) throw (await cancelResponseBody(e), createResponseTooLargeError());
   let r = await readBoundedBody(e, t),
     i = r.byteLength === 0 ? null : Uint8Array.from(r).buffer;
   return new Response(i, {
@@ -124,8 +114,7 @@ async function readBoundedBody(e, t) {
     for (;;) {
       let { done: e, value: a } = await n.read();
       if (e) break;
-      if (((i += a.byteLength), i > t))
-        throw (await n.cancel(), createResponseTooLargeError());
+      if (((i += a.byteLength), i > t)) throw (await n.cancel(), createResponseTooLargeError());
       r.push(a);
     }
   } finally {

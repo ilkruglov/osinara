@@ -1,51 +1,75 @@
 import { type ConnectTriggerAttachmentResult } from "#setup/connect-provisioning.js";
 import { createPromptCommandOutput, type ChannelSetupLog } from "#setup/cli/index.js";
 import { captureVercel, runVercel } from "#setup/primitives/run-vercel.js";
-import { type RawSlackConnector, type SlackConnectorDetails, type SlackConnectorRef, type SlackWorkspaceConnection } from "./slack-connect.js";
+import {
+  type RawSlackConnector,
+  type SlackConnectorDetails,
+  type SlackConnectorRef,
+  type SlackWorkspaceConnection,
+} from "./slack-connect.js";
 export declare const CONNECT_LOOKUP_TIMEOUT_MS = 60000;
 /** Connect subprocess operations needed to inventory and remove Slack connectors. */
 export interface SlackConnectLifecycleDeps {
-    captureVercel: typeof captureVercel;
-    runVercel: typeof runVercel;
+  captureVercel: typeof captureVercel;
+  runVercel: typeof runVercel;
 }
-export type SlackConnectorInventory = {
-    state: "ok";
-    body: unknown;
-    connectors: readonly RawSlackConnector[];
-} | {
-    state: "failed";
-    message: string;
-};
-export type SlackConnectorCleanupResult = {
-    state: "clean";
-} | {
-    state: "failed";
-    connectorUids: readonly string[];
-};
+export type SlackConnectorInventory =
+  | {
+      state: "ok";
+      body: unknown;
+      connectors: readonly RawSlackConnector[];
+    }
+  | {
+      state: "failed";
+      message: string;
+    };
+export type SlackConnectorCleanupResult =
+  | {
+      state: "clean";
+    }
+  | {
+      state: "failed";
+      connectorUids: readonly string[];
+    };
 type CommandOutput = ReturnType<typeof createPromptCommandOutput>;
 /** Shared dependencies and output routing for one connector cleanup operation. */
 export interface SlackConnectorCleanupContext {
-    log: ChannelSetupLog;
-    deps: SlackConnectLifecycleDeps;
-    projectRoot: string;
-    onOutput: CommandOutput;
+  log: ChannelSetupLog;
+  deps: SlackConnectLifecycleDeps;
+  projectRoot: string;
+  onOutput: CommandOutput;
 }
 /** Reads and validates the account-level Slack connector inventory. */
-export declare function listSlackConnectors(deps: SlackConnectLifecycleDeps, projectRoot: string, onOutput: CommandOutput, signal?: AbortSignal): Promise<SlackConnectorInventory>;
-export type SlackConnectorLookup = {
-    state: "found";
-    connectors: readonly SlackConnectorRef[];
-    preferred?: SlackConnectorRef;
-    connectorUids: ReadonlySet<string>;
-} | {
-    state: "not-found";
-    connectorUids: ReadonlySet<string>;
-} | {
-    state: "failed";
-    message: string;
-};
+export declare function listSlackConnectors(
+  deps: SlackConnectLifecycleDeps,
+  projectRoot: string,
+  onOutput: CommandOutput,
+  signal?: AbortSignal,
+): Promise<SlackConnectorInventory>;
+export type SlackConnectorLookup =
+  | {
+      state: "found";
+      connectors: readonly SlackConnectorRef[];
+      preferred?: SlackConnectorRef;
+      connectorUids: ReadonlySet<string>;
+    }
+  | {
+      state: "not-found";
+      connectorUids: ReadonlySet<string>;
+    }
+  | {
+      state: "failed";
+      message: string;
+    };
 /** Lists Slack connectors attached to the linked project and identifies the expected UID. */
-export declare function findSlackConnector(deps: SlackConnectLifecycleDeps, projectRoot: string, projectId: string | undefined, expectedUid: string | undefined, onOutput: CommandOutput, signal?: AbortSignal): Promise<SlackConnectorLookup>;
+export declare function findSlackConnector(
+  deps: SlackConnectLifecycleDeps,
+  projectRoot: string,
+  projectId: string | undefined,
+  expectedUid: string | undefined,
+  onOutput: CommandOutput,
+  signal?: AbortSignal,
+): Promise<SlackConnectorLookup>;
 /**
  * Outcome of pointing a connector's trigger destination at this project's eve
  * route. Detach and attach are reported separately because attach must not run
@@ -59,42 +83,53 @@ export type SlackConnectorAttachmentResult = ConnectTriggerAttachmentResult;
  * subprocess failing short-circuits so a half-configured connector is reported
  * rather than silently left pointing at the wrong place.
  */
-export declare function attachSlackConnector(deps: SlackConnectLifecycleDeps, projectRoot: string, ref: SlackConnectorRef, onOutput: CommandOutput, signal?: AbortSignal): Promise<SlackConnectorAttachmentResult>;
-export type SlackWorkspaceLookup = {
-    state: "connected";
-    workspace: SlackWorkspaceConnection;
-} | {
-    state: "pending";
-} | {
-    state: "failed";
-    message: string;
-};
-export type SlackConnectorDetailsLookup = {
-    state: "found";
-    details: SlackConnectorDetails;
-} | {
-    state: "failed";
-    message: string;
-};
+export declare function attachSlackConnector(
+  deps: SlackConnectLifecycleDeps,
+  projectRoot: string,
+  ref: SlackConnectorRef,
+  onOutput: CommandOutput,
+  signal?: AbortSignal,
+): Promise<SlackConnectorAttachmentResult>;
+export type SlackWorkspaceLookup =
+  | {
+      state: "connected";
+      workspace: SlackWorkspaceConnection;
+    }
+  | {
+      state: "pending";
+    }
+  | {
+      state: "failed";
+      message: string;
+    };
+export type SlackConnectorDetailsLookup =
+  | {
+      state: "found";
+      details: SlackConnectorDetails;
+    }
+  | {
+      state: "failed";
+      message: string;
+    };
 /** Fetches and validates one team-scoped connector detail payload. */
 export declare function fetchSlackConnectorDetails(input: {
-    deps: Pick<SlackConnectLifecycleDeps, "captureVercel">;
-    projectRoot: string;
-    connectorId: string;
-    orgId: string | undefined;
-    onOutput: CommandOutput;
-    timeoutMs: number;
-    signal?: AbortSignal;
+  deps: Pick<SlackConnectLifecycleDeps, "captureVercel">;
+  projectRoot: string;
+  connectorId: string;
+  orgId: string | undefined;
+  onOutput: CommandOutput;
+  timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<SlackConnectorDetailsLookup>;
 /** Fetches the Slack workspace connected to a connector, if one exists yet. */
 export declare function fetchSlackWorkspace(input: {
-    deps: Pick<SlackConnectLifecycleDeps, "captureVercel">;
-    projectRoot: string;
-    connectorId: string;
-    orgId: string | undefined;
-    onOutput: CommandOutput;
-    timeoutMs: number;
-    signal?: AbortSignal;
+  deps: Pick<SlackConnectLifecycleDeps, "captureVercel">;
+  projectRoot: string;
+  connectorId: string;
+  orgId: string | undefined;
+  onOutput: CommandOutput;
+  timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<SlackWorkspaceLookup>;
 /**
  * Removes the exact connector returned by `connect create`. When no UID was
@@ -104,9 +139,12 @@ export declare function fetchSlackWorkspace(input: {
  * attempt's, matching `expectedUid` and absent from the pre-create snapshot, so
  * the caller can stop rather than risk removing a bystander's connector.
  */
-export declare function cleanupCreatedAttempt(context: SlackConnectorCleanupContext, input: {
+export declare function cleanupCreatedAttempt(
+  context: SlackConnectorCleanupContext,
+  input: {
     expectedUid: string;
     baselineConnectorUids: ReadonlySet<string>;
     createdRef: SlackConnectorRef | undefined;
-}): Promise<SlackConnectorCleanupResult>;
+  },
+): Promise<SlackConnectorCleanupResult>;
 export {};

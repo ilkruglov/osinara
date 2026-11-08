@@ -16,7 +16,9 @@ import type { TelegramUpdate } from "eve/channels/telegram";
 import { asRecord as record } from "./json-value.js";
 
 function coordinate(value: unknown, limit: number): number | null {
-  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit ? value : null;
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit
+    ? value
+    : null;
 }
 
 function locationLine(location: Record<string, unknown>): string | null {

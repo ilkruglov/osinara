@@ -1,4 +1,10 @@
-import { type AgentAddress, type AgentHandle, type AgentIdentity, type ContinueOperation, type StartOperation } from "#harness/handles/store.js";
+import {
+  type AgentAddress,
+  type AgentHandle,
+  type AgentIdentity,
+  type ContinueOperation,
+  type StartOperation,
+} from "#harness/handles/store.js";
 import type { HarnessSession, SessionStateMap } from "#harness/types.js";
 import type { AgentTurnOutcome } from "#shared/agent-turn-outcome.js";
 /**
@@ -14,28 +20,41 @@ import type { AgentTurnOutcome } from "#shared/agent-turn-outcome.js";
  * Throws when the identity or operation already exists: fresh starts mint
  * a new identity, so a collision means corrupted derivation, not a replay.
  */
-export declare function prepareAgentStart(session: HarnessSession, input: {
+export declare function prepareAgentStart(
+  session: HarnessSession,
+  input: {
     readonly identity: AgentIdentity;
     readonly operation: StartOperation;
     readonly target: AgentStartTargetInput;
-}): HarnessSession;
-type AgentStartTargetInput = Extract<AgentHandle, {
+  },
+): HarnessSession;
+type AgentStartTargetInput = Extract<
+  AgentHandle,
+  {
     phase: "starting";
-}>["target"];
+  }
+>["target"];
 /** Result of preparing a continuation against an existing handle. */
-export type PrepareAgentContinuationResult = {
-    readonly kind: "ready";
-    readonly session: HarnessSession;
-    readonly handle: Extract<AgentHandle, {
-        phase: "running";
-    }>;
-} | {
-    readonly kind: "unknown";
-} | {
-    readonly kind: "mismatch";
-} | {
-    readonly kind: "busy";
-};
+export type PrepareAgentContinuationResult =
+  | {
+      readonly kind: "ready";
+      readonly session: HarnessSession;
+      readonly handle: Extract<
+        AgentHandle,
+        {
+          phase: "running";
+        }
+      >;
+    }
+  | {
+      readonly kind: "unknown";
+    }
+  | {
+      readonly kind: "mismatch";
+    }
+  | {
+      readonly kind: "busy";
+    };
 /**
  * Records intent to deliver a follow-up turn to a parked child. Must be
  * applied to the step's working snapshot before the delivery side effect
@@ -52,11 +71,14 @@ export type PrepareAgentContinuationResult = {
  * maps them onto `AGENT_UNREACHABLE`, `AGENT_MISMATCH`, and `AGENT_BUSY`
  * results.
  */
-export declare function prepareAgentContinuation(session: HarnessSession, input: {
+export declare function prepareAgentContinuation(
+  session: HarnessSession,
+  input: {
     readonly agentId: string;
     readonly invokedName: string;
     readonly operation: ContinueOperation;
-}): PrepareAgentContinuationResult;
+  },
+): PrepareAgentContinuationResult;
 /**
  * Confirms a started child: `starting` becomes `running` with the child's
  * confirmed address. Throws when no starting handle carries the operation,
@@ -64,19 +86,31 @@ export declare function prepareAgentContinuation(session: HarnessSession, input:
  * committed. Re-confirming an already-running handle with the same
  * operation and address is a replay no-op.
  */
-export declare function confirmAgentStarted(session: HarnessSession, input: {
+export declare function confirmAgentStarted(
+  session: HarnessSession,
+  input: {
     readonly operationId: string;
     readonly address: AgentAddress;
-}): HarnessSession;
+  },
+): HarnessSession;
 /** Confirms a task-mode child as a persistent identity/address record. */
-export declare function confirmTaskAgentAddress(session: HarnessSession, input: {
+export declare function confirmTaskAgentAddress(
+  session: HarnessSession,
+  input: {
     readonly operationId: string;
     readonly address: AgentAddress;
-}): HarnessSession;
+  },
+): HarnessSession;
 /** Removes a task-mode address after permanent delivery failure. */
-export declare function removeTaskAgentAddress(session: HarnessSession, agentId: string): HarnessSession;
+export declare function removeTaskAgentAddress(
+  session: HarnessSession,
+  agentId: string,
+): HarnessSession;
 /** State-only variant used while consuming a terminal task wake. */
-export declare function removeTaskAgentAddressFromState(state: SessionStateMap | undefined, agentId: string): SessionStateMap;
+export declare function removeTaskAgentAddressFromState(
+  state: SessionStateMap | undefined,
+  agentId: string,
+): SessionStateMap;
 /**
  * Resolves a dispatch that definitively failed.
  *
@@ -89,10 +123,13 @@ export declare function removeTaskAgentAddressFromState(state: SessionStateMap |
  * Unknown operations are a no-op: the failure raced a settlement that
  * already resolved the handle.
  */
-export declare function rejectAgentEffect(session: HarnessSession, input: {
+export declare function rejectAgentEffect(
+  session: HarnessSession,
+  input: {
     readonly operationId: string;
     readonly disposition: "dead" | "retryable";
-}): HarnessSession;
+  },
+): HarnessSession;
 /**
  * Parks every running child when the parent abandons a cancelled turn.
  *
@@ -109,13 +146,15 @@ export declare function rejectAgentEffect(session: HarnessSession, input: {
  */
 export declare function abandonRunningAgentTurns(session: HarnessSession): HarnessSession;
 /** Result of applying a settled child turn to the store. */
-export type SettleAgentTurnResult = {
-    readonly kind: "settled";
-    readonly session: HarnessSession;
-} | {
-    readonly kind: "ignored";
-    readonly reason: "unknown-operation";
-};
+export type SettleAgentTurnResult =
+  | {
+      readonly kind: "settled";
+      readonly session: HarnessSession;
+    }
+  | {
+      readonly kind: "ignored";
+      readonly reason: "unknown-operation";
+    };
 /**
  * Applies one settled child turn: `running` becomes `parked` for a parked
  * outcome or is deleted for a terminal outcome.
@@ -124,8 +163,11 @@ export type SettleAgentTurnResult = {
  * running handle; anything else is ignored so a stale delivery can never
  * move a newer turn.
  */
-export declare function settleAgentTurn(session: HarnessSession, input: {
+export declare function settleAgentTurn(
+  session: HarnessSession,
+  input: {
     readonly operationId: string;
     readonly outcome: AgentTurnOutcome;
-}): SettleAgentTurnResult;
+  },
+): SettleAgentTurnResult;
 export {};

@@ -1,20 +1,14 @@
 import { getRuntimeActionRequestKey } from "#runtime/actions/keys.js";
 const WORKFLOW_RUNTIME_ACTION_INTERRUPT_KIND = `eve.workflow-runtime-action`;
 function isWorkflowRuntimeActionInterrupt(e) {
-  return (
-    isRecord(e) &&
-    isRecord(e.payload) &&
-    e.payload.kind === `eve.workflow-runtime-action`
-  );
+  return isRecord(e) && isRecord(e.payload) && e.payload.kind === `eve.workflow-runtime-action`;
 }
 function buildRuntimeActionFromWorkflowInterrupt(e) {
   let t = e.payload,
     n = t.runtimeAction,
     r = t.toolInput,
     i = t.toolName,
-    a = sanitizeCallId(
-      `${i}_${`interruptId` in e ? String(e.interruptId) : ``}`,
-    );
+    a = sanitizeCallId(`${i}_${`interruptId` in e ? String(e.interruptId) : ``}`);
   if (n.kind === `remote-agent-call`)
     return {
       callId: a,
@@ -63,9 +57,7 @@ function buildRuntimeActionsFromWorkflowInterrupt(e) {
   );
 }
 function getRuntimeActionKeysFromWorkflowInterrupt(t) {
-  return buildRuntimeActionsFromWorkflowInterrupt(t).map(
-    getRuntimeActionRequestKey,
-  );
+  return buildRuntimeActionsFromWorkflowInterrupt(t).map(getRuntimeActionRequestKey);
 }
 function sanitizeCallId(e) {
   return e.replace(/[^a-zA-Z0-9_-]/g, `_`);

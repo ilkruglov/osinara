@@ -5,7 +5,12 @@ import type { ScenarioCall } from "./skill-scenario.js";
 
 export async function evaluateSkillRubric(
   rubric: Extract<ExperimentCheck, { target: "rubric" }>,
-  evidence: { request: string; answer: string; calls: readonly ScenarioCall[]; files: Record<string, string> },
+  evidence: {
+    request: string;
+    answer: string;
+    calls: readonly ScenarioCall[];
+    files: Record<string, string>;
+  },
   generate: (prompt: string) => Promise<string>,
 ): Promise<boolean> {
   const prompt = [
@@ -16,6 +21,9 @@ export async function evaluateSkillRubric(
     JSON.stringify({ criteria: rubric.criteria, reference: rubric.reference, evidence }),
   ].join("\n");
   if (prompt.length > 60_000) throw new Error("AGENT_SKILL_LAB_JUDGE_CONTEXT_LIMIT");
-  const result = z.object({ passed: z.array(z.boolean()).length(rubric.criteria.length) }).strict().parse(JSON.parse(await generate(prompt)));
+  const result = z
+    .object({ passed: z.array(z.boolean()).length(rubric.criteria.length) })
+    .strict()
+    .parse(JSON.parse(await generate(prompt)));
   return result.passed.every(Boolean);
 }

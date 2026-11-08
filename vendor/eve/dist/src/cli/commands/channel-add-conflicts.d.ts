@@ -5,17 +5,22 @@ import type { DisabledChannelReasons } from "#setup/cli/index.js";
  * or would conflict with a generated channel module.
  */
 export interface ExistingChannelRegistrations {
-    readonly disabledChannelReasons: DisabledChannelReasons;
-    readonly webRouteOwners: readonly string[];
-    readonly slackOwners: readonly string[];
+  readonly disabledChannelReasons: DisabledChannelReasons;
+  readonly webRouteOwners: readonly string[];
+  readonly slackOwners: readonly string[];
 }
 /**
  * Inspects compiled authored channels so custom filenames still disable the
  * scaffold option for the channel behavior they register.
  */
-export declare function inspectExistingChannelRegistrations(projectRoot: string): Promise<ExistingChannelRegistrations>;
+export declare function inspectExistingChannelRegistrations(
+  projectRoot: string,
+): Promise<ExistingChannelRegistrations>;
 /**
  * Rejects scaffolding when another authored module already owns behavior
  * emitted by the generated channel module.
  */
-export declare function assertCanAddSelectedChannels(selectedChannels: readonly ChannelKind[], registrations: ExistingChannelRegistrations): void;
+export declare function assertCanAddSelectedChannels(
+  selectedChannels: readonly ChannelKind[],
+  registrations: ExistingChannelRegistrations,
+): void;

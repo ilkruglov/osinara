@@ -4,28 +4,43 @@ import type { ResolvedToolDefinition } from "#runtime/types.js";
  * Stable model-visible name for the framework question tool.
  */
 export declare const ASK_QUESTION_TOOL_NAME = "ask_question";
-export declare const ASK_QUESTION_INPUT_SCHEMA: z.ZodObject<{
+export declare const ASK_QUESTION_INPUT_SCHEMA: z.ZodObject<
+  {
     allowFreeform: z.ZodOptional<z.ZodBoolean>;
-    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        description: z.ZodOptional<z.ZodString>;
-        id: z.ZodString;
-        label: z.ZodString;
-        style: z.ZodOptional<z.ZodEnum<{
-            danger: "danger";
-            default: "default";
-            primary: "primary";
-        }>>;
-    }, z.core.$strict>>>;
+    options: z.ZodOptional<
+      z.ZodArray<
+        z.ZodObject<
+          {
+            description: z.ZodOptional<z.ZodString>;
+            id: z.ZodString;
+            label: z.ZodString;
+            style: z.ZodOptional<
+              z.ZodEnum<{
+                danger: "danger";
+                default: "default";
+                primary: "primary";
+              }>
+            >;
+          },
+          z.core.$strict
+        >
+      >
+    >;
     prompt: z.ZodString;
-}, z.core.$strict>;
-export declare const ASK_QUESTION_OUTPUT_SCHEMA: z.ZodObject<{
+  },
+  z.core.$strict
+>;
+export declare const ASK_QUESTION_OUTPUT_SCHEMA: z.ZodObject<
+  {
     optionId: z.ZodOptional<z.ZodString>;
     status: z.ZodEnum<{
-        answered: "answered";
-        ignored: "ignored";
+      answered: "answered";
+      ignored: "ignored";
     }>;
     text: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Root-only framework tool that lets the agent request structured user input.
  *

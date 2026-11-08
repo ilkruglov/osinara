@@ -20,22 +20,29 @@ export type EveEvalValueMatcher<T = JsonValue | undefined> = EveEvalDeepMatcher<
  * count; a predicate receives the observed count and returns its verdict.
  */
 export type EveEvalCountMatcher = number | ((count: number) => boolean);
-type EveEvalDeepMatcher<T> = RegExp | ((value: T) => boolean) | (T extends readonly (infer TEntry)[] ? readonly EveEvalDeepMatcher<TEntry>[] : T extends object ? {
-    readonly [K in keyof T]?: EveEvalDeepMatcher<T[K]>;
-} : T);
+type EveEvalDeepMatcher<T> =
+  | RegExp
+  | ((value: T) => boolean)
+  | (T extends readonly (infer TEntry)[]
+      ? readonly EveEvalDeepMatcher<TEntry>[]
+      : T extends object
+        ? {
+            readonly [K in keyof T]?: EveEvalDeepMatcher<T[K]>;
+          }
+        : T);
 /**
  * Constraints applied to tool calls by `t.calledTool`. All provided
  * constraints must hold for a call to match.
  */
 export interface EveEvalToolCallMatchOptions {
-    /** Partial-deep matcher over the call input (see {@link EveEvalValueMatcher}). */
-    readonly input?: EveEvalValueMatcher<JsonObject>;
-    /** Matcher over the call output. */
-    readonly output?: EveEvalValueMatcher;
-    /** Required lifecycle outcome. Defaults to `"completed"`. */
-    readonly status?: EveEvalToolCall["status"];
-    /** Constraint over the matching call count. Defaults to "at least one". */
-    readonly count?: EveEvalCountMatcher;
+  /** Partial-deep matcher over the call input (see {@link EveEvalValueMatcher}). */
+  readonly input?: EveEvalValueMatcher<JsonObject>;
+  /** Matcher over the call output. */
+  readonly output?: EveEvalValueMatcher;
+  /** Required lifecycle outcome. Defaults to `"completed"`. */
+  readonly status?: EveEvalToolCall["status"];
+  /** Constraint over the matching call count. Defaults to "at least one". */
+  readonly count?: EveEvalCountMatcher;
 }
 /**
  * Constraints applied to a `load_skill` call by `t.loadedSkill`. Identical to
@@ -47,45 +54,56 @@ export type EveEvalSkillLoadMatchOptions = Omit<EveEvalToolCallMatchOptions, "in
  * Constraints applied to subagent calls by `t.calledSubagent`.
  */
 export interface EveEvalSubagentCallMatchOptions {
-    /** Matcher over the runtime-action call id. */
-    readonly callId?: EveEvalValueMatcher<string | undefined>;
-    /** Matcher over the durable child session id, when delegation started. */
-    readonly childSessionId?: EveEvalValueMatcher<string | undefined>;
-    /** Matcher over the `subagent.called` remote URL. */
-    readonly remoteUrl?: EveEvalValueMatcher<string | undefined>;
-    /** Matcher over the `subagent.completed` output. */
-    readonly output?: EveEvalValueMatcher;
-    /** Required lifecycle outcome. Defaults to `"completed"`. */
-    readonly status?: EveEvalSubagentCall["status"];
-    /** Constraint over the matching delegation count. Defaults to "at least one". */
-    readonly count?: EveEvalCountMatcher;
+  /** Matcher over the runtime-action call id. */
+  readonly callId?: EveEvalValueMatcher<string | undefined>;
+  /** Matcher over the durable child session id, when delegation started. */
+  readonly childSessionId?: EveEvalValueMatcher<string | undefined>;
+  /** Matcher over the `subagent.called` remote URL. */
+  readonly remoteUrl?: EveEvalValueMatcher<string | undefined>;
+  /** Matcher over the `subagent.completed` output. */
+  readonly output?: EveEvalValueMatcher;
+  /** Required lifecycle outcome. Defaults to `"completed"`. */
+  readonly status?: EveEvalSubagentCall["status"];
+  /** Constraint over the matching delegation count. Defaults to "at least one". */
+  readonly count?: EveEvalCountMatcher;
 }
 /** Constraints accepted by `requireInputRequest`. */
 export interface EveEvalInputRequestMatchOptions {
-    /** Matcher over the request's display hint. */
-    readonly display?: EveEvalValueMatcher<InputRequest["display"]>;
-    /** Partial-deep matcher over a tool-call action's input. */
-    readonly input?: EveEvalValueMatcher<JsonObject>;
-    /** Matcher over the complete option-id list in request order. */
-    readonly optionIds?: EveEvalValueMatcher<readonly string[]>;
-    /** Matcher over the request prompt. */
-    readonly prompt?: EveEvalValueMatcher<string>;
-    /** Required tool name for a tool-call action. */
-    readonly toolName?: string;
+  /** Matcher over the request's display hint. */
+  readonly display?: EveEvalValueMatcher<InputRequest["display"]>;
+  /** Partial-deep matcher over a tool-call action's input. */
+  readonly input?: EveEvalValueMatcher<JsonObject>;
+  /** Matcher over the complete option-id list in request order. */
+  readonly optionIds?: EveEvalValueMatcher<readonly string[]>;
+  /** Matcher over the request prompt. */
+  readonly prompt?: EveEvalValueMatcher<string>;
+  /** Required tool name for a tool-call action. */
+  readonly toolName?: string;
 }
 /** One typed stream-event matcher used by scoped event assertions. */
-export type EveEvalEventMatch<TType extends MessageStreamEvent["type"] = MessageStreamEvent["type"]> = TType extends MessageStreamEvent["type"] ? {
-    /** Stream-event type to match. */
-    readonly type: TType;
-    /** Partial-deep matcher over the event data. */
-    readonly data?: EveEvalDeepMatcher<Extract<MessageStreamEvent, {
-        type: TType;
-    }> extends {
-        data: infer TData;
-    } ? TData : never>;
-    /** Constraint over the matching event count. Defaults to "at least one". */
-    readonly count?: EveEvalCountMatcher;
-} : never;
+export type EveEvalEventMatch<
+  TType extends MessageStreamEvent["type"] = MessageStreamEvent["type"],
+> = TType extends MessageStreamEvent["type"]
+  ? {
+      /** Stream-event type to match. */
+      readonly type: TType;
+      /** Partial-deep matcher over the event data. */
+      readonly data?: EveEvalDeepMatcher<
+        Extract<
+          MessageStreamEvent,
+          {
+            type: TType;
+          }
+        > extends {
+          data: infer TData;
+        }
+          ? TData
+          : never
+      >;
+      /** Constraint over the matching event count. Defaults to "at least one". */
+      readonly count?: EveEvalCountMatcher;
+    }
+  : never;
 /**
  * Returns true when the observed value satisfies a matcher (literal, RegExp,
  * or function — see {@link EveEvalValueMatcher}).
@@ -95,16 +113,28 @@ export declare function matchesValue(matcher: unknown, value: unknown): boolean;
  * Returns true when one derived tool call satisfies the `input`/`output`/
  * lifecycle constraints (the `count` option is the caller's concern).
  */
-export declare function toolCallMatches(call: EveEvalToolCall, options: EveEvalToolCallMatchOptions): boolean;
+export declare function toolCallMatches(
+  call: EveEvalToolCall,
+  options: EveEvalToolCallMatchOptions,
+): boolean;
 /**
  * Returns true when one derived subagent call satisfies the `remoteUrl`/
  * `output` constraints.
  */
-export declare function subagentCallMatches(call: EveEvalSubagentCall, options: EveEvalSubagentCallMatchOptions): boolean;
+export declare function subagentCallMatches(
+  call: EveEvalSubagentCall,
+  options: EveEvalSubagentCallMatchOptions,
+): boolean;
 /** Returns true when one HITL request satisfies every supplied constraint. */
-export declare function inputRequestMatches(request: InputRequest, options: EveEvalInputRequestMatchOptions): boolean;
+export declare function inputRequestMatches(
+  request: InputRequest,
+  options: EveEvalInputRequestMatchOptions,
+): boolean;
 /** Returns true when one stream event satisfies a typed event matcher. */
-export declare function eventMatches(event: MessageStreamEvent, matcher: EveEvalEventMatch): boolean;
+export declare function eventMatches(
+  event: MessageStreamEvent,
+  matcher: EveEvalEventMatch,
+): boolean;
 /**
  * Strict structural equality used by scoped `outputEquals`: unlike matcher
  * comparison, objects must carry exactly the same keys on both sides.

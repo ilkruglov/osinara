@@ -26,9 +26,9 @@ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
  * across providers without provider context.
  */
 export interface TokenResult {
-    readonly token: string;
-    readonly expiresAt?: number;
-    readonly providerSubject?: string;
+  readonly token: string;
+  readonly expiresAt?: number;
+  readonly providerSubject?: string;
 }
 /**
  * Wire protocol a connection speaks.
@@ -41,7 +41,8 @@ export interface TokenResult {
  */
 export type ConnectionProtocol = "mcp" | "openapi";
 /** A single header value, supporting static strings and per-caller resolution. */
-export type HeaderValue = string | Promise<string> | ((ctx: SessionContext) => string | Promise<string>);
+export type HeaderValue =
+  string | Promise<string> | ((ctx: SessionContext) => string | Promise<string>);
 /**
  * Arbitrary HTTP headers sent with every request to a connection server.
  *
@@ -51,7 +52,11 @@ export type HeaderValue = string | Promise<string> | ((ctx: SessionContext) => s
  * receive the active {@link SessionContext}, so credentials and routing
  * metadata can be selected from the current caller.
  */
-export type HeadersDefinition = Readonly<Record<string, HeaderValue>> | ((ctx: SessionContext) => Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>>>);
+export type HeadersDefinition =
+  | Readonly<Record<string, HeaderValue>>
+  | ((
+      ctx: SessionContext,
+    ) => Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>>>);
 /**
  * Client-side tool filter applied after `listTools()`.
  *
@@ -59,11 +64,13 @@ export type HeadersDefinition = Readonly<Record<string, HeaderValue>> | ((ctx: S
  * - `allow`: the model sees only the named tools.
  * - `block`: the model sees all tools except the named ones.
  */
-export type ToolFilterDefinition = {
-    readonly allow: readonly string[];
-} | {
-    readonly block: readonly string[];
-};
+export type ToolFilterDefinition =
+  | {
+      readonly allow: readonly string[];
+    }
+  | {
+      readonly block: readonly string[];
+    };
 /**
  * Framework-resolved identity on whose behalf a connection is
  * authenticating. The runtime derives this from
@@ -79,14 +86,16 @@ export type ToolFilterDefinition = {
  *   verified Vercel development user. The Vercel OIDC issuer is not forwarded
  *   because Connect rejects it.
  */
-export type ConnectionPrincipal = {
-    readonly type: "app";
-} | {
-    readonly type: "user";
-    readonly id: string;
-    readonly issuer?: string;
-    readonly attributes?: Readonly<Record<string, string | readonly string[]>>;
-};
+export type ConnectionPrincipal =
+  | {
+      readonly type: "app";
+    }
+  | {
+      readonly type: "user";
+      readonly id: string;
+      readonly issuer?: string;
+      readonly attributes?: Readonly<Record<string, string | readonly string[]>>;
+    };
 /**
  * Parsed projection of the OAuth callback the framework received at the
  * connection's callback URL.
@@ -97,11 +106,11 @@ export type ConnectionPrincipal = {
  * `Authorization` headers never cross a step boundary.
  */
 export interface AuthorizationCallback {
-    /** Query-string params merged with form-encoded body params. */
-    readonly params: Readonly<Record<string, string>>;
-    readonly method: string;
-    /** Raw request body, present only for non-GET callbacks (`form_post`). */
-    readonly body?: string;
+  /** Query-string params merged with form-encoded body params. */
+  readonly params: Readonly<Record<string, string>>;
+  readonly method: string;
+  /** Raw request body, present only for non-GET callbacks (`form_post`). */
+  readonly body?: string;
 }
 /**
  * Per-connection metadata the framework hands to every authorization
@@ -116,12 +125,12 @@ export interface AuthorizationCallback {
  * destructure only the fields they need are forward-compatible.
  */
 export interface ConnectionAuthorizationContext {
-    /**
-     * The MCP server URL declared on `defineMcpClientConnection`, verbatim
-     * from the definition. The runtime does not normalize or validate it
-     * beyond the definition's own schema.
-     */
-    readonly url: string;
+  /**
+   * The MCP server URL declared on `defineMcpClientConnection`, verbatim
+   * from the definition. The runtime does not normalize or validate it
+   * beyond the definition's own schema.
+   */
+  readonly url: string;
 }
 /**
  * Authorization strategy for a connection. Two shapes, chosen by
@@ -149,7 +158,8 @@ export interface ConnectionAuthorizationContext {
  * handed from `startAuthorization` to `completeAuthorization` is
  * guaranteed JSON-serializable.
  */
-export type AuthorizationDefinition<Resume extends JsonValue = JsonValue> = NonInteractiveAuthorizationDefinition | InteractiveAuthorizationDefinition<Resume>;
+export type AuthorizationDefinition<Resume extends JsonValue = JsonValue> =
+  NonInteractiveAuthorizationDefinition | InteractiveAuthorizationDefinition<Resume>;
 /**
  * Auth provider returned directly from or resolved by a connection's `auth`
  * field.
@@ -159,9 +169,11 @@ export type AuthorizationDefinition<Resume extends JsonValue = JsonValue> = NonI
  * defaults it to `"app"`. The resolved token is sent as
  * `Authorization: Bearer <token>`.
  */
-export type ConnectionAuthProvider = (Omit<NonInteractiveAuthorizationDefinition, "principalType"> & {
-    readonly principalType?: NonInteractiveAuthorizationDefinition["principalType"];
-}) | AuthorizationDefinition;
+export type ConnectionAuthProvider =
+  | (Omit<NonInteractiveAuthorizationDefinition, "principalType"> & {
+      readonly principalType?: NonInteractiveAuthorizationDefinition["principalType"];
+    })
+  | AuthorizationDefinition;
 /**
  * Resolves a connection auth provider from the active turn.
  *
@@ -169,7 +181,9 @@ export type ConnectionAuthProvider = (Omit<NonInteractiveAuthorizationDefinition
  * `ctx.session`, such as selecting a tenant-specific Vercel Connect client.
  * The returned provider is validated and normalized before use.
  */
-export type ConnectionAuthResolver = (ctx: SessionContext) => ConnectionAuthProvider | Promise<ConnectionAuthProvider>;
+export type ConnectionAuthResolver = (
+  ctx: SessionContext,
+) => ConnectionAuthProvider | Promise<ConnectionAuthProvider>;
 /**
  * Protocol-agnostic `auth` shape accepted by every connection `define*`
  * factory. Pass a provider directly for static configuration, or a resolver
@@ -180,77 +194,77 @@ export type ConnectionAuthDefinition = ConnectionAuthProvider | ConnectionAuthRe
  * Fields shared by every {@link AuthorizationDefinition} shape.
  */
 interface AuthorizationDefinitionBase {
-    /**
-     * Declares whether this connection acts as the agent itself (one
-     * shared credential) or on behalf of the end-user (per-principal
-     * tokens). Runtime definitions always carry this field; public
-     * `getToken`-only `auth` definitions default it to `"app"` during
-     * normalization when authors omit it.
-     *
-     * - `"app"`: the framework passes `{ type: "app" }` to every callback
-     *   regardless of who called the agent. The token cache keys on
-     *   `"app"` and is shared across all sessions.
-     * - `"user"`: the framework projects the active session's user
-     *   principal into `{ type: "user", id, issuer, ... }` and fails
-     *   fast with `reason: "principal_required"` when the session has
-     *   no authenticated user. The token cache keys on
-     *   `user:${issuer}:${id}` so concurrent users never share tokens.
-     */
-    readonly principalType: "app" | "user";
-    /**
-     * Optional metadata marker attached by `connect()` from
-     * `@vercel/connect/eve` so downstream tooling can detect Vercel
-     * Connect-backed connections at compile time without inspecting
-     * `getToken`'s closure state. Examples: a future eve compiler step
-     * that surfaces connector identifiers in build output, or the Vercel
-     * dashboard rendering deep links to a connector's settings page.
-     *
-     * The runtime uses this marker for Connect-specific authorization behavior,
-     * including its local callback URL contract. Authors writing their own
-     * `getToken` callbacks (raw bearer tokens, custom callbacks) should leave
-     * it unset.
-     *
-     * `connector` carries whatever value the author passed to
-     * `connect()`: a UID like `"oauth/mcp-linear-app"` or opaque
-     * `"scl_..."`. Both forms address the same connector on the Vercel
-     * Connect side.
-     */
-    readonly vercelConnect?: {
-        readonly connector: string;
-    };
-    /**
-     * Optional human-readable provider name shown in sign-in UI (e.g.
-     * `"Salesforce"`). Presentation-only: the authorization scope, token
-     * cache keys, and callback URLs all stay keyed by the path-derived
-     * name. Takes precedence over a `displayName` the strategy stamps on
-     * its {@link ConnectionAuthorizationChallenge}; channels fall back to
-     * title-casing the scope name when neither is set.
-     */
-    readonly displayName?: string;
-    /**
-     * Optional best-effort invalidation of any token cache the strategy
-     * owns *below* eve's per-step cache, for the given `principal`.
-     *
-     * eve always drops its own per-step entry when a resolved bearer is
-     * rejected (a downstream `401` mapped to `ctx.requireAuth()`, or the
-     * MCP server rejecting the token). But a strategy frequently sits on a
-     * second, longer-lived cache — most notably the `@vercel/connect`
-     * in-process token cache — that eve cannot see. Without this hook the
-     * re-authorization re-reads the same revoked-but-unexpired credential
-     * from that lower layer and the tool keeps failing.
-     *
-     * Implement `evict` to purge the strategy's own cache for `principal`
-     * so the next `getToken` performs a genuine refresh. The runtime calls
-     * it right after evicting the per-step entry, inside the same
-     * best-effort guard: throwing here must never mask the underlying
-     * authorization error, so implementations should swallow their own
-     * failures or stay side-effect-only. Leave it unset for strategies
-     * that hold no cache of their own (static keys, raw bearers).
-     */
-    evict?(opts: {
-        readonly principal: ConnectionPrincipal;
-        readonly connection: ConnectionAuthorizationContext;
-    }): void | Promise<void>;
+  /**
+   * Declares whether this connection acts as the agent itself (one
+   * shared credential) or on behalf of the end-user (per-principal
+   * tokens). Runtime definitions always carry this field; public
+   * `getToken`-only `auth` definitions default it to `"app"` during
+   * normalization when authors omit it.
+   *
+   * - `"app"`: the framework passes `{ type: "app" }` to every callback
+   *   regardless of who called the agent. The token cache keys on
+   *   `"app"` and is shared across all sessions.
+   * - `"user"`: the framework projects the active session's user
+   *   principal into `{ type: "user", id, issuer, ... }` and fails
+   *   fast with `reason: "principal_required"` when the session has
+   *   no authenticated user. The token cache keys on
+   *   `user:${issuer}:${id}` so concurrent users never share tokens.
+   */
+  readonly principalType: "app" | "user";
+  /**
+   * Optional metadata marker attached by `connect()` from
+   * `@vercel/connect/eve` so downstream tooling can detect Vercel
+   * Connect-backed connections at compile time without inspecting
+   * `getToken`'s closure state. Examples: a future eve compiler step
+   * that surfaces connector identifiers in build output, or the Vercel
+   * dashboard rendering deep links to a connector's settings page.
+   *
+   * The runtime uses this marker for Connect-specific authorization behavior,
+   * including its local callback URL contract. Authors writing their own
+   * `getToken` callbacks (raw bearer tokens, custom callbacks) should leave
+   * it unset.
+   *
+   * `connector` carries whatever value the author passed to
+   * `connect()`: a UID like `"oauth/mcp-linear-app"` or opaque
+   * `"scl_..."`. Both forms address the same connector on the Vercel
+   * Connect side.
+   */
+  readonly vercelConnect?: {
+    readonly connector: string;
+  };
+  /**
+   * Optional human-readable provider name shown in sign-in UI (e.g.
+   * `"Salesforce"`). Presentation-only: the authorization scope, token
+   * cache keys, and callback URLs all stay keyed by the path-derived
+   * name. Takes precedence over a `displayName` the strategy stamps on
+   * its {@link ConnectionAuthorizationChallenge}; channels fall back to
+   * title-casing the scope name when neither is set.
+   */
+  readonly displayName?: string;
+  /**
+   * Optional best-effort invalidation of any token cache the strategy
+   * owns *below* eve's per-step cache, for the given `principal`.
+   *
+   * eve always drops its own per-step entry when a resolved bearer is
+   * rejected (a downstream `401` mapped to `ctx.requireAuth()`, or the
+   * MCP server rejecting the token). But a strategy frequently sits on a
+   * second, longer-lived cache — most notably the `@vercel/connect`
+   * in-process token cache — that eve cannot see. Without this hook the
+   * re-authorization re-reads the same revoked-but-unexpired credential
+   * from that lower layer and the tool keeps failing.
+   *
+   * Implement `evict` to purge the strategy's own cache for `principal`
+   * so the next `getToken` performs a genuine refresh. The runtime calls
+   * it right after evicting the per-step entry, inside the same
+   * best-effort guard: throwing here must never mask the underlying
+   * authorization error, so implementations should swallow their own
+   * failures or stay side-effect-only. Leave it unset for strategies
+   * that hold no cache of their own (static keys, raw bearers).
+   */
+  evict?(opts: {
+    readonly principal: ConnectionPrincipal;
+    readonly connection: ConnectionAuthorizationContext;
+  }): void | Promise<void>;
 }
 /**
  * Non-interactive authorization: the runtime only ever calls
@@ -259,20 +273,20 @@ interface AuthorizationDefinitionBase {
  * agent turn.
  */
 export interface NonInteractiveAuthorizationDefinition extends AuthorizationDefinitionBase {
-    /**
-     * Probe for a cached or freshly-fetched token. Called before every
-     * tool invocation. Throw
-     * {@link ConnectionAuthorizationRequiredError} to signal that the
-     * user must complete authorization out of band; the runtime emits
-     * `authorization.required` and does not suspend on a
-     * webhook.
-     */
-    getToken(opts: {
-        readonly principal: ConnectionPrincipal;
-        readonly connection: ConnectionAuthorizationContext;
-    }): Promise<TokenResult>;
-    readonly startAuthorization?: undefined;
-    readonly completeAuthorization?: undefined;
+  /**
+   * Probe for a cached or freshly-fetched token. Called before every
+   * tool invocation. Throw
+   * {@link ConnectionAuthorizationRequiredError} to signal that the
+   * user must complete authorization out of band; the runtime emits
+   * `authorization.required` and does not suspend on a
+   * webhook.
+   */
+  getToken(opts: {
+    readonly principal: ConnectionPrincipal;
+    readonly connection: ConnectionAuthorizationContext;
+  }): Promise<TokenResult>;
+  readonly startAuthorization?: undefined;
+  readonly completeAuthorization?: undefined;
 }
 /**
  * Interactive authorization: the runtime suspends the turn on a
@@ -284,66 +298,68 @@ export interface NonInteractiveAuthorizationDefinition extends AuthorizationDefi
  * scope-by-first-user, concurrent-bootstrap-race, and
  * revocation-ambiguity problems left behind an explicit opt-in.
  */
-export interface InteractiveAuthorizationDefinition<Resume = JsonValue> extends AuthorizationDefinitionBase {
-    readonly principalType: "user";
+export interface InteractiveAuthorizationDefinition<
+  Resume = JsonValue,
+> extends AuthorizationDefinitionBase {
+  readonly principalType: "user";
+  /**
+   * Probe for a cached or freshly-fetched token.
+   *
+   * Called before every tool invocation on the connection. Returning
+   * a {@link TokenResult} lets the tool run. Throwing
+   * {@link ConnectionAuthorizationRequiredError} signals that the
+   * user must complete an authorization flow; the runtime emits a
+   * `authorization.required` event and suspends the turn
+   * on a framework-owned webhook while it runs
+   * {@link startAuthorization}.
+   */
+  getToken(opts: {
+    readonly principal: ConnectionPrincipal;
+    readonly connection: ConnectionAuthorizationContext;
+  }): Promise<TokenResult>;
+  /**
+   * Start an authorization flow. Invoked inside a durable step after the
+   * runtime mints a framework-owned callback URL. Returns the user-facing
+   * `challenge` (forwarded verbatim on `authorization.required`) and an
+   * optional serializable `resume` value (e.g. a PKCE verifier) that the
+   * runtime journals and hands back to {@link completeAuthorization} when
+   * the callback URL receives the provider redirect. Omit `resume` when
+   * the provider owns the flow state server-side.
+   */
+  startAuthorization(opts: {
+    readonly principal: ConnectionPrincipal;
+    readonly connection: ConnectionAuthorizationContext;
+    readonly callbackUrl: string;
+  }): Promise<{
+    readonly challenge: ConnectionAuthorizationChallenge;
     /**
-     * Probe for a cached or freshly-fetched token.
-     *
-     * Called before every tool invocation on the connection. Returning
-     * a {@link TokenResult} lets the tool run. Throwing
-     * {@link ConnectionAuthorizationRequiredError} signals that the
-     * user must complete an authorization flow; the runtime emits a
-     * `authorization.required` event and suspends the turn
-     * on a framework-owned webhook while it runs
-     * {@link startAuthorization}.
+     * Opaque, JSON-serializable value the strategy carries from
+     * `startAuthorization` to {@link completeAuthorization} (e.g. a PKCE
+     * verifier). Serialized across workflow steps to survive the park.
+     * Omit it when the provider owns the flow state server-side
+     * (e.g. Vercel Connect).
      */
-    getToken(opts: {
-        readonly principal: ConnectionPrincipal;
-        readonly connection: ConnectionAuthorizationContext;
-    }): Promise<TokenResult>;
-    /**
-     * Start an authorization flow. Invoked inside a durable step after the
-     * runtime mints a framework-owned callback URL. Returns the user-facing
-     * `challenge` (forwarded verbatim on `authorization.required`) and an
-     * optional serializable `resume` value (e.g. a PKCE verifier) that the
-     * runtime journals and hands back to {@link completeAuthorization} when
-     * the callback URL receives the provider redirect. Omit `resume` when
-     * the provider owns the flow state server-side.
-     */
-    startAuthorization(opts: {
-        readonly principal: ConnectionPrincipal;
-        readonly connection: ConnectionAuthorizationContext;
-        readonly callbackUrl: string;
-    }): Promise<{
-        readonly challenge: ConnectionAuthorizationChallenge;
-        /**
-         * Opaque, JSON-serializable value the strategy carries from
-         * `startAuthorization` to {@link completeAuthorization} (e.g. a PKCE
-         * verifier). Serialized across workflow steps to survive the park.
-         * Omit it when the provider owns the flow state server-side
-         * (e.g. Vercel Connect).
-         */
-        readonly resume?: Resume;
-    }>;
-    /**
-     * Finish an authorization flow.
-     *
-     * Receives the journaled `resume` value (whatever
-     * {@link startAuthorization} returned, absent for provider-owned
-     * flows), the framework-minted `callbackUrl`, and the parsed
-     * `callback` projection (params only, no request headers). Return a
-     * {@link TokenResult}; throw a `ConnectionAuthorizationFailedError`
-     * with `retryable: false` for terminal user-denied cases.
-     */
-    completeAuthorization(opts: {
-        readonly principal: ConnectionPrincipal;
-        readonly connection: ConnectionAuthorizationContext;
-        readonly callbackUrl: string;
-        /** The value the strategy returned from {@link startAuthorization}'s `resume` (absent for provider-owned flows). */
-        readonly resume?: Resume;
-        /** Parsed callback params (no request headers). */
-        readonly callback: AuthorizationCallback;
-    }): Promise<TokenResult>;
+    readonly resume?: Resume;
+  }>;
+  /**
+   * Finish an authorization flow.
+   *
+   * Receives the journaled `resume` value (whatever
+   * {@link startAuthorization} returned, absent for provider-owned
+   * flows), the framework-minted `callbackUrl`, and the parsed
+   * `callback` projection (params only, no request headers). Return a
+   * {@link TokenResult}; throw a `ConnectionAuthorizationFailedError`
+   * with `retryable: false` for terminal user-denied cases.
+   */
+  completeAuthorization(opts: {
+    readonly principal: ConnectionPrincipal;
+    readonly connection: ConnectionAuthorizationContext;
+    readonly callbackUrl: string;
+    /** The value the strategy returned from {@link startAuthorization}'s `resume` (absent for provider-owned flows). */
+    readonly resume?: Resume;
+    /** Parsed callback params (no request headers). */
+    readonly callback: AuthorizationCallback;
+  }): Promise<TokenResult>;
 }
 /**
  * Interactive authorization strategy with type-safe state flowing from
@@ -373,39 +389,47 @@ export interface InteractiveAuthorizationDefinition<Resume = JsonValue> extends 
  * })
  * ```
  */
-export declare function defineInteractiveAuthorization<Resume extends JsonValue = never>(definition: Omit<InteractiveAuthorizationDefinition<Resume>, "principalType">): InteractiveAuthorizationDefinition<Resume>;
+export declare function defineInteractiveAuthorization<Resume extends JsonValue = never>(
+  definition: Omit<InteractiveAuthorizationDefinition<Resume>, "principalType">,
+): InteractiveAuthorizationDefinition<Resume>;
 /**
  * Whether an authorization definition supports the framework-owned
  * interactive OAuth flow.
  */
-export declare function supportsInteractiveAuthorization(authorization: Readonly<AuthorizationDefinition> | undefined): boolean;
+export declare function supportsInteractiveAuthorization(
+  authorization: Readonly<AuthorizationDefinition> | undefined,
+): boolean;
 /** Metadata for a single tool exposed by a connection. */
 export interface ConnectionToolMetadata {
-    readonly annotations?: Record<string, unknown>;
-    readonly description: string;
-    readonly inputSchema: Record<string, unknown>;
-    readonly name: string;
-    readonly outputSchema?: Record<string, unknown>;
+  readonly annotations?: Record<string, unknown>;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly name: string;
+  readonly outputSchema?: Record<string, unknown>;
 }
 /** Per-call options for {@link ConnectionClient.executeTool}. */
 export interface ConnectionToolExecuteOptions {
-    /** Signal forwarded into the underlying transport. */
-    readonly abortSignal?: AbortSignal;
+  /** Signal forwarded into the underlying transport. */
+  readonly abortSignal?: AbortSignal;
 }
 /** A live client for a single connection. */
 export interface ConnectionClient {
-    close(): Promise<void>;
-    connect(): Promise<unknown>;
-    executeTool(toolName: string, args: unknown, options?: ConnectionToolExecuteOptions): Promise<unknown>;
-    getToolMetadata(): Promise<readonly ConnectionToolMetadata[]>;
-    getTools(): Promise<ToolSet>;
+  close(): Promise<void>;
+  connect(): Promise<unknown>;
+  executeTool(
+    toolName: string,
+    args: unknown,
+    options?: ConnectionToolExecuteOptions,
+  ): Promise<unknown>;
+  getToolMetadata(): Promise<readonly ConnectionToolMetadata[]>;
+  getTools(): Promise<ToolSet>;
 }
 /** Per-session container mapping connection names to clients. */
 export interface ConnectionRegistry {
-    dispose(): Promise<void>;
-    getClient(connectionName: string): ConnectionClient;
-    getConnectionApproval(connectionName: string): Approval | undefined;
-    getConnectionNames(): readonly string[];
-    getConnections(): readonly ResolvedConnectionDefinition[];
+  dispose(): Promise<void>;
+  getClient(connectionName: string): ConnectionClient;
+  getConnectionApproval(connectionName: string): Approval | undefined;
+  getConnectionNames(): readonly string[];
+  getConnections(): readonly ResolvedConnectionDefinition[];
 }
 export {};

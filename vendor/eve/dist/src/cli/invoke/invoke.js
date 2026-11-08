@@ -7,10 +7,7 @@ import {
   vercelTrustedSourcesErrorCode,
 } from "#services/dev-client/vercel-auth-error.js";
 import { resolveLocalDevelopmentClientOptions } from "#services/dev-client/client-options.js";
-import {
-  collectTurnEvents,
-  summarizeTurnEvents,
-} from "#client/session-utils.js";
+import { collectTurnEvents, summarizeTurnEvents } from "#client/session-utils.js";
 import { resolveVerifiedRemoteDevelopmentClient } from "#setup/verified-remote-client.js";
 async function runInvoke(e) {
   let { client: t, deploymentResolution: n } = await createInvokeClient(e),
@@ -26,9 +23,7 @@ async function runInvoke(e) {
     let n = { ...e.operation.payload, signal: e.signal };
     if (r === void 0) {
       if (n.message === void 0)
-        throw Error(
-          `Cannot answer an input request before the session starts.`,
-        );
+        throw Error(`Cannot answer an input request before the session starts.`);
       let e = await t.sessions.create({ ...n, message: n.message });
       ((a = e.session), (i = e.response));
     } else {
@@ -49,8 +44,7 @@ function resolveInvokeOperation(e) {
   let t = e.prompt?.trim(),
     n = e.previous;
   if (n === void 0) {
-    if (!t)
-      throw Error(`eve invoke requires a prompt unless --resume is provided.`);
+    if (!t) throw Error(`eve invoke requires a prompt unless --resume is provided.`);
     return { kind: `send`, payload: { message: t } };
   }
   if (n.status === `input-required`) {
@@ -70,8 +64,7 @@ function resolveInvokeOperation(e) {
       );
     return { kind: `follow`, resume: n.resume };
   }
-  if (n.status !== `ready`)
-    throw Error(`A terminal ${n.status} invocation cannot be resumed.`);
+  if (n.status !== `ready`) throw Error(`A terminal ${n.status} invocation cannot be resumed.`);
   if (!t) throw Error(`A ready invocation requires a follow-up prompt.`);
   return { kind: `send`, payload: { message: t }, resume: n.resume };
 }
@@ -82,19 +75,17 @@ async function createInvokeClient(e) {
         ...resolveLocalDevelopmentClientOptions({
           headers: e.headers,
           serverUrl: e.target.serverUrl,
-          token: () =>
-            resolveLinkedDevelopmentOidcToken(e.target.workspaceRoot),
+          token: () => resolveLinkedDevelopmentOidcToken(e.target.workspaceRoot),
         }),
       }),
     };
-  let { deploymentResolution: n, options: i } =
-    await resolveVerifiedRemoteDevelopmentClient({
-      headers: e.headers,
-      serverUrl: e.target.serverUrl,
-      signal: e.signal,
-      vercelScope: e.vercelScope,
-      workspaceRoot: e.target.workspaceRoot,
-    });
+  let { deploymentResolution: n, options: i } = await resolveVerifiedRemoteDevelopmentClient({
+    headers: e.headers,
+    serverUrl: e.target.serverUrl,
+    signal: e.signal,
+    vercelScope: e.vercelScope,
+    workspaceRoot: e.target.workspaceRoot,
+  });
   return { client: new Client(i), deploymentResolution: n };
 }
 async function observeSafely(e, t, n, r) {
@@ -148,10 +139,7 @@ function runningResult(e, t) {
 function createResume(e, t) {
   return {
     session: t,
-    target:
-      e.kind === `local`
-        ? { kind: `local` }
-        : { kind: `remote`, serverUrl: e.serverUrl },
+    target: e.kind === `local` ? { kind: `local` } : { kind: `remote`, serverUrl: e.serverUrl },
   };
 }
 function authenticationFailure(e, t, r) {

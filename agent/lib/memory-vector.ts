@@ -13,7 +13,10 @@ import type { AppError } from "./app-error.js";
 import { MEMORY_EMBEDDING_DIMENSIONS } from "./memory-config.js";
 
 export function memoryVectorLiteral(vector: readonly number[], invalid: () => AppError): string {
-  if (vector.length !== MEMORY_EMBEDDING_DIMENSIONS || !vector.every((value) => Number.isFinite(value))) {
+  if (
+    vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
+    !vector.every((value) => Number.isFinite(value))
+  ) {
     throw invalid();
   }
   return `[${vector.join(",")}]`;

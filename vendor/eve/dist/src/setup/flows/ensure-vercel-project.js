@@ -29,9 +29,7 @@ async function ensureVercelProject(e) {
       await runInteractive(
         [
           resolveProvisioning({
-            asker: withAnswers({ deploy: `vercel` })(
-              interactiveAsker(e.prompter),
-            ),
+            asker: withAnswers({ deploy: `vercel` })(interactiveAsker(e.prompter)),
             prompter: e.prompter,
             targetDirectory: e.appRoot,
             mode: { headless: !1 },

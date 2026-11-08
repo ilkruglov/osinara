@@ -1,8 +1,4 @@
-import {
-  PROMPT_COMMANDS,
-  formatPromptCommandHelp,
-  parsePromptCommand,
-} from "./prompt-commands.js";
+import { PROMPT_COMMANDS, formatPromptCommandHelp, parsePromptCommand } from "./prompt-commands.js";
 import { pickAgentHeaderTip } from "./agent-header.js";
 import {
   failureKey,
@@ -113,8 +109,7 @@ var EveTUIRunner = class {
         appRoot: t.appRoot,
         onChange: (e) => this.#n.setVercelStatus?.(e),
       };
-      (t.detectProjectIdentity !== void 0 &&
-        (e.detectIdentity = t.detectProjectIdentity),
+      (t.detectProjectIdentity !== void 0 && (e.detectIdentity = t.detectProjectIdentity),
         (this.#D = createVercelStatusTracker(e)),
         t.probeMcpConnection !== void 0 &&
           (this.#O = createMcpConnectionStatusTracker({
@@ -127,8 +122,7 @@ var EveTUIRunner = class {
       (this.#g = t.availablePromptCommands ?? PROMPT_COMMANDS),
       t.remote !== void 0)
     ) {
-      if (this.#t === void 0)
-        throw Error(`A remote TUI requires a configured development client.`);
+      if (this.#t === void 0) throw Error(`A remote TUI requires a configured development client.`);
       this.#v = createRemoteConnectionController({
         client: this.#t,
         credentials: t.remote.credentials,
@@ -176,8 +170,7 @@ var EveTUIRunner = class {
     await this.#$(t);
   }
   #B(e) {
-    let t =
-      this.#p === void 0 ? e : normalizeLocalModelEndpoint(e, process.env);
+    let t = this.#p === void 0 ? e : normalizeLocalModelEndpoint(e, process.env);
     this.#A = t;
     let n = this.#f;
     if (n === void 0) return t;
@@ -223,11 +216,9 @@ var EveTUIRunner = class {
       l = this.#m;
     (await this.#z(),
       this.#v?.current().connection.state === `auth-required` &&
-        (await this.#ce(
-          { type: `extension`, name: `vc:login`, argument: `` },
-          e,
-          { trigger: `startup` },
-        )),
+        (await this.#ce({ type: `extension`, name: `vc:login`, argument: `` }, e, {
+          trigger: `startup`,
+        })),
       this.#re(),
       this.#D?.refreshIdentity(),
       this.#O?.refresh());
@@ -241,17 +232,13 @@ var EveTUIRunner = class {
       this.#n.setupFlow !== void 0 &&
       ((l = void 0), await this.#le(e));
       ;
-
     ) {
-      if (this.#R?.signal.aborted === !0 || this.#n.exitRequested?.() === !0)
-        return;
+      if (this.#R?.signal.aborted === !0 || this.#n.exitRequested?.() === !0) return;
       if (!s) {
         if (r == null) {
           if (!this.#n.readPrompt) {
             if (a) return;
-            throw Error(
-              `No prompt was provided and the renderer does not support prompt input.`,
-            );
+            throw Error(`No prompt was provided and the renderer does not support prompt input.`);
           }
           let t = { title: e };
           l !== void 0 && ((t.initialDraft = l), (l = void 0));
@@ -272,11 +259,7 @@ var EveTUIRunner = class {
         }
         if (u?.type === `cancel`) {
           if (this.#e === void 0) {
-            (this.#ie(`No active turn to cancel.`),
-              (i = void 0),
-              (o = !1),
-              (s = !1),
-              (r = void 0));
+            (this.#ie(`No active turn to cancel.`), (i = void 0), (o = !1), (s = !1), (r = void 0));
             continue;
           }
           try {
@@ -323,9 +306,7 @@ var EveTUIRunner = class {
             let e = await this.#e.compact();
             if (
               (this.#ie(
-                e.status === `accepted`
-                  ? `Compaction requested.`
-                  : `No active session to compact.`,
+                e.status === `accepted` ? `Compaction requested.` : `No active session to compact.`,
               ),
               e.status === `no_active_session`)
             ) {
@@ -375,17 +356,11 @@ var EveTUIRunner = class {
           ((i = void 0), (o = !0), (s = !1), (r = void 0));
         }
         if (u?.type === `help`) {
-          (this.#ie(formatPromptCommandHelp(this.#g)),
-            (i = void 0),
-            (s = !1),
-            (r = void 0));
+          (this.#ie(formatPromptCommandHelp(this.#g)), (i = void 0), (s = !1), (r = void 0));
           continue;
         }
         if (u?.type === `loglevel`) {
-          (this.#ie(this.#fe(u.argument)),
-            (i = void 0),
-            (s = !1),
-            (r = void 0));
+          (this.#ie(this.#fe(u.argument)), (i = void 0), (s = !1), (r = void 0));
           continue;
         }
         if (u?.type === `traces`) {
@@ -473,11 +448,7 @@ var EveTUIRunner = class {
             ((d = this.#Z()), (p = void 0));
             continue;
           }
-          if (
-            d.turnState &&
-            d.turnState.boundaryEvent === void 0 &&
-            !d.turnState.aborted
-          ) {
+          if (d.turnState && d.turnState.boundaryEvent === void 0 && !d.turnState.aborted) {
             let e = this.#e?.state.sessionId;
             this.#n.renderNotice?.(
               e
@@ -530,12 +501,7 @@ var EveTUIRunner = class {
     try {
       await this.#e.reset();
     } catch (e) {
-      return (
-        this.#n.renderNotice?.(
-          `Couldn't reset the session: ${toErrorMessage(e)}`,
-        ),
-        !1
-      );
+      return (this.#n.renderNotice?.(`Couldn't reset the session: ${toErrorMessage(e)}`), !1);
     }
     return (this.#U(), this.#n.reset?.(), !0);
   }
@@ -590,17 +556,11 @@ var EveTUIRunner = class {
   }
   async #q(e) {
     let t = this.#K(e);
-    if (
-      this.#n.renderIdleStream === void 0 ||
-      this.#e?.state.sessionId === void 0
-    )
-      return await t;
+    if (this.#n.renderIdleStream === void 0 || this.#e?.state.sessionId === void 0) return await t;
     let n = new AbortController(),
       r = this.#J(n.signal, e).catch((e) => {
         n.signal.aborted ||
-          this.#n.renderNotice?.(
-            `Stopped following session updates: ${toErrorMessage(e)}`,
-          );
+          this.#n.renderNotice?.(`Stopped following session updates: ${toErrorMessage(e)}`);
       });
     try {
       return await t;
@@ -613,16 +573,13 @@ var EveTUIRunner = class {
     if (n === void 0) return;
     let r = n.stream({ signal: e })[Symbol.asyncIterator]();
     try {
-      for (; !e.aborted; ) {
+      for (; !e.aborted;) {
         let i = !1,
           a = {
             async *[Symbol.asyncIterator]() {
-              for (; !e.aborted; ) {
+              for (; !e.aborted;) {
                 let e = await r.next();
-                if (
-                  e.done === !0 ||
-                  ((i = !0), yield e.value, isCurrentTurnBoundaryEvent(e.value))
-                )
+                if (e.done === !0 || ((i = !0), yield e.value, isCurrentTurnBoundaryEvent(e.value)))
                   return;
               }
             },
@@ -669,12 +626,9 @@ var EveTUIRunner = class {
           this.#n.flushDelayedDevBuildErrors?.(),
         this.#e === void 0)
       ) {
-        if (this.#t === void 0)
-          throw Error(`Cannot create a session without an eve client.`);
+        if (this.#t === void 0) throw Error(`Cannot create a session without an eve client.`);
         if (n.message === void 0)
-          throw Error(
-            `Cannot answer an input request before the session starts.`,
-          );
+          throw Error(`Cannot answer an input request before the session starts.`);
         let e = await this.#t.sessions.create({ ...n, message: n.message });
         ((this.#e = e.session), (r = e.response));
       } else
@@ -706,10 +660,7 @@ var EveTUIRunner = class {
           if (e.boundaryEvent !== void 0 || e.aborted === !0) return;
           let n = e.turnId;
           try {
-            if (
-              (await t?.cancel(n === void 0 ? void 0 : { turnId: n }))
-                ?.status === `accepted`
-            )
+            if ((await t?.cancel(n === void 0 ? void 0 : { turnId: n }))?.status === `accepted`)
               return;
           } catch {}
           await delayMs(250);
@@ -811,25 +762,18 @@ var EveTUIRunner = class {
   }
   async #ae(e, t) {
     let n = this.#h;
-    if (n === void 0)
-      return { message: `/${e.name} is not available in this session.` };
+    if (n === void 0) return { message: `/${e.name} is not available in this session.` };
     let r = this.#A?.agent.model.endpoint,
       i = {
         renderer: this.#n,
         title: t.title,
         initialModelStep: t.initialModelStep,
-        chatGptAccountLabel:
-          r?.kind === `chatgpt` && r.state === `ready`
-            ? r.accountLabel
-            : void 0,
+        chatGptAccountLabel: r?.kind === `chatgpt` && r.state === `ready` ? r.accountLabel : void 0,
         remoteConnection: this.#v,
         withExclusiveTerminal: this.#_,
       },
       a = this.#O?.current(),
-      o =
-        a !== void 0 && Object.keys(a).length > 0
-          ? { ...i, disabledConnectionReasons: a }
-          : i;
+      o = a !== void 0 && Object.keys(a).length > 0 ? { ...i, disabledConnectionReasons: a } : i;
     return t.keepSetupFlowOpen === !0
       ? await n.handle(e, { ...o, keepSetupFlowOpen: !0 })
       : await n.handle(e, o);
@@ -843,13 +787,10 @@ var EveTUIRunner = class {
   }
   async #se(e) {
     if (e?.kind === `model-access-changed`) {
-      (this.#D?.applyEffect({ kind: `refresh-identity` }),
-        (this.#w = !0),
-        await this.#pe());
+      (this.#D?.applyEffect({ kind: `refresh-identity` }), (this.#w = !0), await this.#pe());
       return;
     }
-    e !== void 0 &&
-      (this.#D?.applyEffect(e), (this.#w = !0), this.#ne(this.#A));
+    e !== void 0 && (this.#D?.applyEffect(e), (this.#w = !0), this.#ne(this.#A));
   }
   async #ce(e, t, n) {
     let r = await this.#ae(e, {
@@ -857,10 +798,7 @@ var EveTUIRunner = class {
       keepSetupFlowOpen: n.keepSetupFlowOpen,
       title: t,
     });
-    (this.#oe(e, n.trigger),
-      this.#ie(r?.message, r?.tone),
-      await this.#se(r?.effect),
-      this.#ue());
+    (this.#oe(e, n.trigger), this.#ie(r?.message, r?.tone), await this.#se(r?.effect), this.#ue());
   }
   async #le(e) {
     let t = this.#p;
@@ -875,11 +813,10 @@ var EveTUIRunner = class {
       n = await authStatus();
     if (
       n === `cli-missing` &&
-      (await this.#ce(
-        { type: `extension`, name: `vc:install`, argument: `` },
-        e,
-        { trigger: `startup`, keepSetupFlowOpen: !0 },
-      ),
+      (await this.#ce({ type: `extension`, name: `vc:install`, argument: `` }, e, {
+        trigger: `startup`,
+        keepSetupFlowOpen: !0,
+      }),
       (n = await authStatus()),
       n === `cli-missing`)
     ) {
@@ -888,11 +825,10 @@ var EveTUIRunner = class {
     }
     if (
       n === `logged-out` &&
-      (await this.#ce(
-        { type: `extension`, name: `vc:login`, argument: `` },
-        e,
-        { trigger: `startup`, keepSetupFlowOpen: !0 },
-      ),
+      (await this.#ce({ type: `extension`, name: `vc:login`, argument: `` }, e, {
+        trigger: `startup`,
+        keepSetupFlowOpen: !0,
+      }),
       (n = await authStatus()),
       n === `cli-missing` || n === `logged-out`)
     ) {
@@ -942,8 +878,7 @@ var EveTUIRunner = class {
     if (e === ``)
       return `Logs: ${t.logDisplayMode()}. Use /loglevel all|stderr|sandbox|none — logs stay buffered, so switching also hides or restores past lines.`;
     let n = parseLogDisplayMode(e);
-    if (n === void 0)
-      return `Unknown log level "${e}". Use all, stderr, sandbox, or none.`;
+    if (n === void 0) return `Unknown log level "${e}". Use all, stderr, sandbox, or none.`;
     if (n === t.logDisplayMode()) return `Logs already set to ${n}.`;
     switch ((t.setLogDisplayMode(n), n)) {
       case `none`:
@@ -959,8 +894,7 @@ var EveTUIRunner = class {
   async #pe() {
     let e = this.#p;
     if (e === void 0) return;
-    (loadDevelopmentEnvironmentFiles(e),
-      await this.#d?.refreshAfterSourceChange({}));
+    (loadDevelopmentEnvironmentFiles(e), await this.#d?.refreshAfterSourceChange({}));
     let t = this.#B(await this.#me());
     this.#ne(t);
   }
@@ -995,10 +929,7 @@ var EveTUIRunner = class {
       e.state !== `required` ||
         e.webhookUrl === void 0 ||
         ((e.state = `pending`), this.#F.add(e.name), this.#ye(e), (t = !0));
-    return (
-      t && this.#n.setConnectionAuthPendingCount?.(this.#F.size),
-      this.#F.size > 0
-    );
+    return (t && this.#n.setConnectionAuthPendingCount?.(this.#F.size), this.#F.size > 0);
   }
   #ve(e) {
     let t = this.#P.get(e.data.name) ?? {
@@ -1133,8 +1064,7 @@ async function* eveEventsToTUIStream(e) {
                 yield { type: `assistant-complete`, id: i, text: r });
             else if (r.startsWith(n.text)) {
               let e = r.slice(n.text.length);
-              (e.length > 0 &&
-                (yield { type: `assistant-delta`, id: i, delta: e }),
+              (e.length > 0 && (yield { type: `assistant-delta`, id: i, delta: e }),
                 (n.text = r),
                 (n.completed = !0),
                 (n.completedEpoch = h),
@@ -1182,9 +1112,7 @@ async function* eveEventsToTUIStream(e) {
           if (n.text.length === 0 && r.length > 0)
             ((n.text = r), yield { type: `reasoning-delta`, id: i, delta: r });
           else if (r.length > 0 && !r.startsWith(n.text)) break;
-          ((n.completed = !0),
-            (n.completedEpoch = h),
-            yield { type: `reasoning-complete`, id: i });
+          ((n.completed = !0), (n.completedEpoch = h), yield { type: `reasoning-complete`, id: i });
           break;
         }
         case `actions.requested`: {
@@ -1218,11 +1146,7 @@ async function* eveEventsToTUIStream(e) {
                 }),
               !_.has(e.requestId))
             ) {
-              if (
-                (_.add(e.requestId),
-                n.set(e.requestId, e),
-                e.kind !== `tool-approval`)
-              ) {
+              if ((_.add(e.requestId), n.set(e.requestId, e), e.kind !== `tool-approval`)) {
                 upsertPendingQuestion(r, e);
                 continue;
               }
@@ -1310,9 +1234,7 @@ async function* eveEventsToTUIStream(e) {
           break;
         case `subagent.completed`: {
           let t = e;
-          t.data.backgroundTask === void 0
-            ? o?.(t.data.callId)
-            : a?.(t.data.callId);
+          t.data.backgroundTask === void 0 ? o?.(t.data.callId) : a?.(t.data.callId);
           break;
         }
         case `authorization.required`:
@@ -1367,8 +1289,7 @@ function partStateFor(e, t) {
   let n = e.get(t);
   return (
     n === void 0 &&
-      ((n = { generation: 0, text: ``, completed: !1, completedEpoch: 0 }),
-      e.set(t, n)),
+      ((n = { generation: 0, text: ``, completed: !1, completedEpoch: 0 }), e.set(t, n)),
     n
   );
 }
@@ -1432,8 +1353,7 @@ function toAgentTUIInputQuestion(e) {
   let t =
       e.display === `text`
         ? `text`
-        : e.display === `select` ||
-            (e.options !== void 0 && e.options.length > 0)
+        : e.display === `select` || (e.options !== void 0 && e.options.length > 0)
           ? `select`
           : `text`,
     n = { requestId: e.requestId, prompt: e.prompt, display: t };

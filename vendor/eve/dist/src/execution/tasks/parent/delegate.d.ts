@@ -12,13 +12,13 @@ import type { SessionAuthContext } from "#channel/types.js";
 import { type TaskMetadata } from "#tasks/types.js";
 /** A prepared delegated task: identity plus its started durable run. */
 export interface DelegatedTask {
-    readonly taskInboxToken: string;
-    readonly createdByStepIndex?: number;
-    readonly createdByTurnId: string;
-    readonly metadata: TaskMetadata;
-    readonly operationId: string;
-    readonly taskId: string;
-    readonly taskRunId: string;
+  readonly taskInboxToken: string;
+  readonly createdByStepIndex?: number;
+  readonly createdByTurnId: string;
+  readonly metadata: TaskMetadata;
+  readonly operationId: string;
+  readonly taskId: string;
+  readonly taskRunId: string;
 }
 /**
  * Creates the durable task record for one delegated subagent call,
@@ -27,15 +27,15 @@ export interface DelegatedTask {
  * re-derives the same token and the loser exits on the hook claim.
  */
 export declare function beginDelegatedTask(input: {
-    readonly auth: SessionAuthContext | null;
-    readonly agentId: string;
-    readonly callId: string;
-    readonly mode: "local" | "remote";
-    readonly name: string;
-    readonly parentSessionId: string;
-    readonly parentStepIndex?: number;
-    readonly parentTurnId: string;
-    readonly session: RuntimeSession;
+  readonly auth: SessionAuthContext | null;
+  readonly agentId: string;
+  readonly callId: string;
+  readonly mode: "local" | "remote";
+  readonly name: string;
+  readonly parentSessionId: string;
+  readonly parentStepIndex?: number;
+  readonly parentTurnId: string;
+  readonly session: RuntimeSession;
 }): Promise<DelegatedTask>;
 /**
  * Settles a delegated dispatch that acknowledged a child: persists the task
@@ -44,29 +44,29 @@ export declare function beginDelegatedTask(input: {
  * record; task state owns execution availability.
  */
 export declare function settleDelegatedDispatch(input: {
-    readonly callId: string;
-    readonly session: RuntimeSession;
-    readonly subagentName: string;
-    readonly task: DelegatedTask;
+  readonly callId: string;
+  readonly session: RuntimeSession;
+  readonly subagentName: string;
+  readonly task: DelegatedTask;
 }): Promise<{
-    readonly receipt: RuntimeSubagentChildResult;
-    readonly session: RuntimeSession;
+  readonly receipt: RuntimeSubagentChildResult;
+  readonly session: RuntimeSession;
 }>;
 /** Releases task events only after the parent session index committed. */
 export declare function acknowledgeDelegatedTasksStep(input: {
-    readonly tasks: readonly {
-        readonly taskInboxToken: string;
-        readonly taskId: string;
-        readonly taskRunId: string;
-    }[];
+  readonly tasks: readonly {
+    readonly taskInboxToken: string;
+    readonly taskId: string;
+    readonly taskRunId: string;
+  }[];
 }): Promise<void>;
 /** Fails an indexed task whose child dispatch was definitively rejected. */
 export declare function failDelegatedDispatch(input: {
-    readonly error: JsonValue;
-    readonly task: DelegatedTask;
+  readonly error: JsonValue;
+  readonly task: DelegatedTask;
 }): Promise<void>;
 /** Silently terminates a task whose child dispatch failed before parent indexing. */
 export declare function rejectDelegatedDispatch(input: {
-    readonly error: JsonValue;
-    readonly task: DelegatedTask;
+  readonly error: JsonValue;
+  readonly task: DelegatedTask;
 }): Promise<void>;

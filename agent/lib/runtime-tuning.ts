@@ -27,7 +27,12 @@ export function integerSetting(
   const raw = env[name];
   if (raw === undefined) return bounds.absent;
   const value = Number(raw);
-  if (!/^-?\d+$/u.test(raw) || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
+  if (
+    !/^-?\d+$/u.test(raw) ||
+    !Number.isSafeInteger(value) ||
+    value < bounds.min ||
+    value > bounds.max
+  ) {
     throw new AppError(
       "AGENT_RUNTIME_TUNING_INVALID",
       `${name} должно быть целым от ${bounds.min} до ${bounds.max}`,

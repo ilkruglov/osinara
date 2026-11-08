@@ -22,9 +22,7 @@ async function executeWriteFileOnSandbox(e, t) {
     );
   let l = a.ensure(ReadFileStateKey, () => ({ byTarget: {} })).byTarget[s];
   if (l === void 0)
-    throw Error(
-      `You must read file ${n} before overwriting it. Use the read_file tool first.`,
-    );
+    throw Error(`You must read file ${n} before overwriting it. Use the read_file tool first.`);
   let u = createReadFileStamp({ content: c, filePath: o });
   if (u.contentHash !== l.contentHash || u.byteLength !== l.byteLength)
     throw Error(

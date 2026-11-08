@@ -2,7 +2,7 @@ import picocolors from "#compiled/picocolors/index.js";
 function sanitizeForTerminal(e) {
   let t = ``,
     n = 0;
-  for (; n < e.length; ) {
+  for (; n < e.length;) {
     let r = e.codePointAt(n);
     if (r == null) break;
     if (r === 27) {
@@ -63,7 +63,7 @@ function skipEscSequence(e) {
 }
 function skipCsiSequence(e) {
   let t = e.start;
-  for (; t < e.value.length; ) {
+  for (; t < e.value.length;) {
     let n = e.value.codePointAt(t);
     if (n == null) break;
     if (((t += String.fromCodePoint(n).length), n >= 64 && n <= 126)) return t;
@@ -72,7 +72,7 @@ function skipCsiSequence(e) {
 }
 function skipStringControlSequence(e) {
   let t = e.start;
-  for (; t < e.value.length; ) {
+  for (; t < e.value.length;) {
     let n = e.value.codePointAt(t);
     if (n == null) break;
     let r = t + String.fromCodePoint(n).length;
@@ -89,15 +89,7 @@ function isC1StringControlCodePoint(e) {
   return e === 144 || e === 152 || e === 157 || e === 158 || e === 159;
 }
 function isCharsetDesignationIntroducer(e) {
-  return (
-    e === 40 ||
-    e === 41 ||
-    e === 42 ||
-    e === 43 ||
-    e === 45 ||
-    e === 46 ||
-    e === 47
-  );
+  return e === 40 || e === 41 || e === 42 || e === 43 || e === 45 || e === 46 || e === 47;
 }
 function isUnsafeControlCodePoint(e) {
   return (e >= 0 && e <= 8) || (e >= 11 && e <= 31) || (e >= 127 && e <= 159);

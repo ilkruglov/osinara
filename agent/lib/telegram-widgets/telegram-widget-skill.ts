@@ -24,13 +24,17 @@ function packageRoot(): string {
   const fromCwd = resolve("config/capability-skills/telegram-widgets");
   return existsSync(`${fromCwd}/instructions.md`)
     ? fromCwd
-    : fileURLToPath(new URL("../../../config/capability-skills/telegram-widgets/", import.meta.url));
+    : fileURLToPath(
+        new URL("../../../config/capability-skills/telegram-widgets/", import.meta.url),
+      );
 }
 
 const root = packageRoot();
 
 export const TELEGRAM_WIDGET_TEMPLATES: Readonly<Record<string, string>> = Object.fromEntries(
-  readdirSync(`${root}/templates`).filter((name) => name.endsWith(".html")).sort()
+  readdirSync(`${root}/templates`)
+    .filter((name) => name.endsWith(".html"))
+    .sort()
     .map((name) => [`templates/${name}`, readFileSync(`${root}/templates/${name}`, "utf8")]),
 );
 

@@ -57,14 +57,18 @@ vi.mock("./sessions/session-repository.js", () => ({
 vi.mock("./sessions/group-timeline-cursor-repository.js", () => ({
   groupTimelineCursorRepository: { advance: dependencies.advanceCursor },
 }));
-vi.mock("./telegram-final-delivery.js", () => ({ deliverTelegramFinalOutput: dependencies.deliverFinalOutput }));
+vi.mock("./telegram-final-delivery.js", () => ({
+  deliverTelegramFinalOutput: dependencies.deliverFinalOutput,
+}));
 vi.mock("./telegram-final-delivery-repository.js", () => ({
   telegramFinalDeliveryRepository: { shouldSuppressFailureMessage: vi.fn(async () => false) },
 }));
 vi.mock("./telegram-hitl/approval-repository.js", () => ({
   telegramHitlApprovalRepository: { clearForEveSession: dependencies.clearApprovals },
 }));
-vi.mock("./telegram-hitl/input-request.js", () => ({ handleTelegramInputRequested: dependencies.handleInputRequested }));
+vi.mock("./telegram-hitl/input-request.js", () => ({
+  handleTelegramInputRequested: dependencies.handleInputRequested,
+}));
 vi.mock("./telegram-stable-delivery.js", () => ({
   postTelegramMessageWithoutContinuationChange: dependencies.postStableMessage,
 }));
@@ -75,7 +79,9 @@ vi.mock("./memory-turn-source.js", () => ({
   bindMemoryTurnSources: dependencies.bindMemoryTurnSources,
   releaseMemoryTurnSources: dependencies.releaseMemoryTurnSources,
 }));
-vi.mock("./memory-used-reinforcement.js", () => ({ reinforceUsedMemories: dependencies.reinforce }));
+vi.mock("./memory-used-reinforcement.js", () => ({
+  reinforceUsedMemories: dependencies.reinforce,
+}));
 vi.mock("./memory-review/memory-review-repository.js", () => ({
   memoryReviewRepository: { batchIdForTurn: vi.fn(async () => null) },
 }));
@@ -124,7 +130,11 @@ describe("Telegram channel whisper events", () => {
   });
 
   it("delivers a whisper answer only into its placeholder", async () => {
-    await handler("message.completed")({ finishReason: "stop", message: "Прав Илья." }, channel, whisperContext);
+    await handler("message.completed")(
+      { finishReason: "stop", message: "Прав Илья." },
+      channel,
+      whisperContext,
+    );
 
     expect(dependencies.deliverWhisper).toHaveBeenCalledExactlyOnceWith(
       { finishReason: "stop", message: "Прав Илья." },
@@ -149,13 +159,18 @@ describe("Telegram channel whisper events", () => {
   });
 
   it("refuses a confirmation or a question in a whisper", async () => {
-    await expect(handler("input.requested")({}, channel, whisperContext))
-      .rejects.toMatchObject({ code: "AGENT_TELEGRAM_WHISPER_INPUT_FORBIDDEN" });
+    await expect(handler("input.requested")({}, channel, whisperContext)).rejects.toMatchObject({
+      code: "AGENT_TELEGRAM_WHISPER_INPUT_FORBIDDEN",
+    });
     expect(dependencies.handleInputRequested).not.toHaveBeenCalled();
   });
 
   it("tells a failed whisper turn in the placeholder and posts nothing to the group", async () => {
-    await handler("turn.failed")({ code: "MODEL_CALL_FAILED", message: "сбой" }, channel, whisperContext);
+    await handler("turn.failed")(
+      { code: "MODEL_CALL_FAILED", message: "сбой" },
+      channel,
+      whisperContext,
+    );
 
     expect(dependencies.reportWhisperFailure).toHaveBeenCalledExactlyOnceWith(
       whisperContext.session.auth,

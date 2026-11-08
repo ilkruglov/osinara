@@ -5,10 +5,7 @@
  * - `PreparedClaimEvidence`: trusted claim fields and normalized source rows derived from PostgreSQL.
  * - `insertClaimEvidence` and `insertClaimReinforcement`: re-export transaction persistence helpers.
  */
-export {
-  insertClaimEvidence,
-  insertClaimReinforcement,
-} from "./claim-evidence-persistence.js";
+export { insertClaimEvidence, insertClaimReinforcement } from "./claim-evidence-persistence.js";
 
 export interface PreparedEvidenceSource {
   authorLabelSnapshot: string | null;

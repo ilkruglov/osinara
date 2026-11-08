@@ -61,10 +61,7 @@ var DrainedNitroDevServer = class {
       this.#u = void 0;
     }
     if (this.#s)
-      throw (
-        await this.#h(t),
-        Error(`Development server closed before the worker was ready.`)
-      );
+      throw (await this.#h(t), Error(`Development server closed before the worker was ready.`));
     let n = this.#i;
     ((this.#i = t),
       t.runner.onceClosed(() => {
@@ -133,11 +130,9 @@ var DrainedNitroDevServer = class {
   }
   async waitForActiveRunner(e = RUNNER_READY_TIMEOUT_MS) {
     let t = Date.now() + e;
-    for (; this.#i === void 0 && !this.#s; ) {
+    for (; this.#i === void 0 && !this.#s;) {
       if (Date.now() >= t)
-        throw Error(
-          `Timed out waiting for the development worker to become ready.`,
-        );
+        throw Error(`Timed out waiting for the development worker to become ready.`);
       await new Promise((e) => {
         (this.#a.push(e), setTimeout(e, 100));
       });
@@ -150,16 +145,12 @@ var DrainedNitroDevServer = class {
   async #m() {
     ((this.#s = !0),
       this.#C(),
-      await this.#u?.runner
-        .close(Error(`Development server is closing.`))
-        .catch(() => void 0),
+      await this.#u?.runner.close(Error(`Development server is closing.`)).catch(() => void 0),
       await this.#d.catch(() => void 0));
     let e = [...this.#n],
       t = e.map((e) => e.beginClose()),
       n = [this.#i, ...this.#t].filter((e) => e !== void 0);
-    ((this.#i = void 0),
-      this.#t.clear(),
-      await Promise.all(n.map(async (e) => await this.#h(e))));
+    ((this.#i = void 0), this.#t.clear(), await Promise.all(n.map(async (e) => await this.#h(e))));
     for (let t of e) t.destroySockets();
     await Promise.all(t);
   }
@@ -174,15 +165,12 @@ var DrainedNitroDevServer = class {
       e.disposed ||
       ((e.disposed = !0),
       await e.dispose().catch((e) => {
-        this.#r.error(
-          `[eve:dev] failed to dispose a retired dev host: ${toErrorMessage(e)}`,
-        );
+        this.#r.error(`[eve:dev] failed to dispose a retired dev host: ${toErrorMessage(e)}`);
       }));
   }
   async #v(e) {
     if (this.#s || this.#i !== e) return;
-    ((this.#i = void 0),
-      this.#r.error(`[eve:dev] dev worker exited; restarting.`));
+    ((this.#i = void 0), this.#r.error(`[eve:dev] dev worker exited; restarting.`));
     let n = this.#d
       .catch(() => void 0)
       .then(async () => {
@@ -202,9 +190,7 @@ var DrainedNitroDevServer = class {
     try {
       await n;
     } catch (e) {
-      this.#r.error(
-        `[eve:dev] dev worker restart failed: ${toErrorMessage(e)}`,
-      );
+      this.#r.error(`[eve:dev] dev worker restart failed: ${toErrorMessage(e)}`);
     }
   }
   #y(e) {
@@ -238,11 +224,7 @@ var DrainedNitroDevServer = class {
     let o;
     try {
       let i = createPublicRequest(e, n.signal);
-      stampDevelopmentClientAddress(
-        i.headers,
-        e.socket.remoteAddress ?? void 0,
-        this.#c,
-      );
+      stampDevelopmentClientAddress(i.headers, e.socket.remoteAddress ?? void 0, this.#c);
       let c = await this.#l?.(i);
       if (c !== void 0) {
         await writeResponse(t, c, n.signal);
@@ -252,11 +234,7 @@ var DrainedNitroDevServer = class {
       let l = this.#i;
       if (l === void 0) throw Error(`Development worker is unavailable.`);
       ((o = this.#b(l)),
-        await writeResponse(
-          t,
-          await l.runner.fetch(i, { signal: n.signal }),
-          n.signal,
-        ));
+        await writeResponse(t, await l.runner.fetch(i, { signal: n.signal }), n.signal));
     } catch (e) {
       n.signal.aborted || writeRequestError(t, e);
     } finally {
@@ -266,11 +244,7 @@ var DrainedNitroDevServer = class {
   async #S(e, t, n) {
     let r;
     try {
-      (stampDevelopmentClientAddress(
-        e.headers,
-        e.socket.remoteAddress ?? void 0,
-        this.#c,
-      ),
+      (stampDevelopmentClientAddress(e.headers, e.socket.remoteAddress ?? void 0, this.#c),
         await this.waitForActiveRunner());
       let i = this.#i;
       if (i === void 0) throw Error(`Development worker is unavailable.`);

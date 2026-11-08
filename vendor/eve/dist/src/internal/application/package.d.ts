@@ -1,10 +1,10 @@
 interface InstalledPackageInfo {
-    name: string;
-    version: string;
+  name: string;
+  version: string;
 }
 interface PackageLocation {
-    packageBuildRoot: string | null;
-    packageRoot: string;
+  packageBuildRoot: string | null;
+  packageRoot: string;
 }
 /**
  * Resolves eve's package location relative to an executing module.
@@ -13,7 +13,10 @@ interface PackageLocation {
  * Bundled executions resolve the installed eve manifest through Node's module
  * resolver instead of treating the bundle owner's manifest as eve's.
  */
-export declare function resolvePackageLocationFromModulePath(currentModulePath: string, resolvePackageJsonPath?: (currentModulePath: string) => string): PackageLocation;
+export declare function resolvePackageLocationFromModulePath(
+  currentModulePath: string,
+  resolvePackageJsonPath?: (currentModulePath: string) => string,
+): PackageLocation;
 /**
  * Resolves the installed eve package root.
  */

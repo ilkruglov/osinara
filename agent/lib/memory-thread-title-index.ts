@@ -34,10 +34,14 @@ export const memoryThreadTitleIndexRepository = {
   },
 
   async save(id: string, title: string, embedding: readonly number[]): Promise<boolean> {
-    const vector = memoryVectorLiteral(embedding, () => new AppError(
-      "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
-      "Не удалось построить смысловой индекс названия нити памяти",
-    ));
+    const vector = memoryVectorLiteral(
+      embedding,
+      () =>
+        new AppError(
+          "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
+          "Не удалось построить смысловой индекс названия нити памяти",
+        ),
+    );
     const result = await database().query(
       `UPDATE memory_threads SET title_embedding = $3::vector, title_embedding_model = $4
        WHERE id = $1 AND title = $2 AND title_embedding_model IS DISTINCT FROM $4`,

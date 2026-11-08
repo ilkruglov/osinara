@@ -10,10 +10,7 @@ import {
   upsertProxyInputRequestState,
 } from "#harness/proxy-input-requests.js";
 import { readLatestTaskView } from "#execution/tasks/parent/run-parent.js";
-import {
-  cacheTerminalTaskView,
-  findSessionTaskEntry,
-} from "#tasks/session-index.js";
+import { cacheTerminalTaskView, findSessionTaskEntry } from "#tasks/session-index.js";
 import { isTerminalTaskStatus } from "#tasks/types.js";
 import { createTaskInputCapabilityToken } from "#execution/task-input-capability.js";
 async function recordTaskInputRequestStep(r) {
@@ -33,15 +30,12 @@ async function recordTaskInputRequestStep(r) {
     l = r.hookPayload.event.requests.map((e) => e.requestId),
     u =
       c?.inputRequests?.map((e) =>
-        typeof e == `object` && e && !Array.isArray(e)
-          ? Reflect.get(e, `requestId`)
-          : void 0,
+        typeof e == `object` && e && !Array.isArray(e) ? Reflect.get(e, `requestId`) : void 0,
       ) ?? [];
   if (
     c?.status !== `input_required` ||
     !r.hookPayload.event.requests.every(isInputRequest) ||
-    c.metadata.mode !==
-      (s.address.kind === `agent/remote` ? `remote` : `local`) ||
+    c.metadata.mode !== (s.address.kind === `agent/remote` ? `remote` : `local`) ||
     c.metadata.agentId !== o.metadata.agentId ||
     c.executor?.childSessionId !== r.hookPayload.childSessionId ||
     new Set(l).size !== l.length ||
@@ -101,11 +95,7 @@ async function acceptTaskAuthorizationEventStep(e) {
   let i = (getAgentHandleStore(t.state)?.handles ?? []).find(
     (e) => e.phase === `addressed` && e.identity.id === r.metadata.agentId,
   );
-  if (
-    i?.phase !== `addressed` ||
-    i.address.sessionId !== e.hookPayload.childSessionId
-  )
-    return !1;
+  if (i?.phase !== `addressed` || i.address.sessionId !== e.hookPayload.childSessionId) return !1;
   let a = await readLatestTaskView({ taskRunId: r.taskRunId });
   return (
     a !== void 0 &&

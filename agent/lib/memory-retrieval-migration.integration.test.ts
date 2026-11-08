@@ -37,7 +37,9 @@ describeWithDatabase("050 Russian memory retrieval migration", () => {
       generation_expression: "to_tsvector('russian'::regconfig, content)",
       is_generated: "ALWAYS",
     });
-    expect(indexes.rows.map((row) => row.indexname)).toContain("memory_items_russian_search_vector_idx");
+    expect(indexes.rows.map((row) => row.indexname)).toContain(
+      "memory_items_russian_search_vector_idx",
+    );
     expect(indexes.rows.map((row) => row.indexname)).toContain("memory_items_active_content_trgm");
     expect(indexes.rows.map((row) => row.indexdef).join("\n")).toContain("gin_trgm_ops");
   });

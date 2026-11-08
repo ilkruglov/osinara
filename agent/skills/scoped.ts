@@ -12,11 +12,12 @@ import { isMemoryReviewSession } from "../lib/memory-review/memory-review-sessio
 
 export default defineDynamic({
   events: {
-    "session.started": (_event, ctx) => isMemoryReviewSession(ctx)
-      ? {}
-      : resolveTrustedSessionSkills(ctx.session.auth, {
-        scheduledRun: isScheduledSession(ctx),
-        subagent: ctx.channel.kind === "subagent",
-      }),
+    "session.started": (_event, ctx) =>
+      isMemoryReviewSession(ctx)
+        ? {}
+        : resolveTrustedSessionSkills(ctx.session.auth, {
+            scheduledRun: isScheduledSession(ctx),
+            subagent: ctx.channel.kind === "subagent",
+          }),
   },
 });

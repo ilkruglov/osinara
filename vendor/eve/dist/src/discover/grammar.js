@@ -29,8 +29,7 @@ const DISCOVER_MODULE_SLOT_COLLISION = `discover/module-slot-collision`,
   DISCOVER_EXTENSION_NAME_INVALID = `discover/extension-name-invalid`,
   TOOL_SLUG_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/,
   CONNECTION_SLUG_PATTERN = /^[a-z][a-z0-9-]{0,63}$/,
-  CHANNEL_SLUG_PATTERN =
-    /^(\.?[a-z][a-z0-9-]{0,63}|\[[a-zA-Z][a-zA-Z0-9_]{0,63}\])$/,
+  CHANNEL_SLUG_PATTERN = /^(\.?[a-z][a-z0-9-]{0,63}|\[[a-zA-Z][a-zA-Z0-9_]{0,63}\])$/,
   HOOK_SLUG_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/,
   EXTENSION_SLUG_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/,
   DISCOVER_UNSUPPORTED_DIRECTORY = `discover/unsupported-directory`;
@@ -39,9 +38,7 @@ async function readSortedDirectoryEntries(e, t) {
   return (n.sort((e, t) => e.name.localeCompare(t.name)), n);
 }
 async function discoverInstructionsSource(t) {
-  let i = t.rootEntries.some(
-      (e) => e.name === `instructions` && e.isDirectory(),
-    ),
+  let i = t.rootEntries.some((e) => e.name === `instructions` && e.isDirectory()),
     a = await discoverSlotSource({
       markdownFileName: `instructions.md`,
       moduleBaseName: `instructions`,
@@ -82,8 +79,7 @@ async function discoverInstructionsSource(t) {
     source: t.source,
   });
   if (o.source !== void 0) {
-    let n =
-      o.source.sourceKind === `markdown` ? `system.md` : o.source.logicalPath;
+    let n = o.source.sourceKind === `markdown` ? `system.md` : o.source.logicalPath;
     return {
       diagnostics: [
         createDiscoverWarningDiagnostic({
@@ -128,11 +124,7 @@ async function discoverSlotSource(t) {
   if (n.moduleFileNames.length > 1)
     return {
       diagnostics: [
-        createModuleSlotCollisionDiagnostic(
-          t.rootPath,
-          t.slotLabel,
-          n.moduleFileNames,
-        ),
+        createModuleSlotCollisionDiagnostic(t.rootPath, t.slotLabel, n.moduleFileNames),
       ],
     };
   if (n.markdownFileName !== void 0)
@@ -156,13 +148,7 @@ function discoverFlatModuleSource(e) {
   });
   if (t.moduleFileNames.length > 1)
     return {
-      diagnostics: [
-        createModuleSlotCollisionDiagnostic(
-          e.rootPath,
-          e.slotName,
-          t.moduleFileNames,
-        ),
-      ],
+      diagnostics: [createModuleSlotCollisionDiagnostic(e.rootPath, e.slotName, t.moduleFileNames)],
     };
   let [r] = t.moduleFileNames;
   return r === void 0
@@ -226,8 +212,7 @@ function createExtensionNameDiagnostic(e, t) {
 }
 function createUnsupportedRootDirectoryDiagnostics(n) {
   return n.rootEntries.flatMap((i) =>
-    !i.isDirectory() ||
-    n.classifyEntry(i.name, getDirectoryEntryType(i)) !== `unknown`
+    !i.isDirectory() || n.classifyEntry(i.name, getDirectoryEntryType(i)) !== `unknown`
       ? []
       : [
           createDiscoverWarningDiagnostic({

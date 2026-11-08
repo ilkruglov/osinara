@@ -5,8 +5,7 @@ import { WizardCancelledError } from "./step.js";
 import { setupQuestionToWire } from "./setup-question-wire.js";
 import "./registry-setup-protocol.js";
 function send(e, t) {
-  if (e.send === void 0 || !e.connected)
-    throw Error(`The registry setup host disconnected.`);
+  if (e.send === void 0 || !e.connected) throw Error(`The registry setup host disconnected.`);
   e.send(t);
 }
 function registrySetupBlocker(r) {
@@ -64,8 +63,7 @@ function createRegistrySetupClient(e = {}) {
       s = await new Promise((n) => {
         (a.set(o, n), send(t, { type: `prompt`, id: o, prompt: e }));
       });
-    if ((a.delete(o), s.type === `cancel` || s.cancelled === !0))
-      throw new WizardCancelledError();
+    if ((a.delete(o), s.type === `cancel` || s.cancelled === !0)) throw new WizardCancelledError();
     return s.value;
   }
   async function validatedText(e, t) {
@@ -143,8 +141,7 @@ function createRegistrySetupClient(e = {}) {
         success: (e) => send(t, { type: `log`, level: `success`, text: e }),
         warning: (e) => send(t, { type: `log`, level: `warning`, text: e }),
         error: (e) => send(t, { type: `log`, level: `error`, text: e }),
-        commandOutput: (e) =>
-          send(t, { type: `log`, level: `commandOutput`, text: e }),
+        commandOutput: (e) => send(t, { type: `log`, level: `commandOutput`, text: e }),
         spinner(e, n) {
           let r = i++;
           return (

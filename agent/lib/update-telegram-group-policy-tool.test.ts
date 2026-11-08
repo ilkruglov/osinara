@@ -26,7 +26,10 @@ vi.mock("./telegram-group-administration-repository.js", () => ({
 
 import manageTelegramGroup from "./tools/manage_telegram_group.js";
 
-function context(chatType: "private" | "supergroup", role: "member" | "owner" = "owner"): ToolContext {
+function context(
+  chatType: "private" | "supergroup",
+  role: "member" | "owner" = "owner",
+): ToolContext {
   const caller = {
     attributes: {
       familyId: "family-1",
@@ -82,12 +85,14 @@ describe("manage_telegram_group.update_policy", () => {
   });
 
   it("passes the silent memory review switch through and reports it back", async () => {
-    await expect(manageTelegramGroup.execute(
-      { ...input, memoryReview: "disabled" }, context("private"),
-    )).resolves.toMatchObject({ memoryReview: "disabled", policyUpdated: true });
+    await expect(
+      manageTelegramGroup.execute({ ...input, memoryReview: "disabled" }, context("private")),
+    ).resolves.toMatchObject({ memoryReview: "disabled", policyUpdated: true });
     expect(updatePolicy).toHaveBeenCalledWith(expect.objectContaining({ memoryReview: false }));
     // Without the field the switch is not part of the replacement.
-    expect(updatePolicy).not.toHaveBeenCalledWith(expect.objectContaining({ memoryReview: undefined }));
+    expect(updatePolicy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ memoryReview: undefined }),
+    );
   });
 
   it("describes a complete in-place replacement without type or title", () => {
@@ -102,14 +107,21 @@ describe("manage_telegram_group.update_policy", () => {
   });
 
   it("ignores known sibling fields materialized beside the complete policy", async () => {
-    await expect(manageTelegramGroup.execute({
-      ...input,
-      registration: {},
-    }, context("private"))).resolves.toMatchObject({ policyUpdated: true });
-    expect(updatePolicy).toHaveBeenCalledWith(expect.objectContaining({
-      messageMode: "owner_only",
-      toolAllowlist: ["remember", "list_group_history", "generate_image"],
-    }));
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          ...input,
+          registration: {},
+        },
+        context("private"),
+      ),
+    ).resolves.toMatchObject({ policyUpdated: true });
+    expect(updatePolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageMode: "owner_only",
+        toolAllowlist: ["remember", "list_group_history", "generate_image"],
+      }),
+    );
   });
 
   it.each([
@@ -120,19 +132,19 @@ describe("manage_telegram_group.update_policy", () => {
     { ...input, type: "external" },
     { ...input, telegramChatId: -1003567628736 },
   ])("rejects an incomplete or extended policy payload", async (invalidInput) => {
-    await expect(manageTelegramGroup.execute(invalidInput as never, context("private"))).rejects.toThrowError(
-      /AGENT_TELEGRAM_GROUP_INPUT_INVALID/,
-    );
+    await expect(
+      manageTelegramGroup.execute(invalidInput as never, context("private")),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
     expect(updatePolicy).not.toHaveBeenCalled();
   });
 
-  it.each([
-    context("supergroup"),
-    context("private", "member"),
-  ])("rejects execution outside the current owner's private chat", async (invalidContext) => {
-    await expect(manageTelegramGroup.execute(input, invalidContext)).rejects.toThrowError(
-      /AGENT_ACCESS_DENIED|AGENT_OWNER_REQUIRED|AGENT_PRIVATE_CHAT_REQUIRED/,
-    );
-    expect(updatePolicy).not.toHaveBeenCalled();
-  });
+  it.each([context("supergroup"), context("private", "member")])(
+    "rejects execution outside the current owner's private chat",
+    async (invalidContext) => {
+      await expect(manageTelegramGroup.execute(input, invalidContext)).rejects.toThrowError(
+        /AGENT_ACCESS_DENIED|AGENT_OWNER_REQUIRED|AGENT_PRIVATE_CHAT_REQUIRED/,
+      );
+      expect(updatePolicy).not.toHaveBeenCalled();
+    },
+  );
 });

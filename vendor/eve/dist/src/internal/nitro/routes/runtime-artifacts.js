@@ -7,17 +7,14 @@ import { readDevelopmentRuntimeArtifactsSnapshotRoot } from "#internal/nitro/dev
 function resolveNitroCompiledArtifactsSource(e) {
   if (e.kind === `development`)
     return createDiskRuntimeCompiledArtifactsSource(
-      readDevelopmentRuntimeArtifactsSnapshotRoot(
-        e.devRuntimeArtifactsPointerPath,
-      ) ?? e.appRoot,
+      readDevelopmentRuntimeArtifactsSnapshotRoot(e.devRuntimeArtifactsPointerPath) ?? e.appRoot,
       {
         durableReference: e.durableArtifactsReference,
         moduleMapLoaderPath: e.moduleMapLoaderPath,
         sandboxAppRoot: e.appRoot,
       },
     );
-  if (readBundledCompiledArtifacts() !== null)
-    return createBundledRuntimeCompiledArtifactsSource();
+  if (readBundledCompiledArtifacts() !== null) return createBundledRuntimeCompiledArtifactsSource();
   throw Error(`eve Nitro production requires bundled artifacts.`);
 }
 export { resolveNitroCompiledArtifactsSource };

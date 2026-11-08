@@ -6,16 +6,16 @@ import type { CompiledModuleMap } from "#compiler/module-map.js";
  * embedded directly into the server bundle.
  */
 export interface BundledCompiledArtifacts {
-    manifest: CompiledAgentManifest;
-    metadata?: CompileMetadata;
-    moduleMap: CompiledModuleMap;
+  manifest: CompiledAgentManifest;
+  metadata?: CompileMetadata;
+  moduleMap: CompiledModuleMap;
 }
 /**
  * Input for running code against one isolated bundled compiled-artifact
  * snapshot.
  */
 export interface WithBundledCompiledArtifactsInput extends BundledCompiledArtifacts {
-    readonly sessionId?: string;
+  readonly sessionId?: string;
 }
 /**
  * Installs one bundled compiled-artifact snapshot on the active runtime
@@ -28,7 +28,10 @@ export declare function installBundledCompiledArtifacts(input: BundledCompiledAr
  * Runs `fn` with bundled compiled artifacts installed on a fresh scoped
  * runtime session, leaving the process-default runtime session untouched.
  */
-export declare function withBundledCompiledArtifacts<T>(input: WithBundledCompiledArtifactsInput, fn: () => Promise<T> | T): Promise<T>;
+export declare function withBundledCompiledArtifacts<T>(
+  input: WithBundledCompiledArtifactsInput,
+  fn: () => Promise<T> | T,
+): Promise<T>;
 /**
  * Reads the bundled compiled-artifact snapshot for the active runtime
  * session, or `null` if none has been installed.

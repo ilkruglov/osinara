@@ -48,7 +48,8 @@ export function createAuthoredTurnSkillResolver(dependencies: AuthoredSkillResol
     // The private chat of a non-owner family member is trusted but not part of the library.
     if (environment === "private" && attributes?.role !== "owner") return {};
     const packages = await dependencies.activePackages(familyId);
-    if (options.provenance) await dependencies.capturePackages?.(familyId, options.provenance, packages);
+    if (options.provenance)
+      await dependencies.capturePackages?.(familyId, options.provenance, packages);
     return Object.fromEntries(packages.map((pkg) => [pkg.name, packageDefinition(pkg)]));
   };
 }

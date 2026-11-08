@@ -9,4 +9,7 @@ export declare function resolveArtifactDirectory(appRoot: string): string;
  * Writes all artifacts for a completed eval run: a run summary, a JSONL
  * results index, and per-eval detail/event files under `evals/`.
  */
-export declare function writeArtifacts(artifactDir: string, summary: EveEvalRunSummary): Promise<void>;
+export declare function writeArtifacts(
+  artifactDir: string,
+  summary: EveEvalRunSummary,
+): Promise<void>;

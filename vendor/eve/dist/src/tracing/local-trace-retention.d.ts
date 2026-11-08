@@ -5,28 +5,28 @@
 type RetentionBound = number | false;
 /** Resolved retention policy for one dev worker. */
 export interface LocalTraceRetentionSettings {
-    readonly enabled: boolean;
-    readonly maxAgeMs: RetentionBound;
-    readonly maxTotalBytes: RetentionBound;
-    readonly retainCount: RetentionBound;
+  readonly enabled: boolean;
+  readonly maxAgeMs: RetentionBound;
+  readonly maxTotalBytes: RetentionBound;
+  readonly retainCount: RetentionBound;
 }
 /** Which bound removed traces, reported for a single diagnostics line. */
 export type LocalTracePruneReason = "maxAgeMs" | "maxTotalBytes";
 /** Outcome of one sweep. `removedTraces` counts trace directories, not spans. */
 export interface LocalTracePruneResult {
-    readonly reasons: readonly LocalTracePruneReason[];
-    readonly reclaimedBytes: number;
-    readonly removedTraces: number;
-    readonly retainedTraces: number;
+  readonly reasons: readonly LocalTracePruneReason[];
+  readonly reclaimedBytes: number;
+  readonly removedTraces: number;
+  readonly retainedTraces: number;
 }
 export interface PruneLocalTraceStoreInput {
-    readonly appRoot: string;
-    /** Traces whose session is open in this worker; never evicted. */
-    readonly activeTraceIds: ReadonlySet<string>;
-    readonly maxAgeMs?: RetentionBound;
-    readonly maxTotalBytes?: RetentionBound;
-    readonly now?: number;
-    readonly retainCount?: RetentionBound;
+  readonly appRoot: string;
+  /** Traces whose session is open in this worker; never evicted. */
+  readonly activeTraceIds: ReadonlySet<string>;
+  readonly maxAgeMs?: RetentionBound;
+  readonly maxTotalBytes?: RetentionBound;
+  readonly now?: number;
+  readonly retainCount?: RetentionBound;
 }
 /**
  * Reads the retention policy from the environment.
@@ -39,7 +39,9 @@ export interface PruneLocalTraceStoreInput {
  * and fall back to the default instead of throwing, because a typo in a dev env
  * file should not prevent the agent from booting.
  */
-export declare function resolveLocalTraceRetentionSettings(env?: Readonly<Record<string, string | undefined>>): LocalTraceRetentionSettings;
+export declare function resolveLocalTraceRetentionSettings(
+  env?: Readonly<Record<string, string | undefined>>,
+): LocalTraceRetentionSettings;
 /**
  * Bounds the local trace store.
  *
@@ -53,7 +55,9 @@ export declare function resolveLocalTraceRetentionSettings(env?: Readonly<Record
  * something that happened and cannot be regenerated, so returning to a quiet
  * project should not mean returning to an empty store.
  */
-export declare function pruneLocalTraceStore(input: PruneLocalTraceStoreInput): Promise<LocalTracePruneResult>;
+export declare function pruneLocalTraceStore(
+  input: PruneLocalTraceStoreInput,
+): Promise<LocalTracePruneResult>;
 /**
  * Requests a sweep without blocking the caller.
  *

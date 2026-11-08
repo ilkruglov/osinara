@@ -14,10 +14,7 @@ function formatTodoSummary(e) {
 }
 function getTodoCompactionMessage() {
   let e = loadContext().get(TodoStateKey);
-  if (
-    e === void 0 ||
-    !e.items.some((e) => e.status === `pending` || e.status === `in_progress`)
-  )
+  if (e === void 0 || !e.items.some((e) => e.status === `pending` || e.status === `in_progress`))
     return;
   let n = formatTodoSummary(e);
   if (n !== void 0) return { content: n, role: `user` };
@@ -45,9 +42,7 @@ function executeTodoTool(e) {
 }
 const TODO_ITEM_SCHEMA = z.strictObject({
     content: z.string().describe(`Brief description of the task.`),
-    priority: z
-      .enum([`high`, `medium`, `low`])
-      .describe(`Priority level of the task.`),
+    priority: z.enum([`high`, `medium`, `low`]).describe(`Priority level of the task.`),
     status: z
       .enum([`pending`, `in_progress`, `completed`, `cancelled`])
       .describe(`Current status of the task.`),
@@ -55,9 +50,7 @@ const TODO_ITEM_SCHEMA = z.strictObject({
   TODO_INPUT_SCHEMA = z.strictObject({
     todos: z
       .array(TODO_ITEM_SCHEMA)
-      .describe(
-        `The updated todo list. Omit to read the current list without modifying it.`,
-      )
+      .describe(`The updated todo list. Omit to read the current list without modifying it.`)
       .optional(),
   }),
   countSchema = z.number().int().min(0),

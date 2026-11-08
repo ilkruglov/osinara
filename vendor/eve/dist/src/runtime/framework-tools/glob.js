@@ -17,9 +17,7 @@ const GLOB_INPUT_SCHEMA = z.strictObject({
       .optional(),
     pattern: z
       .string()
-      .describe(
-        `The glob pattern to match files against (e.g. "**/*.ts", "src/**/*.js").`,
-      ),
+      .describe(`The glob pattern to match files against (e.g. "**/*.ts", "src/**/*.js").`),
   }),
   GLOB_OUTPUT_SCHEMA = z.strictObject({
     content: z.string(),

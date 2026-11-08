@@ -60,9 +60,15 @@ export interface TelegramGroupAttachmentListOptions {
 }
 
 function isAuthorizedRow(row: AttachmentListAccessRow): row is AuthorizedAttachmentListRow {
-  return row.id !== null && row.attachment_file_id !== null && row.attachment_kind !== null &&
-    row.sent_at !== null && row.sequence_id !== null && row.telegram_chat_id !== null &&
-    row.telegram_message_id !== null;
+  return (
+    row.id !== null &&
+    row.attachment_file_id !== null &&
+    row.attachment_kind !== null &&
+    row.sent_at !== null &&
+    row.sequence_id !== null &&
+    row.telegram_chat_id !== null &&
+    row.telegram_message_id !== null
+  );
 }
 
 function listItem(row: AuthorizedAttachmentListRow): TelegramGroupAttachmentListItem {
@@ -92,8 +98,11 @@ export async function listTelegramGroupAttachments(
   if (options.messageThreadId !== null) {
     requireTelegramPositiveBigint(options.messageThreadId, "message_thread_id");
   }
-  if (!Number.isInteger(options.limit) || options.limit < 1 ||
-      options.limit > TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT) {
+  if (
+    !Number.isInteger(options.limit) ||
+    options.limit < 1 ||
+    options.limit > TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT
+  ) {
     throw new AppError(
       "AGENT_TELEGRAM_ATTACHMENT_LIMIT_INVALID",
       "Некорректный размер страницы вложений",
@@ -155,9 +164,17 @@ export async function listTelegramGroupAttachments(
        ORDER BY journal.sequence_id DESC, journal.id DESC
        LIMIT $8
      ) AS message ON current_access.authorized`,
-    [auth.groupId, auth.familyId, options.messageThreadId, auth.groupType,
-      options.fileName ?? null, cursor?.sequence ?? null, cursor?.id ?? null,
-      options.limit + 1, auth.userId],
+    [
+      auth.groupId,
+      auth.familyId,
+      options.messageThreadId,
+      auth.groupType,
+      options.fileName ?? null,
+      cursor?.sequence ?? null,
+      cursor?.id ?? null,
+      options.limit + 1,
+      auth.userId,
+    ],
   );
   const access = result.rows[0]!;
   if (!access.authorized) {
@@ -176,8 +193,9 @@ export async function listTelegramGroupAttachments(
   const last = rows.at(-1);
   return {
     items: rows.map(listItem),
-    nextCursor: authorizedRows.length > options.limit && last
-      ? encodeBigintUuidCursor(last.sequence_id, last.id, cursorBinding)
-      : null,
+    nextCursor:
+      authorizedRows.length > options.limit && last
+        ? encodeBigintUuidCursor(last.sequence_id, last.id, cursorBinding)
+        : null,
   };
 }

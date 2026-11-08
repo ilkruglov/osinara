@@ -15,18 +15,14 @@ async function routeProxiedDeliverStep(n) {
   "use step";
   let l = await readDurableSession(n.sessionState),
     u = !(`delivery` in n),
-    d =
-      `delivery` in n
-        ? n.delivery
-        : { auth: n.auth, kind: `deliver`, payloads: [n.payload] },
+    d = `delivery` in n ? n.delivery : { auth: n.auth, kind: `deliver`, payloads: [n.payload] },
     f = new Map(),
     p = new Map(),
     m;
   for (let [e, t] of d.payloads.entries()) {
     let n = routeDeliverPayload({
       allowRoute: (e, t) =>
-        t.taskId === void 0 ||
-        findSessionTaskEntry(l.state, t.taskId) !== void 0,
+        t.taskId === void 0 || findSessionTaskEntry(l.state, t.taskId) !== void 0,
       payload: t,
       state: l.state,
     });
@@ -35,11 +31,7 @@ async function routeProxiedDeliverStep(n) {
       let i =
           r.taskId === void 0
             ? r.childContinuationToken
-            : [
-                r.childContinuationToken,
-                r.childResponseUrl ?? ``,
-                r.taskId,
-              ].join(`\0`),
+            : [r.childContinuationToken, r.childResponseUrl ?? ``, r.taskId].join(`\0`),
         a = p.get(i) ?? {
           childContinuationToken: r.childContinuationToken,
           childResponseUrl: r.childResponseUrl,
@@ -77,8 +69,7 @@ async function routeProxiedDeliverStep(n) {
             auth: d.auth,
             childContinuationToken: e.childContinuationToken,
             childResponseUrl: e.childResponseUrl,
-            inputResponses:
-              coalesceDeliverPayloads(e.payloads).inputResponses ?? [],
+            inputResponses: coalesceDeliverPayloads(e.payloads).inputResponses ?? [],
             kind: `input-response`,
             taskId: t,
           },

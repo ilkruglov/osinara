@@ -38,7 +38,4 @@ function createDelegatedSubagentErrorResult(n, r) {
     output: a,
   };
 }
-export {
-  createDelegatedSubagentErrorResult,
-  createDelegatedSubagentSuccessResult,
-};
+export { createDelegatedSubagentErrorResult, createDelegatedSubagentSuccessResult };

@@ -25,11 +25,12 @@ const SLOW_QUERY_MS = 150;
  
 
 function statementShape(query         )         {
-  const text = typeof query === "string"
-    ? query
-    : typeof (query                             )?.text === "string"
-      ? (query                    ).text
-      : "";
+  const text =
+    typeof query === "string"
+      ? query
+      : typeof (query                             )?.text === "string"
+        ? (query                    ).text
+        : "";
   return text.replace(/\s+/gu, " ").trim().slice(0, STATEMENT_LOG_LIMIT);
 }
 
@@ -45,23 +46,28 @@ function wrapQuery(owner            , thresholdMs        , log                  
     const observe = (result         )       => {
       const ms = performance.now() - startedAt;
       if (ms < thresholdMs) return;
-      log(JSON.stringify({
-        code: "AGENT_WORKFLOW_SLOW_QUERY",
-        ms: Math.round(ms),
-        rows: rowCount(result),
-        statement: statementShape(args[0]),
-      }));
+      log(
+        JSON.stringify({
+          code: "AGENT_WORKFLOW_SLOW_QUERY",
+          ms: Math.round(ms),
+          rows: rowCount(result),
+          statement: statementShape(args[0]),
+        }),
+      );
     };
     const outcome = original(...args);
     // The callback form has no promise to observe; the pool contract keeps both.
     if (typeof (outcome                             )?.then !== "function") return outcome;
-    return (outcome                    ).then((result) => {
-      observe(result);
-      return result;
-    }, (error         ) => {
-      observe(null);
-      throw error;
-    });
+    return (outcome                    ).then(
+      (result) => {
+        observe(result);
+        return result;
+      },
+      (error         ) => {
+        observe(null);
+        throw error;
+      },
+    );
   };
 }
 
@@ -81,7 +87,11 @@ export function traceWorkflowPool(
     if (typeof (outcome                             )?.then !== "function") return outcome;
     return (outcome                    ).then((client) => {
       const tracedClient = client                                    ;
-      if (tracedClient !== null && typeof tracedClient?.query === "function" && tracedClient[TRACED] !== true) {
+      if (
+        tracedClient !== null &&
+        typeof tracedClient?.query === "function" &&
+        tracedClient[TRACED] !== true
+      ) {
         tracedClient[TRACED] = true;
         wrapQuery(tracedClient, thresholdMs, log);
       }

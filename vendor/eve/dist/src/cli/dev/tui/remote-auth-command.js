@@ -28,14 +28,11 @@ function unavailableAfterAuthentication(e, t) {
 function mutedRenderer(e, t) {
   return {
     readSelect: (n) => (t() ? Promise.resolve(void 0) : e.readSelect(n)),
-    readEditableSelect: (n) =>
-      t() ? Promise.resolve(void 0) : e.readEditableSelect(n),
+    readEditableSelect: (n) => (t() ? Promise.resolve(void 0) : e.readEditableSelect(n)),
     readText: (n) => (t() ? Promise.resolve(void 0) : e.readText(n)),
     readAcknowledge: (n) => (t() ? Promise.resolve() : e.readAcknowledge(n)),
     readChoice: (n) =>
-      t()
-        ? { choice: Promise.resolve(void 0), close: () => {} }
-        : e.readChoice(n),
+      t() ? { choice: Promise.resolve(void 0), close: () => {} } : e.readChoice(n),
     setStatus: (n) => {
       t() || e.setStatus(n);
     },
@@ -46,8 +43,7 @@ function mutedRenderer(e, t) {
       t() || e.renderOutput(n);
     },
     withInheritedStdio: (t) => e.withInheritedStdio(t),
-    withExclusiveTerminal: (t) =>
-      e.withExclusiveTerminal?.(t) ?? e.withInheritedStdio(t),
+    withExclusiveTerminal: (t) => e.withExclusiveTerminal?.(t) ?? e.withInheritedStdio(t),
   };
 }
 async function runRemoteAuthCommand(i) {
@@ -75,8 +71,7 @@ async function runRemoteAuthCommand(i) {
         p.then((e) => ({ kind: `completed`, outcome: e })),
         c.promise.then(() => ({ kind: `interrupted` })),
       ]);
-    m.kind === `interrupted` &&
-      ((o = !0), (a = !0), s.abort(new WizardCancelledError()));
+    m.kind === `interrupted` && ((o = !0), (a = !0), s.abort(new WizardCancelledError()));
     let h = m.kind === `completed` ? m.outcome : await p;
     switch (h.kind) {
       case `authenticated`:
@@ -97,9 +92,7 @@ async function runRemoteAuthCommand(i) {
         return unavailableAfterAuthentication(remoteHost(l), h.failure.message);
     }
   } finally {
-    (c.dispose(),
-      i.renderer.setStatus(void 0),
-      i.renderer.end({ preserveDiagnostics: a }));
+    (c.dispose(), i.renderer.setStatus(void 0), i.renderer.end({ preserveDiagnostics: a }));
   }
 }
 export { runRemoteAuthCommand };

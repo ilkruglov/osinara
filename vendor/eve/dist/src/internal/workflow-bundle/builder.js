@@ -95,9 +95,7 @@ var WorkflowBundleBuilder = class {
       }));
     let { manifest: h } = await this.createWorkflowsBundle({
       additionalOutputs:
-        p === void 0 || p === d
-          ? []
-          : [{ outfile: p, stepRegistrationsPath: f ?? c }],
+        p === void 0 || p === d ? [] : [{ outfile: p, stepRegistrationsPath: f ?? c }],
       discoveredEntries: a,
       outfile: d,
       inputFiles: n,
@@ -126,8 +124,7 @@ var WorkflowBundleBuilder = class {
         try {
           return (await readFile(r), r);
         } catch (e) {
-          if (!(e instanceof Error && `code` in e && e.code === `ENOENT`))
-            throw e;
+          if (!(e instanceof Error && `code` in e && e.code === `ENOENT`)) throw e;
         }
       }
       let n = dirname(e);
@@ -137,9 +134,7 @@ var WorkflowBundleBuilder = class {
   }
   async getInputFiles() {
     let e = this.config.dirs.map((e) => resolve(this.config.workingDir, e));
-    return (
-      await Promise.all(e.map((e) => collectWorkflowInputFiles(e)))
-    ).flat();
+    return (await Promise.all(e.map((e) => collectWorkflowInputFiles(e)))).flat();
   }
   async discoverEntries(e, n, r) {
     let i = this.#r.get(e);
@@ -175,49 +170,37 @@ var WorkflowBundleBuilder = class {
         ...d.map((e) => createWorkflowImport(e, this.config.workingDir)),
       ].join(`
 `),
-      m = await buildSingleRolldownChunk(
-        `intermediate workflow bundle for "${i}"`,
-        {
-          cwd: this.config.workingDir,
-          input: WORKFLOW_VIRTUAL_ENTRY_ID,
-          platform: `neutral`,
-          plugins: [
-            createWorkflowVirtualEntryPlugin(p),
-            createWorkflowPseudoPackagePlugin(),
-            createEvePackageImportsPlugin(this.config.workingDir, {
-              workflowCondition: !0,
-            }),
-            createWorkflowTransformPlugin({
-              manifest: f,
-              projectRoot: this.transformProjectRoot,
-              sideEffectFiles: [...l, ...d],
-              workingDir: this.config.workingDir,
-            }),
-            createWorkflowNodeBuiltinGuardPlugin(),
-          ],
-          resolve: {
-            conditionNames: [`eve-source`, `workflow`],
-            extensions: [
-              `.ts`,
-              `.tsx`,
-              `.mts`,
-              `.cts`,
-              `.js`,
-              `.jsx`,
-              `.mjs`,
-              `.cjs`,
-            ],
-            mainFields: [`module`, `main`],
-          },
-          tsconfig: o ?? !1,
-          output: {
-            banner: `globalThis.__private_workflows = new Map();`,
-            comments: !1,
-            format: `cjs`,
-            sourcemap: `inline`,
-          },
+      m = await buildSingleRolldownChunk(`intermediate workflow bundle for "${i}"`, {
+        cwd: this.config.workingDir,
+        input: WORKFLOW_VIRTUAL_ENTRY_ID,
+        platform: `neutral`,
+        plugins: [
+          createWorkflowVirtualEntryPlugin(p),
+          createWorkflowPseudoPackagePlugin(),
+          createEvePackageImportsPlugin(this.config.workingDir, {
+            workflowCondition: !0,
+          }),
+          createWorkflowTransformPlugin({
+            manifest: f,
+            projectRoot: this.transformProjectRoot,
+            sideEffectFiles: [...l, ...d],
+            workingDir: this.config.workingDir,
+          }),
+          createWorkflowNodeBuiltinGuardPlugin(),
+        ],
+        resolve: {
+          conditionNames: [`eve-source`, `workflow`],
+          extensions: [`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`],
+          mainFields: [`module`, `main`],
         },
-      );
+        tsconfig: o ?? !1,
+        output: {
+          banner: `globalThis.__private_workflows = new Map();`,
+          comments: !1,
+          format: `cjs`,
+          sourcemap: `inline`,
+        },
+      });
     return (
       await Promise.all(
         [{ outfile: i, stepRegistrationsPath: a }, ...e].map((e) =>
@@ -240,11 +223,7 @@ var WorkflowBundleBuilder = class {
         classes: convertClassesManifest(t.classes),
       },
       o = JSON.stringify(a, null, 2);
-    return (
-      await mkdir(r, { recursive: !0 }),
-      await writeFile(join(r, `manifest.json`), o),
-      o
-    );
+    return (await mkdir(r, { recursive: !0 }), await writeFile(join(r, `manifest.json`), o), o);
   }
   async #a() {
     return await this.getInputFiles();

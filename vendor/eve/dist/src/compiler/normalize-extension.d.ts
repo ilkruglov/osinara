@@ -1,21 +1,36 @@
-import { type AgentSourceManifest, type LocalSubagentSourceRef, type ResolvedExtensionMount } from "#discover/manifest.js";
-import type { CompiledChannelEntry, CompiledConnectionDefinition, CompiledDynamicInstructionsDefinition, CompiledDynamicSkillDefinition, CompiledDynamicToolDefinition, CompiledHookDefinition, CompiledInstructionsDefinition, CompiledScheduleDefinition, CompiledSkillDefinition, CompiledToolDefinition } from "#compiler/manifest.js";
+import {
+  type AgentSourceManifest,
+  type LocalSubagentSourceRef,
+  type ResolvedExtensionMount,
+} from "#discover/manifest.js";
+import type {
+  CompiledChannelEntry,
+  CompiledConnectionDefinition,
+  CompiledDynamicInstructionsDefinition,
+  CompiledDynamicSkillDefinition,
+  CompiledDynamicToolDefinition,
+  CompiledHookDefinition,
+  CompiledInstructionsDefinition,
+  CompiledScheduleDefinition,
+  CompiledSkillDefinition,
+  CompiledToolDefinition,
+} from "#compiler/manifest.js";
 import type { ManifestCompileContext } from "#compiler/normalize-helpers.js";
 /**
  * Contributions one mounted extension composes into the consuming agent,
  * already namespaced by the mount and rebased onto the consumer's agent root.
  */
 export interface CompiledExtensionContributions {
-    readonly channels: CompiledChannelEntry[];
-    readonly tools: CompiledToolDefinition[];
-    readonly dynamicTools: CompiledDynamicToolDefinition[];
-    readonly hooks: CompiledHookDefinition[];
-    readonly skills: CompiledSkillDefinition[];
-    readonly dynamicSkills: CompiledDynamicSkillDefinition[];
-    readonly dynamicInstructions: CompiledDynamicInstructionsDefinition[];
-    readonly connections: CompiledConnectionDefinition[];
-    readonly instructions: CompiledInstructionsDefinition[];
-    readonly schedules: CompiledScheduleDefinition[];
+  readonly channels: CompiledChannelEntry[];
+  readonly tools: CompiledToolDefinition[];
+  readonly dynamicTools: CompiledDynamicToolDefinition[];
+  readonly hooks: CompiledHookDefinition[];
+  readonly skills: CompiledSkillDefinition[];
+  readonly dynamicSkills: CompiledDynamicSkillDefinition[];
+  readonly dynamicInstructions: CompiledDynamicInstructionsDefinition[];
+  readonly connections: CompiledConnectionDefinition[];
+  readonly instructions: CompiledInstructionsDefinition[];
+  readonly schedules: CompiledScheduleDefinition[];
 }
 /**
  * Compiles one mounted extension's source tree and namespaces its
@@ -30,25 +45,30 @@ export interface CompiledExtensionContributions {
  * extension's own `<ns>__search`.
  */
 export declare function compileExtensionContributions(input: {
-    readonly mount: ResolvedExtensionMount;
-    readonly context: ManifestCompileContext;
-    readonly consumerAgentRoot: string;
-    readonly externalDependencies: readonly string[];
+  readonly mount: ResolvedExtensionMount;
+  readonly context: ManifestCompileContext;
+  readonly consumerAgentRoot: string;
+  readonly externalDependencies: readonly string[];
 }): Promise<CompiledExtensionContributions>;
 /** Composes one mount's root-visible subagents under its namespace. */
 export declare function composeExtensionSubagentSources(input: {
-    readonly consumerAgentRoot: string;
-    readonly mount: ResolvedExtensionMount;
+  readonly consumerAgentRoot: string;
+  readonly mount: ResolvedExtensionMount;
 }): LocalSubagentSourceRef[];
 /** Returns authored and mounted-extension subagents visible from one agent node. */
-export declare function composeAgentSubagentSources(manifest: AgentSourceManifest): LocalSubagentSourceRef[];
+export declare function composeAgentSubagentSources(
+  manifest: AgentSourceManifest,
+): LocalSubagentSourceRef[];
 /** Earlier entries win, matching directory-override precedence for other slots. */
-export declare function mergeExtensionSubagentSources(primary: readonly LocalSubagentSourceRef[], secondary: readonly LocalSubagentSourceRef[]): LocalSubagentSourceRef[];
+export declare function mergeExtensionSubagentSources(
+  primary: readonly LocalSubagentSourceRef[],
+  secondary: readonly LocalSubagentSourceRef[],
+): LocalSubagentSourceRef[];
 export interface DisabledToolTarget {
-    /** Namespaced target, e.g. `crm__search`. */
-    readonly name: string;
-    /** Override-relative authored path, e.g. `tools/search.ts`, for diagnostics. */
-    readonly logicalPath: string;
+  /** Namespaced target, e.g. `crm__search`. */
+  readonly name: string;
+  /** Override-relative authored path, e.g. `tools/search.ts`, for diagnostics. */
+  readonly logicalPath: string;
 }
 /**
  * Removes the extension tools an override slot opted out of with `disableTool()`.
@@ -59,11 +79,11 @@ export interface DisabledToolTarget {
  * Exported for unit testing.
  */
 export declare function applyOverrideDisables(input: {
-    readonly merged: CompiledExtensionContributions;
-    readonly disables: readonly DisabledToolTarget[];
-    readonly extensionToolNames: ReadonlySet<string>;
-    readonly extensionDynamicToolSlugs: ReadonlySet<string>;
-    readonly namespace: string;
+  readonly merged: CompiledExtensionContributions;
+  readonly disables: readonly DisabledToolTarget[];
+  readonly extensionToolNames: ReadonlySet<string>;
+  readonly extensionDynamicToolSlugs: ReadonlySet<string>;
+  readonly namespace: string;
 }): CompiledExtensionContributions;
 /**
  * Merges two composed contribution sets with earlier-set-wins precedence per
@@ -77,4 +97,7 @@ export declare function applyOverrideDisables(input: {
  * the extension's own contributions as `secondary` yields consumer-wins
  * shadowing on name collision.
  */
-export declare function mergeContributions(primary: CompiledExtensionContributions, secondary: CompiledExtensionContributions): CompiledExtensionContributions;
+export declare function mergeContributions(
+  primary: CompiledExtensionContributions,
+  secondary: CompiledExtensionContributions,
+): CompiledExtensionContributions;

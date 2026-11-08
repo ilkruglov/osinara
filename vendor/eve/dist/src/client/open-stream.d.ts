@@ -1,34 +1,34 @@
 import type { MessageStreamEvent } from "#protocol/message.js";
 import type { ClientRedirectPolicy, StreamReconnectPolicy } from "#client/types.js";
 interface RetryPolicy {
-    readonly baseDelayMs: number;
-    readonly maxAttempts: number;
-    readonly maxDelayMs: number;
+  readonly baseDelayMs: number;
+  readonly maxAttempts: number;
+  readonly maxDelayMs: number;
 }
 interface ResolvedStreamReconnectPolicy {
-    readonly retryableErrorStatuses: ReadonlySet<number>;
-    readonly streamIdleReconnectPolicy: RetryPolicy;
-    readonly streamOpenReconnectPolicy: RetryPolicy;
+  readonly retryableErrorStatuses: ReadonlySet<number>;
+  readonly streamIdleReconnectPolicy: RetryPolicy;
+  readonly streamOpenReconnectPolicy: RetryPolicy;
 }
 /**
  * Internal configuration for following a durable event stream.
  */
 interface FollowStreamInput {
-    readonly host: string;
-    /** Keep reconnecting after empty streams until the consumer aborts or stops iteration. */
-    readonly keepAlive?: boolean;
-    readonly streamReconnectPolicy?: StreamReconnectPolicy;
-    readonly resolveHeaders: () => Promise<Headers>;
-    readonly redirect?: ClientRedirectPolicy;
-    readonly sessionId: string;
-    readonly signal?: AbortSignal;
-    readonly startIndex: number;
-    /** Follow the live stream after the durable tail (default). `false` bounds the read at the tail. */
-    readonly follow?: boolean;
+  readonly host: string;
+  /** Keep reconnecting after empty streams until the consumer aborts or stops iteration. */
+  readonly keepAlive?: boolean;
+  readonly streamReconnectPolicy?: StreamReconnectPolicy;
+  readonly resolveHeaders: () => Promise<Headers>;
+  readonly redirect?: ClientRedirectPolicy;
+  readonly sessionId: string;
+  readonly signal?: AbortSignal;
+  readonly startIndex: number;
+  /** Follow the live stream after the durable tail (default). `false` bounds the read at the tail. */
+  readonly follow?: boolean;
 }
 /** One connection open; `requestTailIndex` asks the server to report the durable tail index. */
 interface OpenStreamInput extends FollowStreamInput {
-    readonly requestTailIndex?: boolean;
+  readonly requestTailIndex?: boolean;
 }
 /**
  * Follows a session's durable event stream from an absolute cursor,
@@ -43,11 +43,13 @@ interface OpenStreamInput extends FollowStreamInput {
  * yields events until the cursor passes that tail, reconnecting as needed,
  * then returns instead of following.
  */
-export declare function followStreamIterable(input: FollowStreamInput): AsyncGenerator<MessageStreamEvent>;
+export declare function followStreamIterable(
+  input: FollowStreamInput,
+): AsyncGenerator<MessageStreamEvent>;
 /** An opened connection: the response body plus the tail index from the response header, if any. */
 interface OpenedStream {
-    readonly body: ReadableStream<Uint8Array>;
-    readonly tailIndex: number | undefined;
+  readonly body: ReadableStream<Uint8Array>;
+  readonly tailIndex: number | undefined;
 }
 /**
  * Opens one stream response body, retrying transient failures with capped
@@ -55,7 +57,9 @@ interface OpenedStream {
  * propagation window where a just-acknowledged session may not yet be
  * readable from the stream route.
  */
-export declare function openStreamBody(input: OpenStreamInput & {
+export declare function openStreamBody(
+  input: OpenStreamInput & {
     readonly retryPolicy?: ResolvedStreamReconnectPolicy;
-}): Promise<OpenedStream>;
+  },
+): Promise<OpenedStream>;
 export {};

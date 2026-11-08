@@ -33,9 +33,7 @@ var PostCommitDevelopmentRebuildError = class extends Error {
   };
 async function createDevelopmentAuthoredRebuildCoordinator(e) {
   return new TransactionalDevelopmentAuthoredRebuildCoordinator({
-    currentHostFingerprint: await computeDevelopmentHostFingerprint(
-      e.initialHost,
-    ),
+    currentHostFingerprint: await computeDevelopmentHostFingerprint(e.initialHost),
     currentRuntimeFingerprint: e.initialHost.generation.fingerprint,
     devServer: e.devServer,
     initialHost: e.initialHost,
@@ -53,8 +51,7 @@ var TransactionalDevelopmentAuthoredRebuildCoordinator = class {
       (this.#n = e.currentRuntimeFingerprint),
       (this.#r = e.devServer),
       (this.#i = usesParentDevelopmentWorkflowWorld(
-        e.initialHost.compileResult.manifest.config.experimental?.workflow
-          ?.world,
+        e.initialHost.compileResult.manifest.config.experimental?.workflow?.world,
       )));
   }
   async rebuild(t) {
@@ -107,12 +104,7 @@ var TransactionalDevelopmentAuthoredRebuildCoordinator = class {
         nextHostFingerprint: e,
         nextRuntimeFingerprint: o,
       });
-      return (
-        (a = void 0),
-        r.commit(),
-        startSandboxPrewarmAfterCommit(l.host, t.changedPaths),
-        l
-      );
+      return ((a = void 0), r.commit(), startSandboxPrewarmAfterCommit(l.host, t.changedPaths), l);
     } catch (e) {
       throw e instanceof PostCommitDevelopmentRebuildError
         ? (r.commit(), e)
@@ -143,20 +135,12 @@ var TransactionalDevelopmentAuthoredRebuildCoordinator = class {
       } catch (n) {
         throw (
           await discardDevelopmentGeneration(t.generation).catch(() => void 0),
-          this.#o(
-            { ...t, generation: this.#e.generation },
-            e.nextHostFingerprint,
-            this.#n,
-          ),
+          this.#o({ ...t, generation: this.#e.generation }, e.nextHostFingerprint, this.#n),
           new PostCommitDevelopmentRebuildError(n)
         );
       }
     return (
-      this.#o(
-        t,
-        e.nextHostFingerprint,
-        e.hasRuntimeChange ? e.nextRuntimeFingerprint : this.#n,
-      ),
+      this.#o(t, e.nextHostFingerprint, e.hasRuntimeChange ? e.nextRuntimeFingerprint : this.#n),
       { host: t, kind: `structural` }
     );
   }
@@ -176,8 +160,7 @@ function startSandboxPrewarmAfterCommit(e, t) {
   if (!hasSandboxRelatedChange(e.compileResult.project.agentRoot, t)) return;
   let n = createDevelopmentNitroArtifactsConfig({
     appRoot: e.appRoot,
-    configuredWorld:
-      e.compileResult.manifest.config.experimental?.workflow?.world,
+    configuredWorld: e.compileResult.manifest.config.experimental?.workflow?.world,
   });
   startDevelopmentSandboxPrewarmInBackground({
     appRoot: e.appRoot,
@@ -191,10 +174,7 @@ function hasSandboxRelatedChange(e, r) {
       a = i.split(/[\\/]/u);
     return a[0] === `..` || i === ``
       ? !1
-      : a[0] === `sandbox.ts` ||
-          a[0] === `sandbox` ||
-          a[0] === `workspace` ||
-          a[0] === `skills`;
+      : a[0] === `sandbox.ts` || a[0] === `sandbox` || a[0] === `workspace` || a[0] === `skills`;
   });
 }
 async function discardPreparedHost(e) {
@@ -205,10 +185,7 @@ async function discardPreparedHost(e) {
     ])
   ).flatMap((e) => (e.status === `rejected` ? [e.reason] : []));
   if (t.length > 0)
-    throw AggregateError(
-      t,
-      `Failed to discard development host "${e.workspace.rootDir}".`,
-    );
+    throw AggregateError(t, `Failed to discard development host "${e.workspace.rootDir}".`);
 }
 async function discardFailedHost(e, t) {
   try {

@@ -15,26 +15,34 @@ const GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models";
 const TRANSCRIPTION_MODEL_ID = "whisper-large-v3-turbo";
 const MAX_TIMEOUT_MS = 30_000;
 
-const groqModelSchema = z.object({
-  active: z.boolean(),
-  context_window: z.number().int().positive(),
-  created: z.number().int().nonnegative(),
-  id: z.string().trim().min(1),
-  object: z.literal("model"),
-  owned_by: z.string().trim().min(1),
-}).passthrough();
-const groqModelsResponseSchema = z.object({
-  data: z.array(groqModelSchema),
-  object: z.literal("list"),
-}).passthrough();
+const groqModelSchema = z
+  .object({
+    active: z.boolean(),
+    context_window: z.number().int().positive(),
+    created: z.number().int().nonnegative(),
+    id: z.string().trim().min(1),
+    object: z.literal("model"),
+    owned_by: z.string().trim().min(1),
+  })
+  .passthrough();
+const groqModelsResponseSchema = z
+  .object({
+    data: z.array(groqModelSchema),
+    object: z.literal("list"),
+  })
+  .passthrough();
 
 export async function validateGroqVoiceCredential(options: {
   readonly apiKey: string;
   readonly fetch: typeof globalThis.fetch;
   readonly timeoutMs: number;
 }): Promise<void> {
-  if (!options.apiKey || !Number.isInteger(options.timeoutMs)
-    || options.timeoutMs < 1 || options.timeoutMs > MAX_TIMEOUT_MS) {
+  if (
+    !options.apiKey ||
+    !Number.isInteger(options.timeoutMs) ||
+    options.timeoutMs < 1 ||
+    options.timeoutMs > MAX_TIMEOUT_MS
+  ) {
     throw new InstallerError(
       "OSINARA_INSTALL_GROQ_INPUT_INVALID",
       "Для проверки Groq передан некорректный ключ или таймаут",

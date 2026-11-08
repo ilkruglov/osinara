@@ -13,4 +13,7 @@ import { type CompiledChannel } from "#channel/compiled-channel.js";
  * Disable sentinels are handled by the compiler before this function is
  * called.
  */
-export declare function normalizeChannelDefinition(value: unknown, message: string): CompiledChannel;
+export declare function normalizeChannelDefinition(
+  value: unknown,
+  message: string,
+): CompiledChannel;

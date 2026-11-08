@@ -1,14 +1,14 @@
 declare const SHUTDOWN_SIGNALS: readonly ["SIGINT", "SIGTERM"];
 type ShutdownSignal = (typeof SHUTDOWN_SIGNALS)[number];
 interface SandboxShutdownProcess {
-    readonly env: Record<string, string | undefined>;
-    exit(code?: number): void;
-    once(event: ShutdownSignal, listener: () => void): unknown;
+  readonly env: Record<string, string | undefined>;
+  exit(code?: number): void;
+  once(event: ShutdownSignal, listener: () => void): unknown;
 }
 interface NitroAppLike {
-    readonly hooks?: {
-        hook(name: "close", handler: () => Promise<void>): unknown;
-    };
+  readonly hooks?: {
+    hook(name: "close", handler: () => Promise<void>): unknown;
+  };
 }
 /**
  * Reports whether this server process owns sandbox shutdown.
@@ -19,7 +19,9 @@ interface NitroAppLike {
  *   a server stop, and persistent session sandboxes must keep serving
  *   later invocations.
  */
-export declare function shouldInstallSandboxShutdown(env: Record<string, string | undefined>): boolean;
+export declare function shouldInstallSandboxShutdown(
+  env: Record<string, string | undefined>,
+): boolean;
 /**
  * Stops all tracked sandboxes, bounded by
  * {@link SANDBOX_SHUTDOWN_TIMEOUT_MS}. Never throws.
@@ -32,9 +34,9 @@ export declare function runSandboxShutdown(log: (message: string) => void): Prom
  * export applies it to the real `process`.
  */
 export declare function installSandboxShutdownHandlers(input: {
-    readonly log: (message: string) => void;
-    readonly nitroApp?: NitroAppLike;
-    readonly process: SandboxShutdownProcess;
+  readonly log: (message: string) => void;
+  readonly nitroApp?: NitroAppLike;
+  readonly process: SandboxShutdownProcess;
 }): void;
 export default function sandboxShutdownPlugin(nitroApp?: NitroAppLike): void;
 export {};

@@ -29,10 +29,7 @@ export function requireChatOperationalPromptText(value: string): string {
 }
 
 function escapeXmlText(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 export function buildBehaviorPreferenceInstructions(prompt: ChatOperationalPrompt): string {

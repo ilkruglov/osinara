@@ -11,10 +11,7 @@ var ConnectionRegistryImpl = class {
     if (r !== void 0) return r;
     let i = this.#t.find((e) => e.connectionName === n);
     if (i === void 0) throw Error(`Connection "${n}" is not registered.`);
-    let a =
-      i.protocol === `openapi`
-        ? new OpenApiConnectionClient(i)
-        : new McpConnectionClient(i);
+    let a = i.protocol === `openapi` ? new OpenApiConnectionClient(i) : new McpConnectionClient(i);
     return (this.#e.set(n, a), a);
   }
   getConnectionApproval(e) {

@@ -30,7 +30,13 @@ function ephemeral(text: string, overrides: Partial<TelegramMessage> = {}): Tele
     chat: { id: "-1001", title: "Группа", type: "supergroup" },
     from: { firstName: "Анна", id: "101", isBot: false, username: "anna" },
     messageId: "0",
-    raw: { chat: { id: -1001, type: "supergroup" }, date: 1_700_000_000, ephemeral_message_id: 7, message_id: 0, text },
+    raw: {
+      chat: { id: -1001, type: "supergroup" },
+      date: 1_700_000_000,
+      ephemeral_message_id: 7,
+      message_id: 0,
+      text,
+    },
     text,
     ...overrides,
   };
@@ -55,11 +61,20 @@ describe("parseTelegramWhisperCommand", () => {
     ["another bot's whisper", ephemeral("/whisper@other_bot привет")],
     ["another command", ephemeral("/ask привет")],
     ["a longer command name", ephemeral("/whisperer привет")],
-    ["a public whisper", ephemeral("/whisper привет", { raw: { message_id: 5, text: "/whisper привет" } })],
+    [
+      "a public whisper",
+      ephemeral("/whisper привет", { raw: { message_id: 5, text: "/whisper привет" } }),
+    ],
     ["a private chat", ephemeral("/whisper привет", { chat: { id: "101", type: "private" } })],
-    ["a bot sender", ephemeral("/whisper привет", { from: { firstName: "Бот", id: "9", isBot: true } })],
+    [
+      "a bot sender",
+      ephemeral("/whisper привет", { from: { firstName: "Бот", id: "9", isBot: true } }),
+    ],
     ["no sender", ephemeral("/whisper привет", { from: undefined })],
-    ["a zero ephemeral id", ephemeral("/whisper привет", { raw: { ephemeral_message_id: 0, message_id: 0 } })],
+    [
+      "a zero ephemeral id",
+      ephemeral("/whisper привет", { raw: { ephemeral_message_id: 0, message_id: 0 } }),
+    ],
     ["a caption", ephemeral("", { caption: "/whisper привет" })],
   ])("refuses %s", (_name, message) => {
     expect(parseTelegramWhisperCommand(message, "osinara_bot")).toBeNull();
@@ -76,10 +91,14 @@ describe("isTelegramEphemeralMessage", () => {
 describe("whisper markers", () => {
   it("round-trips the placeholder through the stored update payload", () => {
     const payload = { message: { ...ephemeral("/whisper привет").raw }, update_id: 900 };
-    const marked = withTelegramWhisperMarker(payload, { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "101" });
+    const marked = withTelegramWhisperMarker(payload, {
+      ephemeralMessageId: 7,
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+    });
 
     expect(payload.message).not.toHaveProperty("osinara_whisper");
-    expect(readTelegramWhisperMarker((marked.message as Record<string, unknown>))).toEqual({
+    expect(readTelegramWhisperMarker(marked.message as Record<string, unknown>)).toEqual({
       ephemeralMessageId: 7,
       placeholderMessageId: 31,
       receiverUserId: "101",
@@ -87,7 +106,11 @@ describe("whisper markers", () => {
   });
 
   it.each([
-    [{ osinara_whisper: { ephemeralMessageId: 7, placeholderMessageId: 0, receiverUserId: "101" } }],
+    [
+      {
+        osinara_whisper: { ephemeralMessageId: 7, placeholderMessageId: 0, receiverUserId: "101" },
+      },
+    ],
     [{ osinara_whisper: { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "" } }],
     [{ osinara_whisper: "31" }],
     [{}],
@@ -99,17 +122,27 @@ describe("whisper markers", () => {
 describe("whisper identity", () => {
   it("keeps one queue per chat and person, apart from the chat's own queue", () => {
     expect(telegramWhisperQueueKey("-1001", "101")).toBe("telegram:whisper:-1001:101");
-    expect(telegramWhisperQueueKey("-1001", "102")).not.toBe(telegramWhisperQueueKey("-1001", "101"));
+    expect(telegramWhisperQueueKey("-1001", "102")).not.toBe(
+      telegramWhisperQueueKey("-1001", "101"),
+    );
   });
 
   it("keeps one session per group, topic and person", () => {
-    expect(telegramWhisperContinuationToken("group-1", null, "101")).toBe("osinara:whisper:group-1:main:101");
-    expect(telegramWhisperContinuationToken("group-1", 12, "101")).toBe("osinara:whisper:group-1:topic:12:101");
+    expect(telegramWhisperContinuationToken("group-1", null, "101")).toBe(
+      "osinara:whisper:group-1:main:101",
+    );
+    expect(telegramWhisperContinuationToken("group-1", 12, "101")).toBe(
+      "osinara:whisper:group-1:topic:12:101",
+    );
   });
 
   it("recognizes a whisper session by its verified attribute only", () => {
-    expect(isTelegramWhisperSession({ current: { attributes: { telegramWhisper: "true" } } } as never)).toBe(true);
-    expect(isTelegramWhisperSession({ current: { attributes: { telegramWhisper: true } } } as never)).toBe(false);
+    expect(
+      isTelegramWhisperSession({ current: { attributes: { telegramWhisper: "true" } } } as never),
+    ).toBe(true);
+    expect(
+      isTelegramWhisperSession({ current: { attributes: { telegramWhisper: true } } } as never),
+    ).toBe(false);
     expect(isTelegramWhisperSession({ current: null } as never)).toBe(false);
   });
 

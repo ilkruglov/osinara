@@ -1,9 +1,5 @@
 import { basename } from "node:path";
-import {
-  createCliTheme,
-  renderCliSection,
-  sanitizeForTerminal,
-} from "#cli/ui/output.js";
+import { createCliTheme, renderCliSection, sanitizeForTerminal } from "#cli/ui/output.js";
 import { formatElapsed } from "#cli/format-elapsed.js";
 import {
   formatCostUsd,
@@ -27,18 +23,14 @@ function resolveLocalTraces(t, n) {
   let c = t.filter((e) => e.sessionIds.some((e) => o.includes(e)));
   if (c.length > 0) return orderWindows(c);
   let l = t.filter((e) =>
-    o.some(
-      (t) =>
-        e.traceId.startsWith(t) || e.sessionIds.some((e) => e.startsWith(t)),
-    ),
+    o.some((t) => e.traceId.startsWith(t) || e.sessionIds.some((e) => e.startsWith(t))),
   );
   if (l.length === 0)
     throw Error(
       `No local trace matches "${sanitizeForTerminal(n)}". Run \`eve traces ls\` to list traces.`,
     );
   if (l.length === 1) return l;
-  if (new Set(l.map((e) => e.sessionId ?? e.traceId)).size > 1)
-    throw ambiguousTraceError(l, n);
+  if (new Set(l.map((e) => e.sessionId ?? e.traceId)).size > 1) throw ambiguousTraceError(l, n);
   return orderWindows(l);
 }
 function orderWindows(e) {
@@ -125,9 +117,7 @@ function traceHeaderRows(e) {
   return [
     { label: `Trace ID`, value: e.traceId },
     { label: `Session ID`, value: e.sessionId ?? `unknown` },
-    ...(e.window === void 0
-      ? []
-      : [{ label: `Window`, value: String(e.window) }]),
+    ...(e.window === void 0 ? [] : [{ label: `Window`, value: String(e.window) }]),
     { label: `Agent`, value: e.agentName ?? `unknown` },
     { label: `Started`, value: toDate(e.startTimeNs).toISOString() },
     {
@@ -135,15 +125,11 @@ function traceHeaderRows(e) {
       value: formatElapsed(durationMs(e.startTimeNs, e.endTimeNs)),
     },
     { label: `Spans`, value: String(e.spans.length) },
-    ...(t.models.length === 0
-      ? []
-      : [{ label: `Models`, value: t.models.join(`, `) }]),
+    ...(t.models.length === 0 ? [] : [{ label: `Models`, value: t.models.join(`, `) }]),
     ...(t.inputTokens === 0 && t.outputTokens === 0
       ? []
       : [{ label: `Tokens`, value: formatTokenSummary(t) }]),
-    ...(t.costUsd === void 0
-      ? []
-      : [{ label: `Cost`, value: formatCostUsd(t.costUsd) }]),
+    ...(t.costUsd === void 0 ? [] : [{ label: `Cost`, value: formatCostUsd(t.costUsd) }]),
     ...(t.errorCount === 0
       ? []
       : [
@@ -222,8 +208,7 @@ function renderSpanTree(e, t = {}) {
       });
     };
   for (let e of i) render(e, ``, ``);
-  for (let t of [...e].sort(compareLocalTraceSpans))
-    l.has(t.spanId) || render(t, ``, ``);
+  for (let t of [...e].sort(compareLocalTraceSpans)) l.has(t.spanId) || render(t, ``, ``);
   return c.join(`
 `);
 }
@@ -233,15 +218,13 @@ function subtreeExtents(e, t) {
     visit = (e) => {
       let i = n.get(e.spanId);
       if (i !== void 0) return i;
-      if (r.has(e.spanId))
-        return { endTimeNs: e.endTimeNs, startTimeNs: e.startTimeNs };
+      if (r.has(e.spanId)) return { endTimeNs: e.endTimeNs, startTimeNs: e.startTimeNs };
       r.add(e.spanId);
       let a = e.endTimeNs,
         o = e.startTimeNs;
       for (let n of t.get(e.spanId) ?? []) {
         let e = visit(n);
-        (e.startTimeNs < o && (o = e.startTimeNs),
-          e.endTimeNs > a && (a = e.endTimeNs));
+        (e.startTimeNs < o && (o = e.startTimeNs), e.endTimeNs > a && (a = e.endTimeNs));
       }
       r.delete(e.spanId);
       let s = { endTimeNs: a, startTimeNs: o };
@@ -274,10 +257,7 @@ function ambiguousTraceError(e, t) {
   return Error(
     [
       `"${sanitizeForTerminal(t)}" matches ${e.length} local traces:`,
-      ...e.map(
-        (e) =>
-          `  ${e.traceId}  ${sanitizeForTerminal(e.sessionId ?? `unknown session`)}`,
-      ),
+      ...e.map((e) => `  ${e.traceId}  ${sanitizeForTerminal(e.sessionId ?? `unknown session`)}`),
       `Pass a longer prefix or the full trace/session id.`,
     ].join(`
 `),

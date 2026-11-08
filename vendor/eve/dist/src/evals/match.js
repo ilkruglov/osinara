@@ -23,8 +23,7 @@ function toolCallMatches(e, t) {
 function subagentCallMatches(e, t) {
   return !(
     (t.callId !== void 0 && !matchesValue(t.callId, e.callId)) ||
-    (t.childSessionId !== void 0 &&
-      !matchesValue(t.childSessionId, e.childSessionId)) ||
+    (t.childSessionId !== void 0 && !matchesValue(t.childSessionId, e.childSessionId)) ||
     (t.remoteUrl !== void 0 && !matchesValue(t.remoteUrl, e.remoteUrl)) ||
     (t.output !== void 0 && !matchesValue(t.output, e.output)) ||
     e.status !== (t.status ?? `completed`)
@@ -49,8 +48,7 @@ function inputRequestMatches(e, t) {
 }
 function eventMatches(e, t) {
   return (
-    e.type === t.type &&
-    (t.data === void 0 || matchesValue(t.data, `data` in e ? e.data : void 0))
+    e.type === t.type && (t.data === void 0 || matchesValue(t.data, `data` in e ? e.data : void 0))
   );
 }
 function deepEquals(e, t) {

@@ -52,20 +52,22 @@ describe("removed custom group skills", () => {
   });
 
   it("does not expose a historical persisted grant through status", async () => {
-    listStatuses.mockResolvedValue([{
-      active: true,
-      messageMode: "all",
-      skillAllowlist: ["pohuy"],
-      telegramChatId: "-1001234567890",
-      title: "Внешняя",
-      toolAllowlist: [],
-      type: "external",
-    }]);
+    listStatuses.mockResolvedValue([
+      {
+        active: true,
+        messageMode: "all",
+        skillAllowlist: ["pohuy"],
+        telegramChatId: "-1001234567890",
+        title: "Внешняя",
+        toolAllowlist: [],
+        type: "external",
+      },
+    ]);
 
-    const result = await manageTelegramGroup.execute(
+    const result = (await manageTelegramGroup.execute(
       { action: "status" },
       context(),
-    ) as unknown as { groups: Record<string, unknown>[] };
+    )) as unknown as { groups: Record<string, unknown>[] };
 
     expect(result).not.toHaveProperty("availableSafeSkills");
     expect(result.groups[0]).not.toHaveProperty("skillAllowlist");

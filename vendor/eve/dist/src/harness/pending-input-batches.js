@@ -6,24 +6,17 @@ function hasPendingInputBatch(e) {
   return getPendingInputBatches(e).length > 0;
 }
 function getPendingInputRequestIds(e) {
-  return new Set(
-    getPendingInputBatches(e).flatMap((e) =>
-      e.requests.map((e) => e.requestId),
-    ),
-  );
+  return new Set(getPendingInputBatches(e).flatMap((e) => e.requests.map((e) => e.requestId)));
 }
 function coercePendingInputBatch(e) {
   if (typeof e != `object` || !e) return;
   let t = e;
-  if (!(!Array.isArray(t.requests) || !Array.isArray(t.responseMessages)))
-    return t;
+  if (!(!Array.isArray(t.requests) || !Array.isArray(t.responseMessages))) return t;
 }
 function getPendingInputBatches(e) {
   let r = e?.[PENDING_INPUT_BATCHES_KEY];
   if (Array.isArray(r)) {
-    let e = r
-      .map((e) => coercePendingInputBatch(e))
-      .filter((e) => e !== void 0);
+    let e = r.map((e) => coercePendingInputBatch(e)).filter((e) => e !== void 0);
     return (assertUniqueRequestIds(e), e);
   }
   let i = coercePendingInputBatch(e?.[LEGACY_PENDING_INPUT_BATCH_KEY]),

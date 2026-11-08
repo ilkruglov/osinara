@@ -1,217 +1,242 @@
-import type { AgentInfoData, CompiledAgentManifest, CompiledSubagentNode, ResolvedScheduleDefinition } from "#internal/nitro/routes/agent-info/load-agent-info-data.js";
+import type {
+  AgentInfoData,
+  CompiledAgentManifest,
+  CompiledSubagentNode,
+  ResolvedScheduleDefinition,
+} from "#internal/nitro/routes/agent-info/load-agent-info-data.js";
 import type { ResolvedChannelDefinition, ResolvedToolDefinition } from "#runtime/types.js";
 import type { AgentReasoningDefinition, ModelRouting } from "#shared/agent-definition.js";
 import type { ModelEndpointStatus } from "#shared/model-endpoint-status.js";
 export interface AgentInfoSource {
-    readonly exportName?: string;
-    readonly logicalPath: string;
-    readonly sourceId?: string;
-    readonly sourceKind: string;
+  readonly exportName?: string;
+  readonly logicalPath: string;
+  readonly sourceId?: string;
+  readonly sourceKind: string;
 }
 export interface AgentInfoToolEntry extends AgentInfoSource {
-    readonly description: string;
-    readonly hasAuth: boolean;
-    readonly hasExecute: boolean;
-    readonly hasModelOutputProjection: boolean;
-    readonly hasOutputSchema: boolean;
-    readonly inputSchema: unknown;
-    readonly name: string;
-    readonly origin: "authored" | "framework";
-    readonly outputSchema: unknown;
-    readonly replacesFrameworkTool: boolean;
-    readonly requiresApproval: boolean;
+  readonly description: string;
+  readonly hasAuth: boolean;
+  readonly hasExecute: boolean;
+  readonly hasModelOutputProjection: boolean;
+  readonly hasOutputSchema: boolean;
+  readonly inputSchema: unknown;
+  readonly name: string;
+  readonly origin: "authored" | "framework";
+  readonly outputSchema: unknown;
+  readonly replacesFrameworkTool: boolean;
+  readonly requiresApproval: boolean;
 }
 export interface AgentInfoFrameworkToolEntry extends AgentInfoToolEntry {
-    readonly disabledByAuthor: boolean;
-    readonly replacedByAuthoredTool: boolean;
-    readonly status: "active" | "disabled" | "opt-in" | "replaced";
+  readonly disabledByAuthor: boolean;
+  readonly replacedByAuthoredTool: boolean;
+  readonly status: "active" | "disabled" | "opt-in" | "replaced";
 }
 export interface AgentInfoDynamicResolverEntry extends AgentInfoSource {
-    readonly eventNames: readonly string[];
-    readonly origin: "authored" | "framework";
-    readonly slug: string;
+  readonly eventNames: readonly string[];
+  readonly origin: "authored" | "framework";
+  readonly slug: string;
 }
 export interface AgentInfoTools {
-    readonly available: readonly AgentInfoToolEntry[];
-    readonly authored: readonly AgentInfoToolEntry[];
-    readonly disabledFramework: readonly string[];
-    readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
-    readonly framework: readonly AgentInfoFrameworkToolEntry[];
-    readonly reserved: readonly string[];
+  readonly available: readonly AgentInfoToolEntry[];
+  readonly authored: readonly AgentInfoToolEntry[];
+  readonly disabledFramework: readonly string[];
+  readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
+  readonly framework: readonly AgentInfoFrameworkToolEntry[];
+  readonly reserved: readonly string[];
 }
 export interface AgentInfoSkillEntry extends AgentInfoSource {
-    readonly description: string;
-    readonly license?: string;
-    readonly markdown: string;
-    readonly metadata?: Readonly<Record<string, string>>;
-    readonly name: string;
+  readonly description: string;
+  readonly license?: string;
+  readonly markdown: string;
+  readonly metadata?: Readonly<Record<string, string>>;
+  readonly name: string;
 }
 export interface AgentInfoInstructionsEntry extends AgentInfoSource {
-    readonly content: string;
-    readonly name: string;
-    readonly role: "system" | "user";
+  readonly content: string;
+  readonly name: string;
+  readonly role: "system" | "user";
 }
 export interface AgentInfoInstructions {
-    readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
-    readonly static: readonly AgentInfoInstructionsEntry[];
+  readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
+  readonly static: readonly AgentInfoInstructionsEntry[];
 }
 export interface AgentInfoScheduleEntry extends AgentInfoSource {
-    readonly cron: string;
-    readonly hasRun: boolean;
-    readonly markdown?: string;
-    readonly name: string;
+  readonly cron: string;
+  readonly hasRun: boolean;
+  readonly markdown?: string;
+  readonly name: string;
 }
 export interface AgentInfoSubagentEntry extends AgentInfoSource {
-    readonly description?: string;
-    readonly entryPath: string;
-    readonly name: string;
-    readonly nodeId: string;
-    readonly rootPath: string;
-    readonly summary: {
-        readonly channels: number;
-        readonly connections: number;
-        readonly hooks: number;
-        readonly instructions: boolean;
-        readonly schedules: number;
-        readonly skills: number;
-        readonly tools: number;
-    };
+  readonly description?: string;
+  readonly entryPath: string;
+  readonly name: string;
+  readonly nodeId: string;
+  readonly rootPath: string;
+  readonly summary: {
+    readonly channels: number;
+    readonly connections: number;
+    readonly hooks: number;
+    readonly instructions: boolean;
+    readonly schedules: number;
+    readonly skills: number;
+    readonly tools: number;
+  };
 }
 export interface AgentInfoChannelEntry extends AgentInfoSource {
-    readonly adapterKind?: string;
-    readonly method: string;
-    readonly name: string;
-    readonly origin: "authored" | "framework";
-    readonly urlPath: string;
+  readonly adapterKind?: string;
+  readonly method: string;
+  readonly name: string;
+  readonly origin: "authored" | "framework";
+  readonly urlPath: string;
 }
 export interface AgentInfoFrameworkChannelEntry extends AgentInfoChannelEntry {
-    readonly disabledByAuthor: boolean;
-    readonly replacedByAuthoredChannel: boolean;
-    readonly status: "active" | "disabled" | "replaced";
+  readonly disabledByAuthor: boolean;
+  readonly replacedByAuthoredChannel: boolean;
+  readonly status: "active" | "disabled" | "replaced";
 }
 export interface AgentInfoChannels {
-    readonly authored: readonly AgentInfoChannelEntry[];
-    readonly available: readonly AgentInfoChannelEntry[];
-    readonly disabledFramework: readonly string[];
-    readonly framework: readonly AgentInfoFrameworkChannelEntry[];
+  readonly authored: readonly AgentInfoChannelEntry[];
+  readonly available: readonly AgentInfoChannelEntry[];
+  readonly disabledFramework: readonly string[];
+  readonly framework: readonly AgentInfoFrameworkChannelEntry[];
 }
 export interface AgentInfoConnectionEntry extends AgentInfoSource {
-    readonly connectionName: string;
-    readonly description: string;
-    readonly hasApproval: boolean;
-    readonly hasAuthorization: boolean;
-    readonly hasHeaders: boolean;
-    readonly protocol: string;
-    readonly toolFilter?: unknown;
-    readonly url: string;
+  readonly connectionName: string;
+  readonly description: string;
+  readonly hasApproval: boolean;
+  readonly hasAuthorization: boolean;
+  readonly hasHeaders: boolean;
+  readonly protocol: string;
+  readonly toolFilter?: unknown;
+  readonly url: string;
 }
 export interface AgentInfoHookEntry extends AgentInfoSource {
-    readonly eventNames: readonly string[];
-    readonly slug: string;
+  readonly eventNames: readonly string[];
+  readonly slug: string;
 }
 export interface AgentInfoSandboxEntry extends AgentInfoSource {
-    readonly backendKind?: string;
-    readonly description?: string;
-    readonly hasBootstrap: boolean;
-    readonly hasOnSession: boolean;
-    readonly revalidationKey?: string;
-    readonly sourceHash?: string;
+  readonly backendKind?: string;
+  readonly description?: string;
+  readonly hasBootstrap: boolean;
+  readonly hasOnSession: boolean;
+  readonly revalidationKey?: string;
+  readonly sourceHash?: string;
 }
 export interface AgentInfoDiagnostics {
-    readonly discoveryErrors: number;
-    readonly discoveryWarnings: number;
+  readonly discoveryErrors: number;
+  readonly discoveryWarnings: number;
 }
 interface AgentInfoModelBase {
-    readonly contextWindowTokens?: number;
-    readonly providerOptions?: unknown;
-    /** The agent's authored reasoning effort, forwarded to the model call. */
-    readonly reasoning?: AgentReasoningDefinition;
-    readonly source?: AgentInfoSource;
+  readonly contextWindowTokens?: number;
+  readonly providerOptions?: unknown;
+  /** The agent's authored reasoning effort, forwarded to the model call. */
+  readonly reasoning?: AgentReasoningDefinition;
+  readonly source?: AgentInfoSource;
 }
-export type AgentInfoModel = AgentInfoModelBase & ({
-    readonly id: string;
-    readonly routing: ModelRouting;
-    readonly endpoint?: ModelEndpointStatus;
-} | {
-    readonly id?: never;
-    readonly routing: {
-        readonly kind: "dynamic";
-    };
-    readonly endpoint?: never;
-});
+export type AgentInfoModel = AgentInfoModelBase &
+  (
+    | {
+        readonly id: string;
+        readonly routing: ModelRouting;
+        readonly endpoint?: ModelEndpointStatus;
+      }
+    | {
+        readonly id?: never;
+        readonly routing: {
+          readonly kind: "dynamic";
+        };
+        readonly endpoint?: never;
+      }
+  );
 export interface AgentInfoResponse {
-    readonly agent: {
-        readonly agentRoot: string;
-        readonly appRoot: string;
-        readonly configSource?: AgentInfoSource;
-        readonly description?: string;
-        readonly model: AgentInfoModel;
-        readonly name: string;
-        readonly outputSchema?: unknown;
-    };
-    readonly capabilities: {
-        readonly devRoutes: boolean;
-    };
-    readonly channels: AgentInfoChannels;
-    readonly connections: readonly AgentInfoConnectionEntry[];
-    readonly diagnostics: AgentInfoDiagnostics;
-    readonly hooks: readonly AgentInfoHookEntry[];
-    readonly instructions: AgentInfoInstructions;
-    readonly kind: "eve-agent-info";
-    readonly mode: "development" | "production";
-    readonly sandbox: AgentInfoSandboxEntry | null;
-    readonly schedules: readonly AgentInfoScheduleEntry[];
-    readonly skills: {
-        readonly static: readonly AgentInfoSkillEntry[];
-        readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
-    };
-    readonly subagents: {
-        readonly local: readonly AgentInfoSubagentEntry[];
-        readonly total: number;
-    };
-    readonly tools: AgentInfoTools;
-    readonly version: 2;
-    readonly workflow: {
-        readonly enabled: boolean;
-        readonly toolName: string;
-    };
-    readonly workspace: {
-        readonly resourceRoot: unknown;
-        readonly rootEntries: readonly string[];
-    };
+  readonly agent: {
+    readonly agentRoot: string;
+    readonly appRoot: string;
+    readonly configSource?: AgentInfoSource;
+    readonly description?: string;
+    readonly model: AgentInfoModel;
+    readonly name: string;
+    readonly outputSchema?: unknown;
+  };
+  readonly capabilities: {
+    readonly devRoutes: boolean;
+  };
+  readonly channels: AgentInfoChannels;
+  readonly connections: readonly AgentInfoConnectionEntry[];
+  readonly diagnostics: AgentInfoDiagnostics;
+  readonly hooks: readonly AgentInfoHookEntry[];
+  readonly instructions: AgentInfoInstructions;
+  readonly kind: "eve-agent-info";
+  readonly mode: "development" | "production";
+  readonly sandbox: AgentInfoSandboxEntry | null;
+  readonly schedules: readonly AgentInfoScheduleEntry[];
+  readonly skills: {
+    readonly static: readonly AgentInfoSkillEntry[];
+    readonly dynamic: readonly AgentInfoDynamicResolverEntry[];
+  };
+  readonly subagents: {
+    readonly local: readonly AgentInfoSubagentEntry[];
+    readonly total: number;
+  };
+  readonly tools: AgentInfoTools;
+  readonly version: 2;
+  readonly workflow: {
+    readonly enabled: boolean;
+    readonly toolName: string;
+  };
+  readonly workspace: {
+    readonly resourceRoot: unknown;
+    readonly rootEntries: readonly string[];
+  };
 }
-export declare function buildAgentInfoResponse(data: AgentInfoData, input: {
+export declare function buildAgentInfoResponse(
+  data: AgentInfoData,
+  input: {
     readonly mode: AgentInfoResponse["mode"];
-}): AgentInfoResponse;
+  },
+): AgentInfoResponse;
 export declare function buildFrameworkToolInfo(input: {
-    readonly authoredToolNames: ReadonlySet<string>;
-    readonly delegationToolNames: ReadonlySet<string>;
-    readonly disabledFrameworkToolNames: ReadonlySet<string>;
+  readonly authoredToolNames: ReadonlySet<string>;
+  readonly delegationToolNames: ReadonlySet<string>;
+  readonly disabledFrameworkToolNames: ReadonlySet<string>;
 }): Pick<AgentInfoTools, "available" | "framework">;
-export declare function getRootDelegationToolNames(manifest: CompiledAgentManifest): ReadonlySet<string>;
-export declare function renderChannel(channel: ResolvedChannelDefinition, input: {
+export declare function getRootDelegationToolNames(
+  manifest: CompiledAgentManifest,
+): ReadonlySet<string>;
+export declare function renderChannel(
+  channel: ResolvedChannelDefinition,
+  input: {
     readonly origin: "authored" | "framework";
-}): AgentInfoChannelEntry;
-export declare function renderTool(tool: ResolvedToolDefinition, input: {
+  },
+): AgentInfoChannelEntry;
+export declare function renderTool(
+  tool: ResolvedToolDefinition,
+  input: {
     readonly origin: "authored" | "framework";
     readonly replacesFrameworkTool: boolean;
-}): AgentInfoToolEntry;
-export declare function renderSchedule(schedule: ResolvedScheduleDefinition): AgentInfoScheduleEntry;
+  },
+): AgentInfoToolEntry;
+export declare function renderSchedule(
+  schedule: ResolvedScheduleDefinition,
+): AgentInfoScheduleEntry;
 export declare function renderSubagent(subagent: CompiledSubagentNode): AgentInfoSubagentEntry;
-export declare function renderDynamicResolver(resolver: {
+export declare function renderDynamicResolver(
+  resolver: {
     readonly eventNames: readonly string[];
     readonly exportName?: string;
     readonly logicalPath: string;
     readonly slug: string;
     readonly sourceId: string;
     readonly sourceKind: string;
-}, input: {
+  },
+  input: {
     readonly origin: "authored" | "framework";
-}): AgentInfoDynamicResolverEntry;
+  },
+): AgentInfoDynamicResolverEntry;
 export declare function toSource(source: {
-    readonly exportName?: string;
-    readonly logicalPath: string;
-    readonly sourceId?: string;
-    readonly sourceKind: string;
+  readonly exportName?: string;
+  readonly logicalPath: string;
+  readonly sourceId?: string;
+  readonly sourceKind: string;
 }): AgentInfoSource;
 export {};

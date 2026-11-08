@@ -1,9 +1,12 @@
 import type { HandleMessageStreamEvent } from "../../protocol/message.js";
 import type { SessionContext } from "./callback-context.js";
 import type { ExactDefinition } from "./exact.js";
-type ProtocolEvent<TType extends HandleMessageStreamEvent["type"]> = Extract<HandleMessageStreamEvent, {
+type ProtocolEvent<TType extends HandleMessageStreamEvent["type"]> = Extract<
+  HandleMessageStreamEvent,
+  {
     type: TType;
-}>;
+  }
+>;
 /**
  * Public event contract available to authored hooks.
  *
@@ -12,46 +15,48 @@ type ProtocolEvent<TType extends HandleMessageStreamEvent["type"]> = Extract<Han
  * until eve exposes them here.
  */
 export interface HookEventMap {
-    readonly "action.partial": ProtocolEvent<"action.partial">;
-    readonly "action.result": ProtocolEvent<"action.result">;
-    readonly "approval.candidate": ProtocolEvent<"approval.candidate">;
-    readonly "approval.settled": ProtocolEvent<"approval.settled">;
-    readonly "actions.requested": ProtocolEvent<"actions.requested">;
-    readonly "authorization.completed": ProtocolEvent<"authorization.completed">;
-    readonly "authorization.required": ProtocolEvent<"authorization.required">;
-    readonly "compaction.completed": ProtocolEvent<"compaction.completed">;
-    readonly "compaction.requested": ProtocolEvent<"compaction.requested">;
-    readonly "context.cleared": ProtocolEvent<"context.cleared">;
-    readonly "input.requested": ProtocolEvent<"input.requested">;
-    readonly "input.resolved": ProtocolEvent<"input.resolved">;
-    readonly "message.appended": ProtocolEvent<"message.appended">;
-    readonly "message.completed": ProtocolEvent<"message.completed">;
-    readonly "message.received": ProtocolEvent<"message.received">;
-    readonly "reasoning.appended": ProtocolEvent<"reasoning.appended">;
-    readonly "reasoning.completed": ProtocolEvent<"reasoning.completed">;
-    readonly "result.completed": ProtocolEvent<"result.completed">;
-    readonly "session.completed": ProtocolEvent<"session.completed">;
-    readonly "session.failed": ProtocolEvent<"session.failed">;
-    readonly "session.started": ProtocolEvent<"session.started">;
-    readonly "session.waiting": ProtocolEvent<"session.waiting">;
-    readonly "step.completed": ProtocolEvent<"step.completed">;
-    readonly "step.failed": ProtocolEvent<"step.failed">;
-    readonly "step.started": ProtocolEvent<"step.started">;
-    readonly "subagent.called": ProtocolEvent<"subagent.called">;
-    readonly "subagent.completed": ProtocolEvent<"subagent.completed">;
-    readonly "subagent.event": ProtocolEvent<"subagent.event">;
-    readonly "subagent.started": ProtocolEvent<"subagent.started">;
-    readonly "turn.cancelled": ProtocolEvent<"turn.cancelled">;
-    readonly "turn.completed": ProtocolEvent<"turn.completed">;
-    readonly "turn.failed": ProtocolEvent<"turn.failed">;
-    readonly "turn.started": ProtocolEvent<"turn.started">;
+  readonly "action.partial": ProtocolEvent<"action.partial">;
+  readonly "action.result": ProtocolEvent<"action.result">;
+  readonly "approval.candidate": ProtocolEvent<"approval.candidate">;
+  readonly "approval.settled": ProtocolEvent<"approval.settled">;
+  readonly "actions.requested": ProtocolEvent<"actions.requested">;
+  readonly "authorization.completed": ProtocolEvent<"authorization.completed">;
+  readonly "authorization.required": ProtocolEvent<"authorization.required">;
+  readonly "compaction.completed": ProtocolEvent<"compaction.completed">;
+  readonly "compaction.requested": ProtocolEvent<"compaction.requested">;
+  readonly "context.cleared": ProtocolEvent<"context.cleared">;
+  readonly "input.requested": ProtocolEvent<"input.requested">;
+  readonly "input.resolved": ProtocolEvent<"input.resolved">;
+  readonly "message.appended": ProtocolEvent<"message.appended">;
+  readonly "message.completed": ProtocolEvent<"message.completed">;
+  readonly "message.received": ProtocolEvent<"message.received">;
+  readonly "reasoning.appended": ProtocolEvent<"reasoning.appended">;
+  readonly "reasoning.completed": ProtocolEvent<"reasoning.completed">;
+  readonly "result.completed": ProtocolEvent<"result.completed">;
+  readonly "session.completed": ProtocolEvent<"session.completed">;
+  readonly "session.failed": ProtocolEvent<"session.failed">;
+  readonly "session.started": ProtocolEvent<"session.started">;
+  readonly "session.waiting": ProtocolEvent<"session.waiting">;
+  readonly "step.completed": ProtocolEvent<"step.completed">;
+  readonly "step.failed": ProtocolEvent<"step.failed">;
+  readonly "step.started": ProtocolEvent<"step.started">;
+  readonly "subagent.called": ProtocolEvent<"subagent.called">;
+  readonly "subagent.completed": ProtocolEvent<"subagent.completed">;
+  readonly "subagent.event": ProtocolEvent<"subagent.event">;
+  readonly "subagent.started": ProtocolEvent<"subagent.started">;
+  readonly "turn.cancelled": ProtocolEvent<"turn.cancelled">;
+  readonly "turn.completed": ProtocolEvent<"turn.completed">;
+  readonly "turn.failed": ProtocolEvent<"turn.failed">;
+  readonly "turn.started": ProtocolEvent<"turn.started">;
 }
 /** Event type discriminators available to authored hooks. */
 export type HookEventType = keyof HookEventMap;
 /** Authored hook event keys, including the wildcard subscriber. */
 export type HookEventKey = HookEventType | "*";
 /** Event received by a handler for one authored hook event key. */
-export type HookEvent<TKey extends HookEventKey = HookEventType> = TKey extends HookEventType ? HookEventMap[TKey] : HookEventMap[HookEventType];
+export type HookEvent<TKey extends HookEventKey = HookEventType> = TKey extends HookEventType
+  ? HookEventMap[TKey]
+  : HookEventMap[HookEventType];
 /**
  * Every hook handler receives this context.
  *
@@ -59,14 +64,14 @@ export type HookEvent<TKey extends HookEventKey = HookEventType> = TKey extends 
  * `ctx` is always the last argument.
  */
 export interface HookContext extends SessionContext {
-    readonly agent: {
-        readonly name: string;
-        readonly nodeId?: string;
-    };
-    readonly channel: {
-        readonly kind?: string;
-        readonly continuationToken?: string;
-    };
+  readonly agent: {
+    readonly name: string;
+    readonly nodeId?: string;
+  };
+  readonly channel: {
+    readonly kind?: string;
+    readonly continuationToken?: string;
+  };
 }
 /**
  * Side-effect-only handler for one accepted runtime stream event.
@@ -83,7 +88,7 @@ export type StreamEventHook<TEvent> = (event: TEvent, ctx: HookContext) => void 
  * typed handler for that event (if any).
  */
 export type StreamEventHooks<TKey extends HookEventKey = HookEventKey> = {
-    readonly [TKey_ in TKey]?: StreamEventHook<HookEvent<TKey_>>;
+  readonly [TKey_ in TKey]?: StreamEventHook<HookEvent<TKey_>>;
 };
 /**
  * Public hook definition authored in `agent/hooks/*.ts`.
@@ -95,9 +100,12 @@ export type StreamEventHooks<TKey extends HookEventKey = HookEventKey> = {
  * `defineInstructions` in `agent/instructions/`.
  */
 export interface HookDefinition<TKey extends HookEventKey = HookEventKey> {
-    readonly events?: StreamEventHooks<TKey>;
+  readonly events?: StreamEventHooks<TKey>;
 }
-type DefinedHookEventKeys<TDefinition extends HookDefinition> = Extract<keyof NonNullable<TDefinition["events"]>, HookEventKey>;
+type DefinedHookEventKeys<TDefinition extends HookDefinition> = Extract<
+  keyof NonNullable<TDefinition["events"]>,
+  HookEventKey
+>;
 /**
  * Identity-with-types helper. Returns the passed definition unchanged at
  * runtime while preserving its authored event keys behind the public
@@ -105,5 +113,7 @@ type DefinedHookEventKeys<TDefinition extends HookDefinition> = Extract<keyof No
  * Authors export
  * `defineHook({ events: { "session.started": (event, ctx) => { ... } } })`.
  */
-export declare function defineHook<const T extends HookDefinition>(definition: ExactDefinition<T, HookDefinition>): HookDefinition<DefinedHookEventKeys<T>>;
+export declare function defineHook<const T extends HookDefinition>(
+  definition: ExactDefinition<T, HookDefinition>,
+): HookDefinition<DefinedHookEventKeys<T>>;
 export {};

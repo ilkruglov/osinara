@@ -51,10 +51,7 @@ async function preparePhotonSetup(e, r = defaultDeps) {
             hint: `Configure the Photon webhook manually after deployment`,
           },
         ],
-        recommended:
-          e.environment.vercel.kind === `available`
-            ? `vercel-connect`
-            : `environment`,
+        recommended: e.environment.vercel.kind === `available` ? `vercel-connect` : `environment`,
         required: !0,
       }),
     ),
@@ -83,8 +80,7 @@ async function preparePhotonSetup(e, r = defaultDeps) {
         value: `create`,
         label: `Name`,
         recommended: o,
-        validate: (e) =>
-          e.trim().length === 0 ? `Project name cannot be empty.` : null,
+        validate: (e) => (e.trim().length === 0 ? `Project name cannot be empty.` : null),
       },
     }),
     c = `create`;
@@ -120,8 +116,7 @@ async function preparePhotonSetup(e, r = defaultDeps) {
             }),
           )
         : void 0,
-    d =
-      a === `vercel-connect` ? await e.resolveVercelProject(`Photon`) : void 0,
+    d = a === `vercel-connect` ? await e.resolveVercelProject(`Photon`) : void 0,
     f = {
       agentName: i,
       credentials: a,

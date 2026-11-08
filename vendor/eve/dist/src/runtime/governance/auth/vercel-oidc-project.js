@@ -1,6 +1,4 @@
-const VERCEL_OIDC_PROJECT_RESOLVERS = Symbol.for(
-    `eve.vercel-oidc-project-resolvers`,
-  ),
+const VERCEL_OIDC_PROJECT_RESOLVERS = Symbol.for(`eve.vercel-oidc-project-resolvers`),
   globalResolverRegistry = globalThis;
 globalResolverRegistry[VERCEL_OIDC_PROJECT_RESOLVERS] === void 0 &&
   (globalResolverRegistry[VERCEL_OIDC_PROJECT_RESOLVERS] = new WeakMap());
@@ -11,9 +9,7 @@ async function withVercelOidcProjectResolver(e, t) {
   try {
     return await t();
   } finally {
-    n === void 0
-      ? projectResolvers.delete(e.request)
-      : projectResolvers.set(e.request, n);
+    n === void 0 ? projectResolvers.delete(e.request) : projectResolvers.set(e.request, n);
   }
 }
 async function resolveVercelOidcCurrentProject(e) {

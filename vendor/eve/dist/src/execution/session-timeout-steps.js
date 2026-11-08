@@ -14,9 +14,7 @@ import { resumeSessionInbox } from "#execution/wire/session-inbox-resume.js";
 async function startSessionTimeoutStep(e) {
   "use step";
   return {
-    runId: (
-      await startWorkflowPreferLatest(sessionTimeoutWorkflowReference, [e])
-    ).runId,
+    runId: (await startWorkflowPreferLatest(sessionTimeoutWorkflowReference, [e])).runId,
   };
 }
 async function signalSessionTimeoutStep(e) {
@@ -48,8 +46,4 @@ function isInactiveTimeoutTarget(t) {
       return !0;
   return !1;
 }
-export {
-  cancelSessionTimeoutStep,
-  signalSessionTimeoutStep,
-  startSessionTimeoutStep,
-};
+export { cancelSessionTimeoutStep, signalSessionTimeoutStep, startSessionTimeoutStep };

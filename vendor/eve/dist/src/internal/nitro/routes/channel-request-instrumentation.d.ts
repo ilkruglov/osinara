@@ -1,8 +1,8 @@
 import { type Span } from "#compiled/@opentelemetry/api/index.js";
 /** Inputs for {@link traceChannelRequest}. */
 export interface TraceChannelRequestInput {
-    readonly request: Request;
-    readonly routeKey: string;
+  readonly request: Request;
+  readonly routeKey: string;
 }
 /**
  * Wraps one inbound channel HTTP request in an OTel `SERVER` span.
@@ -32,4 +32,7 @@ export interface TraceChannelRequestInput {
  * synchronous span export in the request path, adding only minimal in-process
  * tracing overhead.
  */
-export declare function traceChannelRequest<T extends Response>(input: TraceChannelRequestInput, handler: (span: Span | undefined) => Promise<T>): Promise<T>;
+export declare function traceChannelRequest<T extends Response>(
+  input: TraceChannelRequestInput,
+  handler: (span: Span | undefined) => Promise<T>,
+): Promise<T>;

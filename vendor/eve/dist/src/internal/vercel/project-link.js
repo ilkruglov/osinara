@@ -24,17 +24,13 @@ function containsDirectory(e, t) {
 }
 function resolveRepoProject(e, t, n) {
   let r = normalizeDirectory(relative(t, n)),
-    a = e.projects.filter((e) =>
-      containsDirectory(normalizeDirectory(e.directory), r),
-    ),
+    a = e.projects.filter((e) => containsDirectory(normalizeDirectory(e.directory), r)),
     o = Math.max(...a.map((e) => e.directory.length)),
     s = a.filter((e) => e.directory.length === o),
     c = s.length === 1 ? s[0] : void 0;
   if (c === void 0) return;
   let l = c.orgId ?? e.orgId;
-  return l === void 0
-    ? void 0
-    : { orgId: l, projectId: c.id, projectName: c.name };
+  return l === void 0 ? void 0 : { orgId: l, projectId: c.id, projectName: c.name };
 }
 async function readProjectFile(t) {
   try {

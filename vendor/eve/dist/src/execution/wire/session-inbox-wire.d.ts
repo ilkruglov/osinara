@@ -1,4 +1,8 @@
-import type { DeliverHookPayload, SessionCommand, SessionTimeoutHookPayload } from "#channel/types.js";
+import type {
+  DeliverHookPayload,
+  SessionCommand,
+  SessionTimeoutHookPayload,
+} from "#channel/types.js";
 /**
  * The session inbox wire family: every payload persisted to a session's
  * durable inbox hooks crosses through `sessionInboxWire.encode` /
@@ -11,9 +15,15 @@ import type { DeliverHookPayload, SessionCommand, SessionTimeoutHookPayload } fr
  * See research/session-inbox-wire-schema.md and issue #1765.
  */
 /** A persisted inbox payload normalized for consumption; `send` never survives decode. */
-export type DecodedSessionInbox = DeliverHookPayload | SessionTimeoutHookPayload | Extract<SessionCommand, {
-    readonly kind: "cancel" | "clear" | "compact" | "reset";
-}>;
+export type DecodedSessionInbox =
+  | DeliverHookPayload
+  | SessionTimeoutHookPayload
+  | Extract<
+      SessionCommand,
+      {
+        readonly kind: "cancel" | "clear" | "compact" | "reset";
+      }
+    >;
 export { SessionInboxWireError } from "#execution/wire/session-inbox-contract.js";
 /**
  * Decodes a persisted inbox payload or throws {@link SessionInboxWireError}.
@@ -25,5 +35,5 @@ export { SessionInboxWireError } from "#execution/wire/session-inbox-contract.js
 declare function decode(value: unknown): DecodedSessionInbox;
 /** Workflow-safe consumer facade. */
 export declare const sessionInboxWire: {
-    readonly decode: typeof decode;
+  readonly decode: typeof decode;
 };

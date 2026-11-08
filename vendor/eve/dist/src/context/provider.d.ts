@@ -10,8 +10,8 @@ export type { ContextReader } from "#context/key.js";
  * value.
  */
 export interface ProviderResult<T> {
-    readonly value: T;
-    readonly session?: HarnessSession;
+  readonly value: T;
+  readonly session?: HarnessSession;
 }
 /**
  * Framework-only provider contract.
@@ -21,7 +21,10 @@ export interface ProviderResult<T> {
  * back onto the harness session after the authored step completes.
  */
 export interface FrameworkContextProvider<T> {
-    readonly key: ContextKey<T>;
-    create(ctx: ContextContainer, session: HarnessSession): ProviderResult<T> | undefined | Promise<ProviderResult<T> | undefined>;
-    commit?(value: T, session: HarnessSession): HarnessSession | Promise<HarnessSession>;
+  readonly key: ContextKey<T>;
+  create(
+    ctx: ContextContainer,
+    session: HarnessSession,
+  ): ProviderResult<T> | undefined | Promise<ProviderResult<T> | undefined>;
+  commit?(value: T, session: HarnessSession): HarnessSession | Promise<HarnessSession>;
 }

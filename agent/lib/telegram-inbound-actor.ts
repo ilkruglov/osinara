@@ -18,11 +18,7 @@ import type { TelegramMessage } from "eve/channels/telegram";
 import { clipText, flattenDisplayText } from "./display-text.js";
 import { asRecord as record, nonEmptyText } from "./json-value.js";
 
-export type TelegramTimelineActorKind =
-  | "agent_self"
-  | "telegram_bot"
-  | "telegram_channel"
-  | "user";
+export type TelegramTimelineActorKind = "agent_self" | "telegram_bot" | "telegram_channel" | "user";
 export type TelegramActorKind = "telegram_bot" | "telegram_channel" | "telegram_user";
 
 export interface TelegramInboundActor {
@@ -82,15 +78,25 @@ export function telegramInboundActor(message: TelegramMessage): TelegramInboundA
 
   // Telegram represents channel-authored supergroup posts as Channel_Bot plus raw sender_chat.
   // Both identities must agree with the verified webhook before the channel is trusted as actor.
-  if (!sender?.isBot || !senderChat ||
+  if (
+    !sender?.isBot ||
+    !senderChat ||
     (message.chat.type !== "group" && message.chat.type !== "supergroup") ||
-    senderChat.type !== "channel") return null;
+    senderChat.type !== "channel"
+  )
+    return null;
   const rawSender = record(message.raw.from);
   const senderChatId = exactIdentifier(senderChat.id);
   const title = nonEmptyText(senderChat.title);
-  if (!rawSender || sender.id !== TELEGRAM_CHANNEL_BOT_ID || rawSender.is_bot !== true ||
+  if (
+    !rawSender ||
+    sender.id !== TELEGRAM_CHANNEL_BOT_ID ||
+    rawSender.is_bot !== true ||
     exactIdentifier(rawSender.id) !== sender.id ||
-    !senderChatId?.startsWith("-") || !title) return null;
+    !senderChatId?.startsWith("-") ||
+    !title
+  )
+    return null;
 
   return {
     actorId: `telegram-channel:${senderChatId}`,

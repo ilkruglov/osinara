@@ -13,11 +13,16 @@
  */
 import { defineHook } from "eve/hooks";
 
-import { createStepClock, formatCompactionLog, formatStepUsageLog } from "../lib/model-usage-log.js";
+import {
+  createStepClock,
+  formatCompactionLog,
+  formatStepUsageLog,
+} from "../lib/model-usage-log.js";
 import { logTurnTiming } from "../lib/turn-timing.js";
 
 const clock = createStepClock();
-const stepKey = (sessionId: string, turnId: string, stepIndex: number) => `${sessionId}/${turnId}/${stepIndex}`;
+const stepKey = (sessionId: string, turnId: string, stepIndex: number) =>
+  `${sessionId}/${turnId}/${stepIndex}`;
 const compactionKey = (sessionId: string, turnId: string) => `compaction/${sessionId}/${turnId}`;
 
 export default defineHook({
@@ -43,13 +48,24 @@ export default defineHook({
       console.info(formatCompactionLog(event));
     },
     "compaction.completed"(event) {
-      console.info(formatCompactionLog(event, clock.finish(compactionKey(event.data.sessionId, event.data.turnId))));
+      console.info(
+        formatCompactionLog(
+          event,
+          clock.finish(compactionKey(event.data.sessionId, event.data.turnId)),
+        ),
+      );
     },
     "step.completed"(event, ctx) {
-      console.info(formatStepUsageLog(event, {
-        channelKind: ctx.channel.kind,
-        sessionId: ctx.session.id,
-      }, clock.finish(stepKey(ctx.session.id, event.data.turnId, event.data.stepIndex))));
+      console.info(
+        formatStepUsageLog(
+          event,
+          {
+            channelKind: ctx.channel.kind,
+            sessionId: ctx.session.id,
+          },
+          clock.finish(stepKey(ctx.session.id, event.data.turnId, event.data.stepIndex)),
+        ),
+      );
     },
   },
 });

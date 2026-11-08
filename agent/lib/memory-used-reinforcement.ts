@@ -41,7 +41,10 @@ export async function reinforceUsedMemories(
   try {
     const auth = requireMemoryAuthorization(input.ctx);
     const sessionTurn = await dependencies.exposures.sessionTurn(input.applicationSessionId);
-    const shown = await dependencies.exposures.shownMemoryRefsForTurn(input.applicationSessionId, sessionTurn);
+    const shown = await dependencies.exposures.shownMemoryRefsForTurn(
+      input.applicationSessionId,
+      sessionTurn,
+    );
     if (input.memoryRefs.length === 0) {
       // An empty directive is a valid "used nothing"; a skipped directive while records were shown
       // is the only production measure of how often the rule is honoured.
@@ -69,21 +72,25 @@ export async function reinforceUsedMemories(
       provenance: { sessionId: input.ctx.session.id, turnId: input.ctx.session.turn.id },
       reason: "model_used",
     });
-    console.info(JSON.stringify({
-      applicationSessionId: input.applicationSessionId,
-      code: "AGENT_MEMORY_REINFORCED",
-      reason: "model_used",
-      refs: result.reinforced,
-      sessionTurn,
-      shown: shown.size,
-      shownRefs: [...shown],
-      timelineEntryId: input.timelineEntryId ?? null,
-      ...(result.unknown.length === 0 ? {} : { unauthorized: result.unknown }),
-    }));
+    console.info(
+      JSON.stringify({
+        applicationSessionId: input.applicationSessionId,
+        code: "AGENT_MEMORY_REINFORCED",
+        reason: "model_used",
+        refs: result.reinforced,
+        sessionTurn,
+        shown: shown.size,
+        shownRefs: [...shown],
+        timelineEntryId: input.timelineEntryId ?? null,
+        ...(result.unknown.length === 0 ? {} : { unauthorized: result.unknown }),
+      }),
+    );
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_MEMORY_REINFORCE_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_MEMORY_REINFORCE_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 }

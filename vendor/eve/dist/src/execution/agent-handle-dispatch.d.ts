@@ -8,13 +8,21 @@
  * dead (handle deleted) or retryable (handle restored to `parked`).
  */
 import { type AgentAddress } from "#harness/handles/store.js";
-import type { RuntimeActionRequest, RuntimeRemoteAgentCallActionRequest, RuntimeSubagentCallActionRequest, RuntimeSubagentDispatchFailure } from "#runtime/actions/types.js";
+import type {
+  RuntimeActionRequest,
+  RuntimeRemoteAgentCallActionRequest,
+  RuntimeSubagentCallActionRequest,
+  RuntimeSubagentDispatchFailure,
+} from "#runtime/actions/types.js";
 import type { CompiledBundle } from "#runtime/sessions/runtime-context-keys.js";
 import type { hydrateDurableSession } from "#execution/session.js";
 /** Runtime action kinds that may address an agent handle via `agentId`. */
-export type RuntimeAgentHandleAction = RuntimeRemoteAgentCallActionRequest | RuntimeSubagentCallActionRequest;
+export type RuntimeAgentHandleAction =
+  RuntimeRemoteAgentCallActionRequest | RuntimeSubagentCallActionRequest;
 /** Narrows an action to the kinds that may carry an `agentId` continuation. */
-export declare function isAgentHandleAction(action: RuntimeActionRequest): action is RuntimeAgentHandleAction;
+export declare function isAgentHandleAction(
+  action: RuntimeActionRequest,
+): action is RuntimeAgentHandleAction;
 /** Hydrated parent session snapshot threaded through dispatch. */
 export type RuntimeSession = ReturnType<typeof hydrateDurableSession>;
 /**
@@ -27,19 +35,21 @@ export type RuntimeSession = ReturnType<typeof hydrateDurableSession>;
  * flat `childSessionId` / `remote` fields of `subagent.called`) at the
  * emission site instead of this type re-encoding them.
  */
-export type DispatchOutcome = {
-    readonly address: AgentAddress;
-    readonly callId: string;
-    readonly kind: "called";
-    readonly name: string;
-    readonly session: RuntimeSession;
-    readonly toolName: string;
-} | {
-    readonly deliveryAmbiguous?: boolean;
-    readonly kind: "error";
-    readonly result: RuntimeSubagentDispatchFailure;
-    readonly session: RuntimeSession;
-};
+export type DispatchOutcome =
+  | {
+      readonly address: AgentAddress;
+      readonly callId: string;
+      readonly kind: "called";
+      readonly name: string;
+      readonly session: RuntimeSession;
+      readonly toolName: string;
+    }
+  | {
+      readonly deliveryAmbiguous?: boolean;
+      readonly kind: "error";
+      readonly result: RuntimeSubagentDispatchFailure;
+      readonly session: RuntimeSession;
+    };
 /**
  * Delivers one `agentId` continuation to the child the handle names.
  *
@@ -52,23 +62,23 @@ export type DispatchOutcome = {
  * same agentId.
  */
 export declare function dispatchToAgentHandle(input: {
-    readonly action: RuntimeAgentHandleAction;
-    readonly agentId: string;
-    readonly bundle: CompiledBundle;
-    readonly currentSession: RuntimeSession;
-    readonly parentToken: string;
-    readonly parentTurnId: string;
+  readonly action: RuntimeAgentHandleAction;
+  readonly agentId: string;
+  readonly bundle: CompiledBundle;
+  readonly currentSession: RuntimeSession;
+  readonly parentToken: string;
+  readonly parentTurnId: string;
 }): Promise<DispatchOutcome>;
 /** Delivers a tasks-mode continuation without creating a second lifecycle claim. */
 export declare function dispatchToTaskAgentAddress(input: {
-    readonly action: RuntimeAgentHandleAction;
-    readonly agentId: string;
-    readonly bundle: CompiledBundle;
-    readonly currentSession: RuntimeSession;
-    readonly parentToken: string;
+  readonly action: RuntimeAgentHandleAction;
+  readonly agentId: string;
+  readonly bundle: CompiledBundle;
+  readonly currentSession: RuntimeSession;
+  readonly parentToken: string;
 }): Promise<DispatchOutcome>;
 export declare function createAgentErrorResult(input: {
-    readonly action: RuntimeAgentHandleAction;
-    readonly code: string;
-    readonly message: string;
+  readonly action: RuntimeAgentHandleAction;
+  readonly code: string;
+  readonly message: string;
 }): RuntimeSubagentDispatchFailure;

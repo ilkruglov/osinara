@@ -11,8 +11,11 @@ import { visionModel } from "../model-registry.js";
 import { modelProviderConfig } from "../model-provider-config.js";
 import { AppError, isAppError } from "../app-error.js";
 import { ModelFacingError } from "../model-facing-error.js";
-import { createWorkspaceImageReader, workspaceImageReaderDependencies,
-  type WorkspaceImageLocation, type WorkspaceImageReaderDependencies,
+import {
+  createWorkspaceImageReader,
+  workspaceImageReaderDependencies,
+  type WorkspaceImageLocation,
+  type WorkspaceImageReaderDependencies,
 } from "./workspace-image-source.js";
 import type { WorkspaceAuthorization } from "./workspace-repository.js";
 
@@ -36,14 +39,17 @@ async function analyzeImage(
     return await dependencies.analyze(input);
   } catch (error) {
     if (isAppError(error)) throw error;
-    console.error(JSON.stringify({
-      code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     throw new ModelFacingError({
       category: "dependency",
       code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
-      correction: "Не повторяйте анализ автоматически. Сообщите, что анализ изображения временно недоступен.",
+      correction:
+        "Не повторяйте анализ автоматически. Сообщите, что анализ изображения временно недоступен.",
       reason: "Vision-модель завершила анализ с внутренней ошибкой.",
       retryable: false,
       sideEffectStatus: "not_started",
@@ -51,9 +57,7 @@ async function analyzeImage(
   }
 }
 
-export function createWorkspaceImageInspector(
-  dependencies: WorkspaceImageInspectorDependencies,
-) {
+export function createWorkspaceImageInspector(dependencies: WorkspaceImageInspectorDependencies) {
   return async (
     auth: WorkspaceAuthorization,
     input: {
@@ -71,10 +75,15 @@ export function createWorkspaceImageInspector(
       };
     }
 
-    const { bytes, mediaType, ...location } = await createWorkspaceImageReader(dependencies)(auth, input);
+    const { bytes, mediaType, ...location } = await createWorkspaceImageReader(dependencies)(
+      auth,
+      input,
+    );
     const analysis = await analyzeImage(dependencies, {
       ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
-      bytes, mediaType, question: input.question,
+      bytes,
+      mediaType,
+      question: input.question,
     });
     if (!analysis.trim()) {
       throw new AppError(
@@ -96,13 +105,15 @@ export const inspectWorkspaceImage = createWorkspaceImageInspector({
     }
     const result = await generateText({
       ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
-      messages: [{
-        content: [
-          { text: input.question, type: "text" },
-          { data: input.bytes, mediaType: input.mediaType, type: "file" },
-        ],
-        role: "user",
-      }],
+      messages: [
+        {
+          content: [
+            { text: input.question, type: "text" },
+            { data: input.bytes, mediaType: input.mediaType, type: "file" },
+          ],
+          role: "user",
+        },
+      ],
       maxRetries: 0,
       model: visionModel,
     });

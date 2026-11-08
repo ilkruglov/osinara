@@ -12,13 +12,7 @@ function invocationOwnerKey(t) {
   let n =
     t === null
       ? [`anonymous`]
-      : [
-          t.authenticator,
-          t.issuer ?? ``,
-          t.principalType,
-          t.principalId,
-          t.subject ?? ``,
-        ];
+      : [t.authenticator, t.issuer ?? ``, t.principalType, t.principalId, t.subject ?? ``];
   return createHash(`sha256`).update(JSON.stringify(n), `utf8`).digest(`hex`);
 }
 function buildInvocationAttributes(e) {

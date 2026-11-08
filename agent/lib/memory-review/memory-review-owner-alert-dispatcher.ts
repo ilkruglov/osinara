@@ -87,12 +87,14 @@ export function createMemoryReviewOwnerAlertDispatcher(
         await dependencies.markDelivered(alert);
       } catch (error) {
         const failure = deliveryFailure(error);
-        console.error(JSON.stringify({
-          alertId: alert.alertId,
-          batchId: alert.batchId,
-          code: failure.diagnosticCode,
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        }));
+        console.error(
+          JSON.stringify({
+            alertId: alert.alertId,
+            batchId: alert.batchId,
+            code: failure.diagnosticCode,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          }),
+        );
         await dependencies.markFailed(alert, failure);
       }
     }

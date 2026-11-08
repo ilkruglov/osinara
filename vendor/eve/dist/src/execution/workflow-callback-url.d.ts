@@ -32,4 +32,7 @@ export declare function createWorkflowCallbackUrl(baseUrl: string, callbackPath:
  * Builds a callback to a remote task child without disclosing this deployment's
  * protection bypass secret to an authored external origin.
  */
-export declare function createRemoteTaskInputCallbackUrl(baseUrl: string, callbackPath: string): string;
+export declare function createRemoteTaskInputCallbackUrl(
+  baseUrl: string,
+  callbackPath: string,
+): string;

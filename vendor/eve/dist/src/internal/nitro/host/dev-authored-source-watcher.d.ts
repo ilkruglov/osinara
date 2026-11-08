@@ -4,13 +4,11 @@ import type { DevelopmentAuthoredRebuildCoordinator } from "#internal/nitro/host
  * Handle for the authored-source development watcher.
  */
 export interface AuthoredSourceWatcherHandle {
-    close(): Promise<void>;
-    flush(): Promise<void>;
-    rebuild(): Promise<void>;
-    suspend(): Promise<void>;
-    resume(options?: {
-        silent?: boolean;
-    }): Promise<void>;
+  close(): Promise<void>;
+  flush(): Promise<void>;
+  rebuild(): Promise<void>;
+  suspend(): Promise<void>;
+  resume(options?: { silent?: boolean }): Promise<void>;
 }
 /**
  * Starts the authored-source watcher used by `eve dev`.
@@ -19,6 +17,6 @@ export interface AuthoredSourceWatcherHandle {
  * triggers Nitro rebuild reloads only when structural runtime wiring changes.
  */
 export declare function startAuthoredSourceWatcher(input: {
-    coordinator: DevelopmentAuthoredRebuildCoordinator;
-    preparedHost: PreparedDevelopmentApplicationHost;
+  coordinator: DevelopmentAuthoredRebuildCoordinator;
+  preparedHost: PreparedDevelopmentApplicationHost;
 }): Promise<AuthoredSourceWatcherHandle>;

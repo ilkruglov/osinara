@@ -28,13 +28,11 @@ function dotCount(e) {
   let t = 0;
   for (let n of e) {
     let e = (n.codePointAt(0) ?? 10240) - 10240;
-    for (; e > 0; ) ((t += e & 1), (e >>= 1));
+    for (; e > 0;) ((t += e & 1), (e >>= 1));
   }
   return t;
 }
-const SPINNER_STATIC = SPINNER_FRAMES.reduce((e, t) =>
-    dotCount(t) > dotCount(e) ? t : e,
-  ),
+const SPINNER_STATIC = SPINNER_FRAMES.reduce((e, t) => (dotCount(t) > dotCount(e) ? t : e)),
   SPINNER_FRAME_MS = 120;
 function createRailLog(a) {
   let { colors: o, output: s } = a,
@@ -45,8 +43,7 @@ function createRailLog(a) {
     f,
     clip = (e) => (visibleLength(e) > u ? `${clipVisible(e, u - 1)}…` : e),
     spinnerRow = (e) => {
-      let t =
-        SPINNER_FRAMES[e.frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0];
+      let t = SPINNER_FRAMES[e.frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0];
       return `${o.green(t)}  ${e.label}`;
     },
     previewRow = (e) => `${o.green(`│`)}  ${o.dim(clip(e))}`;
@@ -74,9 +71,7 @@ function createRailLog(a) {
     let n = f;
     if (
       n !== void 0 &&
-      (n.view?.kind === `spinner` &&
-        n.view.timer !== void 0 &&
-        clearInterval(n.view.timer),
+      (n.view?.kind === `spinner` && n.view.timer !== void 0 && clearInterval(n.view.timer),
       (f = void 0),
       d !== void 0)
     )
@@ -90,9 +85,7 @@ function createRailLog(a) {
   }
   return {
     message(e) {
-      (settle(!1),
-        writeLine(e),
-        (f = { commandLines: [], view: { kind: `status` } }));
+      (settle(!1), writeLine(e), (f = { commandLines: [], view: { kind: `status` } }));
     },
     info(e) {
       (settle(!1), writeLine(o.dim(e)));
@@ -111,22 +104,16 @@ function createRailLog(a) {
         s.write(formatRailLine(o.dim(e), o, s));
         return;
       }
-      (f.commandLines.push(e),
-        f.view !== void 0 && ((f.view.preview = e), d.update(liveRows())));
+      (f.commandLines.push(e), f.view !== void 0 && ((f.view.preview = e), d.update(liveRows())));
     },
     section(n, r) {
       settle(!1);
       let i = r.map((e) => formatRailLine(e, o, s)).join(``);
-      commit(
-        `${formatPromptHeader(`submit`, n, { colors: o, leadingRail: `green` })}${i}`,
-      );
+      commit(`${formatPromptHeader(`submit`, n, { colors: o, leadingRail: `green` })}${i}`);
     },
     spinner(e) {
       if ((settle(!1), d === void 0))
-        return (
-          s.write(`${o.green(`│`)}\n${o.green(SPINNER_STATIC)}  ${e}\n`),
-          { stop() {} }
-        );
+        return (s.write(`${o.green(`│`)}\n${o.green(SPINNER_STATIC)}  ${e}\n`), { stop() {} });
       let t = { kind: `spinner`, frame: 0, label: clip(e) },
         n = { commandLines: [], view: t };
       ((f = n), d.update(liveRows()));
@@ -137,10 +124,7 @@ function createRailLog(a) {
       let i = !1;
       return {
         stop() {
-          i ||
-            ((i = !0),
-            clearInterval(r),
-            f === n && ((n.view = void 0), d.update([])));
+          i || ((i = !0), clearInterval(r), f === n && ((n.view = void 0), d.update([])));
         },
       };
     },

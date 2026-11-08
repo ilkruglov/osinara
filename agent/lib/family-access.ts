@@ -30,16 +30,17 @@ interface RegisteredGroupBase {
   toolAllowlist: string[];
 }
 
-export type RegisteredGroup = RegisteredGroupBase & (
-  | {
-    messageMode: StandardTelegramGroupMessageMode;
-    type: "family_private";
-  }
-  | {
-    messageMode: TelegramGroupMessageMode;
-    type: "external";
-  }
-);
+export type RegisteredGroup = RegisteredGroupBase &
+  (
+    | {
+        messageMode: StandardTelegramGroupMessageMode;
+        type: "family_private";
+      }
+    | {
+        messageMode: TelegramGroupMessageMode;
+        type: "external";
+      }
+  );
 
 export interface ConversationAccess {
   familyId: string;
@@ -60,8 +61,7 @@ export interface ResolveConversationAccessInput {
 }
 
 export type ConversationAccessDecision =
-  | { access: ConversationAccess; allowed: true }
-  | { allowed: false; error: AppError };
+  { access: ConversationAccess; allowed: true } | { allowed: false; error: AppError };
 
 export function evaluateConversationAccess(
   input: ResolveConversationAccessInput,
@@ -101,8 +101,11 @@ export function evaluateConversationAccess(
 
   // A family group is private to active members of the same family.
   if (group.type === "family_private") {
-    if (input.actorKind !== "telegram_user" || !input.identity ||
-      input.identity.familyId !== group.familyId) {
+    if (
+      input.actorKind !== "telegram_user" ||
+      !input.identity ||
+      input.identity.familyId !== group.familyId
+    ) {
       return {
         allowed: false,
         error: new AppError(
@@ -148,8 +151,10 @@ export function evaluateConversationAccess(
   }
 
   // External groups remain group-only, but a same-family identity is retained for owner administration.
-  const familyIdentity = input.actorKind === "telegram_user" &&
-    input.identity?.familyId === group.familyId ? input.identity : null;
+  const familyIdentity =
+    input.actorKind === "telegram_user" && input.identity?.familyId === group.familyId
+      ? input.identity
+      : null;
   return {
     access: {
       familyId: group.familyId,
@@ -162,7 +167,9 @@ export function evaluateConversationAccess(
   };
 }
 
-export function resolveConversationAccess(input: ResolveConversationAccessInput): ConversationAccess {
+export function resolveConversationAccess(
+  input: ResolveConversationAccessInput,
+): ConversationAccess {
   const decision = evaluateConversationAccess(input);
   if (!decision.allowed) throw decision.error;
   return decision.access;

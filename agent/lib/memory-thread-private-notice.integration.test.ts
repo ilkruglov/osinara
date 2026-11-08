@@ -7,10 +7,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
-  embedMemoryPassages: vi.fn(async () => [
-    [1, ...Array.from({ length: 767 }, () => 0)],
-  ]),
+  ...(await importOriginal<typeof import("./memory-embedding-client.js")>()),
+  embedMemoryPassages: vi.fn(async () => [[1, ...Array.from({ length: 767 }, () => 0)]]),
 }));
 
 import { closeDatabase, database } from "./database.js";
@@ -18,9 +16,8 @@ import { createMainAgentPrivateMemoryFixture } from "./memory-agent-write.integr
 import { memoryRepository } from "./memory-repository.js";
 import { memoryThreadNoticeRepository } from "./memory-thread-notice-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("private memory thread notice", () => {
   beforeEach(async () => {
@@ -53,15 +50,18 @@ describeWithDatabase("private memory thread notice", () => {
       },
     });
 
-    await expect(database().query(
-      "SELECT status, origin_conversation_id FROM memory_thread_creation_notices",
-    )).resolves.toMatchObject({ rows: [{
-      origin_conversation_id: fixture.conversationId,
-      status: "pending",
-    }] });
-    await expect(memoryThreadNoticeRepository.takePending(
-      fixture.auth,
-      fixture.conversationId,
-    )).resolves.toMatchObject({ title: "Марафон" });
+    await expect(
+      database().query("SELECT status, origin_conversation_id FROM memory_thread_creation_notices"),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          origin_conversation_id: fixture.conversationId,
+          status: "pending",
+        },
+      ],
+    });
+    await expect(
+      memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId),
+    ).resolves.toMatchObject({ title: "Марафон" });
   });
 });

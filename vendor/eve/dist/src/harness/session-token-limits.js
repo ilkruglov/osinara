@@ -18,8 +18,7 @@ function grantRuntimeTokenLimits(e) {
 function remainingRuntimeTokenQuota(e) {
   return {
     inputTokens:
-      e.runtime.inputTokens !== void 0 &&
-      Math.max(0, e.runtime.inputTokens - e.usage.inputTokens),
+      e.runtime.inputTokens !== void 0 && Math.max(0, e.runtime.inputTokens - e.usage.inputTokens),
     outputTokens:
       e.runtime.outputTokens !== void 0 &&
       Math.max(0, e.runtime.outputTokens - e.usage.outputTokens),

@@ -67,9 +67,8 @@ function item(raw: unknown): GroceryItem | null {
   if (productId === null || !name) return null;
   const price = source?.price as { current?: unknown } | null;
   const rating = source?.rating as { average?: unknown } | null;
-  const url = typeof source?.url === "string" && source.url.startsWith("https://")
-    ? source.url
-    : null;
+  const url =
+    typeof source?.url === "string" && source.url.startsWith("https://") ? source.url : null;
   return {
     name,
     price: finite(price?.current),
@@ -80,7 +79,10 @@ function item(raw: unknown): GroceryItem | null {
   };
 }
 
-export function groceryItems(result: unknown, limit: number): {
+export function groceryItems(
+  result: unknown,
+  limit: number,
+): {
   items: GroceryItem[];
   total: number | null;
 } {
@@ -88,14 +90,17 @@ export function groceryItems(result: unknown, limit: number): {
   const rows = Array.isArray(data.items) ? data.items : [];
   const meta = data.meta as { total?: unknown } | null;
   return {
-    items: rows.map(item).filter((value): value is GroceryItem => value !== null).slice(0, limit),
+    items: rows
+      .map(item)
+      .filter((value): value is GroceryItem => value !== null)
+      .slice(0, limit),
     total: positiveInteger(meta?.total),
   };
 }
 
 export function groceryDetails(result: unknown): GroceryDetails {
   const data = payload(result);
-  const source = (Array.isArray(data.items) ? data.items[0] : data.item ?? data) as unknown;
+  const source = (Array.isArray(data.items) ? data.items[0] : (data.item ?? data)) as unknown;
   const shaped = item(source);
   if (shaped === null) {
     throw new AppError("AGENT_GROCERY_PRODUCT_NOT_FOUND", "Такой товар в каталоге не найден");
@@ -117,10 +122,20 @@ export function groceryCartLink(result: unknown): string {
   // Ссылка уходит человеку в чат, поэтому её адрес проверяется, а не пересказывается моделью.
   let url: URL | undefined;
   if (typeof link === "string" && /^https:\/\//iu.test(link) && !/[\s\\]/u.test(link)) {
-    try { url = new URL(link); } catch { /* Fail closed below. */ }
+    try {
+      url = new URL(link);
+    } catch {
+      /* Fail closed below. */
+    }
   }
-  if (!url || url.protocol !== "https:" || url.username || url.password || url.port ||
-      !(url.hostname === "vkusvill.ru" || url.hostname.endsWith(".vkusvill.ru"))) {
+  if (
+    !url ||
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !(url.hostname === "vkusvill.ru" || url.hostname.endsWith(".vkusvill.ru"))
+  ) {
     throw new AppError("AGENT_GROCERY_CART_LINK_INVALID", "Каталог не вернул ссылку на корзину");
   }
   return link as string;

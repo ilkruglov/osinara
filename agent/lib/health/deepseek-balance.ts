@@ -36,8 +36,11 @@ function unreadable(reason: string): null {
   return null;
 }
 
-export async function readDeepSeekBalance(input: DeepSeekBalanceInput): Promise<DeepSeekBalance | null> {
-  if (input.provider !== "deepseek" || new URL(input.baseUrl).hostname !== "api.deepseek.com") return null;
+export async function readDeepSeekBalance(
+  input: DeepSeekBalanceInput,
+): Promise<DeepSeekBalance | null> {
+  if (input.provider !== "deepseek" || new URL(input.baseUrl).hostname !== "api.deepseek.com")
+    return null;
   if (!input.apiKey) return unreadable("missing_api_key");
   try {
     const response = await (input.fetch ?? globalThis.fetch)(DEEPSEEK_BALANCE_URL, {
@@ -45,15 +48,19 @@ export async function readDeepSeekBalance(input: DeepSeekBalanceInput): Promise<
       signal: AbortSignal.timeout(DEEPSEEK_BALANCE_TIMEOUT_MS),
     });
     if (!response.ok) return unreadable(`http_${response.status}`);
-    const body = await response.json() as { balance_infos?: unknown; is_available?: unknown };
+    const body = (await response.json()) as { balance_infos?: unknown; is_available?: unknown };
     const usd = Array.isArray(body.balance_infos)
-      ? body.balance_infos.find((entry): entry is { total_balance: string } =>
-        typeof entry === "object" && entry !== null &&
-        (entry as { currency?: unknown }).currency === "USD" &&
-        typeof (entry as { total_balance?: unknown }).total_balance === "string")
+      ? body.balance_infos.find(
+          (entry): entry is { total_balance: string } =>
+            typeof entry === "object" &&
+            entry !== null &&
+            (entry as { currency?: unknown }).currency === "USD" &&
+            typeof (entry as { total_balance?: unknown }).total_balance === "string",
+        )
       : undefined;
     const total = usd === undefined ? Number.NaN : Number(usd.total_balance);
-    if (typeof body.is_available !== "boolean" || !Number.isFinite(total)) return unreadable("malformed");
+    if (typeof body.is_available !== "boolean" || !Number.isFinite(total))
+      return unreadable("malformed");
     return { available: body.is_available, totalUsd: total };
   } catch (error) {
     return unreadable(error instanceof Error ? error.name : "unknown");
@@ -83,11 +90,22 @@ export function formatDeepSeekBalance(
 ): { text: string; warning: boolean } | null {
   if (balance === null) return null;
   if (!balance.available) {
-    return { text: `DeepSeek: запросы недоступны, баланс ${usd(balance.totalUsd)}. Бот не может отвечать, пополните счёт.`, warning: true };
+    return {
+      text: `DeepSeek: запросы недоступны, баланс ${usd(balance.totalUsd)}. Бот не может отвечать, пополните счёт.`,
+      warning: true,
+    };
   }
   if (balance.totalUsd < thresholdUsd) {
-    return { text: `DeepSeek: баланс ${usd(balance.totalUsd)}, ниже порога ${usd(thresholdUsd)}. Пополните счёт, иначе бот перестанет отвечать.`, warning: true };
+    return {
+      text: `DeepSeek: баланс ${usd(balance.totalUsd)}, ниже порога ${usd(thresholdUsd)}. Пополните счёт, иначе бот перестанет отвечать.`,
+      warning: true,
+    };
   }
-  const change = changeUsd === null ? "" : changeUsd > 0 ? `, за сутки +${usd(changeUsd)}` : `, за сутки ${usd(changeUsd)}`;
+  const change =
+    changeUsd === null
+      ? ""
+      : changeUsd > 0
+        ? `, за сутки +${usd(changeUsd)}`
+        : `, за сутки ${usd(changeUsd)}`;
   return { text: `DeepSeek: баланс ${usd(balance.totalUsd)}${change}.`, warning: false };
 }

@@ -29,8 +29,7 @@ async function dispatchNodeUpgrade(e, t) {
       },
       { status: 500 },
     );
-  for (let t of r)
-    await Promise.resolve(t.call(e, n.request, n.socket, n.head));
+  for (let t of r) await Promise.resolve(t.call(e, n.request, n.socket, n.head));
   return { handled: !0 };
 }
 function resolveNodeUpgrade(e) {

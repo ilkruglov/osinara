@@ -3,5 +3,5 @@
  * definition shape while preserving literal inference for valid inputs.
  */
 export type ExactDefinition<TInput, TShape> = TInput & {
-    readonly [TKey in Exclude<keyof TInput, keyof TShape>]: never;
+  readonly [TKey in Exclude<keyof TInput, keyof TShape>]: never;
 };

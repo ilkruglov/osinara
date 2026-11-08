@@ -3,10 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { resolveInstalledPackageInfo } from "#internal/application/package.js";
 import { discoverAgent } from "#discover/discover-agent.js";
 import { createDiskProjectSource } from "#discover/project-source.js";
-import {
-  discoverFlatModuleSource,
-  readSortedDirectoryEntries,
-} from "#discover/grammar.js";
+import { discoverFlatModuleSource, readSortedDirectoryEntries } from "#discover/grammar.js";
 import {
   EXTENSION_COMPATIBILITY_MANIFEST_FORMAT_VERSION,
   EXTENSION_COMPATIBILITY_MANIFEST_KIND,
@@ -34,9 +31,7 @@ async function buildExtensionPackage(t, n) {
     s = a.filter((e) => e.severity === `error`);
   if (s.length > 0)
     throw Error(
-      `Cannot build extension "${n.packageName}":\n${s.map(
-        (e) => `  - ${e.message}`,
-      ).join(`
+      `Cannot build extension "${n.packageName}":\n${s.map((e) => `  - ${e.message}`).join(`
 `)}`,
     );
   let c = discoverFlatModuleSource({

@@ -20,10 +20,7 @@ import { createWorld } from "@workflow/world-local";
 import { Logger, makeWorkerUtils, run } from "graphile-worker";
 import { monotonicFactory } from "ulid";
 import { z } from "zod/v4";
-import {
-  Agent as OsinaraLoopbackAgent,
-  fetch as osinaraLoopbackFetch,
-} from "undici";
+import { Agent as OsinaraLoopbackAgent, fetch as osinaraLoopbackFetch } from "undici";
 // Above Workflow's 900 s inline ownership ceiling, so a long step settles before the call gives up.
 const OSINARA_LOOPBACK_TIMEOUT_MS = 20 * 60 * 1000;
 const OSINARA_LOOPBACK_DISPATCHER = new OsinaraLoopbackAgent({
@@ -39,9 +36,7 @@ function createGraphileLogger() {
     if ((level === "debug" || level === "info") && !isVerbose()) return;
     const pipe = level === "error" ? process.stderr : process.stdout;
     if (meta) {
-      pipe.write(
-        `[Graphile Worker] ${message} ${JSON.stringify(meta, null, 2)}\n`,
-      );
+      pipe.write(`[Graphile Worker] ${message} ${JSON.stringify(meta, null, 2)}\n`);
     } else {
       pipe.write(`[Graphile Worker] ${message}\n`);
     }
@@ -104,7 +99,10 @@ export function createQueue(config, pool) {
   // the official one reads a byte. The same token guards the drain route and the approval sweep.
   const requireInternalToken = () => {
     const token = process.env.AGENT_INTERNAL_TOKEN;
-    if (!token) throw new Error("AGENT_INTERNAL_TOKEN_MISSING: Не задан внутренний токен для маршрута очереди");
+    if (!token)
+      throw new Error(
+        "AGENT_INTERNAL_TOKEN_MISSING: Не задан внутренний токен для маршрута очереди",
+      );
     return token;
   };
   const isInternalTokenAuthorized = (presented) => {
@@ -245,10 +243,7 @@ export function createQueue(config, pool) {
     await setupListeners();
   }
   async function waitForLoopbackAndStartRunner(controller, target) {
-    while (
-      !controller.signal.aborted &&
-      !(await canConnectToLoopbackTarget(target))
-    ) {
+    while (!controller.signal.aborted && !(await canConnectToLoopbackTarget(target))) {
       await sleep(50, undefined, {
         ref: false,
       });
@@ -292,17 +287,14 @@ export function createQueue(config, pool) {
     if (!baseUrl) {
       throw new Error("Unable to resolve base URL for workflow queue.");
     }
-    const response = await osinaraLoopbackFetch(
-      createWorkflowUrl(baseUrl, { type: "flow" }),
-      {
-        method: "POST",
-        duplex: "half",
-        headers,
-        body,
-        signal: abortSignal,
-        dispatcher: OSINARA_LOOPBACK_DISPATCHER,
-      },
-    );
+    const response = await osinaraLoopbackFetch(createWorkflowUrl(baseUrl, { type: "flow" }), {
+      method: "POST",
+      duplex: "half",
+      headers,
+      body,
+      signal: abortSignal,
+      dispatcher: OSINARA_LOOPBACK_DISPATCHER,
+    });
     const text = await response.text();
     if (!response.ok) {
       return {
@@ -328,16 +320,12 @@ export function createQueue(config, pool) {
         AND table_name = '_pgboss_pending_jobs'
       ) AS exists`);
     if (hasStaging.rows[0]?.exists) {
-      const jobs =
-        await pool.query(`SELECT name, data, singleton_key, retry_limit
+      const jobs = await pool.query(`SELECT name, data, singleton_key, retry_limit
         FROM "workflow"."_pgboss_pending_jobs"`);
       for (const job of jobs.rows) {
         await utils.addJob(job.name, job.data, {
           jobKey: job.singleton_key ?? undefined,
-          maxAttempts: Math.max(
-            job.retry_limit ?? 0,
-            MAX_GRAPHILE_JOB_ATTEMPTS,
-          ),
+          maxAttempts: Math.max(job.retry_limit ?? 0, MAX_GRAPHILE_JOB_ATTEMPTS),
         });
       }
       await pool.query(`DROP TABLE "workflow"."_pgboss_pending_jobs"`);
@@ -349,17 +337,13 @@ export function createQueue(config, pool) {
         WHERE schema_name = 'pgboss'
       ) AS exists`);
     if (hasPgBoss.rows[0]?.exists) {
-      const jobs =
-        await pool.query(`SELECT name, data, singleton_key, retry_limit
+      const jobs = await pool.query(`SELECT name, data, singleton_key, retry_limit
         FROM pgboss.job
         WHERE state IN ('created', 'retry')`);
       for (const job of jobs.rows) {
         await utils.addJob(job.name, job.data, {
           jobKey: job.singleton_key ?? undefined,
-          maxAttempts: Math.max(
-            job.retry_limit ?? 0,
-            MAX_GRAPHILE_JOB_ATTEMPTS,
-          ),
+          maxAttempts: Math.max(job.retry_limit ?? 0, MAX_GRAPHILE_JOB_ATTEMPTS),
         });
       }
       await pool.query(`DROP SCHEMA pgboss CASCADE`);
@@ -460,9 +444,7 @@ export function createQueue(config, pool) {
           attempt,
           body: messageData.data,
           headers: messageData.headers,
-          abortSignal: graphileHelpers.success
-            ? graphileHelpers.data.abortSignal
-            : undefined,
+          abortSignal: graphileHelpers.success ? graphileHelpers.data.abortSignal : undefined,
         });
         if (result.type === "completed") {
           return "completed";
@@ -491,17 +473,12 @@ export function createQueue(config, pool) {
         if (workflowRunSerializationKey) {
           // Preserve step fan-out while preventing two workflow replays from
           // mutating the same run's event log at the same time.
-          const previous = inflightWorkflowRuns.get(
-            workflowRunSerializationKey,
-          );
+          const previous = inflightWorkflowRuns.get(workflowRunSerializationKey);
           const execution = (previous ?? Promise.resolve())
             .catch(() => {})
             .then(() => executeTask())
             .finally(() => {
-              if (
-                inflightWorkflowRuns.get(workflowRunSerializationKey) ===
-                execution
-              ) {
+              if (inflightWorkflowRuns.get(workflowRunSerializationKey) === execution) {
                 inflightWorkflowRuns.delete(workflowRunSerializationKey);
               }
             });
@@ -578,10 +555,7 @@ export function createQueue(config, pool) {
         try {
           await activeRunner.stop();
         } catch (error) {
-          if (
-            !(error instanceof Error) ||
-            error.message !== "Runner is already stopped"
-          ) {
+          if (!(error instanceof Error) || error.message !== "Runner is already stopped") {
             throw error;
           }
         }

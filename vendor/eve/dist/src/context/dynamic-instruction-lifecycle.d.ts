@@ -8,10 +8,13 @@ import type { ContextKey } from "#context/key.js";
  * Session-scoped entries appear first.
  */
 export declare function buildDynamicInstructionMessages(ctx: {
-    get<T>(key: ContextKey<T>): T | undefined;
+  get<T>(key: ContextKey<T>): T | undefined;
 }): SystemModelMessage[];
 /** Starts the instructions-only virtual context for one lifecycle preamble. */
-export declare function prepareDynamicInstructionPreamble(ctx: AlsContext, messages: readonly ModelMessage[]): void;
+export declare function prepareDynamicInstructionPreamble(
+  ctx: AlsContext,
+  messages: readonly ModelMessage[],
+): void;
 /** Drains user-role results and clears the instructions-only virtual context. */
 export declare function drainDynamicInstructionUserMessages(ctx: AlsContext): ModelMessage[];
 /**
@@ -23,8 +26,8 @@ export declare function drainDynamicInstructionUserMessages(ctx: AlsContext): Mo
  * result for the model call.
  */
 export declare function dispatchDynamicInstructionEvent(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicInstructionsResolver[];
-    readonly event: UnstampedMessageStreamEvent;
-    readonly messages: readonly ModelMessage[];
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicInstructionsResolver[];
+  readonly event: UnstampedMessageStreamEvent;
+  readonly messages: readonly ModelMessage[];
 }): Promise<void>;

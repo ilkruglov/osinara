@@ -9,10 +9,16 @@ export default defineTool({
   async execute({ marker }, ctx) {
     const auth = requireWorkspaceAuthorization(ctx);
     const scopes = ctx.session.auth.current?.attributes.memoryScopes;
-    const expected = auth.telegramChatType === "private" ? ["personal", "family"] :
-      auth.groupType === "family_private" ? ["family"] : ["group"];
+    const expected =
+      auth.telegramChatType === "private"
+        ? ["personal", "family"]
+        : auth.groupType === "family_private"
+          ? ["family"]
+          : ["group"];
     if (JSON.stringify(scopes) !== JSON.stringify(expected)) {
-      throw new Error(`TEST_GROUP_AUTH_INVALID: ${JSON.stringify(scopes)} expected ${JSON.stringify(expected)}`);
+      throw new Error(
+        `TEST_GROUP_AUTH_INVALID: ${JSON.stringify(scopes)} expected ${JSON.stringify(expected)}`,
+      );
     }
     const sandbox = await ctx.getSandbox();
     await sandbox.writeTextFile({ path: "/workspace/probe.txt", content: marker });

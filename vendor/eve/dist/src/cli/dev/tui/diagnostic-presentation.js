@@ -1,5 +1,4 @@
-const ERROR_HEADLINE_PATTERN =
-  /^\s*(?:message|name):\s*\S|^\s*[A-Z][\w$]*Error\b/u;
+const ERROR_HEADLINE_PATTERN = /^\s*(?:message|name):\s*\S|^\s*[A-Z][\w$]*Error\b/u;
 function presentDiagnostic(t, n) {
   let r = t.split(`
 `);
@@ -21,10 +20,7 @@ function presentDiagnostic(t, n) {
 }
 function formatStoredDiagnostic(e) {
   let t = e.omittedLines,
-    n =
-      t === 0
-        ? `diagnostic details`
-        : `${t} diagnostic line${t === 1 ? `` : `s`}`,
+    n = t === 0 ? `diagnostic details` : `${t} diagnostic line${t === 1 ? `` : `s`}`,
     r = [e.summary];
   return (
     e.headline !== void 0 && r.push(e.headline),

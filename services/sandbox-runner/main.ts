@@ -7,10 +7,7 @@
  */
 import Docker from "dockerode";
 
-import {
-  createDockerSandboxEngine,
-  resolveSandboxDockerRuntime,
-} from "./docker-sandbox-engine.js";
+import { createDockerSandboxEngine, resolveSandboxDockerRuntime } from "./docker-sandbox-engine.js";
 import { SANDBOX_IDLE_SWEEP_INTERVAL_MS } from "./docker-sandbox-lifecycle.js";
 import { applyEgressFirewall, killStrayProcesses } from "./docker-sandbox-hardening.js";
 import { createHostDiskProbe, createSandboxDiskQuota } from "./sandbox-disk-quota.js";
@@ -22,14 +19,25 @@ const DOCKER_SOCKET_PATH = "/var/run/docker.sock";
 const docker = new Docker({ socketPath: DOCKER_SOCKET_PATH });
 const resources = await resolveSandboxDockerRuntime(docker);
 const engine = createDockerSandboxEngine({
-  diskQuota: createSandboxDiskQuota({ now: Date.now, probe: createHostDiskProbe(resources.roots.workspaceRoot) }),
+  diskQuota: createSandboxDiskQuota({
+    now: Date.now,
+    probe: createHostDiskProbe(resources.roots.workspaceRoot),
+  }),
   docker,
   hardening: {
     async afterCommand(container, sessionId) {
       const killed = await killStrayProcesses(container);
-      if (killed > 0) console.info(JSON.stringify({ code: "AGENT_SANDBOX_RUNNER_STRAY_PROCESSES_KILLED", killed, sessionId }));
+      if (killed > 0)
+        console.info(
+          JSON.stringify({
+            code: "AGENT_SANDBOX_RUNNER_STRAY_PROCESSES_KILLED",
+            killed,
+            sessionId,
+          }),
+        );
     },
-    afterStart: (container) => applyEgressFirewall(docker, resources.runtime.image, container, resources.runtime.project),
+    afterStart: (container) =>
+      applyEgressFirewall(docker, resources.runtime.image, container, resources.runtime.project),
   },
   ...resources,
 });
@@ -43,13 +51,16 @@ server.listen(RUNNER_PORT, "0.0.0.0", () => {
 
 // Stop idle compute for reuse, then remove expired/excess entries under an explicit hard bound.
 const idleSweep = setInterval(() => {
-  void engine.reconcileIdleSessions(new Date()).then(({ removed, stopped }) => {
-    if (removed > 0 || stopped > 0) {
-      console.log("Reconciled idle sandbox compute", { removed, stopped });
-    }
-  }, (error: unknown) => {
-    console.error("Sandbox idle reconciliation failed", { error });
-  });
+  void engine.reconcileIdleSessions(new Date()).then(
+    ({ removed, stopped }) => {
+      if (removed > 0 || stopped > 0) {
+        console.log("Reconciled idle sandbox compute", { removed, stopped });
+      }
+    },
+    (error: unknown) => {
+      console.error("Sandbox idle reconciliation failed", { error });
+    },
+  );
 }, SANDBOX_IDLE_SWEEP_INTERVAL_MS);
 idleSweep.unref();
 
@@ -61,15 +72,18 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log("Sandbox runner stopping", { signal });
   await engine.stopAllSessions();
   await new Promise<void>((resolve, reject) =>
-    server.close((error) => error ? reject(error) : resolve())
+    server.close((error) => (error ? reject(error) : resolve())),
   );
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
-    void shutdown(signal).then(() => process.exit(0), (error: unknown) => {
-      console.error("Sandbox runner shutdown failed", { error, signal });
-      process.exit(1);
-    });
+    void shutdown(signal).then(
+      () => process.exit(0),
+      (error: unknown) => {
+        console.error("Sandbox runner shutdown failed", { error, signal });
+        process.exit(1);
+      },
+    );
   });
 }

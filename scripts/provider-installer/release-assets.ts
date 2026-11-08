@@ -46,10 +46,15 @@ async function readBoundedArchive(response: Response): Promise<Uint8Array> {
     );
   }
 
-  const archive = await readBoundedBody(response, MAX_ARCHIVE_BYTES, () => new InstallerError(
-    "OSINARA_INSTALL_RELEASE_ARCHIVE_TOO_LARGE",
-    `Installation bundle превышает допустимые ${MAX_ARCHIVE_BYTES} байт`,
-  ));
+  const archive = await readBoundedBody(
+    response,
+    MAX_ARCHIVE_BYTES,
+    () =>
+      new InstallerError(
+        "OSINARA_INSTALL_RELEASE_ARCHIVE_TOO_LARGE",
+        `Installation bundle превышает допустимые ${MAX_ARCHIVE_BYTES} байт`,
+      ),
+  );
   if (archive.byteLength === 0) {
     throw new InstallerError(
       "OSINARA_INSTALL_RELEASE_ARCHIVE_INVALID",
@@ -65,8 +70,8 @@ export function createReleaseAssetsResolver(
 ): () => Promise<ReleaseAssets> {
   return async () => {
     if (
-      !STABLE_SEMVER_PATTERN.test(dependencies.version)
-      || !SHA256_PATTERN.test(dependencies.archiveSha256)
+      !STABLE_SEMVER_PATTERN.test(dependencies.version) ||
+      !SHA256_PATTERN.test(dependencies.archiveSha256)
     ) {
       throw new InstallerError(
         "OSINARA_INSTALL_RELEASE_METADATA_INVALID",
@@ -74,9 +79,9 @@ export function createReleaseAssetsResolver(
       );
     }
     if (
-      !Number.isInteger(dependencies.timeoutMs)
-      || dependencies.timeoutMs < 1
-      || dependencies.timeoutMs > MAX_TIMEOUT_MS
+      !Number.isInteger(dependencies.timeoutMs) ||
+      dependencies.timeoutMs < 1 ||
+      dependencies.timeoutMs > MAX_TIMEOUT_MS
     ) {
       throw new InstallerError(
         "OSINARA_INSTALL_RELEASE_TIMEOUT_INVALID",

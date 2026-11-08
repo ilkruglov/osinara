@@ -8,39 +8,39 @@ import type { LocalTrace, LocalTraceSpan } from "#tracing/local-trace-reader.js"
 import type { Theme } from "../theme.js";
 import type { TraceViewerSurfaces } from "./trace-surfaces.js";
 export interface ConversationItem {
-    readonly kind: "system" | "user" | "assistant" | "tool";
-    /** Detail-drawer source for this item. */
-    readonly span: LocalTraceSpan;
-    /** Tool name for tool items. */
-    readonly name?: string;
-    /** Message text for system/user/assistant items. */
-    readonly text?: string;
-    /** Model reasoning for assistant items (shown dim above the reply). */
-    readonly reasoning?: string;
-    /** Tool names from the model's tool-call decision (shown when no text). */
-    readonly toolCallNames?: readonly string[];
-    /** Raw JSON for tool input / output. */
-    readonly args?: string;
-    readonly result?: string;
-    /** Assistant card metadata. */
-    readonly model?: string;
-    readonly inputTokens?: number;
-    readonly outputTokens?: number;
-    /** Gateway-reported inference cost in USD (from the ancestor step span). */
-    readonly costUsd?: number;
-    /** Set when the item's turn was delegated by another turn (a subagent). */
-    readonly subagent?: ConversationSubagent;
-    readonly durationMs: number;
-    readonly error: boolean;
+  readonly kind: "system" | "user" | "assistant" | "tool";
+  /** Detail-drawer source for this item. */
+  readonly span: LocalTraceSpan;
+  /** Tool name for tool items. */
+  readonly name?: string;
+  /** Message text for system/user/assistant items. */
+  readonly text?: string;
+  /** Model reasoning for assistant items (shown dim above the reply). */
+  readonly reasoning?: string;
+  /** Tool names from the model's tool-call decision (shown when no text). */
+  readonly toolCallNames?: readonly string[];
+  /** Raw JSON for tool input / output. */
+  readonly args?: string;
+  readonly result?: string;
+  /** Assistant card metadata. */
+  readonly model?: string;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  /** Gateway-reported inference cost in USD (from the ancestor step span). */
+  readonly costUsd?: number;
+  /** Set when the item's turn was delegated by another turn (a subagent). */
+  readonly subagent?: ConversationSubagent;
+  readonly durationMs: number;
+  readonly error: boolean;
 }
 /** Dispatch lineage for a subagent turn, read from the turn span. */
 export interface ConversationSubagent {
-    /** Subagent name, when the turn arrived through the subagent adapter. */
-    readonly name?: string;
-    /** Turn id of the dispatching parent turn. */
-    readonly parentTurnId: string;
-    /** Tool call id of the dispatch, when recorded. */
-    readonly parentCallId?: string;
+  /** Subagent name, when the turn arrived through the subagent adapter. */
+  readonly name?: string;
+  /** Turn id of the dispatching parent turn. */
+  readonly parentTurnId: string;
+  /** Tool call id of the dispatch, when recorded. */
+  readonly parentCallId?: string;
 }
 /** Builds the conversation flow from eve's durable delivery, model, and action spans. */
 export declare function buildConversationItems(trace: LocalTrace): ConversationItem[];
@@ -54,8 +54,20 @@ export declare function buildConversationItems(trace: LocalTrace): ConversationI
  * depend on whether the probe was answered. Collapsed cards cap their
  * payloads; expanded ones render them in full.
  */
-export declare function renderConversationItem(item: ConversationItem, width: number, theme: Theme, selected: boolean, expanded: boolean, surfaces?: TraceViewerSurfaces): string[];
+export declare function renderConversationItem(
+  item: ConversationItem,
+  width: number,
+  theme: Theme,
+  selected: boolean,
+  expanded: boolean,
+  surfaces?: TraceViewerSurfaces,
+): string[];
 /** Rendered height of one card — the conversation viewport scrolls by lines. */
-export declare function conversationItemLineCount(item: ConversationItem, width: number, theme: Theme, expanded: boolean): number;
+export declare function conversationItemLineCount(
+  item: ConversationItem,
+  width: number,
+  theme: Theme,
+  expanded: boolean,
+): number;
 /** Whether a card has content hidden behind the collapsed cap at this width. */
 export declare function conversationItemExpandable(item: ConversationItem, width: number): boolean;

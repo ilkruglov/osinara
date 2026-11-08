@@ -11,7 +11,11 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { AppError } from "./app-error.js";
-import { jsonSafeToolOutput, wrapModelFacingTool, wrapModelFacingToolMap } from "./model-facing-tool.js";
+import {
+  jsonSafeToolOutput,
+  wrapModelFacingTool,
+  wrapModelFacingToolMap,
+} from "./model-facing-tool.js";
 import {
   PROGRESS_NOTICE_SENT_NOTE,
   progressNoticeKey,
@@ -40,9 +44,20 @@ describe("model-facing tool boundary", () => {
   // Eve rejects anything but plain JSON; pg rows carry Date objects for timestamp columns.
   it("hands Eve plain JSON: dates and bigints inside results become strings", async () => {
     const created = new Date("2026-09-29T19:43:27.379Z");
-    const wrapped = wrapModelFacingTool("test_tool", tool(() => ({ id: "c1", created_at: created, runs: [{ finished_at: created, count: 3n }], none: null })));
+    const wrapped = wrapModelFacingTool(
+      "test_tool",
+      tool(() => ({
+        id: "c1",
+        created_at: created,
+        runs: [{ finished_at: created, count: 3n }],
+        none: null,
+      })),
+    );
     await expect(wrapped.execute({}, {} as never)).resolves.toEqual({
-      created_at: "2026-09-29T19:43:27.379Z", id: "c1", none: null, runs: [{ count: "3", finished_at: "2026-09-29T19:43:27.379Z" }],
+      created_at: "2026-09-29T19:43:27.379Z",
+      id: "c1",
+      none: null,
+      runs: [{ count: "3", finished_at: "2026-09-29T19:43:27.379Z" }],
     });
     const bytes = new Uint8Array([1, 2, 3]);
     expect(jsonSafeToolOutput({ bytes })).toEqual({ bytes });
@@ -54,7 +69,10 @@ describe("model-facing tool boundary", () => {
   });
 
   it("tells the model when its pre-tool text already reached the person", async () => {
-    const wrapped = wrapModelFacingTool("generate_image", tool(() => ({ delivered: true })));
+    const wrapped = wrapModelFacingTool(
+      "generate_image",
+      tool(() => ({ delivered: true })),
+    );
     const ctx = { session: { id: "wrun_1", turn: { id: "turn_5" } } } as never;
     const key = progressNoticeKey("wrun_1", "turn_5");
     telegramProgressNoticeDeferral.hold(key, {
@@ -70,7 +88,10 @@ describe("model-facing tool boundary", () => {
       // Another turn of the same session, and a non-object output, stay untouched.
       const other = { session: { id: "wrun_1", turn: { id: "turn_6" } } } as never;
       await expect(wrapped.execute({}, other)).resolves.toEqual({ delivered: true });
-      const text = wrapModelFacingTool("read_memory_thread", tool(() => "plain text"));
+      const text = wrapModelFacingTool(
+        "read_memory_thread",
+        tool(() => "plain text"),
+      );
       await expect(text.execute({}, ctx)).resolves.toBe("plain text");
     } finally {
       telegramProgressNoticeDeferral.forget(key);
@@ -109,9 +130,12 @@ describe("model-facing approval boundary", () => {
   const context = { toolInput: {}, toolName: "approval_tool" } as never;
 
   it("turns an application input error thrown by the approval policy into a denial", async () => {
-    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => {
-      throw new AppError("AGENT_TEST_INPUT_INVALID", "Передайте toolAllowlist массивом");
-    }));
+    const wrapped = wrapModelFacingTool(
+      "approval_tool",
+      approvalTool(() => {
+        throw new AppError("AGENT_TEST_INPUT_INVALID", "Передайте toolAllowlist массивом");
+      }),
+    );
 
     await expect((wrapped.approval as (ctx: unknown) => unknown)(context)).resolves.toEqual({
       reason: "AGENT_TEST_INPUT_INVALID: Передайте toolAllowlist массивом",
@@ -120,22 +144,32 @@ describe("model-facing approval boundary", () => {
   });
 
   it("passes ordinary approval decisions through unchanged", async () => {
-    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => "user-approval"));
+    const wrapped = wrapModelFacingTool(
+      "approval_tool",
+      approvalTool(() => "user-approval"),
+    );
 
     expect(await (wrapped.approval as (ctx: unknown) => unknown)(context)).toBe("user-approval");
   });
 
   it("does not swallow unexpected failures inside the approval policy", async () => {
-    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => {
-      throw new TypeError("boom");
-    }));
+    const wrapped = wrapModelFacingTool(
+      "approval_tool",
+      approvalTool(() => {
+        throw new TypeError("boom");
+      }),
+    );
 
-    await expect(async () => await (wrapped.approval as (ctx: unknown) => unknown)(context))
-      .rejects.toThrow("boom");
+    await expect(
+      async () => await (wrapped.approval as (ctx: unknown) => unknown)(context),
+    ).rejects.toThrow("boom");
   });
 
   it("keeps tools without an approval policy untouched", () => {
-    const wrapped = wrapModelFacingTool("plain", tool(() => ({ ok: true })));
+    const wrapped = wrapModelFacingTool(
+      "plain",
+      tool(() => ({ ok: true })),
+    );
 
     expect(wrapped.approval).toBeUndefined();
   });

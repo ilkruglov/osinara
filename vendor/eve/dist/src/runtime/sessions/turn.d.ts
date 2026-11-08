@@ -5,12 +5,19 @@ import type { InternalToolDefinition } from "#shared/tool-definition.js";
  * Serializable authored tool descriptor prepared by the runtime for one
  * harness turn.
  */
-export type PreparedRuntimeAuthoredTool = Readonly<InternalToolDefinition & SourceRef & {
-    kind: "authored-tool";
-}>;
-type PreparedRuntimeDelegationToolBase<TKind extends "remote" | "subagent"> = Readonly<InternalToolDefinition & SourceRef & Node & {
-    kind: TKind;
-}>;
+export type PreparedRuntimeAuthoredTool = Readonly<
+  InternalToolDefinition &
+    SourceRef & {
+      kind: "authored-tool";
+    }
+>;
+type PreparedRuntimeDelegationToolBase<TKind extends "remote" | "subagent"> = Readonly<
+  InternalToolDefinition &
+    SourceRef &
+    Node & {
+      kind: TKind;
+    }
+>;
 /**
  * Serializable local subagent descriptor prepared by the runtime for one
  * harness turn.
@@ -25,7 +32,8 @@ type PreparedRuntimeRemoteAgentTool = PreparedRuntimeDelegationToolBase<"remote"
  * Serializable delegation descriptor prepared by the runtime for one harness
  * turn.
  */
-export type PreparedRuntimeDelegationTool = PreparedRuntimeRemoteAgentTool | PreparedRuntimeSubagentTool;
+export type PreparedRuntimeDelegationTool =
+  PreparedRuntimeRemoteAgentTool | PreparedRuntimeSubagentTool;
 /**
  * Serializable model-visible runtime tool prepared for one harness turn.
  */

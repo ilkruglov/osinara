@@ -18,18 +18,26 @@ export type TelegramWebhookSecretToken = string | (() => string | Promise<string
  * string as the verified body, or any other truthy value to accept it and
  * keep the original body.
  */
-export type TelegramWebhookVerifier = (request: Request, body: string) => unknown | Promise<unknown>;
+export type TelegramWebhookVerifier = (
+  request: Request,
+  body: string,
+) => unknown | Promise<unknown>;
 /** Options for {@link verifyTelegramRequest}. */
 export interface TelegramVerifyOptions {
-    readonly secretToken: TelegramWebhookSecretToken | undefined;
-    readonly webhookVerifier?: TelegramWebhookVerifier;
+  readonly secretToken: TelegramWebhookSecretToken | undefined;
+  readonly webhookVerifier?: TelegramWebhookVerifier;
 }
 /** Resolves a Telegram webhook secret, falling back to `TELEGRAM_WEBHOOK_SECRET_TOKEN`. */
-export declare function resolveTelegramWebhookSecretToken(secretToken?: TelegramWebhookSecretToken): Promise<string>;
+export declare function resolveTelegramWebhookSecretToken(
+  secretToken?: TelegramWebhookSecretToken,
+): Promise<string>;
 /**
  * Verifies an inbound Telegram webhook and returns its raw body.
  *
  * Throws when no secret/verifier is configured, the secret header is
  * missing, or the supplied verifier/header rejects.
  */
-export declare function verifyTelegramRequest(request: Request, options: TelegramVerifyOptions): Promise<string>;
+export declare function verifyTelegramRequest(
+  request: Request,
+  options: TelegramVerifyOptions,
+): Promise<string>;

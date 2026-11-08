@@ -1,7 +1,13 @@
 import type { EveAgentReducer } from "#client/reducer.js";
 import type { ClientSession } from "#client/session.js";
 import type { MessageStreamEvent } from "#protocol/message.js";
-import type { CancelSessionResult, ClientAuth, HeadersValue, SendTurnPayload, ClientSessionState } from "#client/types.js";
+import type {
+  CancelSessionResult,
+  ClientAuth,
+  HeadersValue,
+  SendTurnPayload,
+  ClientSessionState,
+} from "#client/types.js";
 /**
  * Lifecycle state of an {@link EveAgentStore}: `ready` (idle), `submitted`
  * (turn sent, awaiting the first event), `streaming` (events arriving), and
@@ -22,11 +28,11 @@ export type PrepareSend = (input: SendTurnPayload) => SendTurnPayload | Promise<
  * turn lifecycle state, and `error` is the last failure (or `undefined`).
  */
 export interface EveAgentStoreSnapshot<TData> {
-    readonly data: TData;
-    readonly error: Error | undefined;
-    readonly events: readonly MessageStreamEvent[];
-    readonly session: ClientSessionState | undefined;
-    readonly status: EveAgentStoreStatus;
+  readonly data: TData;
+  readonly error: Error | undefined;
+  readonly events: readonly MessageStreamEvent[];
+  readonly session: ClientSessionState | undefined;
+  readonly status: EveAgentStoreStatus;
 }
 /**
  * Hooks invoked while the store processes a turn.
@@ -36,11 +42,11 @@ export interface EveAgentStoreSnapshot<TData> {
  * {@link SendTurnPayload} (for example to attach one-turn client context).
  */
 export interface EveAgentStoreCallbacks<TData> {
-    readonly onError?: (error: Error) => void;
-    readonly onEvent?: (event: MessageStreamEvent) => void;
-    readonly onFinish?: (snapshot: EveAgentStoreSnapshot<TData>) => void;
-    readonly onSessionChange?: (session: ClientSessionState | undefined) => void;
-    readonly prepareSend?: PrepareSend;
+  readonly onError?: (error: Error) => void;
+  readonly onEvent?: (event: MessageStreamEvent) => void;
+  readonly onFinish?: (snapshot: EveAgentStoreSnapshot<TData>) => void;
+  readonly onSessionChange?: (session: ClientSessionState | undefined) => void;
+  readonly prepareSend?: PrepareSend;
 }
 /**
  * Configuration for constructing an {@link EveAgentStore}.
@@ -57,15 +63,15 @@ export interface EveAgentStoreCallbacks<TData> {
  * endpoint may overlap the cursor because repeated ids are applied once.
  */
 export interface EveAgentStoreInit<TData> {
-    readonly auth?: ClientAuth;
-    readonly headers?: HeadersValue;
-    readonly host?: string;
-    /** Ordered prefix of the session stream used to rehydrate projected state. */
-    readonly initialEvents?: readonly MessageStreamEvent[];
-    readonly initialSession?: ClientSessionState;
-    readonly optimistic?: boolean;
-    readonly reducer: EveAgentReducer<TData>;
-    readonly session?: ClientSession;
+  readonly auth?: ClientAuth;
+  readonly headers?: HeadersValue;
+  readonly host?: string;
+  /** Ordered prefix of the session stream used to rehydrate projected state. */
+  readonly initialEvents?: readonly MessageStreamEvent[];
+  readonly initialSession?: ClientSessionState;
+  readonly optimistic?: boolean;
+  readonly reducer: EveAgentReducer<TData>;
+  readonly session?: ClientSession;
 }
 declare const detachStore: unique symbol;
 /**
@@ -82,21 +88,21 @@ declare const detachStore: unique symbol;
  * `reset`.
  */
 export declare class EveAgentStore<TData> {
-    #private;
-    constructor(init: EveAgentStoreInit<TData>);
-    get snapshot(): EveAgentStoreSnapshot<TData>;
-    setCallbacks(callbacks: EveAgentStoreCallbacks<TData>): void;
-    subscribe(callback: () => void): () => void;
-    send<TOutput = unknown>(input: SendTurnPayload<TOutput>): Promise<void>;
-    /**
-     * Requests cooperative cancellation of the active durable turn.
-     *
-     * If the server has not emitted `turn.started` yet, the request waits for
-     * that turn ID. The event stream stays attached until the turn settles.
-     */
-    cancel(): Promise<CancelSessionResult>;
-    [detachStore](): void;
-    reset(): void;
+  #private;
+  constructor(init: EveAgentStoreInit<TData>);
+  get snapshot(): EveAgentStoreSnapshot<TData>;
+  setCallbacks(callbacks: EveAgentStoreCallbacks<TData>): void;
+  subscribe(callback: () => void): () => void;
+  send<TOutput = unknown>(input: SendTurnPayload<TOutput>): Promise<void>;
+  /**
+   * Requests cooperative cancellation of the active durable turn.
+   *
+   * If the server has not emitted `turn.started` yet, the request waits for
+   * that turn ID. The event stream stays attached until the turn settles.
+   */
+  cancel(): Promise<CancelSessionResult>;
+  [detachStore](): void;
+  reset(): void;
 }
 /** @internal Detaches local transport without cancelling durable server work. */
 export declare function detachEveAgentStore<TData>(store: EveAgentStore<TData>): void;

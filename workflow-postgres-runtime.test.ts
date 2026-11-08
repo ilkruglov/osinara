@@ -24,8 +24,13 @@ describe("PostgreSQL Workflow world", () => {
     const agent = readProjectFile("agent/agent.ts");
 
     expect(packageJson.dependencies?.eve).toBe("file:vendor/eve");
-    expect(packageJson.dependencies?.["@workflow/world-postgres"]).toBe("file:vendor/workflow-world-postgres");
-    const world = JSON.parse(readProjectFile("vendor/workflow-world-postgres/package.json")) as { name: string; version: string };
+    expect(packageJson.dependencies?.["@workflow/world-postgres"]).toBe(
+      "file:vendor/workflow-world-postgres",
+    );
+    const world = JSON.parse(readProjectFile("vendor/workflow-world-postgres/package.json")) as {
+      name: string;
+      version: string;
+    };
     expect(world).toMatchObject({ name: "@workflow/world-postgres", version: "5.0.0-beta.35" });
     expect(agent).toContain('externalDependencies: ["@workflow/world-postgres"]');
     expect(agent).toContain('world: "@workflow/world-postgres"');
@@ -52,10 +57,7 @@ describe("PostgreSQL Workflow world", () => {
 
   it("gives Workflow credentials only to services that need them", () => {
     const compose = readProjectFile("compose.production.yaml");
-    const agent = compose.slice(
-      compose.indexOf("\n  agent:\n"),
-      compose.indexOf("\n  migrate:\n"),
-    );
+    const agent = compose.slice(compose.indexOf("\n  agent:\n"), compose.indexOf("\n  migrate:\n"));
     const migrate = compose.slice(
       compose.indexOf("\n  migrate:\n"),
       compose.indexOf("\n  memory-embedding-worker:\n"),
@@ -81,9 +83,7 @@ describe("PostgreSQL Workflow world", () => {
     const packageJson = JSON.parse(readProjectFile("package.json")) as {
       scripts?: Record<string, string>;
     };
-    const stressEval = readProjectFile(
-      "stress/workflow-postgres/evals/retention.eval.ts",
-    );
+    const stressEval = readProjectFile("stress/workflow-postgres/evals/retention.eval.ts");
 
     expect(packageJson.scripts?.["test:workflow-stress"]).toContain("workflow-postgres-stress");
     expect(stressEval).toContain("const STRESS_TURN_COUNT = 300;");

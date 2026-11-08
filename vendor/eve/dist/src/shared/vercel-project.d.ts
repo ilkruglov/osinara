@@ -6,8 +6,8 @@
  * never to make authentication decisions.
  */
 export interface VercelOidcTokenClaims {
-    readonly ownerId: string | undefined;
-    readonly projectId: string | undefined;
+  readonly ownerId: string | undefined;
+  readonly projectId: string | undefined;
 }
 /**
  * Decodes the payload claims of a Vercel OIDC token. Values that are not

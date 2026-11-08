@@ -7,7 +7,14 @@
  * - Native subagents cannot make root-owned durable-memory decisions.
  * External groups live in `mode-tool-surface.test.ts` (split to keep both under 500 lines).
  */
-import { bash as nativeBash, glob as nativeGlob, grep as nativeGrep, readFile as nativeReadFile, webFetch as eveWebFetch, writeFile as nativeWriteFile } from "eve/tools/defaults";
+import {
+  bash as nativeBash,
+  glob as nativeGlob,
+  grep as nativeGrep,
+  readFile as nativeReadFile,
+  webFetch as eveWebFetch,
+  writeFile as nativeWriteFile,
+} from "eve/tools/defaults";
 import { describe, expect, it, vi } from "vitest";
 
 const loadCurrentExternalGroupCapabilities = vi.hoisted(() => vi.fn());
@@ -22,7 +29,13 @@ vi.mock("./external-group-live-policy.js", () => ({
   authorizeCurrentExternalGroupCapability,
 }));
 
-import { FAMILY_ONLY_TOOL_NAMES, PRIVATE_ONLY_TOOL_NAMES, TRUSTED_MODE_TOOL_NAMES, buildModeToolSurface, buildSubagentToolSurface } from "./mode-tool-surface.js";
+import {
+  FAMILY_ONLY_TOOL_NAMES,
+  PRIVATE_ONLY_TOOL_NAMES,
+  TRUSTED_MODE_TOOL_NAMES,
+  buildModeToolSurface,
+  buildSubagentToolSurface,
+} from "./mode-tool-surface.js";
 import { TRUSTED_MODE_TOOLS } from "./trusted-mode-tool-catalog.js";
 import { TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES } from "../turn-interjection/turn-interjection-surface.js";
 import { FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS } from "./group-tool-catalog.js";
@@ -34,7 +47,11 @@ function names(input: Parameters<typeof buildModeToolSurface>[0]): string[] {
 describe("trusted mode tool surfaces", () => {
   it("gives a private chat the shared tools plus owner administration only", () => {
     expect(names({ environment: "private" })).toEqual(
-      [...TRUSTED_MODE_TOOL_NAMES, ...PRIVATE_ONLY_TOOL_NAMES, ...TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES].sort(),
+      [
+        ...TRUSTED_MODE_TOOL_NAMES,
+        ...PRIVATE_ONLY_TOOL_NAMES,
+        ...TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES,
+      ].sort(),
     );
     expect(names({ environment: "private" })).toContain("manage_external_group_schedule");
   });
@@ -48,16 +65,36 @@ describe("trusted mode tool surfaces", () => {
     });
 
     expect(privateNames).toEqual(
-      expect.arrayContaining(["get_memory_source", "list_memory_threads", "manage_memory_thread", "manage_profile_projection", "read_memory_thread", "read_profile_view", "search_memory_threads"]),
+      expect.arrayContaining([
+        "get_memory_source",
+        "list_memory_threads",
+        "manage_memory_thread",
+        "manage_profile_projection",
+        "read_memory_thread",
+        "read_profile_view",
+        "search_memory_threads",
+      ]),
     );
-    expect(familyNames).toEqual(expect.arrayContaining(["list_memory_threads", "manage_memory_thread", "read_memory_thread", "read_profile_view", "search_memory_threads"]));
+    expect(familyNames).toEqual(
+      expect.arrayContaining([
+        "list_memory_threads",
+        "manage_memory_thread",
+        "read_memory_thread",
+        "read_profile_view",
+        "search_memory_threads",
+      ]),
+    );
     expect(familyNames).not.toContain("get_memory_source");
     expect(externalNames).toEqual(expect.arrayContaining(["read_profile_view"]));
   });
 
   it("gives a family group the shared tools plus group history and attachments only", () => {
     expect(names({ environment: "family" })).toEqual(
-      [...TRUSTED_MODE_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES, ...TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES].sort(),
+      [
+        ...TRUSTED_MODE_TOOL_NAMES,
+        ...FAMILY_ONLY_TOOL_NAMES,
+        ...TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES,
+      ].sort(),
     );
     expect(names({ environment: "family" })).not.toContain("manage_external_group_schedule");
   });
@@ -98,16 +135,26 @@ describe("trusted mode tool surfaces", () => {
         if (denied === "web_fetch" || denied === "web_search") continue;
         // Bash is re-emitted only as Eve's own tool so its results can carry waiting messages.
         if (denied === "bash") {
-          expect(surface.bash?.description, `${environment} must keep the native bash`).toBe(nativeBash.description);
+          expect(surface.bash?.description, `${environment} must keep the native bash`).toBe(
+            nativeBash.description,
+          );
           continue;
         }
-        expect(names({ environment }), `${environment} must not override ${denied}`).not.toContain(denied);
+        expect(names({ environment }), `${environment} must not override ${denied}`).not.toContain(
+          denied,
+        );
       }
     }
   });
 
   it("re-emits native sandbox tools unchanged in interactive trusted zones only", () => {
-    const native = { bash: nativeBash, glob: nativeGlob, grep: nativeGrep, read_file: nativeReadFile, write_file: nativeWriteFile };
+    const native = {
+      bash: nativeBash,
+      glob: nativeGlob,
+      grep: nativeGrep,
+      read_file: nativeReadFile,
+      write_file: nativeWriteFile,
+    };
     for (const environment of ["private", "family"] as const) {
       const surface = buildModeToolSurface({ environment });
       for (const [name, definition] of Object.entries(native)) {
@@ -115,7 +162,8 @@ describe("trusted mode tool surfaces", () => {
         expect(surface[name]?.inputSchema, `${environment}.${name}`).toBe(definition.inputSchema);
       }
       const scheduled = buildModeToolSurface({ environment, scheduledRun: true });
-      for (const name of TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES) expect(scheduled).not.toHaveProperty(name);
+      for (const name of TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES)
+        expect(scheduled).not.toHaveProperty(name);
     }
   });
 
@@ -128,7 +176,10 @@ describe("trusted mode tool surfaces", () => {
     }
     // The catalog entry spreads Eve's definition, so the executor is Eve's own before wrapping.
     {
-      const catalogTool = TRUSTED_MODE_TOOLS.web_fetch as unknown as { execute: unknown; inputSchema: unknown };
+      const catalogTool = TRUSTED_MODE_TOOLS.web_fetch as unknown as {
+        execute: unknown;
+        inputSchema: unknown;
+      };
       const eve = eveWebFetch as unknown as { execute: unknown; inputSchema: unknown };
       expect(catalogTool.execute).toBe(eve.execute);
       expect(catalogTool.inputSchema).toBe(eve.inputSchema);
@@ -138,33 +189,55 @@ describe("trusted mode tool surfaces", () => {
   it("keeps HITL approval configuration after dynamic emission", () => {
     const surface = buildModeToolSurface({ environment: "private" });
 
-    for (const toolName of ["manage_reminder", "manage_agent_schedule", "manage_family_invitation", "manage_gmail_message"]) {
-      expect((surface[toolName] as unknown as { approval?: unknown }).approval, `${toolName} must keep its approval policy`).toBeDefined();
+    for (const toolName of [
+      "manage_reminder",
+      "manage_agent_schedule",
+      "manage_family_invitation",
+      "manage_gmail_message",
+    ]) {
+      expect(
+        (surface[toolName] as unknown as { approval?: unknown }).approval,
+        `${toolName} must keep its approval policy`,
+      ).toBeDefined();
     }
   });
 
   it("keeps the authored-skill library to interactive trusted roots", () => {
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("manage_skill");
     expect(buildModeToolSurface({ environment: "family" })).toHaveProperty("manage_skill");
-    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty(
+      "manage_skill",
+    );
     expect(buildSubagentToolSurface({ environment: "family" })).not.toHaveProperty("manage_skill");
-    expect(buildModeToolSurface({ capabilities: new Set(), environment: "external" })).not.toHaveProperty("manage_skill");
-    expect(buildModeToolSurface({ environment: "family" }).manage_skill?.approval).toBeTypeOf("function");
+    expect(
+      buildModeToolSurface({ capabilities: new Set(), environment: "external" }),
+    ).not.toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ environment: "family" }).manage_skill?.approval).toBeTypeOf(
+      "function",
+    );
   });
 
   it("keeps root-owned durable writes off subagents", () => {
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("remember");
     expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("remember");
-    expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("manage_behavior_preference");
-    expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("manage_behavior_preference");
+    expect(buildModeToolSurface({ environment: "private" })).toHaveProperty(
+      "manage_behavior_preference",
+    );
+    expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty(
+      "manage_behavior_preference",
+    );
     expect(
       buildSubagentToolSurface({
         capabilities: new Set(["remember"]),
         environment: "external",
       }),
     ).not.toHaveProperty("remember");
-    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty("manage_behavior_preference");
-    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty("remember");
+    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty(
+      "manage_behavior_preference",
+    );
+    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty(
+      "remember",
+    );
     expect(
       buildModeToolSurface({
         capabilities: new Set(["remember"]),

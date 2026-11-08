@@ -41,9 +41,7 @@ const NON_PUBLIC_IPV4_RANGES: readonly Ipv4Range[] = [
 ];
 
 function ipv4ToNumber(address: string): number {
-  return address
-    .split(".")
-    .reduce((value, octet) => (value * 256 + Number(octet)) >>> 0, 0);
+  return address.split(".").reduce((value, octet) => (value * 256 + Number(octet)) >>> 0, 0);
 }
 
 function belongsToRange(address: string, range: Ipv4Range): boolean {
@@ -66,9 +64,7 @@ function requirePublicIpv4(value: string): string {
   return address;
 }
 
-export async function discoverPublicIpv4(
-  sources: readonly PublicIpv4Source[],
-): Promise<string> {
+export async function discoverPublicIpv4(sources: readonly PublicIpv4Source[]): Promise<string> {
   const sourceIds = new Set(sources.map(({ id }) => id));
   if (sourceIds.size !== sources.length || sources.length < MINIMUM_INDEPENDENT_OBSERVATIONS) {
     throw new InstallerError(

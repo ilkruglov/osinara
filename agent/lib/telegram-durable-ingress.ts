@@ -17,11 +17,18 @@ import type {
 import { parseTelegramUpdate, telegramContinuationToken } from "eve/channels/telegram";
 import { z } from "zod";
 
-import { TELEGRAM_INGRESS_LEASE_MS, TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS, TELEGRAM_PRIVATE_BURST_QUIET_MS } from "../config.js";
+import {
+  TELEGRAM_INGRESS_LEASE_MS,
+  TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS,
+  TELEGRAM_PRIVATE_BURST_QUIET_MS,
+} from "../config.js";
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
 import { telegramIngressMaxConcurrentDrains } from "./telegram-ingress-concurrency.js";
-import type { TelegramIngressClaim, TelegramIngressRepository } from "./telegram-ingress-contract.js";
+import type {
+  TelegramIngressClaim,
+  TelegramIngressRepository,
+} from "./telegram-ingress-contract.js";
 import { sendTelegramFailureNotice } from "./telegram-failure-notice.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
 import {
@@ -46,8 +53,16 @@ import {
 } from "./telegram-pending-messages.js";
 import { telegramWhisperGate, type TelegramWhisperGate } from "./whisper/telegram-whisper-gate.js";
 import { acceptTelegramEphemeralMessage } from "./whisper/telegram-whisper-ingress.js";
-import { isTelegramEphemeralMessage, readTelegramWhisperMarker } from "./whisper/telegram-whisper.js";
-import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks } from "./telegram-rich-message.js";
+import {
+  isTelegramEphemeralMessage,
+  readTelegramWhisperMarker,
+} from "./whisper/telegram-whisper.js";
+import {
+  normalizeRichMessage,
+  richMediaIsLifted,
+  richMessagePlainText,
+  withoutRichMediaBlocks,
+} from "./telegram-rich-message.js";
 import { withLocationText } from "./telegram-location-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
@@ -55,7 +70,10 @@ import { telegramRepository } from "./telegram-repository.js";
 import { noteInboundTelegramMessage } from "./telegram-reachability/reachability-guard.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
 
-const telegramUpdateIdSchema = z.union([z.number().int().nonnegative().safe(), z.string().regex(/^\d+$/)]);
+const telegramUpdateIdSchema = z.union([
+  z.number().int().nonnegative().safe(),
+  z.string().regex(/^\d+$/),
+]);
 const telegramVoiceSchema = z.object({
   message: z
     .object({
@@ -100,18 +118,18 @@ interface DurableIngressDependencies {
    * Records a message as proof that its chat reaches the bot and clears its unreachable mark
    * (migration 138). Never throws: a failed write must not refuse the update.
    */
-  noteInboundMessage?(input: { chatId: string; message: Record<string, unknown>; updateId: string }): Promise<void>;
+  noteInboundMessage?(input: {
+    chatId: string;
+    message: Record<string, unknown>;
+    updateId: string;
+  }): Promise<void>;
   /**
    * Tells the person in a private chat that a message of theirs was not processed. Failure texts are
    * written for people; without this they only reached the log.
    */
   notifyFailure?(update: TelegramUpdate, failure: { code: string; message: string }): Promise<void>;
   repository: TelegramIngressRepository;
-  transcribeVoice(input: {
-    fileId: string;
-    fileSize?: number;
-    mimeType?: string;
-  }): Promise<string>;
+  transcribeVoice(input: { fileId: string; fileSize?: number; mimeType?: string }): Promise<string>;
   /**
    * Authorizes an ephemeral `/whisper` and answers it with a placeholder at once (Telegram allows
    * the reply within 15 seconds only). Without it every ephemeral message is dropped.
@@ -142,8 +160,7 @@ function queueKey(update: TelegramUpdate): string {
   if (update.kind === "callback_query" && !update.callbackQuery.message) {
     return `telegram:callback:${update.callbackQuery.id}`;
   }
-  const message =
-    update.kind === "message" ? update.message : update.callbackQuery.message!;
+  const message = update.kind === "message" ? update.message : update.callbackQuery.message!;
 
   // One FIFO per chat/topic is stricter than Eve's reply branches and avoids cross-anchor races.
   return telegramContinuationToken({
@@ -205,15 +222,17 @@ async function waitForSessionBoundary(
       if (
         event.value.type === "approval.settled" &&
         options.hasPendingApprovals !== undefined &&
-        await options.hasPendingApprovals()
+        (await options.hasPendingApprovals())
       ) {
         // Eve resumes a parked step only once every prompt of the session is answered, and the
         // remaining answers can arrive only through this drain. This delivery is complete.
-        console.info(JSON.stringify({
-          code: "AGENT_TELEGRAM_APPROVAL_BATCH_PENDING",
-          sessionId: session.id,
-          updateId: options.updateId,
-        }));
+        console.info(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_APPROVAL_BATCH_PENDING",
+            sessionId: session.id,
+            updateId: options.updateId,
+          }),
+        );
         reachedBoundary = true;
         break;
       }
@@ -257,7 +276,10 @@ function withCaptionlessAttachmentText(update: TelegramUpdate): TelegramUpdate {
   };
 }
 
-function withTranscript(payload: Record<string, unknown>, transcript: string): Record<string, unknown> {
+function withTranscript(
+  payload: Record<string, unknown>,
+  transcript: string,
+): Record<string, unknown> {
   const cloned = structuredClone(payload);
   const message = cloned.message;
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -292,10 +314,14 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     while (!signal.aborted) {
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(resolve, heartbeatMilliseconds);
-        signal.addEventListener("abort", () => {
-          clearTimeout(timeout);
-          resolve();
-        }, { once: true });
+        signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timeout);
+            resolve();
+          },
+          { once: true },
+        );
       });
       if (signal.aborted) return;
       await dependencies.repository.renewLease(
@@ -312,20 +338,29 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   let staleLeasesReleased = false;
 
   // A lost lease means another drain owns the message; anything else is the person's to know.
-  async function notifyFailure(failed: TelegramIngressClaim, failure: { code: string; message: string }): Promise<void> {
+  async function notifyFailure(
+    failed: TelegramIngressClaim,
+    failure: { code: string; message: string },
+  ): Promise<void> {
     if (!dependencies.notifyFailure || failure.code === "AGENT_TELEGRAM_LEASE_LOST") return;
     const update = parseTelegramUpdate(failed.payload);
     // A private chat and a whisper's placeholder are seen by the author alone; a group never is.
-    if (update?.kind !== "message" ||
-      (update.message.chat.type !== "private" && readTelegramWhisperMarker(update.message.raw) === null)) return;
+    if (
+      update?.kind !== "message" ||
+      (update.message.chat.type !== "private" &&
+        readTelegramWhisperMarker(update.message.raw) === null)
+    )
+      return;
     try {
       await dependencies.notifyFailure(update, failure);
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_TELEGRAM_FAILURE_NOTICE_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-        updateId: failed.updateId,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_TELEGRAM_FAILURE_NOTICE_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+          updateId: failed.updateId,
+        }),
+      );
     }
   }
 
@@ -342,8 +377,14 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     const followers = await dependencies.repository.claimFollowing({
       accept: (payload) => {
         const candidate = parseTelegramUpdate(payload);
-        return candidate !== null &&
-          continuesSeries(update, withLocationText(normalizeRichMessage(candidate)), dependencies.botUsername);
+        return (
+          candidate !== null &&
+          continuesSeries(
+            update,
+            withLocationText(normalizeRichMessage(candidate)),
+            dependencies.botUsername,
+          )
+        );
       },
       afterUpdateId: head.updateId,
       leaseMilliseconds: dependencies.leaseMilliseconds,
@@ -362,13 +403,16 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     });
   }
 
-  function seriesMarker(series: readonly LeasedUpdate[], index: number): TelegramSeriesMarker | null {
+  function seriesMarker(
+    series: readonly LeasedUpdate[],
+    index: number,
+  ): TelegramSeriesMarker | null {
     if (series.length === 1) return null;
     if (index < series.length - 1) return { role: "context" };
     const messages = series.map((item) => (item.update as { message: TelegramMessage }).message);
     return {
       addressed: messages.some((message) =>
-        isMessageAddressedToBot(message, dependencies.botUsername)
+        isMessageAddressedToBot(message, dependencies.botUsername),
       ),
       // The ordinary turn checks these against messages a running turn already showed to the model.
       earlierUpdateIds: series.slice(0, -1).map((item) => item.claim.updateId),
@@ -377,9 +421,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     };
   }
 
-  async function drain(
-    dispatch: TelegramVerifiedUpdateContext["dispatch"],
-  ): Promise<void> {
+  async function drain(dispatch: TelegramVerifiedUpdateContext["dispatch"]): Promise<void> {
     if (!staleLeasesReleased) {
       staleLeasesReleased = true;
       const released = await dependencies.repository.releaseStaleLeases();
@@ -388,7 +430,10 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       }
     }
     while (true) {
-      const claim = await dependencies.repository.claimNext(dependencies.leaseMilliseconds, privateBurst);
+      const claim = await dependencies.repository.claimNext(
+        dependencies.leaseMilliseconds,
+        privateBurst,
+      );
       if (!claim) {
         // A private chat still receiving a burst is held: sleep until it is ready instead of
         // leaving its reply to the next poll of the ingress worker.
@@ -409,10 +454,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         const controller = new AbortController();
         heartbeatControllers.set(leased.updateId, controller);
         heartbeats.push(
-          maintainLease(leased.updateId, leased.leaseToken, controller.signal)
-            .catch((error: unknown) => {
+          maintainLease(leased.updateId, leased.leaseToken, controller.signal).catch(
+            (error: unknown) => {
               heartbeatError = error;
-            }),
+            },
+          ),
         );
       };
       const stopHeartbeat = (updateId: string): void => {
@@ -431,18 +477,20 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       ): Promise<void> {
         await dependencies.repository.beginDispatch(leased.updateId, leased.leaseToken);
         // The turn learns its own update id: messages queued after it can then be shown to it.
-        const stamped = update.kind === "message" ? withTelegramUpdateMarker(update, leased.updateId) : update;
-        const marked = marker !== null && stamped.kind === "message"
-          ? withSeriesMarker(stamped, marker)
-          : stamped;
+        const stamped =
+          update.kind === "message" ? withTelegramUpdateMarker(update, leased.updateId) : update;
+        const marked =
+          marker !== null && stamped.kind === "message"
+            ? withSeriesMarker(stamped, marker)
+            : stamped;
         // The turn sees what the chat said after its message: otherwise it answered a snapshot
         // the conversation had already moved past, and two bots went in circles.
-        const outbound = pendingAfter.length > 0 && marked.kind === "message"
-          ? withPendingMarker(marked, pendingAfter)
-          : marked;
-        const session = (await dispatch(
-          withCaptionlessAttachmentText(outbound),
-        )) as EveSessionResult | null | undefined;
+        const outbound =
+          pendingAfter.length > 0 && marked.kind === "message"
+            ? withPendingMarker(marked, pendingAfter)
+            : marked;
+        const session = (await dispatch(withCaptionlessAttachmentText(outbound))) as
+          EveSessionResult | null | undefined;
         if (!session) {
           stopHeartbeat(leased.updateId);
           await dependencies.repository.complete(leased.updateId, leased.leaseToken);
@@ -450,15 +498,19 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         }
         // The durable cursor excludes every event from earlier turns of a reused Eve session.
         const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
-        const { nextEventIndex, sessionFailed } = await waitForSessionBoundary(session, streamCursor, {
-          ...(update.kind === "callback_query"
-            ? {
-              hasPendingApprovals: () =>
-                dependencies.repository.hasPendingApprovals(session.id),
-            }
-            : {}),
-          updateId: leased.updateId,
-        });
+        const { nextEventIndex, sessionFailed } = await waitForSessionBoundary(
+          session,
+          streamCursor,
+          {
+            ...(update.kind === "callback_query"
+              ? {
+                  hasPendingApprovals: () =>
+                    dependencies.repository.hasPendingApprovals(session.id),
+                }
+              : {}),
+            updateId: leased.updateId,
+          },
+        );
         if (heartbeatError) throw heartbeatError;
         stopHeartbeat(leased.updateId);
         await dependencies.repository.completeWithSession(
@@ -469,7 +521,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         );
         // A session that failed outright may end before any turn told the author; in a group that
         // stays silent, but a whisper's placeholder is the author's alone and would keep «Думаю…».
-        if (sessionFailed && update.kind === "message" && readTelegramWhisperMarker(update.message.raw)) {
+        if (
+          sessionFailed &&
+          update.kind === "message" &&
+          readTelegramWhisperMarker(update.message.raw)
+        ) {
           await notifyFailure(leased, {
             code: "AGENT_TELEGRAM_SESSION_FAILED",
             message: "Не получилось ответить: разговор прервался из-за сбоя. Спросите ещё раз",
@@ -492,14 +548,18 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         // Application update decisions are durable DB transitions and never enter an Eve session.
         if (
           update.kind === "callback_query" &&
-          await dependencies.handleSoftwareUpdateCallback(update.callbackQuery)
+          (await dependencies.handleSoftwareUpdateCallback(update.callbackQuery))
         ) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           pending.shift();
           continue;
         }
 
-        if (claim.voice && update.kind === "message" && shouldTranscribeVoice(update.message, dependencies.botUsername)) {
+        if (
+          claim.voice &&
+          update.kind === "message" &&
+          shouldTranscribeVoice(update.message, dependencies.botUsername)
+        ) {
           const authorized = await dependencies.authorizeVoice(update.message);
           if (authorized) {
             if (!claim.transcript) {
@@ -542,24 +602,34 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           startHeartbeat(follower.claim);
         }
         if (series.length > 1) {
-          console.info(JSON.stringify({
-            code: "AGENT_TELEGRAM_SERIES_CLAIMED",
-            messages: series.length,
-            updateIds: series.map((item) => item.claim.updateId),
-          }));
+          console.info(
+            JSON.stringify({
+              code: "AGENT_TELEGRAM_SERIES_CLAIMED",
+              messages: series.length,
+              updateIds: series.map((item) => item.claim.updateId),
+            }),
+          );
         }
         const tail = series[series.length - 1]!;
-        const pendingAfter = tail.update.kind === "message"
-          ? pendingMessagesFromPayloads(await dependencies.repository.listPendingAfter({
-            afterUpdateId: tail.claim.updateId,
-            limit: TELEGRAM_PENDING_MESSAGES_MAX,
-            queueId: tail.claim.queueId,
-          }))
-          : [];
+        const pendingAfter =
+          tail.update.kind === "message"
+            ? pendingMessagesFromPayloads(
+                await dependencies.repository.listPendingAfter({
+                  afterUpdateId: tail.claim.updateId,
+                  limit: TELEGRAM_PENDING_MESSAGES_MAX,
+                  queueId: tail.claim.queueId,
+                }),
+              )
+            : [];
         for (let index = 0; index < series.length; index += 1) {
           const item = series[index]!;
           const last = index === series.length - 1;
-          await dispatchLeased(item.claim, item.update, seriesMarker(series, index), last ? pendingAfter : []);
+          await dispatchLeased(
+            item.claim,
+            item.update,
+            seriesMarker(series, index),
+            last ? pendingAfter : [],
+          );
           pending.shift();
         }
       } catch (error) {
@@ -574,21 +644,28 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             code: failure.code,
             error: error instanceof Error ? error.message : String(error),
             updateId: pending[0]?.updateId ?? claim.updateId,
-            ...(pending.length > 1 ? { seriesUpdateIds: pending.map((item) => item.updateId) } : {}),
+            ...(pending.length > 1
+              ? { seriesUpdateIds: pending.map((item) => item.updateId) }
+              : {}),
           }),
         );
         // Only the message being prepared or dispatched failed; the rest of its series never reached
         // Eve and goes back to the queue (2 October 2026: two fresh messages failed with a head
         // whose interrupted dispatch was refused as possibly double).
         const [failed, ...untouched] = pending;
-        const retryUndelivered = failed !== undefined && isHookMissing(error) &&
+        const retryUndelivered =
+          failed !== undefined &&
+          isHookMissing(error) &&
           failed.attemptCount < HOOK_MISSING_MAX_ATTEMPTS;
         if (failed && retryUndelivered) {
           stopHeartbeat(failed.updateId);
-          await new Promise((resolve) => setTimeout(
-            resolve,
-            dependencies.hookMissingRetryDelayMilliseconds ?? DEFAULT_HOOK_MISSING_RETRY_DELAY_MILLISECONDS,
-          ));
+          await new Promise((resolve) =>
+            setTimeout(
+              resolve,
+              dependencies.hookMissingRetryDelayMilliseconds ??
+                DEFAULT_HOOK_MISSING_RETRY_DELAY_MILLISECONDS,
+            ),
+          );
           await dependencies.repository.releaseUndelivered(failed.updateId, failed.leaseToken, {
             code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING",
             message: "Сессия ещё не готова принять сообщение; оно вернулось в очередь",
@@ -636,7 +713,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     // goes to its own lane with the placeholder already sent, anything else is dropped.
     if (update.kind === "message" && isTelegramEphemeralMessage(update.message.raw)) {
       await dependencies.noteInboundMessage?.({
-        chatId: update.message.chat.id, message: update.message.raw, updateId: incomingUpdateId,
+        chatId: update.message.chat.id,
+        message: update.message.raw,
+        updateId: incomingUpdateId,
       });
       const accepted = await acceptTelegramEphemeralMessage({
         enqueue: (input) => dependencies.repository.enqueue(input),
@@ -648,22 +727,30 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       if (accepted === "queued") scheduleDrain(context);
       return new Response("ok");
     }
-    const mediaKind = update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
+    const mediaKind =
+      update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
     // Only the one file lifted out of a rich post may be refused while its text goes on: the
     // lifted file is then the message's only media. Any other media next to rich text (a voice
     // field, a second file) keeps the full refusal, because the text-only shape below removes
     // rich blocks alone and would leave that media in the stored update.
-    const textFallback = update.kind === "message" && update.message.attachments.length === 1 &&
+    const textFallback =
+      update.kind === "message" &&
+      update.message.attachments.length === 1 &&
       !hasTelegramRawMediaBesidesLifted(update.message.raw) &&
-      richMediaIsLifted(update.message.raw) && richMessagePlainText(update.message.raw) !== null;
+      richMediaIsLifted(update.message.raw) &&
+      richMessagePlainText(update.message.raw) !== null;
     let payload: Record<string, unknown> = context.raw;
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
-    const mediaRefused = update.kind === "message" && mediaKind !== "none" &&
-      !await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback);
+    const mediaRefused =
+      update.kind === "message" &&
+      mediaKind !== "none" &&
+      !(await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback));
     // Even a refused file proves the chat still reaches the bot; a button press is not recorded.
     if (update.kind === "message") {
       await dependencies.noteInboundMessage?.({
-        chatId: update.message.chat.id, message: update.message.raw, updateId: incomingUpdateId,
+        chatId: update.message.chat.id,
+        message: update.message.raw,
+        updateId: incomingUpdateId,
       });
     }
     if (mediaRefused) {
@@ -674,7 +761,8 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     }
     // A rich post that lifted nothing (two files, a video) is text for the chat: its file
     // references are dropped from the stored update too, so nothing can read them later.
-    if (update.kind === "message" && mediaKind === "none") payload = withoutRichMediaBlocks(payload);
+    if (update.kind === "message" && mediaKind === "none")
+      payload = withoutRichMediaBlocks(payload);
     const voice = voiceMetadata(context.raw);
     await dependencies.repository.enqueue({
       continuationKey: queueKey(update),

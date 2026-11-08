@@ -2,16 +2,16 @@ import type { Writable } from "node:stream";
 import type { ChannelSetupLog } from "./channel-setup-prompter.js";
 import { type PromptColors } from "./prompt-ui.js";
 interface PromptOutput extends Writable {
-    readonly isTTY?: boolean;
-    readonly columns?: number;
+  readonly isTTY?: boolean;
+  readonly columns?: number;
 }
 /**
  * A running spinner anchored to the rail. Call {@link RailSpinner.stop}
  * once the awaited work settles to remove it; the call is idempotent.
  */
 export interface RailSpinner {
-    /** Stops the animation and erases the spinner so the next output starts clean. */
-    stop(): void;
+  /** Stops the animation and erases the spinner so the next output starts clean. */
+  stop(): void;
 }
 /**
  * Spinner frames cycled by {@link RailLog.spinner}: a single braille cell that
@@ -23,25 +23,46 @@ export interface RailSpinner {
  * sequence so the frames stay deterministic and testable; the invariant is
  * checked in the colocated test.
  */
-export declare const SPINNER_FRAMES: readonly ["⠨", "⠸", "⢸", "⢺", "⢾", "⢿", "⢾", "⢼", "⢸", "⠸", "⠨", "⠪", "⠮", "⠯", "⢯", "⢿", "⠿", "⠾", "⠺", "⠪"];
+export declare const SPINNER_FRAMES: readonly [
+  "⠨",
+  "⠸",
+  "⢸",
+  "⢺",
+  "⢾",
+  "⢿",
+  "⢾",
+  "⢼",
+  "⢸",
+  "⠸",
+  "⠨",
+  "⠪",
+  "⠮",
+  "⠯",
+  "⢯",
+  "⢿",
+  "⠿",
+  "⠾",
+  "⠺",
+  "⠪",
+];
 /** Delay between spinner frames. ~8 fps reads as a calm pulse. */
 export declare const SPINNER_FRAME_MS = 120;
 /** A rail log whose current command detail can be cleared before the next prompt is drawn. */
 export interface RailLog extends ChannelSetupLog {
-    section?(title: string, lines: readonly string[]): void;
-    /**
-     * Shows a section-like spinner (leading rail + a breathing braille cell +
-     * message) while a network or other async wait is in flight, then clears it
-     * on {@link RailSpinner.stop} so it leaves no trace. Non-TTY output prints the
-     * message once and the returned `stop` is a no-op.
-     */
-    spinner(message: string): RailSpinner;
-    settle(): void;
+  section?(title: string, lines: readonly string[]): void;
+  /**
+   * Shows a section-like spinner (leading rail + a breathing braille cell +
+   * message) while a network or other async wait is in flight, then clears it
+   * on {@link RailSpinner.stop} so it leaves no trace. Non-TTY output prints the
+   * message once and the returned `stop` is a no-op.
+   */
+  spinner(message: string): RailSpinner;
+  settle(): void;
 }
 /** Options for the shared live rail log used by both eve onboarding entry points. */
 export interface RailLogOptions {
-    colors: PromptColors;
-    output: PromptOutput;
+  colors: PromptColors;
+  output: PromptOutput;
 }
 /**
  * Renders setup status rows above a single {@link LiveRegion}. Committed lines

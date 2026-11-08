@@ -1,7 +1,4 @@
-import {
-  ResolveAgentError,
-  createResolvedModuleSourceRef,
-} from "#runtime/resolve-helpers.js";
+import { ResolveAgentError, createResolvedModuleSourceRef } from "#runtime/resolve-helpers.js";
 import { resolveDynamicToolDefinition } from "#runtime/resolve-dynamic-tool.js";
 import { resolveChannelDefinition } from "#runtime/resolve-channel.js";
 import { resolveConnectionDefinition } from "#runtime/resolve-connection.js";
@@ -25,9 +22,7 @@ async function resolveAgent(e) {
     i.push(await resolveChannelDefinition(t, e.moduleMap, e.nodeId));
   }
   let o = await Promise.all(
-      e.manifest.tools.map((t) =>
-        resolveToolDefinition(t, e.moduleMap, e.nodeId),
-      ),
+      e.manifest.tools.map((t) => resolveToolDefinition(t, e.moduleMap, e.nodeId)),
     ),
     s = await Promise.all(
       (e.manifest.dynamicInstructions ?? []).map((t) =>
@@ -40,28 +35,18 @@ async function resolveAgent(e) {
       ),
     ),
     l = await Promise.all(
-      e.manifest.dynamicTools.map((t) =>
-        resolveDynamicToolDefinition(t, e.moduleMap, e.nodeId),
-      ),
+      e.manifest.dynamicTools.map((t) => resolveDynamicToolDefinition(t, e.moduleMap, e.nodeId)),
     ),
     u = await Promise.all(
-      e.manifest.hooks.map((t) =>
-        resolveHookDefinition(t, e.moduleMap, e.nodeId),
-      ),
+      e.manifest.hooks.map((t) => resolveHookDefinition(t, e.moduleMap, e.nodeId)),
     ),
     d = await Promise.all(
-      e.manifest.connections.map((t) =>
-        resolveConnectionDefinition(t, e.moduleMap, e.nodeId),
-      ),
+      e.manifest.connections.map((t) => resolveConnectionDefinition(t, e.moduleMap, e.nodeId)),
     ),
     f =
       e.manifest.sandbox === null
         ? null
-        : await resolveSandboxDefinition(
-            e.manifest.sandbox,
-            e.moduleMap,
-            e.nodeId,
-          ),
+        : await resolveSandboxDefinition(e.manifest.sandbox, e.moduleMap, e.nodeId),
     p = e.manifest.instructions.map(createResolvedInstructionsDefinition),
     m = e.manifest.workspaceResourceRoot,
     h = {
@@ -90,9 +75,7 @@ async function resolveAgent(e) {
       tools: o,
       workspaceSpec: { rootEntries: [...m.rootEntries] },
     };
-  return `config` in e.manifest
-    ? { ...h, config: createResolvedAgentConfig(e.manifest) }
-    : h;
+  return `config` in e.manifest ? { ...h, config: createResolvedAgentConfig(e.manifest) } : h;
 }
 function createResolvedInstructionsDefinition(e) {
   return {
@@ -112,15 +95,13 @@ function createResolvedAgentConfig(e) {
       (t.model =
         e.config.compaction.model.source === void 0
           ? {
-              contextWindowTokens:
-                e.config.compaction.model.contextWindowTokens,
+              contextWindowTokens: e.config.compaction.model.contextWindowTokens,
               id: e.config.compaction.model.id,
               maxOutputTokens: e.config.compaction.model.maxOutputTokens,
               providerOptions: e.config.compaction.model.providerOptions,
             }
           : {
-              contextWindowTokens:
-                e.config.compaction.model.contextWindowTokens,
+              contextWindowTokens: e.config.compaction.model.contextWindowTokens,
               id: e.config.compaction.model.id,
               maxOutputTokens: e.config.compaction.model.maxOutputTokens,
               providerOptions: e.config.compaction.model.providerOptions,
@@ -138,21 +119,17 @@ function createResolvedAgentConfig(e) {
   if (
     (e.config.experimental !== void 0 &&
       (n.experimental = {
-        instrumentationProviders:
-          e.config.experimental.instrumentationProviders,
-        subagentPersistentSessions:
-          e.config.experimental.subagentPersistentSessions,
+        instrumentationProviders: e.config.experimental.instrumentationProviders,
+        subagentPersistentSessions: e.config.experimental.subagentPersistentSessions,
         tasks: e.config.experimental.tasks,
         workflow:
           e.config.experimental.workflow === void 0
             ? void 0
             : { world: e.config.experimental.workflow.world },
       }),
-    e.config.outputSchema !== void 0 &&
-      (n.outputSchema = e.config.outputSchema),
+    e.config.outputSchema !== void 0 && (n.outputSchema = e.config.outputSchema),
     e.config.reasoning !== void 0 && (n.reasoning = e.config.reasoning),
-    e.config.source !== void 0 &&
-      (n.source = createResolvedModuleSourceRef(e.config.source)),
+    e.config.source !== void 0 && (n.source = createResolvedModuleSourceRef(e.config.source)),
     e.config.limits !== void 0 &&
       (n.limits = {
         maxInputTokensPerSession: e.config.limits.maxInputTokensPerSession,

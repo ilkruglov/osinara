@@ -9,16 +9,21 @@ export type InputOption = z.infer<typeof inputOptionSchema>;
  * Includes descriptions because the `ask_question` tool input embeds this
  * schema and exposes it directly to the model.
  */
-export declare const inputOptionSchema: z.ZodObject<{
+export declare const inputOptionSchema: z.ZodObject<
+  {
     description: z.ZodOptional<z.ZodString>;
     id: z.ZodString;
     label: z.ZodString;
-    style: z.ZodOptional<z.ZodEnum<{
+    style: z.ZodOptional<
+      z.ZodEnum<{
         danger: "danger";
         default: "default";
         primary: "primary";
-    }>>;
-}, z.core.$strict>;
+      }>
+    >;
+  },
+  z.core.$strict
+>;
 /**
  * Framework-owned source of an input request.
  *
@@ -28,46 +33,67 @@ export declare const inputOptionSchema: z.ZodObject<{
 export type InputRequestKind = z.infer<typeof inputRequestKindSchema>;
 /** Zod schema for the framework-owned source of an input request. */
 export declare const inputRequestKindSchema: z.ZodEnum<{
-    question: "question";
-    "session-limit": "session-limit";
-    "tool-approval": "tool-approval";
+  question: "question";
+  "session-limit": "session-limit";
+  "tool-approval": "tool-approval";
 }>;
 /** Unified input request surfaced when the agent needs user input. */
 export type InputRequest = z.infer<typeof inputRequestSchema>;
 /**
  * Zod schema for one input request.
  */
-export declare const inputRequestSchema: z.ZodObject<{
-    action: z.ZodObject<{
+export declare const inputRequestSchema: z.ZodObject<
+  {
+    action: z.ZodObject<
+      {
         callId: z.ZodString;
-        input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
+        input: z.ZodType<
+          import("../../shared/json.ts").JsonObject,
+          unknown,
+          z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+        >;
         kind: z.ZodLiteral<"tool-call">;
         toolName: z.ZodString;
-    }, z.core.$strict>;
+      },
+      z.core.$strict
+    >;
     allowFreeform: z.ZodOptional<z.ZodBoolean>;
-    display: z.ZodOptional<z.ZodEnum<{
+    display: z.ZodOptional<
+      z.ZodEnum<{
         confirmation: "confirmation";
         select: "select";
         text: "text";
-    }>>;
+      }>
+    >;
     kind: z.ZodEnum<{
-        question: "question";
-        "session-limit": "session-limit";
-        "tool-approval": "tool-approval";
+      question: "question";
+      "session-limit": "session-limit";
+      "tool-approval": "tool-approval";
     }>;
-    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        description: z.ZodOptional<z.ZodString>;
-        id: z.ZodString;
-        label: z.ZodString;
-        style: z.ZodOptional<z.ZodEnum<{
-            danger: "danger";
-            default: "default";
-            primary: "primary";
-        }>>;
-    }, z.core.$strict>>>;
+    options: z.ZodOptional<
+      z.ZodArray<
+        z.ZodObject<
+          {
+            description: z.ZodOptional<z.ZodString>;
+            id: z.ZodString;
+            label: z.ZodString;
+            style: z.ZodOptional<
+              z.ZodEnum<{
+                danger: "danger";
+                default: "default";
+                primary: "primary";
+              }>
+            >;
+          },
+          z.core.$strict
+        >
+      >
+    >;
     prompt: z.ZodString;
     requestId: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Unified input response submitted by the client for a pending request.
  */
@@ -75,11 +101,14 @@ export type InputResponse = z.infer<typeof inputResponseSchema>;
 /**
  * Zod schema for one input response.
  */
-export declare const inputResponseSchema: z.ZodObject<{
+export declare const inputResponseSchema: z.ZodObject<
+  {
     optionId: z.ZodOptional<z.ZodString>;
     requestId: z.ZodString;
     text: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Returns true when a value matches the input request contract.
  */

@@ -40,10 +40,7 @@ const model: NormalizedModel = {
 function prompts(overrides: Partial<PromptAdapter> = {}): PromptAdapter {
   return {
     confirm: vi.fn().mockResolvedValue(false),
-    secret: vi
-      .fn()
-      .mockResolvedValueOnce("123456:Abc_def-123")
-      .mockResolvedValueOnce("model-key"),
+    secret: vi.fn().mockResolvedValueOnce("123456:Abc_def-123").mockResolvedValueOnce("model-key"),
     select: vi
       .fn()
       .mockResolvedValueOnce("sslip-io")
@@ -113,12 +110,10 @@ describe("provider installer orchestration", () => {
       }),
     );
     expect(deps.listModels).toHaveBeenCalledWith("deepseek", "model-key");
-    expect(deps.validateModel).toHaveBeenCalledWith(
-      "deepseek",
-      "model-key",
-      model,
-      { effort: "high", type: "effort" },
-    );
+    expect(deps.validateModel).toHaveBeenCalledWith("deepseek", "model-key", model, {
+      effort: "high",
+      type: "effort",
+    });
     expect(deps.resolveReleaseAssets).toHaveBeenCalledWith();
   });
 
@@ -155,10 +150,7 @@ describe("provider installer orchestration", () => {
       defaultReasoningOption: null,
       displayName: "DeepSeek V4 Flash",
       id: "deepseek-v4-flash",
-      reasoningOptions: [
-        { type: "none" },
-        { effort: "max", type: "effort" },
-      ],
+      reasoningOptions: [{ type: "none" }, { effort: "max", type: "effort" }],
     };
     const multiPrompts = prompts({
       select: vi
@@ -175,12 +167,10 @@ describe("provider installer orchestration", () => {
 
     await runInteractiveInstaller(deps);
 
-    expect(deps.validateModel).toHaveBeenCalledWith(
-      "deepseek",
-      "model-key",
-      secondModel,
-      { effort: "max", type: "effort" },
-    );
+    expect(deps.validateModel).toHaveBeenCalledWith("deepseek", "model-key", secondModel, {
+      effort: "max",
+      type: "effort",
+    });
     expect(deps.executeInstallation).toHaveBeenCalledWith(
       expect.objectContaining({
         model: secondModel,
@@ -277,10 +267,12 @@ describe("provider installer orchestration", () => {
     const executeInstallation = vi.fn();
     const deps = dependencies({
       executeInstallation,
-      listModels: vi.fn().mockResolvedValue([
-        model,
-        { ...model, contextWindowTokens: -1, displayName: "Duplicate" },
-      ]),
+      listModels: vi
+        .fn()
+        .mockResolvedValue([
+          model,
+          { ...model, contextWindowTokens: -1, displayName: "Duplicate" },
+        ]),
     });
 
     await expect(runInteractiveInstaller(deps)).rejects.toMatchObject({
@@ -293,13 +285,15 @@ describe("provider installer orchestration", () => {
     const executeInstallation = vi.fn();
     const deps = dependencies({
       executeInstallation,
-      listModels: vi.fn().mockResolvedValue([{
-        ...model,
-        reasoningOptions: [
-          { effort: "high", type: "effort" },
-          { effort: "high", type: "effort" },
-        ],
-      }]),
+      listModels: vi.fn().mockResolvedValue([
+        {
+          ...model,
+          reasoningOptions: [
+            { effort: "high", type: "effort" },
+            { effort: "high", type: "effort" },
+          ],
+        },
+      ]),
     });
 
     await expect(runInteractiveInstaller(deps)).rejects.toMatchObject({
@@ -322,9 +316,9 @@ describe("provider installer orchestration", () => {
       const executeInstallation = vi.fn();
       const deps = dependencies({
         executeInstallation,
-        listModels: vi.fn().mockResolvedValue([
-          { ...model, ...invalidMetadata } as unknown as NormalizedModel,
-        ]),
+        listModels: vi
+          .fn()
+          .mockResolvedValue([{ ...model, ...invalidMetadata } as unknown as NormalizedModel]),
       });
 
       await expect(runInteractiveInstaller(deps)).rejects.toMatchObject({

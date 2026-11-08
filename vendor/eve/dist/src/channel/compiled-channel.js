@@ -1,12 +1,9 @@
 const CHANNEL_SENTINEL = `eve:channel`,
   CHANNEL_INSTRUMENTATION_KIND = Symbol.for(`eve.channel.instrumentationKind`),
-  CHANNEL_INSTRUMENTATION_KINDS = Symbol.for(
-    `eve.channel.instrumentationKinds`,
-  ),
+  CHANNEL_INSTRUMENTATION_KINDS = Symbol.for(`eve.channel.instrumentationKinds`),
   channelInstrumentationKindGlobal = globalThis;
 channelInstrumentationKindGlobal[CHANNEL_INSTRUMENTATION_KINDS] ??= new Map();
-const channelInstrumentationKinds =
-  channelInstrumentationKindGlobal[CHANNEL_INSTRUMENTATION_KINDS];
+const channelInstrumentationKinds = channelInstrumentationKindGlobal[CHANNEL_INSTRUMENTATION_KINDS];
 function isCompiledChannel(e) {
   return typeof e == `object` && !!e && e.__kind === `eve:channel`;
 }
@@ -30,8 +27,7 @@ function setChannelInstrumentationKind(e, t) {
 }
 function channelRouteSignature(e) {
   if (e.routes.length !== 0)
-    return e.routes.map((e) => `${e.method.toUpperCase()} ${e.path}`).sort()
-      .join(`
+    return e.routes.map((e) => `${e.method.toUpperCase()} ${e.path}`).sort().join(`
 `);
 }
 export {

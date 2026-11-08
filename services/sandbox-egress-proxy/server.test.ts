@@ -11,11 +11,7 @@ import type { Socket } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  bindTunnelLifecycle,
-  connectWithDeadline,
-  createSandboxEgressProxy,
-} from "./server.js";
+import { bindTunnelLifecycle, connectWithDeadline, createSandboxEgressProxy } from "./server.js";
 
 function upstreamSocket(): Socket {
   return Object.assign(new EventEmitter(), {
@@ -51,9 +47,11 @@ describe("sandbox egress proxy server", () => {
     connectWithDeadline(() => socket, 15_000);
     await vi.advanceTimersByTimeAsync(15_000);
 
-    expect(socket.destroy).toHaveBeenCalledWith(expect.objectContaining({
-      message: expect.stringContaining("AGENT_SANDBOX_EGRESS_TIMEOUT"),
-    }));
+    expect(socket.destroy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("AGENT_SANDBOX_EGRESS_TIMEOUT"),
+      }),
+    );
   });
 
   it("does not treat an established idle tunnel as a connection timeout", async () => {

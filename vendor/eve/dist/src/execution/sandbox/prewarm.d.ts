@@ -1,5 +1,12 @@
-import type { SandboxBackend, SandboxBackendPrewarmInput, SandboxBackendPrewarmResult } from "#public/definitions/sandbox-backend.js";
-import { type RuntimeCompiledArtifactsSource, type RuntimeDiskCompiledArtifactsSource } from "#runtime/compiled-artifacts-source.js";
+import type {
+  SandboxBackend,
+  SandboxBackendPrewarmInput,
+  SandboxBackendPrewarmResult,
+} from "#public/definitions/sandbox-backend.js";
+import {
+  type RuntimeCompiledArtifactsSource,
+  type RuntimeDiskCompiledArtifactsSource,
+} from "#runtime/compiled-artifacts-source.js";
 import { type ResolvedAgentGraphBundle } from "#runtime/graph.js";
 /**
  * Optional dispatch override that intercepts every `backend.prewarm`
@@ -9,18 +16,18 @@ import { type ResolvedAgentGraphBundle } from "#runtime/graph.js";
  * them.
  */
 export type SandboxBackendPrewarmDispatch = (input: {
-    readonly backend: SandboxBackend;
-    readonly input: SandboxBackendPrewarmInput;
+  readonly backend: SandboxBackend;
+  readonly input: SandboxBackendPrewarmInput;
 }) => Promise<SandboxBackendPrewarmResult>;
 interface PrewarmSandboxesInput {
-    readonly appRoot: string;
-    readonly compileDirectoryPath: string;
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly graph: ResolvedAgentGraphBundle;
-    readonly log?: (message: string) => void;
-    readonly dispatch?: SandboxBackendPrewarmDispatch;
-    readonly onPrewarmSignature?: (signature: string) => void;
-    readonly shouldPrewarmSignature?: (signature: string) => boolean;
+  readonly appRoot: string;
+  readonly compileDirectoryPath: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly graph: ResolvedAgentGraphBundle;
+  readonly log?: (message: string) => void;
+  readonly dispatch?: SandboxBackendPrewarmDispatch;
+  readonly onPrewarmSignature?: (signature: string) => void;
+  readonly shouldPrewarmSignature?: (signature: string) => boolean;
 }
 /**
  * Prewarms every backend sandbox template required by one compiled
@@ -40,23 +47,25 @@ export declare function prewarmSandboxes(input: PrewarmSandboxesInput): Promise<
  * Vercel build hook.
  */
 export declare function prewarmAppSandboxes(input: {
-    readonly appRoot: string;
-    readonly compiledArtifactsSource?: RuntimeCompiledArtifactsSource;
-    readonly loadAgentGraph?: (input: Readonly<{
-        compiledArtifactsSource: RuntimeDiskCompiledArtifactsSource;
-    }>) => Promise<ResolvedAgentGraphBundle>;
-    readonly log?: (message: string) => void;
-    readonly dispatch?: SandboxBackendPrewarmDispatch;
-    readonly onPrewarmSignature?: (signature: string) => void;
-    readonly shouldPrewarmSignature?: (signature: string) => boolean;
+  readonly appRoot: string;
+  readonly compiledArtifactsSource?: RuntimeCompiledArtifactsSource;
+  readonly loadAgentGraph?: (
+    input: Readonly<{
+      compiledArtifactsSource: RuntimeDiskCompiledArtifactsSource;
+    }>,
+  ) => Promise<ResolvedAgentGraphBundle>;
+  readonly log?: (message: string) => void;
+  readonly dispatch?: SandboxBackendPrewarmDispatch;
+  readonly onPrewarmSignature?: (signature: string) => void;
+  readonly shouldPrewarmSignature?: (signature: string) => boolean;
 }): Promise<void>;
 /**
  * Loads one built app's bundled compiled artifacts and prewarms the sandbox
  * templates that its production Nitro runtime will request.
  */
 export declare function prewarmBuiltAppSandboxes(input: {
-    readonly appRoot: string;
-    readonly log?: (message: string) => void;
-    readonly dispatch?: SandboxBackendPrewarmDispatch;
+  readonly appRoot: string;
+  readonly log?: (message: string) => void;
+  readonly dispatch?: SandboxBackendPrewarmDispatch;
 }): Promise<void>;
 export {};

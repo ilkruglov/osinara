@@ -84,11 +84,7 @@ var EveAgentStore = class {
         if (!this.#v(r)) return;
         (a || ((a = !0), (this.#h = `streaming`)),
           this.#a.admit(e) &&
-            ((this.#u = [...this.#u, e]),
-            this.#x(e),
-            this.#s.onEvent?.(e),
-            this.#S(e),
-            this.#O()));
+            ((this.#u = [...this.#u, e]), this.#x(e), this.#s.onEvent?.(e), this.#S(e), this.#O()));
       }
       if (!this.#v(r)) return;
       this.#h = this.#l === void 0 ? `ready` : `error`;
@@ -113,9 +109,7 @@ var EveAgentStore = class {
     let e = this.#o;
     return e === void 0
       ? Promise.resolve({ status: `no_active_turn` })
-      : e.response.then((e) =>
-          e === void 0 ? { status: `no_active_turn` } : e.cancel(),
-        );
+      : e.response.then((e) => (e === void 0 ? { status: `no_active_turn` } : e.cancel()));
   }
   [detachStore]() {
     this.#o?.abortController.abort();
@@ -137,8 +131,7 @@ var EveAgentStore = class {
       this.#O());
   }
   async #g(e) {
-    if (this.#e === void 0)
-      throw Error(`An external eve session is required before sending.`);
+    if (this.#e === void 0) throw Error(`An external eve session is required before sending.`);
     if (e.message === void 0)
       throw Error(`Cannot answer an input request before the session starts.`);
     let t = await this.#e.sessions.create({ ...e, message: e.message });
@@ -191,11 +184,7 @@ var EveAgentStore = class {
     if (e.type === `message.received` && this.#d !== void 0) {
       let t = this.#d.id;
       ((this.#d = void 0),
-        this.#T(
-          (e) =>
-            e.type === `client.message.submitted` && e.data.submissionId === t,
-          e,
-        ));
+        this.#T((e) => e.type === `client.message.submitted` && e.data.submissionId === t, e));
       return;
     }
     this.#w(e);
@@ -211,19 +200,15 @@ var EveAgentStore = class {
     let t = this.#d;
     t !== void 0 &&
       ((this.#d = void 0),
-      this.#T(
-        (e) =>
-          e.type === `client.message.submitted` && e.data.submissionId === t.id,
-        {
-          data: {
-            createdAt: t.createdAt,
-            error: { message: e.message },
-            message: t.message,
-            submissionId: t.id,
-          },
-          type: `client.message.failed`,
+      this.#T((e) => e.type === `client.message.submitted` && e.data.submissionId === t.id, {
+        data: {
+          createdAt: t.createdAt,
+          error: { message: e.message },
+          message: t.message,
+          submissionId: t.id,
         },
-      ));
+        type: `client.message.failed`,
+      }));
   }
   #w(e) {
     ((this.#f = [...this.#f, e]), (this.#c = this.#r.reduce(this.#c, e)));
@@ -278,8 +263,7 @@ function summarizeUserContent(e) {
       t.push(n.text);
       continue;
     }
-    n.type === `file` &&
-      t.push(n.filename ? `[file: ${n.filename}]` : `[file]`);
+    n.type === `file` && t.push(n.filename ? `[file: ${n.filename}]` : `[file]`);
   }
   return t.join(`
 `);

@@ -9,18 +9,13 @@ function isRecord(e) {
 }
 function parseOutputConfig(e, t) {
   let n = JSON.parse(e);
-  if (!isRecord(n))
-    throw Error(
-      `Vercel Build Output config at "${t}" must contain a JSON object.`,
-    );
+  if (!isRecord(n)) throw Error(`Vercel Build Output config at "${t}" must contain a JSON object.`);
   return n;
 }
 function readCronConfigs(e, t) {
   if (e.crons !== void 0) {
     if (!Array.isArray(e.crons))
-      throw Error(
-        `Vercel Build Output config at "${t}" must contain a crons array.`,
-      );
+      throw Error(`Vercel Build Output config at "${t}" must contain a crons array.`);
     return e.crons.map((e, n) => {
       if (
         !isRecord(e) ||
@@ -29,9 +24,7 @@ function readCronConfigs(e, t) {
         typeof e.schedule != `string` ||
         e.schedule.trim().length === 0
       )
-        throw Error(
-          `Vercel Build Output config at "${t}" contains an invalid cron at index ${n}.`,
-        );
+        throw Error(`Vercel Build Output config at "${t}" contains an invalid cron at index ${n}.`);
       return e;
     });
   }

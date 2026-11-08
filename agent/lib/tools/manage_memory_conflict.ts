@@ -12,11 +12,13 @@ import { requireMemoryAuthorization } from "../memory-context.js";
 import { MEMORY_REF_PATTERN } from "../model-memory.js";
 import { AppError } from "../app-error.js";
 
-const conflictInputSchema = z.object({
-  action: z.enum(["choose", "keep_both", "keep_unresolved"]),
-  conflictRef: z.string(),
-  memoryRef: z.string().optional(),
-}).strict();
+const conflictInputSchema = z
+  .object({
+    action: z.enum(["choose", "keep_both", "keep_unresolved"]),
+    conflictRef: z.string(),
+    memoryRef: z.string().optional(),
+  })
+  .strict();
 
 function invalidInput(): AppError {
   return new AppError(
@@ -34,24 +36,27 @@ export default defineTool({
   inputSchema: conflictInputSchema,
   async execute(input, ctx) {
     const parsed = conflictInputSchema.safeParse(input);
-    if (!parsed.success || !CONFLICT_REF_PATTERN.test(parsed.data.conflictRef)) throw invalidInput();
+    if (!parsed.success || !CONFLICT_REF_PATTERN.test(parsed.data.conflictRef))
+      throw invalidInput();
     if (
       parsed.data.action === "choose" &&
       (parsed.data.memoryRef === undefined || !MEMORY_REF_PATTERN.test(parsed.data.memoryRef))
     ) {
       throw invalidInput();
     }
-    if (parsed.data.action !== "choose" && parsed.data.memoryRef !== undefined) throw invalidInput();
-    const resolution = parsed.data.action === "choose"
-      ? {
-          action: parsed.data.action,
-          conflictRef: parsed.data.conflictRef,
-          memoryRef: parsed.data.memoryRef!,
-        }
-      : { action: parsed.data.action, conflictRef: parsed.data.conflictRef };
-    return await memoryConflictRepository.resolve(
-      requireMemoryAuthorization(ctx),
-      { ...resolution, operationKey: ctx.callId },
-    );
+    if (parsed.data.action !== "choose" && parsed.data.memoryRef !== undefined)
+      throw invalidInput();
+    const resolution =
+      parsed.data.action === "choose"
+        ? {
+            action: parsed.data.action,
+            conflictRef: parsed.data.conflictRef,
+            memoryRef: parsed.data.memoryRef!,
+          }
+        : { action: parsed.data.action, conflictRef: parsed.data.conflictRef };
+    return await memoryConflictRepository.resolve(requireMemoryAuthorization(ctx), {
+      ...resolution,
+      operationKey: ctx.callId,
+    });
   },
 });

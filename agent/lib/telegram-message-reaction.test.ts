@@ -87,16 +87,24 @@ describe("setTelegramMessageReaction", () => {
     const target = telegramHandle({ ok: true, result: true });
 
     await expect(setTelegramMessageReaction(target.telegram, "44", "❤️")).resolves.toBe("applied");
-    expect(target.request).toHaveBeenCalledWith("setMessageReaction", expect.objectContaining({
-      reaction: [{ emoji: "❤", type: "emoji" }],
-    }));
+    expect(target.request).toHaveBeenCalledWith(
+      "setMessageReaction",
+      expect.objectContaining({
+        reaction: [{ emoji: "❤", type: "emoji" }],
+      }),
+    );
   });
 
   it("logs the provider description and the emoji when the reaction is declined", async () => {
-    const target = telegramHandle({ description: "Bad Request: REACTION_INVALID", ok: false }, false);
+    const target = telegramHandle(
+      { description: "Bad Request: REACTION_INVALID", ok: false },
+      false,
+    );
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      await expect(setTelegramMessageReaction(target.telegram, "42", "👎")).resolves.toBe("unavailable");
+      await expect(setTelegramMessageReaction(target.telegram, "42", "👎")).resolves.toBe(
+        "unavailable",
+      );
       expect(log).toHaveBeenCalledWith(expect.stringContaining("REACTION_INVALID"));
       expect(log).toHaveBeenCalledWith(expect.stringContaining("👎"));
     } finally {
@@ -107,9 +115,7 @@ describe("setTelegramMessageReaction", () => {
   it("sets one small allowlisted reaction on the verified current message", async () => {
     const target = telegramHandle({ ok: true, result: true });
 
-    await expect(
-      setTelegramMessageReaction(target.telegram, "42", "👌"),
-    ).resolves.toBe("applied");
+    await expect(setTelegramMessageReaction(target.telegram, "42", "👌")).resolves.toBe("applied");
     expect(target.request).toHaveBeenCalledWith("setMessageReaction", {
       chat_id: "-100123",
       is_big: false,
@@ -121,9 +127,7 @@ describe("setTelegramMessageReaction", () => {
   it("delivers an expressive allowlisted reaction without changing the transport shape", async () => {
     const target = telegramHandle({ ok: true, result: true });
 
-    await expect(
-      setTelegramMessageReaction(target.telegram, "43", "🔥"),
-    ).resolves.toBe("applied");
+    await expect(setTelegramMessageReaction(target.telegram, "43", "🔥")).resolves.toBe("applied");
     expect(target.request).toHaveBeenCalledWith("setMessageReaction", {
       chat_id: "-100123",
       is_big: false,
@@ -135,35 +139,37 @@ describe("setTelegramMessageReaction", () => {
   it("rejects an invalid inbound message id before calling Telegram", async () => {
     const target = telegramHandle({ ok: true, result: true });
 
-    await expect(setTelegramMessageReaction(target.telegram, "message-42", "👍"))
-      .rejects.toThrowError(/AGENT_TELEGRAM_REACTION_TARGET_INVALID/u);
+    await expect(
+      setTelegramMessageReaction(target.telegram, "message-42", "👍"),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_REACTION_TARGET_INVALID/u);
     expect(target.request).not.toHaveBeenCalled();
   });
 
   it("keeps a provider-declined reaction silent and reports it as unavailable", async () => {
     const target = telegramHandle({ description: "reaction not allowed", ok: false }, false);
 
-    await expect(setTelegramMessageReaction(target.telegram, "42", "👎"))
-      .resolves.toBe("unavailable");
+    await expect(setTelegramMessageReaction(target.telegram, "42", "👎")).resolves.toBe(
+      "unavailable",
+    );
   });
 
-  it.each([{ body: { ok: true, result: false }, ok: true }, { body: null, ok: true }])(
-    "fails closed when Telegram returns a malformed acknowledgement",
-    async ({ body, ok }) => {
-      const target = telegramHandle(body, ok);
+  it.each([
+    { body: { ok: true, result: false }, ok: true },
+    { body: null, ok: true },
+  ])("fails closed when Telegram returns a malformed acknowledgement", async ({ body, ok }) => {
+    const target = telegramHandle(body, ok);
 
-      await expect(setTelegramMessageReaction(target.telegram, "42", "👎"))
-        .rejects.toThrowError(/AGENT_TELEGRAM_REACTION_DELIVERY_FAILED/u);
-    },
-  );
+    await expect(setTelegramMessageReaction(target.telegram, "42", "👎")).rejects.toThrowError(
+      /AGENT_TELEGRAM_REACTION_DELIVERY_FAILED/u,
+    );
+  });
 
   it("adds the stable delivery code to a transport failure and rethrows it", async () => {
     const error = new TypeError("fetch failed");
     const request = vi.fn().mockRejectedValue(error);
     const telegram = { chatId: "-100123", request } as unknown as TelegramHandle;
 
-    await expect(setTelegramMessageReaction(telegram, "42", "👍"))
-      .rejects.toBe(error);
+    await expect(setTelegramMessageReaction(telegram, "42", "👍")).rejects.toBe(error);
     expect(error.message).toContain("AGENT_TELEGRAM_REACTION_DELIVERY_FAILED");
   });
 });

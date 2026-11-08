@@ -18,9 +18,27 @@
  *   outcome, so an order submit that may have reached Lavka is never reported as refused.
  */
 import type { LavkaEndpoint } from "./lavka-config.js";
-import { LAVKA_ENDPOINTS, LAVKA_FETCH_TIMEOUT_MS, LAVKA_HOST, LAVKA_PAGE_DEADLINE_MS, LAVKA_PAGE_RESULT_MAX_BYTES } from "./lavka-config.js";
+import {
+  LAVKA_ENDPOINTS,
+  LAVKA_FETCH_TIMEOUT_MS,
+  LAVKA_HOST,
+  LAVKA_PAGE_DEADLINE_MS,
+  LAVKA_PAGE_RESULT_MAX_BYTES,
+} from "./lavka-config.js";
 
-export type LavkaProjection = "addresses" | "cart" | "geocode" | "orders" | "payment" | "paymentMethods" | "product" | "raw" | "search" | "serviceInfo" | "submit" | "suggest";
+export type LavkaProjection =
+  | "addresses"
+  | "cart"
+  | "geocode"
+  | "orders"
+  | "payment"
+  | "paymentMethods"
+  | "product"
+  | "raw"
+  | "search"
+  | "serviceInfo"
+  | "submit"
+  | "suggest";
 
 export interface LavkaPageRequest {
   body?: unknown;
@@ -69,7 +87,13 @@ export function lavkaPageScript(request: LavkaPageRequest, searchLimit: number):
   const path = spec.path;
   const url = spec.method === "GET" && request.query ? `${path}?${request.query}` : path;
   // Everything the model or the person typed reaches the page only as JSON literals.
-  const literal = JSON.stringify({ body: request.body ?? null, city: request.city ?? "213", method: spec.method, project: request.project, url });
+  const literal = JSON.stringify({
+    body: request.body ?? null,
+    city: request.city ?? "213",
+    method: spec.method,
+    project: request.project,
+    url,
+  });
   return `(async () => {
 const req = ${literal};
 // The tab may have been navigated elsewhere between the driver's URL check and this eval: a

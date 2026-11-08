@@ -16,13 +16,11 @@ function nextAllowedMajor(e, n) {
 }
 function pinnedNodeEngineMajor(e) {
   let t = validRange(e);
-  if (t === null)
-    throw Error(`eve declares an invalid Node.js engine range: "${e}".`);
+  if (t === null) throw Error(`eve declares an invalid Node.js engine range: "${e}".`);
   let n = minVersion(t);
-  if (n === null)
-    throw Error(`eve declares an empty Node.js engine range: "${e}".`);
+  if (n === null) throw Error(`eve declares an empty Node.js engine range: "${e}".`);
   let i = n.major;
-  for (; i !== void 0; ) {
+  for (; i !== void 0;) {
     let e = `${i}.x`;
     if (isNonEmptySubset(e, t)) return e;
     i = nextAllowedMajor(t, i);
@@ -45,8 +43,4 @@ function formatPackageJsonValue(e) {
 function formatNodeEngineOverrideWarning(e) {
   return `Overrode package.json engines.node from ${formatPackageJsonValue(e.previous)} to "${e.next}" because the previous value was not confined to the Node.js major selected by eve.`;
 }
-export {
-  formatNodeEngineOverrideWarning,
-  pinnedNodeEngineMajor,
-  reconcileNodeEngine,
-};
+export { formatNodeEngineOverrideWarning, pinnedNodeEngineMajor, reconcileNodeEngine };

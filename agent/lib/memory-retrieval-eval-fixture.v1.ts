@@ -10,12 +10,7 @@
  */
 
 export type MemoryRetrievalEvalCategory =
-  | "exact"
-  | "mixed_language"
-  | "negative"
-  | "russian_morphology"
-  | "semantic_paraphrase"
-  | "typo";
+  "exact" | "mixed_language" | "negative" | "russian_morphology" | "semantic_paraphrase" | "typo";
 
 export interface MemoryRetrievalEvalRecord {
   content: string;

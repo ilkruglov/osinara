@@ -11,10 +11,7 @@ import type {
   DecryptedGoogleAccount,
   GoogleIntegrationAuthorization,
 } from "./google-integration-contract.js";
-import {
-  type CredentialRow,
-  googleAccountFromRow,
-} from "./google-integration-persistence.js";
+import { type CredentialRow, googleAccountFromRow } from "./google-integration-persistence.js";
 import { decryptGoogleToken } from "./google-token-crypto.js";
 
 const GOOGLE_WORKSPACE_PROVIDER = "google_workspace";
@@ -41,17 +38,23 @@ async function loadDefaultAccount(
   if (!row) return null;
   return {
     ...googleAccountFromRow(row),
-    accessToken: decryptGoogleToken({
-      authTag: row.access_token_auth_tag,
-      ciphertext: row.access_token_ciphertext,
-      nonce: row.access_token_nonce,
-    }, encryptionKey),
+    accessToken: decryptGoogleToken(
+      {
+        authTag: row.access_token_auth_tag,
+        ciphertext: row.access_token_ciphertext,
+        nonce: row.access_token_nonce,
+      },
+      encryptionKey,
+    ),
     accessTokenExpiresAt: row.access_token_expires_at,
-    refreshToken: decryptGoogleToken({
-      authTag: row.refresh_token_auth_tag,
-      ciphertext: row.refresh_token_ciphertext,
-      nonce: row.refresh_token_nonce,
-    }, encryptionKey),
+    refreshToken: decryptGoogleToken(
+      {
+        authTag: row.refresh_token_auth_tag,
+        ciphertext: row.refresh_token_ciphertext,
+        nonce: row.refresh_token_nonce,
+      },
+      encryptionKey,
+    ),
     scopes: row.scopes,
   };
 }

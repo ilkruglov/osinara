@@ -85,11 +85,13 @@ describe("telegram memory review turn binding", () => {
       eveSessionId: "eve-session-1",
       eveTurnId: "turn-4",
     });
-    expect(dependencies.completeBatch).toHaveBeenCalledWith(expect.objectContaining({
-      batchId: "batch-1",
-      eveSessionId: "eve-session-1",
-      eveTurnId: "turn-4",
-    }));
+    expect(dependencies.completeBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: "batch-1",
+        eveSessionId: "eve-session-1",
+        eveTurnId: "turn-4",
+      }),
+    );
     // Ход проверки не является ходом разговора и не закрывает чат-сессию сам по себе.
     expect(dependencies.recordTurnCompleted).not.toHaveBeenCalled();
   });
@@ -101,9 +103,11 @@ describe("telegram memory review turn binding", () => {
 
     // Пакет освобождён, строки нет, но повтор терминального события остаётся ходом проверки.
     expect(dependencies.batchIdForTurn).not.toHaveBeenCalled();
-    expect(dependencies.completeBatch).toHaveBeenCalledWith(expect.objectContaining({
-      batchId: "batch-2",
-    }));
+    expect(dependencies.completeBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: "batch-2",
+      }),
+    );
     expect(dependencies.recordTurnCompleted).not.toHaveBeenCalled();
   });
 
@@ -128,11 +132,13 @@ describe("telegram memory review turn binding", () => {
 
     // Отмена — самый частый исход в живом чате. Без этого обработчика пакет висел до временной
     // границы, а следующие ходы успевали выстроиться за мёртвой головой.
-    expect(dependencies.failRunning).toHaveBeenCalledWith(expect.objectContaining({
-      batchId: "batch-4",
-      eveSessionId: "eve-session-1",
-      eveTurnId: "turn-4",
-    }));
+    expect(dependencies.failRunning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: "batch-4",
+        eveSessionId: "eve-session-1",
+        eveTurnId: "turn-4",
+      }),
+    );
   });
 
   it("keeps the batch open while the turn is parked on a human answer", async () => {

@@ -25,13 +25,18 @@ type BotCommand = {
 };
 
 function commandFailure(stage: string, response: { body: unknown; status: number }): AppError {
-  console.error(JSON.stringify({
-    code: "AGENT_TELEGRAM_WHISPER_COMMAND_FAILED",
-    providerDescription: telegramProviderDescription(response.body),
-    providerStatus: response.status,
-    stage,
-  }));
-  return new AppError("AGENT_TELEGRAM_WHISPER_COMMAND_FAILED", "Не удалось объявить Telegram команду /whisper");
+  console.error(
+    JSON.stringify({
+      code: "AGENT_TELEGRAM_WHISPER_COMMAND_FAILED",
+      providerDescription: telegramProviderDescription(response.body),
+      providerStatus: response.status,
+      stage,
+    }),
+  );
+  return new AppError(
+    "AGENT_TELEGRAM_WHISPER_COMMAND_FAILED",
+    "Не удалось объявить Telegram команду /whisper",
+  );
 }
 
 function commandsOf(body: unknown): BotCommand[] | null {
@@ -39,12 +44,15 @@ function commandsOf(body: unknown): BotCommand[] | null {
   if (!Array.isArray(result)) return null;
   return result.flatMap((item) => {
     const candidate = item as Partial<BotCommand> | null;
-    if (typeof candidate?.command !== "string" || typeof candidate.description !== "string") return [];
-    return [{
-      command: candidate.command,
-      description: candidate.description,
-      ...(candidate.is_ephemeral === true ? { is_ephemeral: true } : {}),
-    }];
+    if (typeof candidate?.command !== "string" || typeof candidate.description !== "string")
+      return [];
+    return [
+      {
+        command: candidate.command,
+        description: candidate.description,
+        ...(candidate.is_ephemeral === true ? { is_ephemeral: true } : {}),
+      },
+    ];
   });
 }
 
@@ -52,19 +60,33 @@ export async function ensureTelegramWhisperCommand(input: {
   botToken: string;
   fetch?: typeof fetch;
 }): Promise<"unchanged" | "updated"> {
-  const options = { botToken: input.botToken, ...(input.fetch === undefined ? {} : { fetch: input.fetch }) };
-  const read = await callTelegramApi({ body: { scope: GROUP_CHATS_SCOPE }, method: "getMyCommands", ...options });
+  const options = {
+    botToken: input.botToken,
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+  };
+  const read = await callTelegramApi({
+    body: { scope: GROUP_CHATS_SCOPE },
+    method: "getMyCommands",
+    ...options,
+  });
   const current = read.ok ? commandsOf(read.body) : null;
   if (current === null) throw commandFailure("read", read);
   const declared = current.find((command) => command.command === TELEGRAM_WHISPER_COMMAND);
-  if (declared?.description === TELEGRAM_WHISPER_BOT_COMMAND.description && declared.is_ephemeral === true) {
+  if (
+    declared?.description === TELEGRAM_WHISPER_BOT_COMMAND.description &&
+    declared.is_ephemeral === true
+  ) {
     return "unchanged";
   }
   const commands = [
     ...current.filter((command) => command.command !== TELEGRAM_WHISPER_COMMAND),
     { ...TELEGRAM_WHISPER_BOT_COMMAND },
   ];
-  const written = await callTelegramApi({ body: { commands, scope: GROUP_CHATS_SCOPE }, method: "setMyCommands", ...options });
+  const written = await callTelegramApi({
+    body: { commands, scope: GROUP_CHATS_SCOPE },
+    method: "setMyCommands",
+    ...options,
+  });
   if (!written.ok) throw commandFailure("write", written);
   return "updated";
 }

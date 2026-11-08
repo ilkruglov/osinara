@@ -31,9 +31,11 @@ export function requireGoogleWorkspaceConnectionActor(
       "Не удалось определить пользователя или область Google Workspace",
     );
   }
-  const personal = attributes.telegramChatType === "private" &&
+  const personal =
+    attributes.telegramChatType === "private" &&
     (attributes.groupType === undefined || attributes.groupType === null);
-  const family = ["group", "supergroup"].includes(String(attributes.telegramChatType)) &&
+  const family =
+    ["group", "supergroup"].includes(String(attributes.telegramChatType)) &&
     attributes.groupType === "family_private" &&
     typeof attributes.groupId === "string";
   if (!personal && !family) {

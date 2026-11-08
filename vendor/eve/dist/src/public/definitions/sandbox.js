@@ -1,6 +1,4 @@
-const SANDBOX_PARENT_DEFINITION_MARKER = Symbol.for(
-  `eve.sandbox-parent-definition`,
-);
+const SANDBOX_PARENT_DEFINITION_MARKER = Symbol.for(`eve.sandbox-parent-definition`);
 function defineSandbox(e) {
   return (
     typeof e == `function` &&

@@ -64,7 +64,10 @@ export function requireAppDatabaseConfig(adminUrl: string, appUrl: string): AppD
   };
 }
 
-export async function provisionAppDatabaseRole(client: QueryClient, config: AppDatabaseConfig): Promise<void> {
+export async function provisionAppDatabaseRole(
+  client: QueryClient,
+  config: AppDatabaseConfig,
+): Promise<void> {
   await client.query("BEGIN");
   try {
     await provisionInTransaction(client, config);
@@ -75,11 +78,18 @@ export async function provisionAppDatabaseRole(client: QueryClient, config: AppD
   }
 }
 
-async function provisionInTransaction(client: QueryClient, config: AppDatabaseConfig): Promise<void> {
+async function provisionInTransaction(
+  client: QueryClient,
+  config: AppDatabaseConfig,
+): Promise<void> {
   const role = escapeIdentifier(APP_DATABASE_ROLE);
   const flags = `LOGIN PASSWORD ${escapeLiteral(config.password)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`;
-  const existing = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [APP_DATABASE_ROLE]);
-  await client.query(existing.rows.length > 0 ? `ALTER ROLE ${role} ${flags}` : `CREATE ROLE ${role} ${flags}`);
+  const existing = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [
+    APP_DATABASE_ROLE,
+  ]);
+  await client.query(
+    existing.rows.length > 0 ? `ALTER ROLE ${role} ${flags}` : `CREATE ROLE ${role} ${flags}`,
+  );
 
   for (const statement of [
     `GRANT CONNECT ON DATABASE ${escapeIdentifier(config.database)} TO ${role}`,

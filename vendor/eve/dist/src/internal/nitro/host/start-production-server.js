@@ -30,10 +30,7 @@ function readEnvironmentPort() {
 }
 function normalizeServerClientUrl(e) {
   let t = new URL(e);
-  return (
-    WILDCARD_LISTEN_HOSTNAMES.has(t.hostname) && (t.hostname = `127.0.0.1`),
-    t.toString()
-  );
+  return (WILDCARD_LISTEN_HOSTNAMES.has(t.hostname) && (t.hostname = `127.0.0.1`), t.toString());
 }
 function formatClientHost(e) {
   return WILDCARD_LISTEN_HOSTNAMES.has(e)
@@ -74,7 +71,7 @@ async function waitForHealth(t) {
   let { child: n, url: r } = t,
     i = new URL(EVE_HEALTH_ROUTE_PATH, r).toString(),
     a = Date.now() + HEALTH_TIMEOUT_MS;
-  for (; Date.now() < a; ) {
+  for (; Date.now() < a;) {
     let e = t.getStartError();
     if (e !== void 0) throw e;
     if (n.exitCode !== null || n.signalCode !== null)
@@ -82,20 +79,17 @@ async function waitForHealth(t) {
         `Built server process exited (code=${String(n.exitCode)}, signal=${String(n.signalCode)}) before becoming healthy.`,
       );
     try {
-      if ((await fetch(i, { signal: AbortSignal.timeout(2e3) })).ok)
-        return new URL(r).toString();
+      if ((await fetch(i, { signal: AbortSignal.timeout(2e3) })).ok) return new URL(r).toString();
     } catch (e) {
       if (isAddressInUseError(e)) throw e;
     }
     await setTimeout(250);
   }
-  throw Error(
-    `Built server did not become healthy within ${HEALTH_TIMEOUT_MS / 1e3}s at ${i}.`,
-  );
+  throw Error(`Built server did not become healthy within ${HEALTH_TIMEOUT_MS / 1e3}s at ${i}.`);
 }
 async function waitForReady(e) {
   let t = Date.now() + HEALTH_TIMEOUT_MS;
-  for (; Date.now() < t; ) {
+  for (; Date.now() < t;) {
     let t = e.getStartError();
     if (t !== void 0) throw t;
     let n = parseServerUrlFromOutput(e.getOutput()) ?? e.knownUrl;
@@ -124,10 +118,7 @@ async function terminate(e) {
   e.exitCode !== null ||
     e.killed ||
     (e.kill(`SIGTERM`),
-    (await Promise.race([
-      once(e, `exit`),
-      setTimeout(2e4).then(() => `timeout`),
-    ])) === `timeout` &&
+    (await Promise.race([once(e, `exit`), setTimeout(2e4).then(() => `timeout`)])) === `timeout` &&
       e.exitCode === null &&
       (e.kill(`SIGKILL`), await once(e, `exit`)),
     e.stdout?.destroy(),
@@ -142,9 +133,7 @@ async function startProductionServer(e, n = {}) {
   let o = resolve(e),
     s = resolveOutputServerEntry(o);
   if (!existsSync(s))
-    throw Error(
-      `Missing eve build output at ${s}. Run "eve build" before "eve start".`,
-    );
+    throw Error(`Missing eve build output at ${s}. Run "eve build" before "eve start".`);
   (loadDevelopmentEnvironmentFiles(o),
     await prewarmBuiltAppSandboxes({ appRoot: o, log: (e) => console.log(e) }));
   let c = n.host ?? `0.0.0.0`,

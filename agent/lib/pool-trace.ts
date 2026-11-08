@@ -24,11 +24,12 @@ const TRACED = Symbol.for("osinara.slowQueryTrace");
 const STATEMENT_LOG_LIMIT = 120;
 
 function statementShape(query: unknown): string {
-  const text = typeof query === "string"
-    ? query
-    : typeof (query as { text?: unknown } | null)?.text === "string"
-      ? (query as { text: string }).text
-      : "";
+  const text =
+    typeof query === "string"
+      ? query
+      : typeof (query as { text?: unknown } | null)?.text === "string"
+        ? (query as { text: string }).text
+        : "";
   return text.replace(/\s+/gu, " ").trim().slice(0, STATEMENT_LOG_LIMIT);
 }
 
@@ -48,12 +49,14 @@ export function traceSlowQueries<T extends Pool>(pool: T, trace: SlowQueryTrace)
   const observe = (query: unknown, startedAt: number, result: unknown): void => {
     const ms = now() - startedAt;
     if (ms < trace.thresholdMs) return;
-    log(JSON.stringify({
-      code: trace.code,
-      ms: Math.round(ms),
-      rows: rowCount(result),
-      statement: statementShape(query),
-    }));
+    log(
+      JSON.stringify({
+        code: trace.code,
+        ms: Math.round(ms),
+        rows: rowCount(result),
+        statement: statementShape(query),
+      }),
+    );
   };
 
   const wrapQuery = <O extends { query: (...args: never[]) => unknown }>(owner: O): void => {
@@ -63,13 +66,16 @@ export function traceSlowQueries<T extends Pool>(pool: T, trace: SlowQueryTrace)
       const outcome = original(...args);
       // The callback form has no promise to observe; the pool contract keeps both.
       if (typeof (outcome as { then?: unknown } | null)?.then !== "function") return outcome;
-      return (outcome as Promise<unknown>).then((result) => {
-        observe(args[0], startedAt, result);
-        return result;
-      }, (error: unknown) => {
-        observe(args[0], startedAt, null);
-        throw error;
-      });
+      return (outcome as Promise<unknown>).then(
+        (result) => {
+          observe(args[0], startedAt, result);
+          return result;
+        },
+        (error: unknown) => {
+          observe(args[0], startedAt, null);
+          throw error;
+        },
+      );
     }) as O["query"];
   };
 

@@ -4,10 +4,7 @@ import {
   EVE_DEVELOPMENT_SANDBOX_RUN_ID_TAG,
 } from "#execution/sandbox/development-run.js";
 import { toErrorMessage } from "#shared/errors.js";
-import {
-  DockerUnavailableError,
-  createDockerCli,
-} from "#execution/sandbox/bindings/docker-cli.js";
+import { DockerUnavailableError, createDockerCli } from "#execution/sandbox/bindings/docker-cli.js";
 import {
   DOCKER_SANDBOX_LABEL,
   stopDockerContainerIfRunning,
@@ -30,9 +27,7 @@ async function stopDevelopmentSandboxResources(e) {
   ]);
   for (let n of t)
     n.status === `rejected` &&
-      e.log?.(
-        `failed to stop development sandbox resources: ${toErrorMessage(n.reason)}`,
-      );
+      e.log?.(`failed to stop development sandbox resources: ${toErrorMessage(n.reason)}`);
 }
 async function stopDevelopmentDockerResources(e) {
   let t = createDockerCli(),
@@ -64,31 +59,19 @@ async function stopDevelopmentMicrosandboxResources(r, i, a) {
     s
       .filter((e) => e.status === `running` || e.status === `draining`)
       .map(async (n) => {
-        let r = getMicrosandboxLabel(
-          n.configJson,
-          EVE_DEVELOPMENT_SANDBOX_METADATA_PATH_TAG,
-        );
+        let r = getMicrosandboxLabel(n.configJson, EVE_DEVELOPMENT_SANDBOX_METADATA_PATH_TAG);
         if (r === void 0) {
-          await (await o.Sandbox.get(n.name))
-            .stopWithTimeout(1e4)
-            .catch(() => {});
+          await (await o.Sandbox.get(n.name)).stopWithTimeout(1e4).catch(() => {});
           return;
         }
         let i = await readSessionMetadata(r);
         if (i === null || i.sandboxName !== n.name) {
-          await (await o.Sandbox.get(n.name))
-            .stopWithTimeout(1e4)
-            .catch(() => {});
+          await (await o.Sandbox.get(n.name)).stopWithTimeout(1e4).catch(() => {});
           return;
         }
-        a?.(
-          `snapshotting development microsandbox session "${n.name}" before shutdown`,
-        );
+        a?.(`snapshotting development microsandbox session "${n.name}" before shutdown`);
         let s = i.stateSnapshotName,
-          u = createProviderName(
-            `eve-sbx-state`,
-            `${i.sandboxName}:${randomUUID()}`,
-          );
+          u = createProviderName(`eve-sbx-state`, `${i.sandboxName}:${randomUUID()}`);
         (await stopAndSnapshotMicrosandboxSandbox(o, n.name, u),
           await writeSessionMetadata(r, {
             networkPolicy: i.networkPolicy,

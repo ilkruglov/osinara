@@ -49,48 +49,152 @@ const TOOL_DESCRIPTION = [
   "add_example(name,request,expected), remove_example(name,exampleId) по просьбе владельца. rollback(name,version), retire(name), grant/revoke(name,group). Навык не добавляет прав, публикация действует со следующего хода.",
 ].join(" ");
 
-const MUTATING_ACTIONS = new Set(["create_experiment", "grant", "publish", "retire", "revoke", "rollback"]);
+const MUTATING_ACTIONS = new Set([
+  "create_experiment",
+  "grant",
+  "publish",
+  "retire",
+  "revoke",
+  "rollback",
+]);
 
-const manageSkillSchema = z.object({
-  action: z.enum(["create_experiment", "enroll_experiment", "run_experiment", "experiment_status", "cancel_experiment", "cancel_trial", "test_selection", "draft", "begin_trial", "finish_trial", "add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
-  experimentId: z.uuid().optional(),
-  parentCandidateId: z.uuid().optional(),
-  protocol: experimentProtocolSchema.optional().describe("create_experiment: environment files/scenario; 2–6 cases с id, partition development/holdout, request, files, checks и toolFixtures. checks: {path,text/json}, {target:answer,text/json}, {target:tool,toolName,input?,count}, {target:rubric,criteria,reference}. Бюджет включает оценщика."),
-  selectionCases: z.array(skillSelectionCaseSchema).min(2).max(6).optional().describe("test_selection: положительные и отрицательные запросы для выбора навыка"),
-  candidateId: z.uuid().optional().describe("begin_trial и publish: id неизменяемого черновика из draft"),
-  runId: z.uuid().optional().describe("finish_trial и publish: id наблюдаемого прогона"),
-  checks: z.array(skillCheckSchema).min(1).max(10).optional().describe("begin_trial: заранее заданные проверки output инструмента; path это массив ключей JSON"),
-  variant: z.enum(["baseline", "candidate"]).optional().describe("begin_trial: текущая версия или черновик"),
-  changeNote: z.string().max(AUTHORED_SKILL_LIMITS.changeNoteMaxCharacters).optional()
-    .describe("publish: что изменилось и зачем"),
-  description: z.string().max(AUTHORED_SKILL_LIMITS.descriptionMaxCharacters).optional()
-    .describe("publish: триггер загрузки, задача плюс косвенные формулировки"),
-  exampleId: z.uuid().optional().describe("remove_example: id примера из read"),
-  expected: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
-    .describe("add_example: каким должен быть правильный результат"),
-  files: z.record(z.string(), z.string()).optional()
-    .describe("publish: справочные файлы references/<имя>.md"),
-  group: z.string().max(200).optional()
-    .describe("grant, revoke: название внешней группы или её отрицательный chat id"),
-  markdown: z.string().max(AUTHORED_SKILL_LIMITS.markdownMaxCharacters).optional()
-    .describe("publish: тело SKILL.md без frontmatter"),
-  name: z.string().max(40).optional().describe("Имя навыка: строчные латинские буквы, цифры, дефис"),
-  note: z.string().max(500).optional().describe("record_outcome: что именно вышло не так или хорошо"),
-  outcome: z.enum(["failed", "ok"]).optional().describe("record_outcome: исход последнего применения"),
-  request: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
-    .describe("add_example: запрос человека, на котором навык проверяется"),
-  trialRequest: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
-    .describe("publish: запрос, на котором выполнен пробный прогон; сохраняется как пример"),
-  trials: z.array(z.object({
-    exampleId: z.uuid(),
-    summary: z.string().min(1).max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS),
-  }).strict()).max(AUTHORED_SKILL_EXAMPLES_MAX).optional()
-    .describe("publish версии 2+: прогон каждого сохранённого примера и что получилось"),
-  trialSummary: z.string().max(AUTHORED_SKILL_LIMITS.trialSummaryMaxCharacters).optional()
-    .describe("publish: что выполнено в пробном прогоне и что получилось"),
-  usageId: z.uuid().optional().describe("record_outcome: id конкретного применения из read, обязательно"),
-  version: z.number().int().min(1).optional().describe("read: версия; rollback: к какой версии вернуться"),
-}).strict();
+const manageSkillSchema = z
+  .object({
+    action: z.enum([
+      "create_experiment",
+      "enroll_experiment",
+      "run_experiment",
+      "experiment_status",
+      "cancel_experiment",
+      "cancel_trial",
+      "test_selection",
+      "draft",
+      "begin_trial",
+      "finish_trial",
+      "add_example",
+      "grant",
+      "list",
+      "publish",
+      "read",
+      "record_outcome",
+      "remove_example",
+      "retire",
+      "revoke",
+      "rollback",
+    ]),
+    experimentId: z.uuid().optional(),
+    parentCandidateId: z.uuid().optional(),
+    protocol: experimentProtocolSchema
+      .optional()
+      .describe(
+        "create_experiment: environment files/scenario; 2–6 cases с id, partition development/holdout, request, files, checks и toolFixtures. checks: {path,text/json}, {target:answer,text/json}, {target:tool,toolName,input?,count}, {target:rubric,criteria,reference}. Бюджет включает оценщика.",
+      ),
+    selectionCases: z
+      .array(skillSelectionCaseSchema)
+      .min(2)
+      .max(6)
+      .optional()
+      .describe("test_selection: положительные и отрицательные запросы для выбора навыка"),
+    candidateId: z
+      .uuid()
+      .optional()
+      .describe("begin_trial и publish: id неизменяемого черновика из draft"),
+    runId: z.uuid().optional().describe("finish_trial и publish: id наблюдаемого прогона"),
+    checks: z
+      .array(skillCheckSchema)
+      .min(1)
+      .max(10)
+      .optional()
+      .describe(
+        "begin_trial: заранее заданные проверки output инструмента; path это массив ключей JSON",
+      ),
+    variant: z
+      .enum(["baseline", "candidate"])
+      .optional()
+      .describe("begin_trial: текущая версия или черновик"),
+    changeNote: z
+      .string()
+      .max(AUTHORED_SKILL_LIMITS.changeNoteMaxCharacters)
+      .optional()
+      .describe("publish: что изменилось и зачем"),
+    description: z
+      .string()
+      .max(AUTHORED_SKILL_LIMITS.descriptionMaxCharacters)
+      .optional()
+      .describe("publish: триггер загрузки, задача плюс косвенные формулировки"),
+    exampleId: z.uuid().optional().describe("remove_example: id примера из read"),
+    expected: z
+      .string()
+      .max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS)
+      .optional()
+      .describe("add_example: каким должен быть правильный результат"),
+    files: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("publish: справочные файлы references/<имя>.md"),
+    group: z
+      .string()
+      .max(200)
+      .optional()
+      .describe("grant, revoke: название внешней группы или её отрицательный chat id"),
+    markdown: z
+      .string()
+      .max(AUTHORED_SKILL_LIMITS.markdownMaxCharacters)
+      .optional()
+      .describe("publish: тело SKILL.md без frontmatter"),
+    name: z
+      .string()
+      .max(40)
+      .optional()
+      .describe("Имя навыка: строчные латинские буквы, цифры, дефис"),
+    note: z
+      .string()
+      .max(500)
+      .optional()
+      .describe("record_outcome: что именно вышло не так или хорошо"),
+    outcome: z
+      .enum(["failed", "ok"])
+      .optional()
+      .describe("record_outcome: исход последнего применения"),
+    request: z
+      .string()
+      .max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS)
+      .optional()
+      .describe("add_example: запрос человека, на котором навык проверяется"),
+    trialRequest: z
+      .string()
+      .max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS)
+      .optional()
+      .describe("publish: запрос, на котором выполнен пробный прогон; сохраняется как пример"),
+    trials: z
+      .array(
+        z
+          .object({
+            exampleId: z.uuid(),
+            summary: z.string().min(1).max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS),
+          })
+          .strict(),
+      )
+      .max(AUTHORED_SKILL_EXAMPLES_MAX)
+      .optional()
+      .describe("publish версии 2+: прогон каждого сохранённого примера и что получилось"),
+    trialSummary: z
+      .string()
+      .max(AUTHORED_SKILL_LIMITS.trialSummaryMaxCharacters)
+      .optional()
+      .describe("publish: что выполнено в пробном прогоне и что получилось"),
+    usageId: z
+      .uuid()
+      .optional()
+      .describe("record_outcome: id конкретного применения из read, обязательно"),
+    version: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("read: версия; rollback: к какой версии вернуться"),
+  })
+  .strict();
 
 type ManageSkillInput = z.infer<typeof manageSkillSchema>;
 
@@ -103,14 +207,24 @@ function requireName(input: ManageSkillInput): string {
 
 function requireGroup(input: ManageSkillInput): string {
   if (typeof input.group !== "string" || input.group.trim().length === 0) {
-    throw new AppError("AGENT_SKILL_INPUT_INVALID", "Укажи group: название внешней группы или её chat id");
+    throw new AppError(
+      "AGENT_SKILL_INPUT_INVALID",
+      "Укажи group: название внешней группы или её chat id",
+    );
   }
   return input.group;
 }
 
 function requireField(
   input: ManageSkillInput,
-  key: "changeNote" | "description" | "expected" | "markdown" | "request" | "trialRequest" | "trialSummary",
+  key:
+    | "changeNote"
+    | "description"
+    | "expected"
+    | "markdown"
+    | "request"
+    | "trialRequest"
+    | "trialSummary",
   action = "publish",
 ): string {
   const value = input[key];
@@ -124,14 +238,17 @@ function requireField(
 async function knownToolNames(owner: TrustedTelegramOwner): Promise<Set<string>> {
   // Lazy import: the catalog imports this tool, so a static import would be a cycle.
   const catalog = await import("../tool-policy/trusted-mode-tool-catalog.js");
-  const modeOnly = owner.chatKind === "private" ? catalog.PRIVATE_ONLY_TOOL_NAMES : catalog.FAMILY_ONLY_TOOL_NAMES;
+  const modeOnly =
+    owner.chatKind === "private" ? catalog.PRIVATE_ONLY_TOOL_NAMES : catalog.FAMILY_ONLY_TOOL_NAMES;
   return new Set([...catalog.TRUSTED_MODE_TOOL_NAMES, ...modeOnly, ...EVE_BUILTIN_TOOL_NAMES]);
 }
 
 export default defineTool({
   approval: ({ toolInput }) => {
     const action = (toolInput as { action?: unknown } | null)?.action;
-    return typeof action === "string" && MUTATING_ACTIONS.has(action) ? "user-approval" : "not-applicable";
+    return typeof action === "string" && MUTATING_ACTIONS.has(action)
+      ? "user-approval"
+      : "not-applicable";
   },
   description: TOOL_DESCRIPTION,
   inputSchema: manageSkillSchema,
@@ -144,20 +261,36 @@ export default defineTool({
     switch (input.action) {
       case "create_experiment": {
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
-        return skillExperimentRepository.create(caller, requireName(input), input.protocol, ctx.callId, owner.chatKind);
+        return skillExperimentRepository.create(
+          caller,
+          requireName(input),
+          input.protocol,
+          ctx.callId,
+          owner.chatKind,
+        );
       }
       case "enroll_experiment":
       case "run_experiment":
       case "experiment_status":
       case "cancel_experiment": {
-        if (input.action === "experiment_status" && !input.experimentId) return skillExperimentRepository.list(caller, requireName(input));
-        if (!input.experimentId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен experimentId");
+        if (input.action === "experiment_status" && !input.experimentId)
+          return skillExperimentRepository.list(caller, requireName(input));
+        if (!input.experimentId)
+          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен experimentId");
         if (input.action === "enroll_experiment") {
-          if (!input.candidateId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен candidateId");
-          return skillExperimentRepository.enroll(caller, input.experimentId, input.candidateId, input.parentCandidateId);
+          if (!input.candidateId)
+            throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен candidateId");
+          return skillExperimentRepository.enroll(
+            caller,
+            input.experimentId,
+            input.candidateId,
+            input.parentCandidateId,
+          );
         }
-        if (input.action === "run_experiment") return runSkillExperiment(caller, input.experimentId, ctx.abortSignal);
-        if (input.action === "cancel_experiment") return skillExperimentRepository.cancel(caller, input.experimentId);
+        if (input.action === "run_experiment")
+          return runSkillExperiment(caller, input.experimentId, ctx.abortSignal);
+        if (input.action === "cancel_experiment")
+          return skillExperimentRepository.cancel(caller, input.experimentId);
         return skillExperimentRepository.status(caller, input.experimentId);
       }
       case "list":
@@ -167,38 +300,77 @@ export default defineTool({
         };
       case "grant": {
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
-        const result = await authoredSkillGrantRepository.grant(caller, { group: requireGroup(input), name: requireName(input) });
-        return { ...result, note: result.granted ? "Навык доступен группе со следующего хода" : "Навык уже был выдан этой группе" };
+        const result = await authoredSkillGrantRepository.grant(caller, {
+          group: requireGroup(input),
+          name: requireName(input),
+        });
+        return {
+          ...result,
+          note: result.granted
+            ? "Навык доступен группе со следующего хода"
+            : "Навык уже был выдан этой группе",
+        };
       }
       case "revoke": {
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
-        const result = await authoredSkillGrantRepository.revoke(caller, { group: requireGroup(input), name: requireName(input) });
+        const result = await authoredSkillGrantRepository.revoke(caller, {
+          group: requireGroup(input),
+          name: requireName(input),
+        });
         return { ...result, note: "Группа больше не получает этот навык" };
       }
       case "read":
         return {
-          ...await authoredSkillRepository.read(owner.familyId, requireName(input), input.version),
+          ...(await authoredSkillRepository.read(
+            owner.familyId,
+            requireName(input),
+            input.version,
+          )),
           experiments: await skillExperimentRepository.list(caller, requireName(input)),
           candidates: await skillEvaluationRepository.list(owner.familyId, requireName(input)),
-          usages: await authoredSkillRepository.usages(owner.familyId, requireName(input), await authoredSkillRepository.conversationId(owner)),
+          usages: await authoredSkillRepository.usages(
+            owner.familyId,
+            requireName(input),
+            await authoredSkillRepository.conversationId(owner),
+          ),
         };
       case "record_outcome": {
         if (input.outcome === undefined || input.usageId === undefined) {
-          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для record_outcome укажи usageId из read и outcome: ok или failed");
+          throw new AppError(
+            "AGENT_SKILL_INPUT_INVALID",
+            "Для record_outcome укажи usageId из read и outcome: ok или failed",
+          );
         }
         const conversationId = await authoredSkillRepository.conversationId(owner);
         return await authoredSkillRepository.recordOutcome(caller, {
-          conversationId, usageId: input.usageId, name: requireName(input), note: input.note ?? null, outcome: input.outcome,
+          conversationId,
+          usageId: input.usageId,
+          name: requireName(input),
+          note: input.note ?? null,
+          outcome: input.outcome,
         });
       }
       case "test_selection": {
-        if (!input.candidateId || !input.selectionCases) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId и selectionCases");
-        return await skillEvaluationRepository.testSelection(caller, input.candidateId, input.selectionCases);
+        if (!input.candidateId || !input.selectionCases)
+          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId и selectionCases");
+        return await skillEvaluationRepository.testSelection(
+          caller,
+          input.candidateId,
+          input.selectionCases,
+        );
       }
       case "begin_trial": {
-        if (!input.candidateId || !input.checks || !input.variant) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId, checks, variant");
-        return await skillEvaluationRepository.begin(caller, { ...provenance, candidateId: input.candidateId,
-          exampleId: input.exampleId, request: input.request, checks: input.checks, variant: input.variant, operationKey: ctx.callId });
+        if (!input.candidateId || !input.checks || !input.variant)
+          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId, checks, variant");
+        return await skillEvaluationRepository.begin(caller, {
+          ...provenance,
+          candidateId: input.candidateId,
+          exampleId: input.exampleId,
+          request: input.request,
+          checks: input.checks,
+          variant: input.variant,
+          operationKey: ctx.callId,
+        });
       }
       case "cancel_trial": {
         if (!input.runId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен runId");
@@ -206,7 +378,12 @@ export default defineTool({
       }
       case "finish_trial": {
         if (!input.runId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен runId");
-        return await skillEvaluationRepository.finish(caller, input.runId, provenance, requireField(input, "trialSummary", "finish_trial"));
+        return await skillEvaluationRepository.finish(
+          caller,
+          input.runId,
+          provenance,
+          requireField(input, "trialSummary", "finish_trial"),
+        );
       }
       case "draft":
       case "publish": {
@@ -216,43 +393,80 @@ export default defineTool({
           files: input.files ?? {},
           markdown: requireField(input, "markdown"),
           name: requireName(input),
-          trialSummary: input.action === "draft" ? "Пробный прогон ещё не выполнен" : requireField(input, "trialSummary"),
+          trialSummary:
+            input.action === "draft"
+              ? "Пробный прогон ещё не выполнен"
+              : requireField(input, "trialSummary"),
         };
         if (input.action === "draft") {
-          const candidate = await skillEvaluationRepository.draft(caller, draft, ctx.callId, await knownToolNames(owner));
+          const candidate = await skillEvaluationRepository.draft(
+            caller,
+            draft,
+            ctx.callId,
+            await knownToolNames(owner),
+          );
           // The contract names the id `candidateId` everywhere else; the raw row said `id`.
-          return { baseVersion: candidate.base_version, candidateId: candidate.id, contentHash: candidate.content_hash, name: candidate.name };
+          return {
+            baseVersion: candidate.base_version,
+            candidateId: candidate.id,
+            contentHash: candidate.content_hash,
+            name: candidate.name,
+          };
         }
-        if (!input.candidateId || (!input.runId && !input.experimentId)) throw new AppError("AGENT_SKILL_EVAL_MISSING", "publish требует candidateId и runId либо experimentId завершённого эксперимента");
+        if (!input.candidateId || (!input.runId && !input.experimentId))
+          throw new AppError(
+            "AGENT_SKILL_EVAL_MISSING",
+            "publish требует candidateId и runId либо experimentId завершённого эксперимента",
+          );
         const trialRequest = requireField(input, "trialRequest");
         // Owner role and the exact Telegram approval are both revalidated at the mutation boundary.
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.publish(caller, draft, {
-          knownToolNames: await knownToolNames(owner), operationKey: ctx.callId, provenance,
-          evaluation: { candidateId: input.candidateId, runId: input.runId, experimentId: input.experimentId },
-          trialRequest, trials: input.trials ?? [],
+          knownToolNames: await knownToolNames(owner),
+          operationKey: ctx.callId,
+          provenance,
+          evaluation: {
+            candidateId: input.candidateId,
+            runId: input.runId,
+            experimentId: input.experimentId,
+          },
+          trialRequest,
+          trials: input.trials ?? [],
         });
         return { ...result, note: nextTurnNote };
       }
       case "add_example":
         return await authoredSkillExampleRepository.add(caller, {
-          expected: requireField(input, "expected", "add_example"), name: requireName(input),
+          expected: requireField(input, "expected", "add_example"),
+          name: requireName(input),
           request: requireField(input, "request", "add_example"),
         });
       case "remove_example": {
         if (input.exampleId === undefined) {
-          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для remove_example укажи exampleId из read");
+          throw new AppError(
+            "AGENT_SKILL_INPUT_INVALID",
+            "Для remove_example укажи exampleId из read",
+          );
         }
-        return await authoredSkillExampleRepository.remove(caller, { exampleId: input.exampleId, name: requireName(input) });
+        return await authoredSkillExampleRepository.remove(caller, {
+          exampleId: input.exampleId,
+          name: requireName(input),
+        });
       }
       case "rollback": {
         if (input.version === undefined) {
-          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для rollback укажи version, к которой вернуться");
+          throw new AppError(
+            "AGENT_SKILL_INPUT_INVALID",
+            "Для rollback укажи version, к которой вернуться",
+          );
         }
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.rollback(caller, {
-          knownToolNames: await knownToolNames(owner), name: requireName(input),
-          operationKey: ctx.callId, provenance, version: input.version,
+          knownToolNames: await knownToolNames(owner),
+          name: requireName(input),
+          operationKey: ctx.callId,
+          provenance,
+          version: input.version,
         });
         return { ...result, note: nextTurnNote };
       }

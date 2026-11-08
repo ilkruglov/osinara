@@ -63,15 +63,9 @@ function submitSetupSelect(n) {
 function editSetupSelect(e) {
   switch (e.key.type) {
     case `backspace`:
-      return isSearchableSelect(e)
-        ? updatedSelect(e, { type: `backspace` })
-        : { kind: `ignore` };
+      return isSearchableSelect(e) ? updatedSelect(e, { type: `backspace` }) : { kind: `ignore` };
     case `text`: {
-      if (
-        e.key.framing === `unframed` &&
-        isMultiSelect(e) &&
-        e.key.value === ` `
-      )
+      if (e.key.framing === `unframed` && isMultiSelect(e) && e.key.value === ` `)
         return updatedSelect(e, { type: `toggle` });
       if (!isSearchableSelect(e)) return { kind: `ignore` };
       let t = e.select,
@@ -85,9 +79,7 @@ function editSetupSelect(e) {
 `,
         ` `,
       ))
-        i >= ` ` &&
-          i !== `` &&
-          (t = reduceSelect(t, { type: `char`, char: i }, r));
+        i >= ` ` && i !== `` && (t = reduceSelect(t, { type: `char`, char: i }, r));
       return { kind: `update`, select: t };
     }
     default:
@@ -98,9 +90,7 @@ function reduceSetupSelectInput(e) {
   let t = setupSelectionIntent(e.key);
   switch (t?.kind) {
     case `cancel`:
-      return e.key.type === `escape` &&
-        isSearchableSelect(e) &&
-        e.select.filter.length > 0
+      return e.key.type === `escape` && isSearchableSelect(e) && e.select.filter.length > 0
         ? updatedSelect(e, { type: `clear` })
         : { kind: `cancel` };
     case `repaint`:

@@ -5,10 +5,7 @@ function createDataUrlFilePart(e) {
     mediaType: e.mediaType,
     type: `file`,
   };
-  return (
-    e.filename !== void 0 && e.filename.length > 0 && (t.filename = e.filename),
-    t
-  );
+  return (e.filename !== void 0 && e.filename.length > 0 && (t.filename = e.filename), t);
 }
 function createTextWithFileContent(e) {
   return [{ text: e.text, type: `text` }, createDataUrlFilePart(e)];

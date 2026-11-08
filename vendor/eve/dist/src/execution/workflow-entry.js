@@ -1,14 +1,8 @@
 import { sessionCommandHookToken } from "#execution/session-command-token.js";
 import { isTaskOwnedSerializedContext } from "#execution/tasks/child/instructions.js";
 import { readSerializedSubagentDepth } from "#harness/subagent-depth.js";
-import {
-  readChannelRequestId,
-  readRootSessionId,
-} from "#execution/eve-workflow-attributes.js";
-import {
-  getWorkflowMetadata,
-  getWritable,
-} from "#compiled/@workflow/core/index.js";
+import { readChannelRequestId, readRootSessionId } from "#execution/eve-workflow-attributes.js";
+import { getWorkflowMetadata, getWritable } from "#compiled/@workflow/core/index.js";
 import { isHookConflictError } from "#execution/hook-ownership.js";
 import { activeTurnId } from "#harness/active-turn-id.js";
 import { fireSessionCallbackStep } from "#execution/session-callback-step.js";
@@ -98,9 +92,7 @@ async function workflowEntry(e) {
       sessionTimeoutDeadline:
         e.sessionTimeoutMs === !1
           ? void 0
-          : new Date(
-              c.getTime() + (e.sessionTimeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS),
-            ),
+          : new Date(c.getTime() + (e.sessionTimeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS)),
     });
     return h.kind === `result`
       ? h.result
@@ -152,9 +144,7 @@ async function resolveCallerForCrash(e, t) {
   }
 }
 function createSafeOuterWorkflowError() {
-  let e = Error(
-    `Agent workflow failed. Inspect the private session trace for details.`,
-  );
+  let e = Error(`Agent workflow failed. Inspect the private session trace for details.`);
   return ((e.name = `EveWorkflowFailure`), e);
 }
 async function runDriverLoop(t) {
@@ -193,16 +183,14 @@ async function runDriverLoop(t) {
       }
     },
     r = 0,
-    nextTurnControlToken = () =>
-      `${t.sessionState.sessionId}:turn-control:${String(r++)}`,
+    nextTurnControlToken = () => `${t.sessionState.sessionId}:turn-control:${String(r++)}`,
     i = [],
     a = [],
     o = new Set(),
     l = new Set(),
     u = createSessionCommandInbox(),
     h = sessionCommandHookToken(t.sessionState.sessionId);
-  (await u.claimStable(h),
-    await u.claimAuthorization(`${t.sessionState.sessionId}:auth`));
+  (await u.claimStable(h), await u.claimAuthorization(`${t.sessionState.sessionId}:auth`));
   let _ =
       t.sessionTimeoutDeadline === void 0
         ? void 0
@@ -270,8 +258,7 @@ async function runDriverLoop(t) {
             mode: t.mode,
           }),
         };
-      if (e.kind !== `park`)
-        throw Error(`Driver received unexpected turn action "${e.kind}".`);
+      if (e.kind !== `park`) throw Error(`Driver received unexpected turn action "${e.kind}".`);
       if (e.cancelled === !0) {
         let e = await settleCancelledTurnStep({
           parentWritable: t.driverWritable,
@@ -283,9 +270,7 @@ async function runDriverLoop(t) {
           caller: t.crashCleanupState.caller,
           sessionId: v.sessionState.sessionId,
         };
-        (await notifyCancelledTaskCallerStep(
-          e.usage === void 0 ? n : { ...n, usage: e.usage },
-        ),
+        (await notifyCancelledTaskCallerStep(e.usage === void 0 ? n : { ...n, usage: e.usage }),
           (t.crashCleanupState.lastSessionState = v.sessionState));
       }
       v.sessionState.continuationToken &&
@@ -304,8 +289,7 @@ async function runDriverLoop(t) {
         expectedAttemptIds: e.authorizationAttemptIds ?? [],
       });
       if (
-        ((t.crashCleanupState.lastSessionState = v.sessionState),
-        r.kind === `authorization-resume`)
+        ((t.crashCleanupState.lastSessionState = v.sessionState), r.kind === `authorization-resume`)
       ) {
         e = await runTurn({ kind: `deliver`, payloads: r.payloads });
         continue;
@@ -328,8 +312,7 @@ async function runDriverLoop(t) {
         e = await runTurn({ kind: r.kind });
         continue;
       }
-      if (r.kind === `closed`)
-        return { kind: `result`, result: { output: `` } };
+      if (r.kind === `closed`) return { kind: `result`, result: { output: `` } };
       if (r.kind === `cancel-turn`) {
         await cancelDescendantTurnsStep({
           serializedContext: v.serializedContext,
@@ -346,8 +329,7 @@ async function runDriverLoop(t) {
           (t.crashCleanupState.lastSessionState = v.sessionState));
         continue;
       }
-      (r.delivery.caller !== void 0 &&
-        (t.crashCleanupState.caller = r.delivery.caller),
+      (r.delivery.caller !== void 0 && (t.crashCleanupState.caller = r.delivery.caller),
         (e = await runTurn(r.delivery)));
     }
   } finally {

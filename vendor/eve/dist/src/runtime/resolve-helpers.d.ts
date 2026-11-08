@@ -5,21 +5,24 @@ import type { ResolvedModuleSourceRef } from "#runtime/types.js";
  * authored agent model.
  */
 export declare class ResolveAgentError extends Error {
-    readonly logicalPath?: string;
-    readonly sourceId?: string;
-    constructor(message: string, input?: {
-        logicalPath?: string;
-        sourceId?: string;
-    });
+  readonly logicalPath?: string;
+  readonly sourceId?: string;
+  constructor(
+    message: string,
+    input?: {
+      logicalPath?: string;
+      sourceId?: string;
+    },
+  );
 }
 /**
  * Builds the resolved source ref block shared by every per-primitive
  * resolver that targets a `module` source.
  */
 export declare function createResolvedModuleSourceRef(sourceRef: {
-    readonly exportName?: string;
-    readonly logicalPath: string;
-    readonly sourceId: string;
+  readonly exportName?: string;
+  readonly logicalPath: string;
+  readonly sourceId: string;
 }): ResolvedModuleSourceRef;
 /**
  * Looks up a compiled module namespace for one resolved agent node and
@@ -32,12 +35,12 @@ export declare function createResolvedModuleSourceRef(sourceRef: {
  * duplicating ~25 lines of boilerplate per resolver.
  */
 export declare function loadResolvedModuleExport(input: {
-    readonly definition: {
-        readonly exportName?: string;
-        readonly logicalPath: string;
-        readonly sourceId: string;
-    };
-    readonly kindLabel: string;
-    readonly moduleMap: CompiledModuleMap;
-    readonly nodeId: string | undefined;
+  readonly definition: {
+    readonly exportName?: string;
+    readonly logicalPath: string;
+    readonly sourceId: string;
+  };
+  readonly kindLabel: string;
+  readonly moduleMap: CompiledModuleMap;
+  readonly nodeId: string | undefined;
 }): Promise<unknown>;

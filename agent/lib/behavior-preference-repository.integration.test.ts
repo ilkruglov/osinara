@@ -20,7 +20,9 @@ const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "
 const integrationDatabaseUrl = process.env.DATABASE_URL;
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -115,8 +117,14 @@ async function source(
         telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
      VALUES ($1, $2, $3, $3, 'user', $4, $5, 'Prompt author', false, 'text',
              'Update the operational prompt', $6) RETURNING id`,
-    [conversationId, current.telegram_group_id, current.sequence_id,
-      `telegram:${telegramUserId}`, telegramUserId, sentAt],
+    [
+      conversationId,
+      current.telegram_group_id,
+      current.sequence_id,
+      `telegram:${telegramUserId}`,
+      telegramUserId,
+      sentAt,
+    ],
   );
   return {
     conversationId,
@@ -145,8 +153,13 @@ async function botSource(
         telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
      VALUES ($1, $2, $3, $3, 'telegram_bot', $4, $5, 'Other bot', true, 'text',
              'Привет от другого бота', now()) RETURNING id`,
-    [conversationId, current.telegram_group_id, current.sequence_id,
-      `telegram-bot:${telegramBotId}`, telegramBotId],
+    [
+      conversationId,
+      current.telegram_group_id,
+      current.sequence_id,
+      `telegram-bot:${telegramBotId}`,
+      telegramBotId,
+    ],
   );
   return {
     conversationId,
@@ -165,16 +178,20 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
     const owner = await source(fixture.familyConversationId, fixture.ownerTelegramUserId);
     const member = await source(fixture.familyConversationId, fixture.memberTelegramUserId);
 
-    await expect(behaviorPreferenceRepository.mutate(owner, {
-      action: "replace",
-      content: "Не шути.",
-      expectedRevision: 0,
-    })).resolves.toMatchObject({ content: "Не шути.", revision: 1 });
-    await expect(behaviorPreferenceRepository.mutate(member, {
-      action: "replace",
-      content: "Шути, когда это уместно.",
-      expectedRevision: 1,
-    })).resolves.toMatchObject({ content: "Шути, когда это уместно.", revision: 2 });
+    await expect(
+      behaviorPreferenceRepository.mutate(owner, {
+        action: "replace",
+        content: "Не шути.",
+        expectedRevision: 0,
+      }),
+    ).resolves.toMatchObject({ content: "Не шути.", revision: 1 });
+    await expect(
+      behaviorPreferenceRepository.mutate(member, {
+        action: "replace",
+        content: "Шути, когда это уместно.",
+        expectedRevision: 1,
+      }),
+    ).resolves.toMatchObject({ content: "Шути, когда это уместно.", revision: 2 });
   });
 
   it("isolates the prompt by exact chat", async () => {
@@ -196,22 +213,26 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
       content: "Семейный prompt.",
       revision: 1,
     });
-    await expect(behaviorPreferenceRepository.get({
-      actorUserId: fixture.memberUserId,
-      familyId: fixture.familyId,
-      groupId: fixture.familyGroupId,
-      kind: "scheduled",
-      scope: "family",
-      telegramChatId: `-100-prompt-family-isolation`,
-    })).resolves.toMatchObject({ content: "Семейный prompt.", revision: 1 });
-    await expect(behaviorPreferenceRepository.get({
-      actorUserId: fixture.memberUserId,
-      familyId: fixture.familyId,
-      groupId: null,
-      kind: "scheduled",
-      scope: "personal",
-      telegramChatId: fixture.memberTelegramUserId,
-    })).resolves.toEqual({ content: "", revision: 0, updatedAt: null });
+    await expect(
+      behaviorPreferenceRepository.get({
+        actorUserId: fixture.memberUserId,
+        familyId: fixture.familyId,
+        groupId: fixture.familyGroupId,
+        kind: "scheduled",
+        scope: "family",
+        telegramChatId: `-100-prompt-family-isolation`,
+      }),
+    ).resolves.toMatchObject({ content: "Семейный prompt.", revision: 1 });
+    await expect(
+      behaviorPreferenceRepository.get({
+        actorUserId: fixture.memberUserId,
+        familyId: fixture.familyId,
+        groupId: null,
+        kind: "scheduled",
+        scope: "personal",
+        telegramChatId: fixture.memberTelegramUserId,
+      }),
+    ).resolves.toEqual({ content: "", revision: 0, updatedAt: null });
   });
 
   // Every participant of a registered external group used to rewrite the whole chat prompt for
@@ -219,23 +240,24 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
   // не рассказывать" on 10 сентября 2026. Reading stays open, because every turn there needs it.
   it("lets an external participant read the prompt but leaves writing to the family", async () => {
     const fixture = await createFixture("external");
-    const external = await source(
-      fixture.externalConversationId,
-      fixture.externalTelegramUserId,
-    );
+    const external = await source(fixture.externalConversationId, fixture.externalTelegramUserId);
 
-    await expect(behaviorPreferenceRepository.mutate(external, {
-      action: "replace",
-      content: "Анекдоты не рассказывать.",
-      expectedRevision: 0,
-    })).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+    await expect(
+      behaviorPreferenceRepository.mutate(external, {
+        action: "replace",
+        content: "Анекдоты не рассказывать.",
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
 
     const member = await source(fixture.externalConversationId, fixture.memberTelegramUserId);
-    await expect(behaviorPreferenceRepository.mutate(member, {
-      action: "replace",
-      content: "Не используй эмодзи.",
-      expectedRevision: 0,
-    })).resolves.toMatchObject({ content: "Не используй эмодзи.", revision: 1 });
+    await expect(
+      behaviorPreferenceRepository.mutate(member, {
+        action: "replace",
+        content: "Не используй эмодзи.",
+        expectedRevision: 0,
+      }),
+    ).resolves.toMatchObject({ content: "Не используй эмодзи.", revision: 1 });
 
     await expect(behaviorPreferenceRepository.get(external)).resolves.toMatchObject({
       content: "Не используй эмодзи.",
@@ -263,8 +285,9 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
       revision: 1,
     });
     // The bot row is bound to its exact message: a user identity or another chat is refused.
-    await expect(behaviorPreferenceRepository.get({ ...bot, telegramBotId: "7000000002" }))
-      .rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+    await expect(
+      behaviorPreferenceRepository.get({ ...bot, telegramBotId: "7000000002" }),
+    ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
     const familyBot = await botSource(fixture.familyConversationId, "7000000001");
     await expect(behaviorPreferenceRepository.get(familyBot)).rejects.toThrowError(
       /AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u,
@@ -273,17 +296,16 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
 
   it("rejects a source actor or sequence substituted into another private chat", async () => {
     const fixture = await createFixture("source-substitution");
-    const wrongActor = await source(
-      fixture.privateConversationId,
-      fixture.memberTelegramUserId,
-    );
+    const wrongActor = await source(fixture.privateConversationId, fixture.memberTelegramUserId);
     await expect(behaviorPreferenceRepository.get(wrongActor)).rejects.toThrowError(
       /AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u,
     );
-    await expect(behaviorPreferenceRepository.get({
-      ...wrongActor,
-      sourceSequence: String(Number(wrongActor.sourceSequence) + 1),
-    })).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+    await expect(
+      behaviorPreferenceRepository.get({
+        ...wrongActor,
+        sourceSequence: String(Number(wrongActor.sourceSequence) + 1),
+      }),
+    ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
   });
 
   it("appends independent text and lets the agent rewrite everything from scratch", async () => {
@@ -296,19 +318,23 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
       content: "Не шути.",
       expectedRevision: 0,
     });
-    await expect(behaviorPreferenceRepository.mutate(second, {
-      action: "append",
-      content: "Разделяй абзацы пустой строкой.",
-      expectedRevision: 1,
-    })).resolves.toMatchObject({
+    await expect(
+      behaviorPreferenceRepository.mutate(second, {
+        action: "append",
+        content: "Разделяй абзацы пустой строкой.",
+        expectedRevision: 1,
+      }),
+    ).resolves.toMatchObject({
       content: "Не шути.\nРазделяй абзацы пустой строкой.",
       revision: 2,
     });
-    await expect(behaviorPreferenceRepository.mutate(third, {
-      action: "replace",
-      content: "Пиши спокойно и разделяй абзацы пустой строкой.",
-      expectedRevision: 2,
-    })).resolves.toMatchObject({
+    await expect(
+      behaviorPreferenceRepository.mutate(third, {
+        action: "replace",
+        content: "Пиши спокойно и разделяй абзацы пустой строкой.",
+        expectedRevision: 2,
+      }),
+    ).resolves.toMatchObject({
       content: "Пиши спокойно и разделяй абзацы пустой строкой.",
       revision: 3,
     });
@@ -322,11 +348,13 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
 
     await expect(behaviorPreferenceRepository.mutate(first, mutation)).resolves.toEqual(saved);
     const stale = await source(fixture.familyConversationId, fixture.memberTelegramUserId);
-    await expect(behaviorPreferenceRepository.mutate(stale, {
-      action: "append",
-      content: "Опоздавшее изменение.",
-      expectedRevision: 0,
-    })).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_REVISION_CONFLICT/u);
+    await expect(
+      behaviorPreferenceRepository.mutate(stale, {
+        action: "append",
+        content: "Опоздавшее изменение.",
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_REVISION_CONFLICT/u);
   });
 
   it("serializes concurrent first writes before a prompt row exists", async () => {
@@ -364,28 +392,31 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
       expectedRevision: 0,
     });
     const member = await source(fixture.familyConversationId, fixture.memberTelegramUserId);
-    await expect(database().query(
-      "DELETE FROM telegram_group_messages WHERE id = $1",
-      [initial.timelineEntryId],
-    )).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [
+        initial.timelineEntryId,
+      ]),
+    ).resolves.toMatchObject({ rowCount: 1 });
     await expect(behaviorPreferenceRepository.get(member)).resolves.toMatchObject({
       content: "Сохрани этот prompt.",
     });
 
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [fixture.familyId, fixture.memberUserId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.memberUserId,
+    ]);
     await expect(behaviorPreferenceRepository.get(member)).rejects.toThrowError(
       /AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u,
     );
-    await expect(behaviorPreferenceRepository.get({
-      actorUserId: fixture.memberUserId,
-      familyId: fixture.familyId,
-      groupId: null,
-      kind: "scheduled",
-      scope: "personal",
-      telegramChatId: fixture.memberTelegramUserId,
-    })).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+    await expect(
+      behaviorPreferenceRepository.get({
+        actorUserId: fixture.memberUserId,
+        familyId: fixture.familyId,
+        groupId: null,
+        kind: "scheduled",
+        scope: "personal",
+        telegramChatId: fixture.memberTelegramUserId,
+      }),
+    ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
   });
 });

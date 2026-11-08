@@ -11,4 +11,7 @@ import type { DevelopmentNitroArtifactsConfig } from "#internal/nitro/routes/run
  *
  * Auth: none. The dev server is local-only and the route is dev-only.
  */
-export declare function handleDevScheduleDispatchRequest(input: DevelopmentNitroArtifactsConfig, request: Request): Promise<Response>;
+export declare function handleDevScheduleDispatchRequest(
+  input: DevelopmentNitroArtifactsConfig,
+  request: Request,
+): Promise<Response>;

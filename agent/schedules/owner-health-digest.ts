@@ -14,27 +14,39 @@ import { dispatchIngressStallAlerts } from "../lib/telegram-ingress-stall.js";
 export default defineSchedule({
   cron: "*/10 * * * *",
   run({ waitUntil }) {
-    waitUntil(dispatchOwnerHealthDigests().catch((error: unknown) => {
-      console.error(JSON.stringify({
-        code: "AGENT_OWNER_HEALTH_DIGEST_SCHEDULE_FAILED",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      }));
-      throw error;
-    }));
+    waitUntil(
+      dispatchOwnerHealthDigests().catch((error: unknown) => {
+        console.error(
+          JSON.stringify({
+            code: "AGENT_OWNER_HEALTH_DIGEST_SCHEDULE_FAILED",
+            errorMessage: error instanceof Error ? error.message : String(error),
+          }),
+        );
+        throw error;
+      }),
+    );
     // The balance alert runs on the same tick and never waits for the digest hour.
-    waitUntil(dispatchOwnerBalanceAlerts().catch((error: unknown) => {
-      console.error(JSON.stringify({
-        code: "AGENT_OWNER_BALANCE_ALERT_SCHEDULE_FAILED",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      }));
-      throw error;
-    }));
-    waitUntil(dispatchIngressStallAlerts().catch((error: unknown) => {
-      console.error(JSON.stringify({
-        code: "AGENT_TELEGRAM_INGRESS_STALL_SCHEDULE_FAILED",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      }));
-      throw error;
-    }));
+    waitUntil(
+      dispatchOwnerBalanceAlerts().catch((error: unknown) => {
+        console.error(
+          JSON.stringify({
+            code: "AGENT_OWNER_BALANCE_ALERT_SCHEDULE_FAILED",
+            errorMessage: error instanceof Error ? error.message : String(error),
+          }),
+        );
+        throw error;
+      }),
+    );
+    waitUntil(
+      dispatchIngressStallAlerts().catch((error: unknown) => {
+        console.error(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_INGRESS_STALL_SCHEDULE_FAILED",
+            errorMessage: error instanceof Error ? error.message : String(error),
+          }),
+        );
+        throw error;
+      }),
+    );
   },
 });

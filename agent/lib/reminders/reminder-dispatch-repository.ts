@@ -239,10 +239,7 @@ export const reminderDispatchRepository = {
       [id, leaseToken],
     );
     if (!result.rowCount) {
-      throw new AppError(
-        "AGENT_REMINDER_LEASE_STALE",
-        "Доставка напоминания уже неактуальна",
-      );
+      throw new AppError("AGENT_REMINDER_LEASE_STALE", "Доставка напоминания уже неактуальна");
     }
   },
 
@@ -336,7 +333,11 @@ export const reminderDispatchRepository = {
       if (!failed.rows[0]) {
         throw new AppError("AGENT_REMINDER_LEASE_STALE", "Ошибка доставки уже неактуальна");
       }
-      await recordFailures(client, [{ family_id: failed.rows[0].family_id, id: job.id }], errorCode);
+      await recordFailures(
+        client,
+        [{ family_id: failed.rows[0].family_id, id: job.id }],
+        errorCode,
+      );
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

@@ -58,9 +58,7 @@ async function discoverAndImportEvals(e, t) {
     for (let n of await importEvalFile(e, t)) {
       let e = a.get(n.id);
       if (e !== void 0)
-        throw Error(
-          `Duplicate eval id "${n.id}" derived from both "${e}" and "${t}".`,
-        );
+        throw Error(`Duplicate eval id "${n.id}" derived from both "${e}" and "${t}".`);
       (a.set(n.id, t), matchesEvalFilter(n.id, r) && i.push(n));
     }
   return i;
@@ -84,9 +82,7 @@ async function discoverEvalConfig(t) {
   return a;
 }
 function isEveEvalConfig(e) {
-  return (
-    typeof e == `object` && !!e && `_tag` in e && e._tag === `EveEvalConfig`
-  );
+  return typeof e == `object` && !!e && `_tag` in e && e._tag === `EveEvalConfig`;
 }
 function isEveEvalDefinition(e) {
   return typeof e == `object` && !!e && `_tag` in e && e._tag === `EveEval`;

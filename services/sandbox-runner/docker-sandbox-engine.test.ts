@@ -42,22 +42,25 @@ const runtime = {
 };
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) =>
-    rm(root, { force: true, recursive: true })
-  ));
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
 });
 
 describe("buildSandboxContainerOptions", () => {
   it.each(["personal", "family", "group"] as const)(
     "tells only trusted %s compute that the cloud browser exists, never its key",
     (scope) => {
-      const options = buildSandboxContainerOptions({ ...runtime, browserlessApiKey: "browserless-secret" }, {
-        access: scope === "group" ? "restricted" : "trusted",
-        eveSessionId: EVE_SESSION_ID,
-        mounts: [{ mountPoint: scope, workspaceId: PERSONAL_WORKSPACE_ID }],
-        sandboxSessionId: SANDBOX_SESSION_ID,
-        seedDigest: EMPTY_SEED_DIGEST,
-      });
+      const options = buildSandboxContainerOptions(
+        { ...runtime, browserlessApiKey: "browserless-secret" },
+        {
+          access: scope === "group" ? "restricted" : "trusted",
+          eveSessionId: EVE_SESSION_ID,
+          mounts: [{ mountPoint: scope, workspaceId: PERSONAL_WORKSPACE_ID }],
+          sandboxSessionId: SANDBOX_SESSION_ID,
+          seedDigest: EMPTY_SEED_DIGEST,
+        },
+      );
       expect(options.Env?.includes("BROWSERLESS_AVAILABLE=true")).toBe(scope !== "group");
       // The key stays in the egress proxy (security review, 5 October 2026).
       expect(options.Env?.some((entry) => entry.includes("browserless-secret"))).toBe(false);
@@ -111,27 +114,33 @@ describe("buildSandboxContainerOptions", () => {
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
-    expect(options.Env).toEqual(expect.arrayContaining([
-      "AGENT_BROWSER_USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
-      "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
-      "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
-      "LIGHTPANDA_DISABLE_TELEMETRY=true",
-      "HOME=/tools/personal/home",
-      "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
-      "NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
-      "NODE_USE_ENV_PROXY=1",
-      "NPM_CONFIG_PREFIX=/tools/personal/npm",
-    ]));
-    expect(options.Env).not.toEqual(expect.arrayContaining([
-      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
-      expect.stringContaining("/tools/family"),
-    ]));
+    expect(options.Env).toEqual(
+      expect.arrayContaining([
+        "AGENT_BROWSER_USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
+        "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
+        "LIGHTPANDA_DISABLE_TELEMETRY=true",
+        "HOME=/tools/personal/home",
+        "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
+        "NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
+        "NODE_USE_ENV_PROXY=1",
+        "NPM_CONFIG_PREFIX=/tools/personal/npm",
+      ]),
+    );
+    expect(options.Env).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
+        expect.stringContaining("/tools/family"),
+      ]),
+    );
     // The logged-in browser session and its restore state belong to the browser companion only.
     // /workspace is on the read-only root: commands start in the main writable workspace.
     expect(options.WorkingDir).toBe("/workspace/personal");
     // The logged-in browser session, its restore state and Chrome's arguments (which Lightpanda,
     // the only browser left in Bash, refuses) belong to the browser companion only.
-    expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE|ARGS)/u.test(entry))).toBe(false);
+    expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE|ARGS)/u.test(entry))).toBe(
+      false,
+    );
   });
 
   it("creates one-shot GWS compute with exact argv and only one workspace", () => {
@@ -175,13 +184,12 @@ describe("buildSandboxContainerOptions", () => {
         VolumeOptions: { Subpath: FAMILY_WORKSPACE_ID },
       }),
     ]);
-    expect(options.Env).toEqual(expect.arrayContaining([
-      "HOME=/tools/family/home",
-      "NPM_CONFIG_PREFIX=/tools/family/npm",
-    ]));
-    expect(options.Env).not.toEqual(expect.arrayContaining([
-      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
-    ]));
+    expect(options.Env).toEqual(
+      expect.arrayContaining(["HOME=/tools/family/home", "NPM_CONFIG_PREFIX=/tools/family/npm"]),
+    );
+    expect(options.Env).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE")]),
+    );
   });
 
   it("gives an external group no tools volume and no network", () => {
@@ -209,9 +217,9 @@ describe("buildSandboxContainerOptions", () => {
       "PROXY=",
       "/tools/",
     ]) {
-      expect(options.Env).not.toEqual(expect.arrayContaining([
-        expect.stringContaining(forbiddenEnvironmentFragment),
-      ]));
+      expect(options.Env).not.toEqual(
+        expect.arrayContaining([expect.stringContaining(forbiddenEnvironmentFragment)]),
+      );
     }
   });
 
@@ -231,7 +239,12 @@ describe("buildSandboxContainerOptions", () => {
       remove: vi.fn(async () => undefined),
     };
     const replacement = {
-      exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })),
+      exec: vi.fn(async () => ({
+        inspect: vi.fn(async () => ({ ExitCode: 0 })),
+        start: vi.fn(async (options?: { stdin?: boolean }) =>
+          options?.stdin ? new PassThrough() : Readable.from([]),
+        ),
+      })),
       putArchive: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
       start: vi.fn(async () => undefined),
@@ -251,59 +264,74 @@ describe("buildSandboxContainerOptions", () => {
       runtime,
     });
 
-    await expect(engine.createSession({
-      access: "restricted",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: "a".repeat(64),
-      seedFiles: [{ contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" }],
-    })).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
+    await expect(
+      engine.createSession({
+        access: "restricted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: "a".repeat(64),
+        seedFiles: [
+          { contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" },
+        ],
+      }),
+    ).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
     expect(stale.remove).toHaveBeenCalledWith({ force: true, v: true });
     expect(docker.createContainer).toHaveBeenCalledOnce();
     expect(replacement.start).toHaveBeenCalledOnce();
     // The seed reaches the new container on a process's stdin, not through the archive API.
     expect(replacement.putArchive).not.toHaveBeenCalled();
-    expect(replacement.exec).toHaveBeenCalledWith(expect.objectContaining({
-      AttachStdin: true,
-      Cmd: expect.arrayContaining(["tar", "-xpf", "-", "-C", "/"]),
-    }));
+    expect(replacement.exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        AttachStdin: true,
+        Cmd: expect.arrayContaining(["tar", "-xpf", "-", "-C", "/"]),
+      }),
+    );
   });
 
   it.each([
     { previous: undefined, current: "new-key" },
     { previous: "old-key", current: "new-key" },
     { previous: "old-key", current: undefined },
-  ])("requests reseeding trusted compute after Browserless credentials change: $previous -> $current", async ({ previous, current }) => {
-    await mkdir(join(process.cwd(), ".tmp/browserless-check"), { recursive: true });
-    const root = await mkdtemp(join(process.cwd(), ".tmp/browserless-check/rotation-"));
-    temporaryRoots.push(root);
-    const request = {
-      access: "trusted" as const,
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "personal" as const, workspaceId: PERSONAL_WORKSPACE_ID }],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    };
-    const docker = {
-      getContainer: () => ({ inspect: async () => ({
-        Config: {
-          Env: previous ? [`BROWSERLESS_API_KEY=${previous}`] : [],
-          Labels: {
-            "dev.osinara.sandbox.request-hash": sandboxRequestHash(request),
-            "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
-          },
-        },
-        State: { Running: true },
-      }) }),
-    } as unknown as Docker;
-    const engine = createDockerSandboxEngine({
-      docker,
-      roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
-      runtime: { ...runtime, browserlessApiKey: current },
-    });
-    expect(await engine.createSession(request)).toEqual({ created: false, seedRequired: true, sessionId: SANDBOX_SESSION_ID });
-  });
+  ])(
+    "requests reseeding trusted compute after Browserless credentials change: $previous -> $current",
+    async ({ previous, current }) => {
+      await mkdir(join(process.cwd(), ".tmp/browserless-check"), { recursive: true });
+      const root = await mkdtemp(join(process.cwd(), ".tmp/browserless-check/rotation-"));
+      temporaryRoots.push(root);
+      const request = {
+        access: "trusted" as const,
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: "personal" as const, workspaceId: PERSONAL_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: EMPTY_SEED_DIGEST,
+      };
+      const docker = {
+        getContainer: () => ({
+          inspect: async () => ({
+            Config: {
+              Env: previous ? [`BROWSERLESS_API_KEY=${previous}`] : [],
+              Labels: {
+                "dev.osinara.sandbox.request-hash": sandboxRequestHash(request),
+                "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
+              },
+            },
+            State: { Running: true },
+          }),
+        }),
+      } as unknown as Docker;
+      const engine = createDockerSandboxEngine({
+        docker,
+        roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
+        runtime: { ...runtime, browserlessApiKey: current },
+      });
+      expect(await engine.createSession(request)).toEqual({
+        created: false,
+        seedRequired: true,
+        sessionId: SANDBOX_SESSION_ID,
+      });
+    },
+  );
 
   it("restarts a matching warm container without requesting or writing seeds", async () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
@@ -359,11 +387,15 @@ describe("buildSandboxContainerOptions", () => {
     const containers = {
       "running-idle": { stop: stopRunning },
       "stopped-recent": {
-        inspect: vi.fn(async () => ({ State: { FinishedAt: "2026-07-30T19:00:00.000Z", Running: false } })),
+        inspect: vi.fn(async () => ({
+          State: { FinishedAt: "2026-07-30T19:00:00.000Z", Running: false },
+        })),
         remove: removeRecent,
       },
       "stopped-expired": {
-        inspect: vi.fn(async () => ({ State: { FinishedAt: "2026-07-29T18:00:00.000Z", Running: false } })),
+        inspect: vi.fn(async () => ({
+          State: { FinishedAt: "2026-07-29T18:00:00.000Z", Running: false },
+        })),
         remove: removeExpired,
       },
     } as const;
@@ -430,10 +462,12 @@ describe("buildSandboxContainerOptions", () => {
       runtime,
     });
 
-    await expect(engine.removePath(SANDBOX_SESSION_ID, {
-      force: true,
-      path: "obsolete.txt",
-    })).resolves.toBeUndefined();
+    await expect(
+      engine.removePath(SANDBOX_SESSION_ID, {
+        force: true,
+        path: "obsolete.txt",
+      }),
+    ).resolves.toBeUndefined();
     expect(start).toHaveBeenCalledOnce();
   });
 
@@ -450,8 +484,8 @@ describe("buildSandboxContainerOptions", () => {
         id === "shutdown-orphan"
           ? { remove: removeOrphan }
           : id === "gws-orphan"
-          ? { remove: removeGoogleWorkspaceOrphan }
-          : sessionContainer
+            ? { remove: removeGoogleWorkspaceOrphan }
+            : sessionContainer,
       ),
       listContainers: vi.fn(async () => [
         {
@@ -512,23 +546,42 @@ describe("running-container cap", () => {
     mounts: [{ mountPoint: "group" as const, workspaceId: GROUP_WORKSPACE_ID }],
     sandboxSessionId: SANDBOX_SESSION_ID,
     seedDigest: "a".repeat(64),
-    seedFiles: [{ contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" }],
+    seedFiles: [
+      { contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" },
+    ],
   };
-  const busyListing = [{
-    Id: "running-busy",
-    Labels: { "dev.osinara.sandbox.session-id": BUSY_SESSION_ID },
-    State: "running",
-  }];
+  const busyListing = [
+    {
+      Id: "running-busy",
+      Labels: { "dev.osinara.sandbox.session-id": BUSY_SESSION_ID },
+      State: "running",
+    },
+  ];
 
   it("stops the coldest container at the cap to make room for a new one", async () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
     temporaryRoots.push(root);
-    const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
-    const created = { exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })), putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
+    const busy = {
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      stop: vi.fn(async () => undefined),
+    };
+    const created = {
+      exec: vi.fn(async () => ({
+        inspect: vi.fn(async () => ({ ExitCode: 0 })),
+        start: vi.fn(async (options?: { stdin?: boolean }) =>
+          options?.stdin ? new PassThrough() : Readable.from([]),
+        ),
+      })),
+      putArchive: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+      start: vi.fn(async () => undefined),
+    };
     const docker = {
       createContainer: vi.fn(async () => created),
       // The new session has no container yet; the busy one is addressed by id when stopped.
-      getContainer: vi.fn((id: string) => id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) }),
+      getContainer: vi.fn((id: string) =>
+        id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) },
+      ),
       listContainers: vi.fn(async () => busyListing),
       modem: { demuxStream: vi.fn((stream: Readable) => stream.resume()) },
     } as unknown as Docker;
@@ -539,7 +592,11 @@ describe("running-container cap", () => {
       runtime,
     });
 
-    await expect(engine.createSession(request)).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
+    await expect(engine.createSession(request)).resolves.toEqual({
+      created: true,
+      seedRequired: false,
+      sessionId: SANDBOX_SESSION_ID,
+    });
     expect(busy.stop).toHaveBeenCalledOnce();
     expect(docker.createContainer).toHaveBeenCalledOnce();
   });
@@ -553,20 +610,30 @@ describe("running-container cap", () => {
     const started: Array<{ name: string; sessionId: string }> = [];
     const docker = {
       createContainer: vi.fn(async (options: { Labels: Record<string, string>; name: string }) => ({
-        exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })),
+        exec: vi.fn(async () => ({
+          inspect: vi.fn(async () => ({ ExitCode: 0 })),
+          start: vi.fn(async (options?: { stdin?: boolean }) =>
+            options?.stdin ? new PassThrough() : Readable.from([]),
+          ),
+        })),
         putArchive: vi.fn(async () => undefined),
         remove: vi.fn(async () => undefined),
         start: vi.fn(async () => {
-          started.push({ name: options.name, sessionId: options.Labels["dev.osinara.sandbox.session-id"]! });
+          started.push({
+            name: options.name,
+            sessionId: options.Labels["dev.osinara.sandbox.session-id"]!,
+          });
         }),
       })),
       getContainer: vi.fn(() => ({ inspect: vi.fn(async () => Promise.reject(missing)) })),
       // The listing reflects what has started so far, as Docker would.
-      listContainers: vi.fn(async () => started.map((item) => ({
-        Id: item.name,
-        Labels: { "dev.osinara.sandbox.session-id": item.sessionId },
-        State: "running",
-      }))),
+      listContainers: vi.fn(async () =>
+        started.map((item) => ({
+          Id: item.name,
+          Labels: { "dev.osinara.sandbox.session-id": item.sessionId },
+          State: "running",
+        })),
+      ),
       modem: { demuxStream: vi.fn((stream: Readable) => stream.resume()) },
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
@@ -581,7 +648,9 @@ describe("running-container cap", () => {
       engine.createSession({ ...request, sandboxSessionId: BUSY_SESSION_ID }),
     ]);
     expect(outcomes.map((outcome) => outcome.status).sort()).toEqual(["fulfilled", "rejected"]);
-    const refused = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+    const refused = outcomes.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+    );
     expect(String(refused?.reason)).toContain("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
     expect(started).toHaveLength(1);
   });
@@ -589,10 +658,15 @@ describe("running-container cap", () => {
   it("refuses a new container when every one at the cap was used within the minute", async () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
     temporaryRoots.push(root);
-    const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
+    const busy = {
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      stop: vi.fn(async () => undefined),
+    };
     const docker = {
       createContainer: vi.fn(),
-      getContainer: vi.fn((id: string) => id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) }),
+      getContainer: vi.fn((id: string) =>
+        id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) },
+      ),
       listContainers: vi.fn(async () => busyListing),
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
@@ -604,7 +678,9 @@ describe("running-container cap", () => {
     // A read a moment ago marks the busy session as used in this process.
     await engine.readFile(BUSY_SESSION_ID, "/workspace/anything").catch(() => undefined);
 
-    await expect(engine.createSession(request)).rejects.toThrow("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    await expect(engine.createSession(request)).rejects.toThrow(
+      "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED",
+    );
     expect(busy.stop).not.toHaveBeenCalled();
     expect(docker.createContainer).not.toHaveBeenCalled();
   });

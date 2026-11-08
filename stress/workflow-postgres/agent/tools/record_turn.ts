@@ -25,10 +25,9 @@ export default defineTool({
     const client = new Client({ connectionString });
     await client.connect();
     try {
-      await client.query(
-        "INSERT INTO workflow_stress_side_effects (ordinal) VALUES ($1)",
-        [ordinal],
-      );
+      await client.query("INSERT INTO workflow_stress_side_effects (ordinal) VALUES ($1)", [
+        ordinal,
+      ]);
     } finally {
       await client.end();
     }

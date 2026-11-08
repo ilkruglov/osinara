@@ -22,14 +22,14 @@ export declare const DEFAULT_SANDBOX_SOURCE_ID = "eve:default-sandbox";
  * reads these files.
  */
 export interface RuntimeRegisteredSandbox {
+  readonly definition: ResolvedSandboxDefinition;
+  readonly workspaceResourceRoot: CompiledWorkspaceResourceRoot;
+  /** Parent-owned sandbox identity used by a child that selects parent.sandbox. */
+  readonly inheritance?: {
     readonly definition: ResolvedSandboxDefinition;
+    readonly nodeId: string;
     readonly workspaceResourceRoot: CompiledWorkspaceResourceRoot;
-    /** Parent-owned sandbox identity used by a child that selects parent.sandbox. */
-    readonly inheritance?: {
-        readonly definition: ResolvedSandboxDefinition;
-        readonly nodeId: string;
-        readonly workspaceResourceRoot: CompiledWorkspaceResourceRoot;
-    };
+  };
 }
 /**
  * Runtime-owned registry that exposes the resolved sandbox to the harness
@@ -42,7 +42,7 @@ export interface RuntimeRegisteredSandbox {
  * need a `null` sandbox cast through `as RuntimeSandboxRegistry`.
  */
 export interface RuntimeSandboxRegistry {
-    readonly sandbox: RuntimeRegisteredSandbox;
+  readonly sandbox: RuntimeRegisteredSandbox;
 }
 /**
  * Builds the runtime-owned registry for one resolved authored agent's
@@ -50,8 +50,8 @@ export interface RuntimeSandboxRegistry {
  * framework default.
  */
 export declare function createRuntimeSandboxRegistry(input: {
-    readonly authoredSandbox: ResolvedSandboxDefinition | null;
-    readonly workspaceResourceRoot: CompiledWorkspaceResourceRoot;
+  readonly authoredSandbox: ResolvedSandboxDefinition | null;
+  readonly workspaceResourceRoot: CompiledWorkspaceResourceRoot;
 }): RuntimeSandboxRegistry;
 /**
  * Builds the framework default sandbox definition used when no agent

@@ -1,7 +1,18 @@
 /** Ordered `agent-prompt/` sections composed into the pre-scaffold setup guide. */
-export declare const SETUP_SECTIONS: readonly ["intro-setup.md", "collect-intent.md", "vercel-connect.md", "scaffold.md", "build-and-verify.md"];
+export declare const SETUP_SECTIONS: readonly [
+  "intro-setup.md",
+  "collect-intent.md",
+  "vercel-connect.md",
+  "scaffold.md",
+  "build-and-verify.md",
+];
 /** Ordered `agent-prompt/` sections composed into the post-scaffold handoff. */
-export declare const HANDOFF_SECTIONS: readonly ["intro-handoff.md", "collect-intent.md", "vercel-connect.md", "build-and-verify.md"];
+export declare const HANDOFF_SECTIONS: readonly [
+  "intro-handoff.md",
+  "collect-intent.md",
+  "vercel-connect.md",
+  "build-and-verify.md",
+];
 /**
  * The pre-scaffold setup guide shown after malformed coding-agent input. It
  * scaffolds from scratch, so it renders with the universal `npx eve dev` rather
@@ -9,16 +20,17 @@ export declare const HANDOFF_SECTIONS: readonly ["intro-handoff.md", "collect-in
  */
 export declare function initAgentInstructions(): string;
 /** Concise scaffold facts printed only when a coding agent launched `eve init`. */
-export declare function initAgentReadySummary(model: string | undefined, projectPath: string): string;
+export declare function initAgentReadySummary(
+  model: string | undefined,
+  projectPath: string,
+): string;
 /** The post-scaffold handoff printed after a coding agent runs `eve init`. */
 export declare function initAgentDevHandoff(options: {
-    projectPath: string;
-    devCommand: string;
+  projectPath: string;
+  devCommand: string;
 }): string;
 /** The initial prompt for a coding-agent REPL opened inside the scaffolded project. */
-export declare function initAgentReplPrompt(options: {
-    devCommand: string;
-}): string;
+export declare function initAgentReplPrompt(options: { devCommand: string }): string;
 /**
  * Pre-scaffold guide for a coding agent that ran `eve extension init` with no
  * target. Mirrors agent bare-init: collect a package name, then re-run with it.
@@ -30,7 +42,7 @@ export declare function initExtensionInstructions(): string;
  * `eve dev`.
  */
 export declare function initExtensionHandoff(options: {
-    packageManager: string;
-    packageName: string;
-    projectPath: string;
+  packageManager: string;
+  packageName: string;
+  projectPath: string;
 }): string;

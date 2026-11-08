@@ -95,12 +95,7 @@ function buildCompletedCallbackBody(e) {
 }
 function parseSerializedSessionCallback(e) {
   let t = parseSessionCallback(e);
-  if (!t.ok)
-    throw Error(`Serialized session callback is invalid.`, { cause: t.cause });
+  if (!t.ok) throw Error(`Serialized session callback is invalid.`, { cause: t.cause });
   return t.callback;
 }
-export {
-  fireSessionCallbackStep,
-  fireTaskEventCallbackStep,
-  fireTaskUpdateCallbackStep,
-};
+export { fireSessionCallbackStep, fireTaskEventCallbackStep, fireTaskUpdateCallbackStep };

@@ -6,24 +6,18 @@ function stampDevelopmentClientAddress(e, t, n) {
     deleteHeader(e, DEVELOPMENT_CLIENT_ADDRESS_SIGNATURE_HEADER),
     !(t === void 0 || t.length === 0 || n === void 0 || n.length === 0) &&
       (setHeader(e, DEVELOPMENT_CLIENT_ADDRESS_HEADER, t),
-      setHeader(
-        e,
-        DEVELOPMENT_CLIENT_ADDRESS_SIGNATURE_HEADER,
-        signClientAddress(t, n),
-      )));
+      setHeader(e, DEVELOPMENT_CLIENT_ADDRESS_SIGNATURE_HEADER, signClientAddress(t, n))));
 }
 function readTrustedDevelopmentClientAddress(e, t) {
   let n = e.get(DEVELOPMENT_CLIENT_ADDRESS_HEADER),
     i = e.get(DEVELOPMENT_CLIENT_ADDRESS_SIGNATURE_HEADER);
-  if (
-    !(
-      n === null ||
-      i === null ||
-      t === void 0 ||
-      t.length === 0 ||
-      !timingSafeEqualStrings(i, signClientAddress(n, t))
-    )
-  )
+  if (!(
+    n === null ||
+    i === null ||
+    t === void 0 ||
+    t.length === 0 ||
+    !timingSafeEqualStrings(i, signClientAddress(n, t))
+  ))
     return n;
 }
 function timingSafeEqualStrings(t, r) {

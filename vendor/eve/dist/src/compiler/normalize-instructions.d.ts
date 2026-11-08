@@ -1,5 +1,8 @@
 import type { InstructionsSourceRef } from "#discover/manifest.js";
-import type { CompiledDynamicInstructionsDefinition, CompiledInstructionsDefinition } from "#compiler/manifest.js";
+import type {
+  CompiledDynamicInstructionsDefinition,
+  CompiledInstructionsDefinition,
+} from "#compiler/manifest.js";
 import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-helpers.js";
 /**
  * Compiled instructions entry produced from one authored `instructions/*`
@@ -8,13 +11,15 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * Either a static instructions definition or a dynamic resolver that
  * produces model messages at runtime.
  */
-export type CompiledInstructionsEntry = {
-    readonly kind: "instructions";
-    readonly definition: CompiledInstructionsDefinition;
-} | {
-    readonly kind: "dynamic-instructions";
-    readonly definition: CompiledDynamicInstructionsDefinition;
-};
+export type CompiledInstructionsEntry =
+  | {
+      readonly kind: "instructions";
+      readonly definition: CompiledInstructionsDefinition;
+    }
+  | {
+      readonly kind: "dynamic-instructions";
+      readonly definition: CompiledDynamicInstructionsDefinition;
+    };
 /**
  * Compiles one authored instructions prompt source (markdown or
  * module-backed `defineInstructions`) into the normalized shape consumed
@@ -28,9 +33,17 @@ export type CompiledInstructionsEntry = {
  * classified and their event names recorded; the resolver runs at
  * runtime.
  */
-export declare function compileInstructionsEntry(agentRoot: string, source: InstructionsSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledInstructionsEntry>;
+export declare function compileInstructionsEntry(
+  agentRoot: string,
+  source: InstructionsSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledInstructionsEntry>;
 /**
  * @deprecated Use {@link compileInstructionsEntry} instead. Kept for
  * backwards compatibility with callers that pass a single source.
  */
-export declare function compileInstructions(agentRoot: string, source: InstructionsSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledInstructionsDefinition>;
+export declare function compileInstructions(
+  agentRoot: string,
+  source: InstructionsSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledInstructionsDefinition>;

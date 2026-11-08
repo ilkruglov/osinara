@@ -23,9 +23,7 @@ import {
   type WorkspaceAuthorization,
   workspaceRepository,
 } from "../workspaces/workspace-repository.js";
-import {
-  createScopedFileTools,
-} from "./scoped-file-tools.js";
+import { createScopedFileTools } from "./scoped-file-tools.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ExternalGroupFileToolName = "glob" | "grep" | "read_file" | "write_file";
@@ -46,10 +44,12 @@ export function createExternalGroupFileTools(
   dependencies: ExternalGroupFileToolDependencies,
 ): Readonly<Record<ExternalGroupFileToolName, AnyToolDefinition>> {
   const workspaceTools = createScopedFileTools({
-    authorize: async (auth) => [{
-      hostRoot: await dependencies.authorize(auth),
-      mountPoint: "group",
-    }],
+    authorize: async (auth) => [
+      {
+        hostRoot: await dependencies.authorize(auth),
+        mountPoint: "group",
+      },
+    ],
     defaultMountPoint: "group",
     defaults: dependencies.defaults,
     forbiddenPath,
@@ -69,7 +69,8 @@ export function createExternalGroupFileTools(
     }),
     write_file: defineTool({
       ...workspaceTools.write_file,
-      description: "Создать или изменить файл только по абсолютному filePath внутри /workspace/group.",
+      description:
+        "Создать или изменить файл только по абсолютному filePath внутри /workspace/group.",
     }),
   };
 }

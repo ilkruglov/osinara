@@ -48,9 +48,7 @@ var AgentInfoResponseError = class extends Error {
   issues;
   constructor(issues = []) {
     const detail = issues.length === 0 ? "" : ` (${issues.join("; ")})`;
-    super(
-      `The server returned an unrecognized response from the eve agent info route.${detail}`,
-    );
+    super(`The server returned an unrecognized response from the eve agent info route.${detail}`);
     this.name = "AgentInfoResponseError";
     this.issues = issues;
   }
@@ -60,9 +58,7 @@ var AgentInfoResponseError = class extends Error {
 //#region src/internal/http/basic-auth.ts
 function encodeBasicCredentials(username, password) {
   const bytes = new TextEncoder().encode(`${username}:${password}`);
-  const binaryString = Array.from(bytes, (byte) =>
-    String.fromCodePoint(byte),
-  ).join("");
+  const binaryString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join("");
   return btoa(binaryString);
 }
 
@@ -93,13 +89,7 @@ const modelEndpoint = z.union([
   }),
   z.object({
     kind: z.literal("chatgpt"),
-    state: z.enum([
-      "checking",
-      "ready",
-      "signed-out",
-      "reauth-required",
-      "unavailable",
-    ]),
+    state: z.enum(["checking", "ready", "signed-out", "reauth-required", "unavailable"]),
     accountLabel: z.string().optional(),
   }),
   z.object({
@@ -116,15 +106,7 @@ const agentModelBaseFields = {
   contextWindowTokens: z.number().optional(),
   providerOptions: z.unknown().optional(),
   reasoning: z
-    .enum([
-      "provider-default",
-      "none",
-      "minimal",
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ])
+    .enum(["provider-default", "none", "minimal", "low", "medium", "high", "xhigh"])
     .optional()
     .catch(void 0),
   source: source.optional(),
@@ -318,9 +300,7 @@ var ClientError = class extends Error {
     this.code = code;
     this.status = status;
     this.body = body;
-    this.headers = Object.freeze(
-      Object.fromEntries(new Headers(headers).entries()),
-    );
+    this.headers = Object.freeze(Object.fromEntries(new Headers(headers).entries()));
   }
 };
 
@@ -331,8 +311,7 @@ function toErrorMessage(error) {
   if (typeof error === "string") return error;
   if (error === null || error === void 0) return String(error);
   if (isObject(error)) {
-    if (typeof error.message === "string" && error.message.length > 0)
-      return error.message;
+    if (typeof error.message === "string" && error.message.length > 0) return error.message;
     return safeJsonStringify(error);
   }
   return String(error);
@@ -341,12 +320,9 @@ function toError(raw) {
   if (raw instanceof Error) return raw;
   const error = new Error(toErrorMessage(raw));
   if (!isObject(raw)) return error;
-  if (typeof raw.name === "string" && raw.name.length > 0)
-    error.name = raw.name;
-  if (typeof raw.stack === "string" && raw.stack.length > 0)
-    error.stack = raw.stack;
-  if ("cause" in raw && raw.cause !== void 0 && raw.cause !== raw)
-    error.cause = raw.cause;
+  if (typeof raw.name === "string" && raw.name.length > 0) error.name = raw.name;
+  if (typeof raw.stack === "string" && raw.stack.length > 0) error.stack = raw.stack;
+  if ("cause" in raw && raw.cause !== void 0 && raw.cause !== raw) error.cause = raw.cause;
   return error;
 }
 function safeJsonStringify(value) {
@@ -369,9 +345,7 @@ function createUlidFactory() {
   return function createUlidFromFactory() {
     const now = Date.now();
     if (!Number.isInteger(now) || now < 0 || now > TIME_MAX)
-      throw new Error(
-        `Cannot mint a ULID: timestamp must be an integer from 0 to ${TIME_MAX}.`,
-      );
+      throw new Error(`Cannot mint a ULID: timestamp must be an integer from 0 to ${TIME_MAX}.`);
     if (now > lastTimeMs) {
       lastTimeMs = now;
       randomFill(lastRandom);
@@ -390,9 +364,7 @@ const createUlid = createUlidFactory();
 function randomFill(target) {
   const webCrypto = globalThis.crypto;
   if (typeof webCrypto?.getRandomValues !== "function")
-    throw new Error(
-      "Cannot mint a ULID: globalThis.crypto.getRandomValues is unavailable.",
-    );
+    throw new Error("Cannot mint a ULID: globalThis.crypto.getRandomValues is unavailable.");
   webCrypto.getRandomValues(target);
 }
 function encodeTime(timeMs) {
@@ -445,9 +417,7 @@ function isCurrentTurnBoundaryEvent(event) {
 }
 function isTurnFailureEvent(event) {
   return (
-    event.type === "session.failed" ||
-    event.type === "step.failed" ||
-    event.type === "turn.failed"
+    event.type === "session.failed" || event.type === "step.failed" || event.type === "turn.failed"
   );
 }
 
@@ -455,8 +425,7 @@ function isTurnFailureEvent(event) {
 //#region src/client/output-schema.ts
 function extractCompletedResult(events) {
   let result;
-  for (const event of events)
-    if (isResultCompletedEvent(event)) result = event.data.result;
+  for (const event of events) if (isResultCompletedEvent(event)) result = event.data.result;
   return result;
 }
 function isResultCompletedEvent(event) {
@@ -475,12 +444,10 @@ function summarizeTurnEvents(events) {
     if (isCurrentTurnBoundaryEvent(event)) boundary = event;
     if (isTurnFailureEvent(event)) failure = event;
     if (isFinalMessageCompleted(event)) message = event.data.message ?? void 0;
-    if (event.type === "input.requested")
-      inputRequests.push(...event.data.requests);
+    if (event.type === "input.requested") inputRequests.push(...event.data.requests);
     if (event.type === "authorization.required")
       pendingAuthorizations.set(event.data.name, event.data);
-    if (event.type === "authorization.completed")
-      pendingAuthorizations.delete(event.data.name);
+    if (event.type === "authorization.completed") pendingAuthorizations.delete(event.data.name);
   }
   return {
     boundary,
@@ -497,10 +464,7 @@ function summarizeTurnEvents(events) {
   };
 }
 function isFinalMessageCompleted(event) {
-  return (
-    event.type === "message.completed" &&
-    event.data.finishReason !== "tool-calls"
-  );
+  return event.type === "message.completed" && event.data.finishReason !== "tool-calls";
 }
 
 //#endregion
@@ -522,14 +486,11 @@ var MessageResponse = class {
     if (this.#settled) return Promise.resolve({ status: "no_active_turn" });
     if (this.#cancellation !== void 0) return this.#cancellation;
     const cancellation = this.#turnId.promise.then((turnId) =>
-      turnId === void 0
-        ? { status: "no_active_turn" }
-        : this.#cancelTurn(turnId),
+      turnId === void 0 ? { status: "no_active_turn" } : this.#cancelTurn(turnId),
     );
     this.#cancellation = cancellation;
     cancellation.catch(() => {
-      if (!this.#settled && this.#cancellation === cancellation)
-        this.#cancellation = void 0;
+      if (!this.#settled && this.#cancellation === cancellation) this.#cancellation = void 0;
     });
     return cancellation;
   }
@@ -547,16 +508,14 @@ var MessageResponse = class {
     };
   }
   [Symbol.asyncIterator]() {
-    if (this.#consumed)
-      throw new Error("MessageResponse has already been consumed.");
+    if (this.#consumed) throw new Error("MessageResponse has already been consumed.");
     this.#consumed = true;
     return this.#observeStream();
   }
   async *#observeStream() {
     try {
       for await (const event of this.#createStream()) {
-        if (event.type === "turn.started")
-          this.#turnId.resolve(event.data.turnId);
+        if (event.type === "turn.started") this.#turnId.resolve(event.data.turnId);
         else if (isCurrentTurnBoundaryEvent(event)) {
           this.#settled = true;
           this.#turnId.resolve(void 0);
@@ -574,17 +533,13 @@ var MessageResponse = class {
 function isStreamDisconnectError(error) {
   if (error instanceof DOMException) return error.name === "AbortError";
   if (!(error instanceof Error)) return false;
-  const errorCode =
-    "code" in error && typeof error.code === "string" ? error.code : void 0;
+  const errorCode = "code" in error && typeof error.code === "string" ? error.code : void 0;
   return (
     error.name === "AbortError" ||
     error.message === "terminated" ||
     errorCode === "UND_ERR_SOCKET" ||
-    (error instanceof TypeError &&
-      /^(?:failed to fetch|fetch failed)$/i.test(error.message)) ||
-    /abort|cancel|disconnect|premature close|socket|terminated/i.test(
-      error.message,
-    )
+    (error instanceof TypeError && /^(?:failed to fetch|fetch failed)$/i.test(error.message)) ||
+    /abort|cancel|disconnect|premature close|socket|terminated/i.test(error.message)
   );
 }
 async function* readNdjsonStream(body) {
@@ -600,8 +555,7 @@ async function* readNdjsonStream(body) {
         buffer += decoder.decode();
         break;
       }
-      if (result.value)
-        buffer += decoder.decode(result.value, { stream: true });
+      if (result.value) buffer += decoder.decode(result.value, { stream: true });
       let newlineIndex = buffer.indexOf("\n");
       while (newlineIndex !== -1) {
         const line = buffer.slice(0, newlineIndex).trim();
@@ -622,10 +576,8 @@ async function* readNdjsonStream(body) {
 //#region src/client/url.ts
 function createClientUrl(host, routePath, searchParams) {
   const queryIndex = routePath.indexOf("?");
-  const pathOnly =
-    queryIndex === -1 ? routePath : routePath.slice(0, queryIndex);
-  const embeddedQuery =
-    queryIndex === -1 ? "" : routePath.slice(queryIndex + 1);
+  const pathOnly = queryIndex === -1 ? routePath : routePath.slice(0, queryIndex);
+  const embeddedQuery = queryIndex === -1 ? "" : routePath.slice(queryIndex + 1);
   const normalizedRoute = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
   if (isAbsoluteUrl(host)) {
     const url = new URL(host);
@@ -643,8 +595,7 @@ function createClientUrl(host, routePath, searchParams) {
 }
 function mergeEmbeddedQuery(target, embeddedQuery) {
   if (embeddedQuery.length === 0) return;
-  for (const [name, value] of new URLSearchParams(embeddedQuery))
-    target.append(name, value);
+  for (const [name, value] of new URLSearchParams(embeddedQuery)) target.append(name, value);
 }
 function isAbsoluteUrl(value) {
   return /^[a-z][a-z\d+\-.]*:/i.test(value);
@@ -655,8 +606,7 @@ function trimTrailingSlash(value) {
 }
 function mergeSearchParams(target, searchParams) {
   if (searchParams === void 0) return;
-  for (const [name, value] of Object.entries(searchParams))
-    target.set(name, value);
+  for (const [name, value] of Object.entries(searchParams)) target.set(name, value);
 }
 function formatSearch(searchParams) {
   const value = searchParams.toString();
@@ -666,9 +616,7 @@ function formatSearch(searchParams) {
 //#endregion
 //#region src/client/open-stream.ts
 const DEFAULT_STREAM_RECONNECT_POLICY = {
-  retryableErrorStatuses: /* @__PURE__ */ new Set([
-    404, 409, 425, 500, 502, 503, 504,
-  ]),
+  retryableErrorStatuses: /* @__PURE__ */ new Set([404, 409, 425, 500, 502, 503, 504]),
   streamIdleReconnectPolicy: {
     baseDelayMs: 250,
     maxAttempts: 5,
@@ -766,12 +714,7 @@ async function* followStreamIterable(input) {
     } catch (error) {
       if (!isStreamDisconnectError(error)) throw error;
     }
-    if (
-      input.signal?.aborted ||
-      input.startIndex < 0 ||
-      idleRetryPolicy.maxAttempts === 0
-    )
-      return;
+    if (input.signal?.aborted || input.startIndex < 0 || idleRetryPolicy.maxAttempts === 0) return;
     if (
       input.keepAlive !== true &&
       !deliveredEvent &&
@@ -782,10 +725,7 @@ async function* followStreamIterable(input) {
     initialConnection = false;
     await sleep(reconnectDelayMs, input.signal);
     if (input.signal?.aborted) return;
-    reconnectDelayMs = Math.min(
-      reconnectDelayMs * 2,
-      idleRetryPolicy.maxDelayMs,
-    );
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, idleRetryPolicy.maxDelayMs);
   }
 }
 async function openStreamBody(input) {
@@ -796,8 +736,7 @@ async function openStreamBody(input) {
   let lastHeaders;
   let retryDelayMs = openRetryPolicy.baseDelayMs;
   const searchParams = {};
-  if (input.startIndex !== 0)
-    searchParams.startIndex = String(input.startIndex);
+  if (input.startIndex !== 0) searchParams.startIndex = String(input.startIndex);
   if (input.requestTailIndex === true) searchParams.includeTailIndex = "1";
   for (let attempt = 0; attempt < openRetryPolicy.maxAttempts; attempt += 1) {
     const url = createClientUrl(
@@ -827,11 +766,7 @@ async function openStreamBody(input) {
     }
     if (response.ok) {
       if (!response.body)
-        throw new ClientError(
-          response.status,
-          "Response body is null.",
-          response.headers,
-        );
+        throw new ClientError(response.status, "Response body is null.", response.headers);
       return {
         body: response.body,
         tailIndex: parseTailIndexHeader(response.headers),
@@ -847,11 +782,7 @@ async function openStreamBody(input) {
       retryDelayMs = Math.min(retryDelayMs * 2, openRetryPolicy.maxDelayMs);
     }
   }
-  throw new ClientError(
-    lastStatus ?? 0,
-    lastBody ?? "Failed to open message stream.",
-    lastHeaders,
-  );
+  throw new ClientError(lastStatus ?? 0, lastBody ?? "Failed to open message stream.", lastHeaders);
 }
 function parseTailIndexHeader(headers) {
   const raw = headers.get(EVE_STREAM_TAIL_INDEX_HEADER);
@@ -942,12 +873,9 @@ async function cancelClientSession(input) {
   const result = CancelTurnResponseSchema.safeParse(payload);
   if (
     !result.success ||
-    (result.data.status === "accepted" &&
-      result.data.sessionId !== input.sessionId)
+    (result.data.status === "accepted" && result.data.sessionId !== input.sessionId)
   )
-    throw new Error(
-      `Cancel route returned an invalid response (${response.status}).`,
-    );
+    throw new Error(`Cancel route returned an invalid response (${response.status}).`);
   return result.data.status === "accepted"
     ? {
         sessionId: result.data.sessionId,
@@ -964,8 +892,7 @@ async function clearClientSession(input) {
   const result = ClearResponseSchema.safeParse(payload);
   if (
     !result.success ||
-    (result.data.status === "accepted" &&
-      result.data.sessionId !== input.sessionId)
+    (result.data.status === "accepted" && result.data.sessionId !== input.sessionId)
   )
     throw new Error("Clear route returned an invalid response.");
   return result.data.status === "accepted"
@@ -984,8 +911,7 @@ async function compactClientSession(input) {
   const result = CompactResponseSchema.safeParse(payload);
   if (
     !result.success ||
-    (result.data.status === "accepted" &&
-      result.data.sessionId !== input.sessionId)
+    (result.data.status === "accepted" && result.data.sessionId !== input.sessionId)
   )
     throw new Error("Compact route returned an invalid response.");
   return result.data.status === "accepted"
@@ -1005,8 +931,7 @@ async function resetClientSession(input) {
   const result = ResetResponseSchema.safeParse(payload);
   if (
     !result.success ||
-    (result.data.status === "reset" &&
-      result.data.previousSessionId !== input.sessionId)
+    (result.data.status === "reset" && result.data.previousSessionId !== input.sessionId)
   )
     throw new Error("Reset route returned an invalid response.");
   return result.data.status === "reset"
@@ -1031,17 +956,14 @@ async function postJson(input) {
     ),
   );
   const text = await response.text();
-  if (!response.ok)
-    throw new ClientError(response.status, text, response.headers);
+  if (!response.ok) throw new ClientError(response.status, text, response.headers);
   try {
     return {
       payload: JSON.parse(text),
       response,
     };
   } catch {
-    throw new Error(
-      `${input.operation} route returned invalid JSON (${response.status}).`,
-    );
+    throw new Error(`${input.operation} route returned invalid JSON (${response.status}).`);
   }
 }
 function withRedirectPolicy$1(init, redirect) {
@@ -1060,36 +982,28 @@ const JSON_VALUE_ERROR_MESSAGE = "Expected a JSON-serializable value.";
 const JSON_OBJECT_ERROR_MESSAGE = "Expected a JSON-serializable object.";
 function parseJsonValue(value) {
   const normalized = normalizeJsonValueCandidate(value);
-  if (normalized === INVALID_JSON_VALUE_CANDIDATE)
-    throw new TypeError(JSON_VALUE_ERROR_MESSAGE);
+  if (normalized === INVALID_JSON_VALUE_CANDIDATE) throw new TypeError(JSON_VALUE_ERROR_MESSAGE);
   return normalized;
 }
 function parseJsonObject(value) {
   const normalized = parseJsonValue(value);
-  if (!isJsonObjectValue(normalized))
-    throw new TypeError(JSON_OBJECT_ERROR_MESSAGE);
+  if (!isJsonObjectValue(normalized)) throw new TypeError(JSON_OBJECT_ERROR_MESSAGE);
   return normalized;
 }
-function normalizeJsonValueCandidate(
-  value,
-  seen = /* @__PURE__ */ new WeakSet(),
-) {
-  if (value === null || typeof value === "boolean" || typeof value === "string")
-    return value;
+function normalizeJsonValueCandidate(value, seen = /* @__PURE__ */ new WeakSet()) {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "number")
     return Number.isFinite(value) ? value : INVALID_JSON_VALUE_CANDIDATE;
   if (Array.isArray(value)) {
     const normalizedItems = [];
     for (const item of value) {
       const normalizedItem = normalizeJsonValueCandidate(item, seen);
-      if (normalizedItem === INVALID_JSON_VALUE_CANDIDATE)
-        return INVALID_JSON_VALUE_CANDIDATE;
+      if (normalizedItem === INVALID_JSON_VALUE_CANDIDATE) return INVALID_JSON_VALUE_CANDIDATE;
       normalizedItems.push(normalizedItem);
     }
     return normalizedItems;
   }
-  if (typeof value !== "object" || value === void 0)
-    return INVALID_JSON_VALUE_CANDIDATE;
+  if (typeof value !== "object" || value === void 0) return INVALID_JSON_VALUE_CANDIDATE;
   if (!isPlainObject(value)) return INVALID_JSON_VALUE_CANDIDATE;
   if (seen.has(value)) return INVALID_JSON_VALUE_CANDIDATE;
   seen.add(value);
@@ -1097,8 +1011,7 @@ function normalizeJsonValueCandidate(
   for (const [key, entry] of Object.entries(value)) {
     if (entry === void 0) continue;
     const normalizedEntry = normalizeJsonValueCandidate(entry, seen);
-    if (normalizedEntry === INVALID_JSON_VALUE_CANDIDATE)
-      return INVALID_JSON_VALUE_CANDIDATE;
+    if (normalizedEntry === INVALID_JSON_VALUE_CANDIDATE) return INVALID_JSON_VALUE_CANDIDATE;
     normalized[key] = normalizedEntry;
   }
   seen.delete(value);
@@ -1127,11 +1040,8 @@ function toJsonObject(source, direction) {
   const standard = getStandardSchemaProperties(source);
   const jsonSchema = standard?.jsonSchema;
   const emit =
-    typeof jsonSchema === "object" && jsonSchema !== null
-      ? jsonSchema[direction]
-      : void 0;
-  const vendor =
-    typeof standard?.vendor === "string" ? standard.vendor : "unknown";
+    typeof jsonSchema === "object" && jsonSchema !== null ? jsonSchema[direction] : void 0;
+  const vendor = typeof standard?.vendor === "string" ? standard.vendor : "unknown";
   if (standard !== void 0 && typeof emit !== "function" && vendor === "zod") {
     if (direction === "input") {
       const { $schema: _schemaVersion, ...canonical } = parseJsonObject(
@@ -1154,8 +1064,7 @@ function toJsonObject(source, direction) {
   return canonical;
 }
 function getStandardSchemaProperties(value) {
-  if (typeof value !== "object" || value === null || !("~standard" in value))
-    return void 0;
+  if (typeof value !== "object" || value === null || !("~standard" in value)) return void 0;
   const standard = value["~standard"];
   return typeof standard === "object" && standard !== null ? standard : void 0;
 }
@@ -1170,12 +1079,7 @@ var ClientSession = class ClientSession {
     this.#state = state;
   }
   static async create(context, input) {
-    const response = await postTurn(
-      context,
-      EVE_SESSION_ROUTE_PATH,
-      input,
-      true,
-    );
+    const response = await postTurn(context, EVE_SESSION_ROUTE_PATH, input, true);
     const sessionId = await readSessionId(response);
     const session = new ClientSession(context, {
       sessionId,
@@ -1215,9 +1119,7 @@ var ClientSession = class ClientSession {
   }
   async respond(inputResponses, options = {}) {
     if (inputResponses.length === 0)
-      throw new Error(
-        "ClientSession.respond() requires at least one input response.",
-      );
+      throw new Error("ClientSession.respond() requires at least one input response.");
     return await this.#send({
       ...options,
       inputResponses,
@@ -1231,10 +1133,7 @@ var ClientSession = class ClientSession {
       input,
       false,
     );
-    if (
-      (await readSessionId(response, this.#state.sessionId)) !==
-      this.#state.sessionId
-    )
+    if ((await readSessionId(response, this.#state.sessionId)) !== this.#state.sessionId)
       throw new Error("Message route returned a different session id.");
     return this.#messageResponse(response, input, initialStreamIndex);
   }
@@ -1265,10 +1164,7 @@ var ClientSession = class ClientSession {
     });
   }
   stream(options) {
-    if (
-      options?.follow === false &&
-      (options.startIndex ?? this.#state.streamIndex) < 0
-    )
+    if (options?.follow === false && (options.startIndex ?? this.#state.streamIndex) < 0)
       throw new Error(
         "stream({ follow: false }) requires a nonnegative startIndex; a tail-relative cursor cannot be bounded.",
       );
@@ -1379,11 +1275,7 @@ function createMessageBody(input, requireMessage) {
   if (input.message !== void 0) body.message = input.message;
   if (input.inputResponses !== void 0 && input.inputResponses.length > 0)
     body.inputResponses = input.inputResponses;
-  if (
-    !requireMessage &&
-    input.message !== void 0 &&
-    input.turnPolicy !== void 0
-  )
+  if (!requireMessage && input.message !== void 0 && input.turnPolicy !== void 0)
     body.turnPolicy = input.turnPolicy;
   if (input.clientContext !== void 0) body.clientContext = input.clientContext;
   const outputSchema = serializeOutputSchema(input.outputSchema);
@@ -1404,8 +1296,7 @@ var ClientSessions = class {
     return await ClientSession.create(this.#context, input);
   }
   attach(sessionId, options) {
-    if (sessionId.length === 0)
-      throw new Error("sessionId must be a non-empty string.");
+    if (sessionId.length === 0) throw new Error("sessionId must be a non-empty string.");
     return new ClientSession(this.#context, {
       sessionId,
       streamIndex: options?.streamIndex ?? 0,
@@ -1439,10 +1330,7 @@ var Client = class {
   async health() {
     const url = createClientUrl(this.#host, EVE_HEALTH_ROUTE_PATH);
     const headers = await this.#resolveHeaders();
-    const response = await fetch(
-      url,
-      withRedirectPolicy({ headers }, this.#redirect),
-    );
+    const response = await fetch(url, withRedirectPolicy({ headers }, this.#redirect));
     if (!response.ok) {
       const body = await response.text();
       throw new ClientError(response.status, body, response.headers);
@@ -1466,18 +1354,14 @@ var Client = class {
       throw new AgentInfoResponseError(
         result.error.issues.slice(0, 5).map((issue) => {
           const path = issue.path.join(".");
-          return path.length === 0
-            ? issue.message
-            : `${path}: ${issue.message}`;
+          return path.length === 0 ? issue.message : `${path}: ${issue.message}`;
         }),
       );
     return result.data;
   }
   async fetch(path, init = {}) {
     const url = createClientUrl(this.#host, path);
-    const headers = await this.#resolveHeaders(
-      headersInitToRecord(init.headers),
-    );
+    const headers = await this.#resolveHeaders(headersInitToRecord(init.headers));
     return await fetch(
       url,
       withRedirectPolicy(
@@ -1495,13 +1379,9 @@ var Client = class {
       resolveHeadersValue(this.#headers),
       this.#resolveAuthHeaders(),
     ]);
-    for (const [key, value] of Object.entries(baseHeaders))
-      headers.set(key, value);
-    for (const [key, value] of Object.entries(authHeaders))
-      headers.set(key, value);
-    if (perRequest)
-      for (const [key, value] of Object.entries(perRequest))
-        headers.set(key, value);
+    for (const [key, value] of Object.entries(baseHeaders)) headers.set(key, value);
+    for (const [key, value] of Object.entries(authHeaders)) headers.set(key, value);
+    if (perRequest) for (const [key, value] of Object.entries(perRequest)) headers.set(key, value);
     return headers;
   }
   async #resolveAuthHeaders() {
@@ -1638,8 +1518,7 @@ var EveAgentStore = class {
     this.#status = "submitted";
     this.#publish();
     try {
-      const preparedInput =
-        (await this.#callbacks.prepareSend?.(input)) ?? input;
+      const preparedInput = (await this.#callbacks.prepareSend?.(input)) ?? input;
       assertExclusiveTurnInput(preparedInput);
       if (!this.#isActiveTurn(turn)) return;
       this.#projectOptimisticMessage(preparedInput);
@@ -1647,10 +1526,7 @@ var EveAgentStore = class {
       this.#publish();
       const turnInput = {
         ...preparedInput,
-        signal: createAbortSignal(
-          preparedInput.signal,
-          turn.abortController.signal,
-        ),
+        signal: createAbortSignal(preparedInput.signal, turn.abortController.signal),
       };
       const response = await this.#dispatchTurn(turnInput);
       if (!this.#isActiveTurn(turn)) return;
@@ -1722,9 +1598,7 @@ var EveAgentStore = class {
     if (this.#client === void 0)
       throw new Error("An external eve session is required before sending.");
     if (input.message === void 0)
-      throw new Error(
-        "Cannot answer an input request before the session starts.",
-      );
+      throw new Error("Cannot answer an input request before the session starts.");
     const created = await this.#client.sessions.create({
       ...input,
       message: input.message,
@@ -1765,8 +1639,7 @@ var EveAgentStore = class {
     });
   }
   #projectInputResponses(input) {
-    if (input.inputResponses === void 0 || input.inputResponses.length === 0)
-      return;
+    if (input.inputResponses === void 0 || input.inputResponses.length === 0) return;
     this.#appendProjectionEvent({
       data: {
         createdAt: Date.now(),
@@ -1776,10 +1649,7 @@ var EveAgentStore = class {
     });
   }
   #applyServerEvent(event) {
-    if (
-      event.type === "message.received" &&
-      this.#pendingMessageSubmission !== void 0
-    ) {
+    if (event.type === "message.received" && this.#pendingMessageSubmission !== void 0) {
       const submissionId = this.#pendingMessageSubmission.id;
       this.#pendingMessageSubmission = void 0;
       this.#replaceProjectionEvent(
@@ -1808,8 +1678,7 @@ var EveAgentStore = class {
     this.#pendingMessageSubmission = void 0;
     this.#replaceProjectionEvent(
       (event) =>
-        event.type === "client.message.submitted" &&
-        event.data.submissionId === pending.id,
+        event.type === "client.message.submitted" && event.data.submissionId === pending.id,
       {
         data: {
           createdAt: pending.createdAt,
@@ -1834,8 +1703,7 @@ var EveAgentStore = class {
       }
       return event;
     });
-    if (!replaced)
-      this.#projectionEvents = [...this.#projectionEvents, replacement];
+    if (!replaced) this.#projectionEvents = [...this.#projectionEvents, replacement];
     this.#data = this.#reduceProjectionEvents(this.#projectionEvents);
   }
   #reduceProjectionEvents(events) {
@@ -1862,9 +1730,7 @@ function detachEveAgentStore(store) {
 }
 function assertExclusiveTurnInput(input) {
   if ((input.message !== void 0) === (input.inputResponses !== void 0))
-    throw new Error(
-      "A turn requires exactly one of message or inputResponses.",
-    );
+    throw new Error("A turn requires exactly one of message or inputResponses.");
 }
 let submissionSequence = 0;
 function createSubmissionId() {
@@ -1884,8 +1750,7 @@ function summarizeUserContent(message) {
       parts.push(part.text);
       continue;
     }
-    if (part.type === "file")
-      parts.push(part.filename ? `[file: ${part.filename}]` : "[file]");
+    if (part.type === "file") parts.push(part.filename ? `[file: ${part.filename}]` : "[file]");
   }
   return parts.join("\n");
 }
@@ -1906,9 +1771,7 @@ const EVE_NAMED_AGENT_ROUTE_PREFIX = "/eve/agents";
 function resolveEveAgentHost(input) {
   if (input.agent === void 0) return input.host ?? "";
   if (input.host !== void 0)
-    throw new Error(
-      "useEveAgent cannot combine agent and host. Use one target option.",
-    );
+    throw new Error("useEveAgent cannot combine agent and host. Use one target option.");
   assertValidAgentName(input.agent);
   return `${EVE_NAMED_AGENT_ROUTE_PREFIX}/${input.agent}`;
 }
@@ -1923,8 +1786,7 @@ function assertValidAgentName(name) {
 //#region src/client/authorization-message-parts.ts
 function createAuthorizationRequiredPart(event) {
   const displayName =
-    event.data.authorization?.displayName ??
-    formatAuthorizationDisplayName(event.data.name);
+    event.data.authorization?.displayName ?? formatAuthorizationDisplayName(event.data.name);
   return {
     authorization: event.data.authorization,
     description: normalizeAuthorizationDescription(
@@ -1955,11 +1817,7 @@ function createAuthorizationCompletedPart(event, existing) {
         : void 0,
     description:
       existing?.description ??
-      buildCompletedAuthorizationDescription(
-        displayName,
-        event.data.outcome,
-        event.data.reason,
-      ),
+      buildCompletedAuthorizationDescription(displayName, event.data.outcome, event.data.reason),
     displayName,
     name: event.data.name,
     outcome: event.data.outcome,
@@ -2133,14 +1991,12 @@ function reduceMessageData(data, event) {
       });
     case "client.input.responded": {
       let next = data;
-      for (const response of event.data.responses)
-        next = respondToInputRequest(next, response);
+      for (const response of event.data.responses) next = respondToInputRequest(next, response);
       return next;
     }
     case "input.resolved": {
       let next = data;
-      for (const resolution of event.data.resolutions)
-        next = resolveInputRequest(next, resolution);
+      for (const resolution of event.data.resolutions) next = resolveInputRequest(next, resolution);
       return next;
     }
     case "message.received":
@@ -2282,9 +2138,7 @@ function reduceMessageData(data, event) {
         nextPart = {
           ...resultPartBase,
           approval: approvedApproval(existing),
-          errorText:
-            event.data.error?.message ??
-            stringifyUnknown(event.data.result.output),
+          errorText: event.data.error?.message ?? stringifyUnknown(event.data.result.output),
           state: "output-error",
         };
       else
@@ -2294,13 +2148,9 @@ function reduceMessageData(data, event) {
           output: event.data.result.output,
           state: "output-available",
         };
-      if (existing !== void 0)
-        return updateToolPart(data, event.data.result.callId, nextPart);
+      if (existing !== void 0) return updateToolPart(data, event.data.result.callId, nextPart);
       return updateAssistantMessage(data, event.data.turnId, (message) =>
-        upsertPart(
-          ensureStepStartPart(message, event.data.stepIndex),
-          nextPart,
-        ),
+        upsertPart(ensureStepStartPart(message, event.data.stepIndex), nextPart),
       );
     }
     case "action.partial": {
@@ -2315,20 +2165,13 @@ function reduceMessageData(data, event) {
         state: "output-available",
         stepIndex: event.data.stepIndex,
         toolCallId: event.data.result.callId,
-        toolMetadata: mergeToolMetadata(
-          existing?.toolMetadata,
-          createToolMetadata(descriptor),
-        ),
+        toolMetadata: mergeToolMetadata(existing?.toolMetadata, createToolMetadata(descriptor)),
         toolName: existing?.toolName ?? descriptor.toolName,
         type: "dynamic-tool",
       };
-      if (existing !== void 0)
-        return updateToolPart(data, event.data.result.callId, nextPart);
+      if (existing !== void 0) return updateToolPart(data, event.data.result.callId, nextPart);
       return updateAssistantMessage(data, event.data.turnId, (message) =>
-        upsertPart(
-          ensureStepStartPart(message, event.data.stepIndex),
-          nextPart,
-        ),
+        upsertPart(ensureStepStartPart(message, event.data.stepIndex), nextPart),
       );
     }
     case "authorization.required":
@@ -2351,8 +2194,7 @@ function reduceMessageData(data, event) {
       );
     case "message.completed":
       return updateAssistantMessage(data, event.data.turnId, (message) => {
-        if (event.data.message === null)
-          return removeTextPart(message, event.data.stepIndex);
+        if (event.data.message === null) return removeTextPart(message, event.data.stepIndex);
         return upsertRun(ensureStepStartPart(message, event.data.stepIndex), {
           state: "done",
           stepIndex: event.data.stepIndex,
@@ -2376,8 +2218,7 @@ function reduceMessageData(data, event) {
           status: "complete",
         },
         parts: message.parts.map((part) =>
-          (part.type === "text" || part.type === "reasoning") &&
-          part.state === "streaming"
+          (part.type === "text" || part.type === "reasoning") && part.state === "streaming"
             ? {
                 ...part,
                 state: "done",
@@ -2415,8 +2256,7 @@ function respondToInputRequest(data, response) {
   });
 }
 function resolveInputRequest(data, resolution) {
-  if (resolution.response !== void 0)
-    return respondToInputRequest(data, resolution.response);
+  if (resolution.response !== void 0) return respondToInputRequest(data, resolution.response);
   const existing = findToolPartByApprovalId(data, resolution.requestId);
   if (!existing) return data;
   return updateToolPart(data, existing.toolCallId, {
@@ -2435,8 +2275,7 @@ function updateAssistantMessage(data, turnId, update) {
     data,
     update(
       data.messages.find(
-        (message) =>
-          message.role === "assistant" && message.metadata?.turnId === turnId,
+        (message) => message.role === "assistant" && message.metadata?.turnId === turnId,
       ) ?? createAssistantMessage(turnId),
     ),
   );
@@ -2462,9 +2301,7 @@ function createAssistantMessage(turnId) {
   };
 }
 function ensureStepStartPart(message, stepIndex) {
-  const stepStartCount = message.parts.filter(
-    (part) => part.type === "step-start",
-  ).length;
+  const stepStartCount = message.parts.filter((part) => part.type === "step-start").length;
   if (stepStartCount > stepIndex) return message;
   const missingCount = stepIndex - stepStartCount + 1;
   return {
@@ -2476,25 +2313,16 @@ function ensureStepStartPart(message, stepIndex) {
   };
 }
 function upsertPart(message, next) {
-  const index = message.parts.findIndex(
-    (part) => partKey(part) === partKey(next),
-  );
+  const index = message.parts.findIndex((part) => partKey(part) === partKey(next));
   const parts =
     index === -1
       ? [...message.parts, next]
-      : [
-          ...message.parts.slice(0, index),
-          next,
-          ...message.parts.slice(index + 1),
-        ];
+      : [...message.parts.slice(0, index), next, ...message.parts.slice(index + 1)];
   return {
     ...message,
     metadata: {
       ...message.metadata,
-      status:
-        next.type === "text" && next.state === "done"
-          ? "complete"
-          : "streaming",
+      status: next.type === "text" && next.state === "done" ? "complete" : "streaming",
     },
     parts,
   };
@@ -2510,20 +2338,13 @@ function upsertRun(message, next) {
   }
   const parts =
     lastIndex !== -1 && message.parts[lastIndex].state === "streaming"
-      ? [
-          ...message.parts.slice(0, lastIndex),
-          next,
-          ...message.parts.slice(lastIndex + 1),
-        ]
+      ? [...message.parts.slice(0, lastIndex), next, ...message.parts.slice(lastIndex + 1)]
       : [...message.parts, next];
   return {
     ...message,
     metadata: {
       ...message.metadata,
-      status:
-        next.type === "text" && next.state === "done"
-          ? "complete"
-          : "streaming",
+      status: next.type === "text" && next.state === "done" ? "complete" : "streaming",
     },
     parts,
   };
@@ -2547,8 +2368,7 @@ function updateToolPart(data, toolCallId, next) {
     (candidate) =>
       candidate.role === "assistant" &&
       candidate.parts.some(
-        (part) =>
-          part.type === "dynamic-tool" && part.toolCallId === toolCallId,
+        (part) => part.type === "dynamic-tool" && part.toolCallId === toolCallId,
       ),
   );
   if (!message) return data;
@@ -2565,8 +2385,7 @@ function completeAuthorization(data, event) {
 function updateAuthorizationPart(data, existing, next) {
   const message = data.messages.find(
     (candidate) =>
-      candidate.role === "assistant" &&
-      candidate.parts.some((part) => part === existing),
+      candidate.role === "assistant" && candidate.parts.some((part) => part === existing),
   );
   if (!message) return data;
   return upsertMessage(data, upsertPart(message, next));
@@ -2574,8 +2393,7 @@ function updateAuthorizationPart(data, existing, next) {
 function findToolPart(data, toolCallId) {
   for (const message of data.messages)
     for (const part of message.parts)
-      if (part.type === "dynamic-tool" && part.toolCallId === toolCallId)
-        return part;
+      if (part.type === "dynamic-tool" && part.toolCallId === toolCallId) return part;
 }
 function isSettledToolPart(part) {
   return (
@@ -2585,24 +2403,12 @@ function isSettledToolPart(part) {
   );
 }
 function findLatestPendingAuthorizationPart(data, name) {
-  for (
-    let messageIndex = data.messages.length - 1;
-    messageIndex >= 0;
-    messageIndex -= 1
-  ) {
+  for (let messageIndex = data.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = data.messages[messageIndex];
     if (message?.role !== "assistant") continue;
-    for (
-      let partIndex = message.parts.length - 1;
-      partIndex >= 0;
-      partIndex -= 1
-    ) {
+    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.parts[partIndex];
-      if (
-        part?.type === "authorization" &&
-        part.state === "required" &&
-        part.name === name
-      )
+      if (part?.type === "authorization" && part.state === "required" && part.name === name)
         return part;
     }
   }
@@ -2610,8 +2416,7 @@ function findLatestPendingAuthorizationPart(data, name) {
 function findToolPartByApprovalId(data, approvalId) {
   for (const message of data.messages)
     for (const part of message.parts)
-      if (part.type === "dynamic-tool" && part.approval?.id === approvalId)
-        return part;
+      if (part.type === "dynamic-tool" && part.approval?.id === approvalId) return part;
 }
 function projectReceivedParts(parts, message) {
   return (
@@ -2658,11 +2463,7 @@ function upsertMessage(data, next) {
   const index = data.messages.findIndex((message) => message.id === next.id);
   if (index === -1) return { messages: [...data.messages, next] };
   return {
-    messages: [
-      ...data.messages.slice(0, index),
-      next,
-      ...data.messages.slice(index + 1),
-    ],
+    messages: [...data.messages.slice(0, index), next, ...data.messages.slice(index + 1)],
   };
 }
 function optimisticUserMessageId(submissionId) {

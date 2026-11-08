@@ -11,28 +11,19 @@ async function verifyDiscordRequest(e, t) {
   let n = await e.text();
   if (t.webhookVerifier !== void 0) {
     let r = await t.webhookVerifier(e, n);
-    if (!r)
-      throw Error(
-        `discordChannel: inbound webhook verifier rejected the request.`,
-      );
+    if (!r) throw Error(`discordChannel: inbound webhook verifier rejected the request.`);
     return typeof r == `string` ? r : n;
   }
   let r = await resolveDiscordPublicKey(t.publicKey),
     i = e.headers.get(`x-signature-ed25519`) ?? ``,
     a = e.headers.get(`x-signature-timestamp`) ?? ``;
-  if (!i || !a)
-    throw Error(
-      `discordChannel: inbound request missing Discord signature headers.`,
-    );
+  if (!i || !a) throw Error(`discordChannel: inbound request missing Discord signature headers.`);
   let o = Number(a);
-  if (!Number.isFinite(o))
-    throw Error(`discordChannel: inbound request has malformed timestamp.`);
+  if (!Number.isFinite(o)) throw Error(`discordChannel: inbound request has malformed timestamp.`);
   let s = t.maxSkewSeconds ?? 300,
     c = Math.floor(Date.now() / 1e3);
   if (Math.abs(c - o) > s)
-    throw Error(
-      `discordChannel: inbound request timestamp outside allowed skew.`,
-    );
+    throw Error(`discordChannel: inbound request timestamp outside allowed skew.`);
   if (
     !verifyDiscordSignature({
       body: n,
@@ -56,14 +47,7 @@ function verifyDiscordSignature(n) {
     });
     return verify(null, Buffer.from(`${n.timestamp}${n.body}`), o, a);
   } catch (e) {
-    return (
-      log.debug(`Discord signature verification threw`, { error: e }),
-      !1
-    );
+    return (log.debug(`Discord signature verification threw`, { error: e }), !1);
   }
 }
-export {
-  resolveDiscordPublicKey,
-  verifyDiscordRequest,
-  verifyDiscordSignature,
-};
+export { resolveDiscordPublicKey, verifyDiscordRequest, verifyDiscordSignature };

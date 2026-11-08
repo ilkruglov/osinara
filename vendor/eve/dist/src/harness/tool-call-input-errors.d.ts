@@ -12,8 +12,8 @@ import type { RuntimeToolCallActionRequest } from "#runtime/actions/types.js";
  */
 export declare function isInvalidToolCall(toolCall: TypedToolCall<ToolSet>): boolean;
 export declare function createInvalidToolCallInputError(input: {
-    readonly error: unknown;
-    readonly toolCall: TypedToolCall<ToolSet>;
+  readonly error: unknown;
+  readonly toolCall: TypedToolCall<ToolSet>;
 }): TypedToolError<ToolSet>;
 /**
  * Resolves a provider-executed tool call into an observable runtime-action
@@ -24,16 +24,18 @@ export declare function createInvalidToolCallInputError(input: {
  * JSON argument text reaches the harness only here.
  */
 export declare function resolveProviderToolCallRequest(toolCall: {
-    readonly input?: unknown;
-    readonly toolCallId: string;
-    readonly toolName: string;
-}): {
-    readonly request: RuntimeToolCallActionRequest;
-    readonly toolError?: undefined;
-} | {
-    readonly request?: undefined;
-    readonly toolError: TypedToolError<ToolSet>;
-};
+  readonly input?: unknown;
+  readonly toolCallId: string;
+  readonly toolName: string;
+}):
+  | {
+      readonly request: RuntimeToolCallActionRequest;
+      readonly toolError?: undefined;
+    }
+  | {
+      readonly request?: undefined;
+      readonly toolError: TypedToolError<ToolSet>;
+    };
 export declare function getInvalidToolCallInputError(input: {
-    readonly toolCall: TypedToolCall<ToolSet>;
+  readonly toolCall: TypedToolCall<ToolSet>;
 }): TypedToolError<ToolSet> | undefined;

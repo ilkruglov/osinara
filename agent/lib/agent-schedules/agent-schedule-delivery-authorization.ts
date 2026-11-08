@@ -25,8 +25,7 @@ export interface AgentScheduleExecutionAuthorizationInput {
   telegramChatId: string;
 }
 
-export interface AgentScheduleDeliveryAuthorizationInput
-  extends AgentScheduleExecutionAuthorizationInput {
+export interface AgentScheduleDeliveryAuthorizationInput extends AgentScheduleExecutionAuthorizationInput {
   eveSessionId: string;
 }
 
@@ -87,7 +86,7 @@ export async function isAgentScheduleDeliveryAuthorized(
 export async function authorizeAgentScheduleExecution(
   input: AgentScheduleExecutionAuthorizationInput,
 ): Promise<void> {
-  if (!await isAuthorized(database(), input, null)) {
+  if (!(await isAuthorized(database(), input, null))) {
     throw new AppError(
       "AGENT_SCHEDULE_EXECUTION_AUTHORIZATION_REVOKED",
       "Автоматизация остановлена: владелец или целевая Telegram-группа больше не авторизованы",
@@ -99,7 +98,7 @@ export async function authorizeAgentScheduleDelivery(
   input: AgentScheduleDeliveryAuthorizationInput,
 ): Promise<void> {
   // This query is the authorization linearization point immediately before Telegram side effects.
-  if (!await isAgentScheduleDeliveryAuthorized(database(), input)) {
+  if (!(await isAgentScheduleDeliveryAuthorized(database(), input))) {
     throw new AppError(
       "AGENT_SCHEDULE_DELIVERY_AUTHORIZATION_REVOKED",
       "Доставка результата отменена: владелец или целевая Telegram-группа больше не авторизованы",

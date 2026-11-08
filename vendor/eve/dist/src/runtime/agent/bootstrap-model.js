@@ -14,8 +14,7 @@ function resolveBootstrapRuntimeModel(n) {
   if (i !== void 0) return i;
   let a = new MockLanguageModelV3({
     doGenerate: async (e) => createBootstrapModelResult(e.prompt, n.id),
-    doStream: async (e) =>
-      createBootstrapStreamResult(createBootstrapModelResult(e.prompt, n.id)),
+    doStream: async (e) => createBootstrapStreamResult(createBootstrapModelResult(e.prompt, n.id)),
     modelId: n.id,
     provider: `eve-bootstrap`,
   });

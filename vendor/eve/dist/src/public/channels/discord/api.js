@@ -19,19 +19,13 @@ async function resolveDiscordBotToken(e) {
 async function callDiscordApi(e) {
   let n = e.fetch ?? fetch,
     r = new Headers();
-  if (
-    (r.set(`content-type`, `application/json; charset=utf-8`),
-    e.botToken !== void 0)
-  ) {
+  if ((r.set(`content-type`, `application/json; charset=utf-8`), e.botToken !== void 0)) {
     let t = await resolveDiscordBotToken(e.botToken);
     r.set(`authorization`, `Bot ${t}`);
   }
   let i = { headers: r, method: e.method ?? `POST` };
   e.body !== void 0 && (i.body = JSON.stringify(parseJsonObject(e.body)));
-  let a = await n(
-    `${e.apiBaseUrl ?? `https://discord.com/api/v10`}${e.path}`,
-    i,
-  );
+  let a = await n(`${e.apiBaseUrl ?? `https://discord.com/api/v10`}${e.path}`, i);
   return { body: await parseResponseBody(a), ok: a.ok, status: a.status };
 }
 async function sendDiscordChannelMessage(e) {
@@ -42,8 +36,7 @@ async function sendDiscordChannelMessage(e) {
     fetch: e.fetch,
     path: `/channels/${encodeURIComponent(e.channelId)}/messages`,
   });
-  if (!t.ok)
-    throw Error(`Discord create message failed with HTTP ${t.status}.`);
+  if (!t.ok) throw Error(`Discord create message failed with HTTP ${t.status}.`);
   return toPostedMessage(t.body);
 }
 async function triggerDiscordTypingIndicator(e) {
@@ -53,8 +46,7 @@ async function triggerDiscordTypingIndicator(e) {
     fetch: e.fetch,
     path: `/channels/${encodeURIComponent(e.channelId)}/typing`,
   });
-  if (!t.ok)
-    throw Error(`Discord typing indicator failed with HTTP ${t.status}.`);
+  if (!t.ok) throw Error(`Discord typing indicator failed with HTTP ${t.status}.`);
 }
 async function editDiscordOriginalResponse(e) {
   let t = await resolveDiscordApplicationId(e.credentials?.applicationId),
@@ -65,8 +57,7 @@ async function editDiscordOriginalResponse(e) {
       method: `PATCH`,
       path: `/webhooks/${encodeURIComponent(t)}/${encodeURIComponent(e.interactionToken)}/messages/@original`,
     });
-  if (!n.ok)
-    throw Error(`Discord edit original response failed with HTTP ${n.status}.`);
+  if (!n.ok) throw Error(`Discord edit original response failed with HTTP ${n.status}.`);
   return toPostedMessage(n.body);
 }
 async function createDiscordFollowupMessage(e) {
@@ -77,15 +68,14 @@ async function createDiscordFollowupMessage(e) {
       fetch: e.fetch,
       path: `/webhooks/${encodeURIComponent(t)}/${encodeURIComponent(e.interactionToken)}`,
     });
-  if (!n.ok)
-    throw Error(`Discord followup message failed with HTTP ${n.status}.`);
+  if (!n.ok) throw Error(`Discord followup message failed with HTTP ${n.status}.`);
   return toPostedMessage(n.body);
 }
 function splitDiscordMessageContent(e) {
   if (e.length <= 2e3) return [e];
   let t = [],
     n = e;
-  for (; n.length > DISCORD_MESSAGE_CONTENT_MAX_LENGTH; ) {
+  for (; n.length > DISCORD_MESSAGE_CONTENT_MAX_LENGTH;) {
     let e = n.lastIndexOf(
       `
 `,

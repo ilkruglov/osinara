@@ -9,24 +9,18 @@ var RetryableError = class extends Error {},
   FatalError = class extends Error {};
 function createHook(e) {
   let n = workflowGlobal[WORKFLOW_CREATE_HOOK];
-  if (n === void 0)
-    throw Error("`createHook()` can only be called inside a workflow function");
+  if (n === void 0) throw Error("`createHook()` can only be called inside a workflow function");
   return n(e);
 }
 function getWorkflowMetadata() {
   let t = workflowGlobal[WORKFLOW_CONTEXT_SYMBOL];
   if (t === void 0)
-    throw Error(
-      "`getWorkflowMetadata()` can only be called inside a workflow or step function",
-    );
+    throw Error("`getWorkflowMetadata()` can only be called inside a workflow or step function");
   return t;
 }
 function getWritable(e = {}) {
   let t = workflowGlobal[WORKFLOW_GET_STREAM_ID];
-  if (t === void 0)
-    throw Error(
-      "`getWritable()` can only be called inside a workflow function",
-    );
+  if (t === void 0) throw Error("`getWritable()` can only be called inside a workflow function");
   let r = t(e.namespace);
   return Object.create(globalThis.WritableStream.prototype, {
     [STREAM_NAME_SYMBOL]: { value: r, writable: !1 },
@@ -44,22 +38,17 @@ function defineHook() {
   return {
     create: createHook,
     resume() {
-      throw Error(
-        "`defineHook().resume()` can only be called from external contexts.",
-      );
+      throw Error("`defineHook().resume()` can only be called from external contexts.");
     },
   };
 }
 function sleep(e) {
   let t = workflowGlobal[WORKFLOW_SLEEP];
-  if (t === void 0)
-    throw Error("`sleep()` can only be called inside a workflow function");
+  if (t === void 0) throw Error("`sleep()` can only be called inside a workflow function");
   return t(e);
 }
 function resumeHook() {
-  throw Error(
-    "`resumeHook()` can only be called from outside a workflow function",
-  );
+  throw Error("`resumeHook()` can only be called from outside a workflow function");
 }
 function getStepMetadata() {
   throw Error("`getStepMetadata()` can only be called inside a step function");
@@ -69,9 +58,7 @@ async function setAttributes(e, t = {}) {
   if (n.length === 0) return;
   let r = workflowGlobal[WORKFLOW_USE_STEP];
   if (r === void 0)
-    throw Error(
-      "`setAttributes()` can only be called inside a workflow runtime context",
-    );
+    throw Error("`setAttributes()` can only be called inside a workflow runtime context");
   let i = n.map(([e, t]) => ({ key: e, value: t === void 0 ? null : t })),
     a = t.allowReservedAttributes === !0 ? { allowReservedAttributes: !0 } : {};
   await r(`__builtin_set_attributes`)(i, a);

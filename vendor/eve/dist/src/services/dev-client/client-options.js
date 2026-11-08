@@ -1,9 +1,6 @@
 import { VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER } from "#client/types.js";
 function hasDevelopmentAuthorizationHeader(e) {
-  return (
-    e !== void 0 &&
-    Object.keys(e).some((e) => e.toLowerCase() === `authorization`)
-  );
+  return e !== void 0 && Object.keys(e).some((e) => e.toLowerCase() === `authorization`);
 }
 async function resolveRemoteHeaders(t) {
   if (!t.includeTrustedOidcHeader)
@@ -21,8 +18,7 @@ function resolveDevelopmentClientOptions(e) {
 }
 function resolveLocalDevelopmentClientOptions(e) {
   let t = { host: e.serverUrl, redirect: `manual` };
-  if (hasDevelopmentAuthorizationHeader(e.headers))
-    return { ...t, headers: e.headers };
+  if (hasDevelopmentAuthorizationHeader(e.headers)) return { ...t, headers: e.headers };
   let n = { ...t, auth: { bearer: e.token } };
   return e.headers === void 0 ? n : { ...n, headers: e.headers };
 }

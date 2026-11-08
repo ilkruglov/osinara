@@ -20,9 +20,7 @@ function setupSelectRequest(e, t, n, r) {
     );
   }
   if (e.search === !0 && e.hintLayout === `stacked`)
-    throw Error(
-      `Searchable setup questions do not support a stacked hint layout.`,
-    );
+    throw Error(`Searchable setup questions do not support a stacked hint layout.`);
   let a;
   if (e.search === !0) {
     if (
@@ -36,14 +34,10 @@ function setupSelectRequest(e, t, n, r) {
       t !== void 0 && (a.searchAction.load = async (e) => r(await t(e)));
     }
   } else {
-    let t =
-      e.hintLayout === `inline` ? `task-list` : (e.hintLayout ?? `single`);
+    let t = e.hintLayout === `inline` ? `task-list` : (e.hintLayout ?? `single`);
     a = { ...i, kind: t };
   }
-  return (
-    e.initialValue !== void 0 && (a.initialValue = n(e.initialValue)),
-    withNotices(a)
-  );
+  return (e.initialValue !== void 0 && (a.initialValue = n(e.initialValue)), withNotices(a));
 }
 function createTuiPrompter(r) {
   function guardCancel(t) {
@@ -80,10 +74,7 @@ function createTuiPrompter(r) {
     },
     async password(e) {
       let t = { message: e.message, mask: !0 };
-      return (
-        e.validate !== void 0 && (t.validate = e.validate),
-        guardCancel(await r.readText(t))
-      );
+      return (e.validate !== void 0 && (t.validate = e.validate), guardCancel(await r.readText(t)));
     },
     select,
     async selectEditable(e) {

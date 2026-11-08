@@ -53,7 +53,8 @@ export async function refreshTelegramReactionPolicy(
     if (
       cached &&
       Date.now() - cached.fetchedAt.getTime() < TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS
-    ) return;
+    )
+      return;
 
     const response = await telegram.request("getChat", { chat_id: telegram.chatId });
     const body = response.body as { ok?: unknown; result?: unknown } | null;
@@ -68,10 +69,12 @@ export async function refreshTelegramReactionPolicy(
     );
   } catch (error) {
     // A stale or missing policy only removes the reaction surface from the prompt for this turn.
-    console.error(JSON.stringify({
-      code: "AGENT_TELEGRAM_REACTION_POLICY_REFRESH_FAILED",
-      errorCode: isAppError(error) ? error.code : null,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_REACTION_POLICY_REFRESH_FAILED",
+        errorCode: isAppError(error) ? error.code : null,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
   }
 }

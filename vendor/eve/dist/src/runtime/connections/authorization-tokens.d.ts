@@ -24,14 +24,20 @@ import type { TokenResult } from "#runtime/connections/types.js";
  * `"user:${issuer}:${id}"`) collide only when the resolved principal
  * genuinely matches.
  */
-export declare const ConnectionAuthorizationTokensKey: ContextKey<Readonly<Record<string, Readonly<Record<string, TokenResult>>>>>;
+export declare const ConnectionAuthorizationTokensKey: ContextKey<
+  Readonly<Record<string, Readonly<Record<string, TokenResult>>>>
+>;
 /**
  * Returns the cached {@link TokenResult} for
  * `(connectionName, principalKey)` when the entry is still valid
  * (not expired). Expired entries are treated as a cache miss so
  * callers re-run the authorization flow.
  */
-export declare function readCachedToken(ctx: AlsContext, connectionName: string, principalKey: string): TokenResult | undefined;
+export declare function readCachedToken(
+  ctx: AlsContext,
+  connectionName: string,
+  principalKey: string,
+): TokenResult | undefined;
 /**
  * Persists a freshly resolved {@link TokenResult} on the cache under
  * `(connectionName, principalKey)`. Existing entries for other
@@ -40,7 +46,12 @@ export declare function readCachedToken(ctx: AlsContext, connectionName: string,
  * Writes to the virtual context slot so the bearer is never serialized
  * into the durable step payload. See the module docblock.
  */
-export declare function writeCachedToken(ctx: AlsContext, connectionName: string, principalKey: string, token: TokenResult): void;
+export declare function writeCachedToken(
+  ctx: AlsContext,
+  connectionName: string,
+  principalKey: string,
+  token: TokenResult,
+): void;
 /**
  * Drops the cached {@link TokenResult} for `(connectionName, principalKey)`,
  * if present. Used when the remote server rejects an already-resolved
@@ -48,4 +59,8 @@ export declare function writeCachedToken(ctx: AlsContext, connectionName: string
  * re-read the stale token from the per-step cache. No-op when nothing is
  * cached for the principal.
  */
-export declare function evictCachedToken(ctx: AlsContext, connectionName: string, principalKey: string): void;
+export declare function evictCachedToken(
+  ctx: AlsContext,
+  connectionName: string,
+  principalKey: string,
+): void;

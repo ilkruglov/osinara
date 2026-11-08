@@ -5,25 +5,29 @@ export type { ChannelKind };
 /** Where the user wants to chat with the agent after scaffolding finishes. */
 export type ChatPreference = "web" | "slack" | "repl" | "api" | "skip";
 export type AiGatewayEnvFile = ".env.local" | ".env";
-export type ResolvedAiGatewayCredentials = {
-    kind: "unresolved";
-} | {
-    kind: "api-key";
-    envFile: AiGatewayEnvFile;
-};
+export type ResolvedAiGatewayCredentials =
+  | {
+      kind: "unresolved";
+    }
+  | {
+      kind: "api-key";
+      envFile: AiGatewayEnvFile;
+    };
 /**
  * The scaffold directory. `inPlace` is the directory decision (scaffold into
  * the target directory itself vs a `./<agentName>` child). The target step
  * resolves the path before the scaffold step writes it.
  */
-export type ResolvedProjectPath = {
-    kind: "unresolved";
-    inPlace: boolean;
-} | {
-    kind: "resolved";
-    inPlace: boolean;
-    path: string;
-};
+export type ResolvedProjectPath =
+  | {
+      kind: "unresolved";
+      inPlace: boolean;
+    }
+  | {
+      kind: "resolved";
+      inPlace: boolean;
+      path: string;
+    };
 /**
  * The `--non-interactive` Vercel project flags. Read ONLY on the headless path (see
  * {@link ProvisioningMode}): an interactive run prompts for these decisions
@@ -33,20 +37,20 @@ export type ResolvedProjectPath = {
  * opt-out, and `team`/`project` parameterize it.
  */
 export interface ArgsHeadlessProject {
-    /** Do not create, link, deploy, or inherit credentials from a Vercel project. */
-    skipVercel?: boolean;
-    /** Vercel team slug (scope). Undefined = the current vercel scope. */
-    team?: string;
-    /** Existing project name or ID to link. Undefined = create a project named after the agent. */
-    project?: string;
+  /** Do not create, link, deploy, or inherit credentials from a Vercel project. */
+  skipVercel?: boolean;
+  /** Vercel team slug (scope). Undefined = the current vercel scope. */
+  team?: string;
+  /** Existing project name or ID to link. Undefined = create a project named after the agent. */
+  project?: string;
 }
 /**
  * The `--non-interactive` AI Gateway flags, read only on the headless path alongside
  * {@link ArgsHeadlessProject}.
  */
 export interface ArgsHeadlessAiGateway {
-    /** AI Gateway API key. Undefined = inherit the linked project's gateway (OIDC). */
-    apiKey?: string;
+  /** AI Gateway API key. Undefined = inherit the linked project's gateway (OIDC). */
+  apiKey?: string;
 }
 /**
  * Provisioning mode for the resolve-provisioning and preflight boxes. The
@@ -54,51 +58,62 @@ export interface ArgsHeadlessAiGateway {
  * path cannot read them: the type makes it unrepresentable. An interactive run
  * resolves every provisioning decision by prompting.
  */
-export type ProvisioningMode = {
-    headless: true;
-    project: ArgsHeadlessProject;
-    aiGateway: ArgsHeadlessAiGateway;
-} | {
-    headless: false;
-};
+export type ProvisioningMode =
+  | {
+      headless: true;
+      project: ArgsHeadlessProject;
+      aiGateway: ArgsHeadlessAiGateway;
+    }
+  | {
+      headless: false;
+    };
 /** Stable identity of an existing Vercel project selected for linking. */
 export interface VercelProjectIdentity {
-    projectId: string;
-    projectName: string;
+  projectId: string;
+  projectName: string;
 }
 /**
  * Resolved project decision, fully concrete. The variant determines whether
  * the flow creates a project, links an existing one, or avoids Vercel project
  * mutation entirely. Decided once, up front, by the resolve-provisioning box.
  */
-export type ResolvedVercelProject = {
-    kind: "none";
-} | {
-    kind: "new";
-    project: string;
-    team: string;
-} | {
-    kind: "existing";
-    project: VercelProjectIdentity;
-    team: string;
-};
+export type ResolvedVercelProject =
+  | {
+      kind: "none";
+    }
+  | {
+      kind: "new";
+      project: string;
+      team: string;
+    }
+  | {
+      kind: "existing";
+      project: VercelProjectIdentity;
+      team: string;
+    };
 /** A concrete project to ensure exists and link. */
-export type ResolvedVercelProjectSpec = Extract<ResolvedVercelProject, {
+export type ResolvedVercelProjectSpec = Extract<
+  ResolvedVercelProject,
+  {
     kind: "new" | "existing";
-}>;
+  }
+>;
 /**
  * Resolved gateway-credential decision, independent of the project plan.
  * `inherit` uses the linked project's OIDC gateway; `byok` writes an AI
  * Gateway key; `byop` leaves provider credentials outside the AI Gateway path.
  */
-export type ResolvedAiGateway = {
-    kind: "inherit";
-} | {
-    kind: "byok";
-    apiGatewayKey: string;
-} | {
-    kind: "byop";
-};
+export type ResolvedAiGateway =
+  | {
+      kind: "inherit";
+    }
+  | {
+      kind: "byok";
+      apiGatewayKey: string;
+    }
+  | {
+      kind: "byop";
+    };
 /**
  * How the scaffolded agent reaches a model. `"gateway"` routes through the
  * Vercel AI Gateway (OIDC, or a pasted gateway key). `"self"` scaffolds an
@@ -121,20 +136,24 @@ export type SetupMode = "complete" | "one-shot";
  * so the add-connections box runs effects without prompting.
  */
 export interface ConnectionPlan {
-    slug: string;
-    protocol: ConnectionProtocol;
-    entry: ConnectionInput;
-    provision: {
+  slug: string;
+  protocol: ConnectionProtocol;
+  entry: ConnectionInput;
+  provision:
+    | {
         kind: "connect";
         service: string;
-    } | {
+      }
+    | {
         kind: "connect-manual";
-    } | {
+      }
+    | {
         kind: "command-hint";
         service: string;
-    } | {
+      }
+    | {
         kind: "none";
-    };
+      };
 }
 /**
  * The in-memory state threaded through every setup box. Greenfield onboarding
@@ -142,24 +161,24 @@ export interface ConnectionPlan {
  * on-disk facts and leaves the onboarding-only plans at their defaults.
  */
 export interface SetupState {
-    agentName: string;
-    /** Decided by the select-setup-mode box; gates every post-scaffold box. */
-    setupMode: SetupMode;
-    modelId: string;
-    modelWiring: WiringMode;
-    /** Connections planned in the interview phase; scaffolded later by the connections box. */
-    connectionSelection: ConnectionPlan[];
-    /** Decided once by the resolve-provisioning box; executed later by the link box. */
-    vercelProject: ResolvedVercelProject;
-    /** Decided once by the resolve-provisioning box; executed by the AI Gateway credential box. */
-    aiGateway: ResolvedAiGateway;
-    projectPath: ResolvedProjectPath;
-    aiGatewayCredentials: ResolvedAiGatewayCredentials;
-    chat: ChatPreference | null;
-    deploymentDependenciesInstalled: boolean;
-    /** The linked Vercel project facts, from the link box or the on-disk `.vercel` link. */
-    project: ProjectResolution;
-    deploymentPending: boolean;
+  agentName: string;
+  /** Decided by the select-setup-mode box; gates every post-scaffold box. */
+  setupMode: SetupMode;
+  modelId: string;
+  modelWiring: WiringMode;
+  /** Connections planned in the interview phase; scaffolded later by the connections box. */
+  connectionSelection: ConnectionPlan[];
+  /** Decided once by the resolve-provisioning box; executed later by the link box. */
+  vercelProject: ResolvedVercelProject;
+  /** Decided once by the resolve-provisioning box; executed by the AI Gateway credential box. */
+  aiGateway: ResolvedAiGateway;
+  projectPath: ResolvedProjectPath;
+  aiGatewayCredentials: ResolvedAiGatewayCredentials;
+  chat: ChatPreference | null;
+  deploymentDependenciesInstalled: boolean;
+  /** The linked Vercel project facts, from the link box or the on-disk `.vercel` link. */
+  project: ProjectResolution;
+  deploymentPending: boolean;
 }
 export declare function createDefaultSetupState(): SetupState;
 /**
@@ -172,7 +191,9 @@ export declare function createDefaultSetupState(): SetupState;
  * until the link box runs, so the second disjunct only fires when a real link
  * exists.
  */
-export declare function hasVercelProject(state: Pick<SetupState, "vercelProject" | "project">): boolean;
+export declare function hasVercelProject(
+  state: Pick<SetupState, "vercelProject" | "project">,
+): boolean;
 export declare function requireProjectPath(state: Pick<SetupState, "projectPath">): string;
 /**
  * Deep-frozen copy of {@link SetupState} for a box's gather and perform faces.

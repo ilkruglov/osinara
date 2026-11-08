@@ -18,9 +18,11 @@ describeWithDatabase("removed Telegram group skill policy", () => {
 
   it("keeps no per-group skill allowlist at all", async () => {
     // 120 dropped the column 083 had pinned to an empty array: no row can grant a removed package.
-    await expect(database().query(
-      `SELECT 1 FROM information_schema.columns
+    await expect(
+      database().query(
+        `SELECT 1 FROM information_schema.columns
         WHERE table_schema = current_schema() AND table_name = 'telegram_groups' AND column_name = 'skill_allowlist'`,
-    )).resolves.toMatchObject({ rowCount: 0 });
+      ),
+    ).resolves.toMatchObject({ rowCount: 0 });
   });
 });

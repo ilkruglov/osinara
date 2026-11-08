@@ -11,17 +11,30 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { BOT_USERNAME, groupMessage, privateMessage, repositories, telegramContext } from "./telegram-on-message.test-fixtures.js";
+import {
+  BOT_USERNAME,
+  groupMessage,
+  privateMessage,
+  repositories,
+  telegramContext,
+} from "./telegram-on-message.test-fixtures.js";
 
 // Another bot writes into the group; Bot-to-Bot mode delivers it with `isBot: true`.
 function botGroupMessage(text: string) {
   const message = groupMessage(text);
-  return { ...message, from: { firstName: "Другой бот", id: "telegram-999", isBot: true, username: "other_bot" } };
+  return {
+    ...message,
+    from: { firstName: "Другой бот", id: "telegram-999", isBot: true, username: "other_bot" },
+  };
 }
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 import { TELEGRAM_UPDATE_MARKER_KEY } from "./telegram-update-marker.js";
 import { TELEGRAM_SERIES_MARKER_KEY } from "./telegram-message-series.js";
-import { alreadySeenSeriesContext, alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
+import {
+  alreadySeenSeriesContext,
+  alreadySeenTurnContext,
+  turnInterjectionMarkerContext,
+} from "./turn-interjection/turn-interjection-block.js";
 
 const INGRESS_UPDATE_ID = "501";
 // The durable ingress stamps the update id into the message before Eve dispatch.
@@ -39,7 +52,11 @@ const GROUP = {
 
 function ownerRepositories() {
   const repository = repositories();
-  repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "owner", userId: "user-1" });
+  repository.telegram.findIdentity.mockResolvedValue({
+    familyId: "family-1",
+    role: "owner",
+    userId: "user-1",
+  });
   return repository;
 }
 
@@ -47,8 +64,14 @@ describe("turn interjection preparation", () => {
   it("announces a fresh marker in trusted auth and in the turn's own context", async () => {
     const handler = createTelegramMessageHandler(ownerRepositories());
 
-    const first = await handler(telegramContext().context, fromIngress(privateMessage("найди билеты")));
-    const second = await handler(telegramContext().context, fromIngress(privateMessage("найди билеты")));
+    const first = await handler(
+      telegramContext().context,
+      fromIngress(privateMessage("найди билеты")),
+    );
+    const second = await handler(
+      telegramContext().context,
+      fromIngress(privateMessage("найди билеты")),
+    );
 
     const marker = first?.auth?.attributes.telegramTurnInterjectionMarker;
     expect(marker).toMatch(/^[0-9a-f]{24}$/u);
@@ -61,14 +84,25 @@ describe("turn interjection preparation", () => {
     repository.telegram.findGroup.mockResolvedValue({ ...GROUP, type: "family_private" });
     const handler = createTelegramMessageHandler(repository);
 
-    const result = await handler(telegramContext().context, fromIngress(groupMessage(`@${BOT_USERNAME} найди`)));
+    const result = await handler(
+      telegramContext().context,
+      fromIngress(groupMessage(`@${BOT_USERNAME} найди`)),
+    );
 
     expect(result?.auth?.attributes.telegramTurnInterjectionMarker).toMatch(/^[0-9a-f]{24}$/u);
   });
 
   it.each([
-    ["an external group member", { ...GROUP, type: "external" as const }, () => groupMessage(`@${BOT_USERNAME} найди`)],
-    ["another bot", { ...GROUP, type: "external" as const }, () => botGroupMessage(`@${BOT_USERNAME} найди`)],
+    [
+      "an external group member",
+      { ...GROUP, type: "external" as const },
+      () => groupMessage(`@${BOT_USERNAME} найди`),
+    ],
+    [
+      "another bot",
+      { ...GROUP, type: "external" as const },
+      () => botGroupMessage(`@${BOT_USERNAME} найди`),
+    ],
   ])("prepares no marker for %s", async (_label, group, message) => {
     const repository = ownerRepositories();
     repository.telegram.findGroup.mockResolvedValue(group);
@@ -95,9 +129,15 @@ describe("turn interjection preparation", () => {
     repository.turnInterjections.findDeliveredContentKind.mockResolvedValue("text");
     const handler = createTelegramMessageHandler(repository);
 
-    const result = await handler(telegramContext().context, fromIngress(privateMessage("Стоп, Питер")));
+    const result = await handler(
+      telegramContext().context,
+      fromIngress(privateMessage("Стоп, Питер")),
+    );
 
-    expect(repository.turnInterjections.findDeliveredContentKind).toHaveBeenCalledWith("501", "session-1");
+    expect(repository.turnInterjections.findDeliveredContentKind).toHaveBeenCalledWith(
+      "501",
+      "session-1",
+    );
     expect(result?.context).toContain(alreadySeenTurnContext("text"));
   });
 
@@ -115,14 +155,33 @@ describe("turn interjection preparation", () => {
   // answered by C; B came back as an earlier message without any notice.
   it("tells the agent which earlier messages of the series it already saw", async () => {
     const repository = ownerRepositories();
-    repository.turnInterjections.findDeliveredContentKinds.mockResolvedValue(new Map([["499", "text"], ["500", "notice"]]));
+    repository.turnInterjections.findDeliveredContentKinds.mockResolvedValue(
+      new Map([
+        ["499", "text"],
+        ["500", "notice"],
+      ]),
+    );
     const handler = createTelegramMessageHandler(repository);
     const message = fromIngress(privateMessage("и ещё сыр"));
-    const series = { ...message, raw: { ...message.raw, [TELEGRAM_SERIES_MARKER_KEY]: { addressed: true, earlierUpdateIds: ["499", "500"], role: "current", telegramMessageIds: ["41", "42"] } } };
+    const series = {
+      ...message,
+      raw: {
+        ...message.raw,
+        [TELEGRAM_SERIES_MARKER_KEY]: {
+          addressed: true,
+          earlierUpdateIds: ["499", "500"],
+          role: "current",
+          telegramMessageIds: ["41", "42"],
+        },
+      },
+    };
 
     const result = await handler(telegramContext().context, series);
 
-    expect(repository.turnInterjections.findDeliveredContentKinds).toHaveBeenCalledWith(["499", "500"], "session-1");
+    expect(repository.turnInterjections.findDeliveredContentKinds).toHaveBeenCalledWith(
+      ["499", "500"],
+      "session-1",
+    );
     expect(result?.context).toContain(alreadySeenSeriesContext(1));
   });
 

@@ -80,10 +80,7 @@ function eveChannel(e) {
         if (l instanceof Response) return l;
         let u = parseCreateBody(s);
         if (u instanceof Response) return u;
-        let d =
-            u.callback === void 0
-              ? void 0
-              : parseTraceparent(i.headers.get(`traceparent`)),
+        let d = u.callback === void 0 ? void 0 : parseTraceparent(i.headers.get(`traceparent`)),
           f = checkUploadPolicy(u, r);
         if (f !== null) return f;
         if (u.operationId !== void 0 && l.auth.principalType === `anonymous`)
@@ -135,9 +132,7 @@ function eveChannel(e) {
         try {
           g = await h({
             auth: m.auth,
-            capabilities:
-              u.capabilities ??
-              (u.mode === `task` ? void 0 : { requestInput: !0 }),
+            capabilities: u.capabilities ?? (u.mode === `task` ? void 0 : { requestInput: !0 }),
             callback: u.callback,
             continuationToken: p,
             initiatorAuth: l.accepted ? l.initiatorAuth : void 0,
@@ -179,224 +174,204 @@ function eveChannel(e) {
           },
         );
       }),
-      POST(
-        EVE_SESSION_ROUTE_PATTERN,
-        async (n, { attachSession: i, params: a }) => {
-          let o = await routeAuth(n, e.auth);
-          if (o instanceof Response) return o;
-          let s = requireSessionId(a);
-          if (s instanceof Response) return s;
-          let c = await parseJsonRequest(n);
-          if (c instanceof Response) return c;
-          let l = parseSessionMessageBody(c);
-          if (l instanceof Response) return l;
-          let u = checkUploadPolicy(l, r);
-          if (u !== null) return u;
-          let d = l.context,
-            f = o;
-          if (l.message !== void 0) {
-            let t = await resolveOnMessage({
-              auth: o,
-              config: e,
-              message: l.message,
-              request: n,
-              sessionId: s,
-            });
-            if (t instanceof Response) return t;
-            ((d = mergeContext(l.context, t.context)), (f = t.auth));
-          }
-          let p;
-          try {
-            let e = i(s),
-              t = {
-                auth: f,
-                callback: l.callback,
-                context: d,
-                outputSchema: l.outputSchema,
-                turnPolicy: l.turnPolicy,
-              };
-            p =
-              l.inputResponses === void 0
-                ? await e.send(l.message, t)
-                : await e.respond(l.inputResponses, t);
-          } catch (e) {
-            let n = logError(log, `session-message request failed`, e, {
-              sessionId: s,
-            });
-            return Response.json(
+      POST(EVE_SESSION_ROUTE_PATTERN, async (n, { attachSession: i, params: a }) => {
+        let o = await routeAuth(n, e.auth);
+        if (o instanceof Response) return o;
+        let s = requireSessionId(a);
+        if (s instanceof Response) return s;
+        let c = await parseJsonRequest(n);
+        if (c instanceof Response) return c;
+        let l = parseSessionMessageBody(c);
+        if (l instanceof Response) return l;
+        let u = checkUploadPolicy(l, r);
+        if (u !== null) return u;
+        let d = l.context,
+          f = o;
+        if (l.message !== void 0) {
+          let t = await resolveOnMessage({
+            auth: o,
+            config: e,
+            message: l.message,
+            request: n,
+            sessionId: s,
+          });
+          if (t instanceof Response) return t;
+          ((d = mergeContext(l.context, t.context)), (f = t.auth));
+        }
+        let p;
+        try {
+          let e = i(s),
+            t = {
+              auth: f,
+              callback: l.callback,
+              context: d,
+              outputSchema: l.outputSchema,
+              turnPolicy: l.turnPolicy,
+            };
+          p =
+            l.inputResponses === void 0
+              ? await e.send(l.message, t)
+              : await e.respond(l.inputResponses, t);
+        } catch (e) {
+          let n = logError(log, `session-message request failed`, e, {
+            sessionId: s,
+          });
+          return Response.json(
+            {
+              error: `Failed to send the session message.`,
+              errorId: n,
+              ok: !1,
+            },
+            { status: 500 },
+          );
+        }
+        return p.status === `session_not_active`
+          ? Response.json(
               {
-                error: `Failed to send the session message.`,
-                errorId: n,
+                code: `session_not_active`,
+                error: `The session is no longer active.`,
                 ok: !1,
               },
-              { status: 500 },
-            );
-          }
-          return p.status === `session_not_active`
-            ? Response.json(
-                {
-                  code: `session_not_active`,
-                  error: `The session is no longer active.`,
-                  ok: !1,
-                },
-                { headers: { "cache-control": `no-store` }, status: 409 },
-              )
-            : Response.json(
-                { ok: !0, sessionId: p.sessionId, status: `accepted` },
-                {
-                  headers: {
-                    "cache-control": `no-store`,
-                    [EVE_SESSION_ID_HEADER]: p.sessionId,
-                  },
-                  status: 202,
-                },
-              );
-        },
-      ),
-      POST(
-        EVE_SESSION_CANCEL_ROUTE_PATTERN,
-        async (n, { attachSession: r, params: i }) => {
-          let a = await routeAuth(n, e.auth);
-          if (a instanceof Response) return a;
-          let o = requireSessionId(i);
-          if (o instanceof Response) return o;
-          let s = await parseCancelTurnBody(n);
-          if (s instanceof Response) return s;
-          let c;
-          try {
-            c = await r(o).cancel({ taskId: s.taskId, turnId: s.turnId });
-          } catch (e) {
-            let n = logError(log, `cancel-turn request failed`, e, {
-              sessionId: o,
-            });
-            return Response.json(
-              { error: `Failed to cancel the turn.`, errorId: n, ok: !1 },
-              { status: 500 },
-            );
-          }
-          return Response.json(
-            c.status === `accepted`
-              ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
-              : { ok: !0, status: `no_active_turn` },
-            {
-              headers: { "cache-control": `no-store` },
-              status: c.status === `accepted` ? 202 : 200,
-            },
-          );
-        },
-      ),
-      POST(
-        EVE_SESSION_COMPACT_ROUTE_PATTERN,
-        async (n, { attachSession: r, params: i }) => {
-          let a = await routeAuth(n, e.auth);
-          if (a instanceof Response) return a;
-          let o = requireSessionId(i);
-          if (o instanceof Response) return o;
-          let s = await parseSessionControlBody(n);
-          if (s instanceof Response) return s;
-          let c;
-          try {
-            c = await r(o).compact();
-          } catch (e) {
-            let n = logError(log, `session-compaction request failed`, e, {
-              sessionId: o,
-            });
-            return Response.json(
-              { error: `Failed to compact the session.`, errorId: n, ok: !1 },
-              { status: 500 },
-            );
-          }
-          return Response.json(
-            c.status === `accepted`
-              ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
-              : { ok: !0, status: `no_active_session` },
-            {
-              headers: { "cache-control": `no-store` },
-              status: c.status === `accepted` ? 202 : 200,
-            },
-          );
-        },
-      ),
-      POST(
-        EVE_SESSION_CLEAR_ROUTE_PATTERN,
-        async (n, { attachSession: r, params: i }) => {
-          let a = await routeAuth(n, e.auth);
-          if (a instanceof Response) return a;
-          let o = requireSessionId(i);
-          if (o instanceof Response) return o;
-          let s = await parseSessionControlBody(n);
-          if (s instanceof Response) return s;
-          let c;
-          try {
-            c = await r(o).clear();
-          } catch (e) {
-            let n = logError(log, `session-clear request failed`, e, {
-              sessionId: o,
-            });
-            return Response.json(
+              { headers: { "cache-control": `no-store` }, status: 409 },
+            )
+          : Response.json(
+              { ok: !0, sessionId: p.sessionId, status: `accepted` },
               {
-                error: `Failed to clear the session context.`,
-                errorId: n,
-                ok: !1,
+                headers: {
+                  "cache-control": `no-store`,
+                  [EVE_SESSION_ID_HEADER]: p.sessionId,
+                },
+                status: 202,
               },
-              { status: 500 },
             );
-          }
+      }),
+      POST(EVE_SESSION_CANCEL_ROUTE_PATTERN, async (n, { attachSession: r, params: i }) => {
+        let a = await routeAuth(n, e.auth);
+        if (a instanceof Response) return a;
+        let o = requireSessionId(i);
+        if (o instanceof Response) return o;
+        let s = await parseCancelTurnBody(n);
+        if (s instanceof Response) return s;
+        let c;
+        try {
+          c = await r(o).cancel({ taskId: s.taskId, turnId: s.turnId });
+        } catch (e) {
+          let n = logError(log, `cancel-turn request failed`, e, {
+            sessionId: o,
+          });
           return Response.json(
-            c.status === `accepted`
-              ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
-              : { ok: !0, status: `no_active_session` },
+            { error: `Failed to cancel the turn.`, errorId: n, ok: !1 },
+            { status: 500 },
+          );
+        }
+        return Response.json(
+          c.status === `accepted`
+            ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
+            : { ok: !0, status: `no_active_turn` },
+          {
+            headers: { "cache-control": `no-store` },
+            status: c.status === `accepted` ? 202 : 200,
+          },
+        );
+      }),
+      POST(EVE_SESSION_COMPACT_ROUTE_PATTERN, async (n, { attachSession: r, params: i }) => {
+        let a = await routeAuth(n, e.auth);
+        if (a instanceof Response) return a;
+        let o = requireSessionId(i);
+        if (o instanceof Response) return o;
+        let s = await parseSessionControlBody(n);
+        if (s instanceof Response) return s;
+        let c;
+        try {
+          c = await r(o).compact();
+        } catch (e) {
+          let n = logError(log, `session-compaction request failed`, e, {
+            sessionId: o,
+          });
+          return Response.json(
+            { error: `Failed to compact the session.`, errorId: n, ok: !1 },
+            { status: 500 },
+          );
+        }
+        return Response.json(
+          c.status === `accepted`
+            ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
+            : { ok: !0, status: `no_active_session` },
+          {
+            headers: { "cache-control": `no-store` },
+            status: c.status === `accepted` ? 202 : 200,
+          },
+        );
+      }),
+      POST(EVE_SESSION_CLEAR_ROUTE_PATTERN, async (n, { attachSession: r, params: i }) => {
+        let a = await routeAuth(n, e.auth);
+        if (a instanceof Response) return a;
+        let o = requireSessionId(i);
+        if (o instanceof Response) return o;
+        let s = await parseSessionControlBody(n);
+        if (s instanceof Response) return s;
+        let c;
+        try {
+          c = await r(o).clear();
+        } catch (e) {
+          let n = logError(log, `session-clear request failed`, e, {
+            sessionId: o,
+          });
+          return Response.json(
             {
-              headers: { "cache-control": `no-store` },
-              status: c.status === `accepted` ? 202 : 200,
+              error: `Failed to clear the session context.`,
+              errorId: n,
+              ok: !1,
             },
+            { status: 500 },
           );
-        },
-      ),
-      POST(
-        EVE_SESSION_RESET_ROUTE_PATTERN,
-        async (n, { attachSession: r, params: i }) => {
-          let a = await routeAuth(n, e.auth);
-          if (a instanceof Response) return a;
-          let o = requireSessionId(i);
-          if (o instanceof Response) return o;
-          let s = await parseResetBody(n);
-          if (s instanceof Response) return s;
-          let c;
-          try {
-            c = await r(o).reset({ reason: s.reason });
-          } catch (e) {
-            let n = logError(log, `session-reset request failed`, e, {
-              sessionId: o,
-            });
-            return Response.json(
-              { error: `Failed to reset the session.`, errorId: n, ok: !1 },
-              { status: 500 },
-            );
-          }
+        }
+        return Response.json(
+          c.status === `accepted`
+            ? { ok: !0, sessionId: c.sessionId, status: `accepted` }
+            : { ok: !0, status: `no_active_session` },
+          {
+            headers: { "cache-control": `no-store` },
+            status: c.status === `accepted` ? 202 : 200,
+          },
+        );
+      }),
+      POST(EVE_SESSION_RESET_ROUTE_PATTERN, async (n, { attachSession: r, params: i }) => {
+        let a = await routeAuth(n, e.auth);
+        if (a instanceof Response) return a;
+        let o = requireSessionId(i);
+        if (o instanceof Response) return o;
+        let s = await parseResetBody(n);
+        if (s instanceof Response) return s;
+        let c;
+        try {
+          c = await r(o).reset({ reason: s.reason });
+        } catch (e) {
+          let n = logError(log, `session-reset request failed`, e, {
+            sessionId: o,
+          });
           return Response.json(
-            c.status === `reset`
-              ? {
-                  ok: !0,
-                  previousSessionId: c.previousSessionId,
-                  status: `reset`,
-                }
-              : { ok: !0, status: `no_active_session` },
-            { headers: { "cache-control": `no-store` } },
+            { error: `Failed to reset the session.`, errorId: n, ok: !1 },
+            { status: 500 },
           );
-        },
-      ),
-      GET(
-        EVE_SESSION_STREAM_ROUTE_PATTERN,
-        async (t, { attachSession: n, params: r }) => {
-          let i = await routeAuth(t, e.auth);
-          if (i instanceof Response) return i;
-          let a = requireSessionId(r);
-          return a instanceof Response
-            ? a
-            : await createSessionStreamResponse(t, n(a));
-        },
-      ),
+        }
+        return Response.json(
+          c.status === `reset`
+            ? {
+                ok: !0,
+                previousSessionId: c.previousSessionId,
+                status: `reset`,
+              }
+            : { ok: !0, status: `no_active_session` },
+          { headers: { "cache-control": `no-store` } },
+        );
+      }),
+      GET(EVE_SESSION_STREAM_ROUTE_PATTERN, async (t, { attachSession: n, params: r }) => {
+        let i = await routeAuth(t, e.auth);
+        if (i instanceof Response) return i;
+        let a = requireSessionId(r);
+        return a instanceof Response ? a : await createSessionStreamResponse(t, n(a));
+      }),
       GET(EVE_SUBAGENT_STREAM_ROUTE_PATTERN, async (t, n) => {
         let r = await routeAuth(t, e.auth);
         if (r instanceof Response) return r;
@@ -428,10 +403,7 @@ function eveChannel(e) {
           if (e === void 0) throw Error(`Remote subagent binding not found.`);
           u = e;
         } catch {
-          return Response.json(
-            { error: `Subagent stream not found.`, ok: !1 },
-            { status: 404 },
-          );
+          return Response.json({ error: `Subagent stream not found.`, ok: !1 }, { status: 404 });
         }
         let d = readRemoteAgentStreamHeadersResolver(n);
         if (d === void 0)
@@ -450,10 +422,7 @@ function eveChannel(e) {
             url: u.data.remote.url,
           });
         } catch {
-          return Response.json(
-            { error: `Subagent stream not found.`, ok: !1 },
-            { status: 404 },
-          );
+          return Response.json({ error: `Subagent stream not found.`, ok: !1 }, { status: 404 });
         }
         let h = new URL(
           createEveSessionStreamRoutePath(o).replace(/^\/+/, ``),
@@ -524,8 +493,7 @@ function normalizeEveCors(e) {
     e.exposedHeaders !== void 0 && (t.exposeHeaders = e.exposedHeaders),
     e.credentials !== void 0 && (t.credentials = e.credentials),
     e.maxAge !== void 0 && (t.maxAge = e.maxAge),
-    e.preflightStatus !== void 0 &&
-      (t.preflight = { statusCode: e.preflightStatus }),
+    e.preflightStatus !== void 0 && (t.preflight = { statusCode: e.preflightStatus }),
     t
   );
 }
@@ -573,9 +541,7 @@ async function deriveOperationContinuationToken(e) {
       e.operationId,
     ]),
     n = await crypto.subtle.digest(`SHA-256`, new TextEncoder().encode(t));
-  return `eve:op:${Array.from(new Uint8Array(n), (e) =>
-    e.toString(16).padStart(2, `0`),
-  )
+  return `eve:op:${Array.from(new Uint8Array(n), (e) => e.toString(16).padStart(2, `0`))
     .join(``)
     .slice(0, 32)}`;
 }
@@ -601,10 +567,7 @@ function parseCreateBody(e) {
   let o = parseOutputSchemaField(e.outputSchema);
   if (o instanceof Response) return o;
   if (t === void 0)
-    return Response.json(
-      { error: `Missing or empty 'message' field.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing or empty 'message' field.`, ok: !1 }, { status: 400 });
   let s = e.operationId;
   if (s !== void 0 && (typeof s != `string` || !s))
     return Response.json(
@@ -688,27 +651,17 @@ async function parseCancelTurnBody(e) {
       { status: 400 },
     );
   let a = {};
-  return (
-    typeof i == `string` && (a.taskId = i),
-    typeof r == `string` && (a.turnId = r),
-    a
-  );
+  return (typeof i == `string` && (a.taskId = i), typeof r == `string` && (a.turnId = r), a);
 }
 async function parseJsonRequest(e) {
   let t;
   try {
     t = await e.json();
   } catch {
-    return Response.json(
-      { error: `Invalid JSON body.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid JSON body.`, ok: !1 }, { status: 400 });
   }
   return typeof t != `object` || !t || Array.isArray(t)
-    ? Response.json(
-        { error: `Expected a JSON object.`, ok: !1 },
-        { status: 400 },
-      )
+    ? Response.json({ error: `Expected a JSON object.`, ok: !1 }, { status: 400 })
     : t;
 }
 async function parseResetBody(e) {
@@ -735,26 +688,17 @@ async function parseOptionalJsonRequest(e) {
   try {
     t = await e.text();
   } catch {
-    return Response.json(
-      { error: `Unreadable request body.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Unreadable request body.`, ok: !1 }, { status: 400 });
   }
   if (t.trim().length === 0) return {};
   let n;
   try {
     n = JSON.parse(t);
   } catch {
-    return Response.json(
-      { error: `Invalid JSON body.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid JSON body.`, ok: !1 }, { status: 400 });
   }
   return typeof n != `object` || !n || Array.isArray(n)
-    ? Response.json(
-        { error: `Expected a JSON object.`, ok: !1 },
-        { status: 400 },
-      )
+    ? Response.json({ error: `Expected a JSON object.`, ok: !1 }, { status: 400 })
     : n;
 }
 function rejectSessionContinuationToken(e) {
@@ -769,10 +713,7 @@ function rejectSessionContinuationToken(e) {
     : null;
 }
 function requireSessionId(e) {
-  return (
-    e.sessionId ||
-    Response.json({ error: `Missing session id.`, ok: !1 }, { status: 400 })
-  );
+  return e.sessionId || Response.json({ error: `Missing session id.`, ok: !1 }, { status: 400 });
 }
 async function createSessionStreamResponse(e, t) {
   let n = parseStartIndex(e);
@@ -794,10 +735,7 @@ async function createSessionStreamResponse(e, t) {
       new Response(serializeAsNdjson(i), { headers: a })
     );
   } catch {
-    return Response.json(
-      { error: `Session not found.`, ok: !1 },
-      { status: 404 },
-    );
+    return Response.json({ error: `Session not found.`, ok: !1 }, { status: 404 });
   }
 }
 function parseOutputSchemaField(e) {
@@ -817,9 +755,7 @@ function parseOutputSchemaField(e) {
 function parseCallbackField(e) {
   if (e === void 0) return;
   let t = parseSessionCallback(e);
-  return t.ok
-    ? t.callback
-    : Response.json({ error: t.message, ok: !1 }, { status: 400 });
+  return t.ok ? t.callback : Response.json({ error: t.message, ok: !1 }, { status: 400 });
 }
 function parseCapabilitiesField(e) {
   if (e === void 0) return;
@@ -830,8 +766,7 @@ function parseCapabilitiesField(e) {
     );
   let t = Object.keys(e),
     n = Reflect.get(e, `requestInput`);
-  return t.some((e) => e !== `requestInput`) ||
-    (n !== void 0 && typeof n != `boolean`)
+  return t.some((e) => e !== `requestInput`) || (n !== void 0 && typeof n != `boolean`)
     ? Response.json(
         {
           error: `Expected 'capabilities.requestInput' to be a boolean when provided.`,
@@ -924,12 +859,7 @@ function parseMessagePart(e) {
         { status: 400 },
       );
     let e = { type: `file`, mediaType: t.mediaType, data: t.data };
-    return (
-      typeof t.filename == `string` &&
-        t.filename.length > 0 &&
-        (e.filename = t.filename),
-      e
-    );
+    return (typeof t.filename == `string` && t.filename.length > 0 && (e.filename = t.filename), e);
   }
   return Response.json(
     {
@@ -993,8 +923,7 @@ function mergeContext(e, t) {
 }
 function parseClientContextField(e) {
   if (e !== void 0) {
-    if (typeof e == `string`)
-      return e.length > 0 ? [toClientContextMessage(e)] : void 0;
+    if (typeof e == `string`) return e.length > 0 ? [toClientContextMessage(e)] : void 0;
     if (Array.isArray(e))
       return e.length === 0
         ? void 0
@@ -1042,10 +971,7 @@ function parseStartIndex(e) {
   if (t === null) return;
   let n = Number(t);
   return !/^-?\d+$/.test(t) || !Number.isSafeInteger(n)
-    ? Response.json(
-        { error: `Expected startIndex to be an integer.`, ok: !1 },
-        { status: 400 },
-      )
+    ? Response.json({ error: `Expected startIndex to be an integer.`, ok: !1 }, { status: 400 })
     : n;
 }
 function serializeAsNdjson(e) {

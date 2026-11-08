@@ -25,14 +25,22 @@ describe("workflow event log cache patch", () => {
 
     // A 43-turn session carried 585 events and 9 MB of payloads that were re-read on every
     // message before the model was called (10 сентября 2026).
-    expect(codeText(storage)).toContain(codeText("const cacheKey = eventLogCacheKey(params, resolveData, sortOrder"));
-    expect(codeText(storage)).toContain(codeText("let cached = cacheKey === null ? undefined : readEventLogCache(cacheKey"));
-    expect(codeText(storage)).toContain(codeText("const data = cached === undefined ? [] : [...cached.data]"));
+    expect(codeText(storage)).toContain(
+      codeText("const cacheKey = eventLogCacheKey(params, resolveData, sortOrder"),
+    );
+    expect(codeText(storage)).toContain(
+      codeText("let cached = cacheKey === null ? undefined : readEventLogCache(cacheKey"),
+    );
+    expect(codeText(storage)).toContain(
+      codeText("const data = cached === undefined ? [] : [...cached.data]"),
+    );
     // A shrunk log must never be served from a stale prefix.
     expect(codeText(storage)).toContain(codeText("if (total < cached.data.length) {"));
     expect(codeText(storage)).toContain(codeText("dropEventLogCache(cacheKey"));
     // Only a complete listing becomes a prefix for the next resume, and every resume reports itself.
-    expect(codeText(storage)).toContain(codeText("if (!hasMore) writeEventLogCache(cacheKey, data, data.at(-1)?.eventId"));
+    expect(codeText(storage)).toContain(
+      codeText("if (!hasMore) writeEventLogCache(cacheKey, data, data.at(-1)?.eventId"),
+    );
     expect(codeText(storage)).toContain(codeText("traceEventLogRead( params.runId, reusedEvents"));
   });
 

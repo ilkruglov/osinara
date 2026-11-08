@@ -6,7 +6,7 @@ import type { DynamicSubagentAgentConfig } from "#runtime/subagents/dynamic-agen
  * Builds the bootstrap {@link ContextContainer} for one run.
  */
 export declare function buildRunContext(input: {
-    readonly bundle: CompiledBundle;
-    readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
-    readonly run: RunInput;
+  readonly bundle: CompiledBundle;
+  readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
+  readonly run: RunInput;
 }): ContextContainer;

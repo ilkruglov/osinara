@@ -20,10 +20,7 @@ import {
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { resolveCurrentApprovalAuth, type ApprovalAuthRow } from "./approval-auth.js";
-import type {
-  ApprovalTimeoutRepository,
-  TimedOutApprovalClaim,
-} from "./approval-timeout.js";
+import type { ApprovalTimeoutRepository, TimedOutApprovalClaim } from "./approval-timeout.js";
 
 interface ClaimRow extends ApprovalAuthRow {
   id: string;
@@ -175,19 +172,17 @@ export const approvalTimeoutRepository: ApprovalTimeoutRepository = {
        RETURNING timeout_attempts`,
       [claim.id, claim.leaseToken],
     );
-    console.error(JSON.stringify({
-      approvalId: claim.id,
-      attempts: result.rows[0]?.timeout_attempts ?? null,
-      code: errorCode,
-    }));
+    console.error(
+      JSON.stringify({
+        approvalId: claim.id,
+        attempts: result.rows[0]?.timeout_attempts ?? null,
+        code: errorCode,
+      }),
+    );
   },
 };
 
-async function releaseLease(
-  client: PoolClient,
-  id: string,
-  leaseToken: string,
-): Promise<void> {
+async function releaseLease(client: PoolClient, id: string, leaseToken: string): Promise<void> {
   await client.query(
     `UPDATE telegram_hitl_approvals
         SET timeout_lease_token = NULL, timeout_lease_expires_at = NULL,

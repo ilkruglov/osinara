@@ -4,24 +4,30 @@ import { z } from "zod";
 import { AppError } from "../app-error.js";
 
 function isVisibleMessageId(value: string): boolean {
-  return Array.from(value).every((character) =>
-    character.trim() !== "" && !/[\p{Cc}\p{Cf}]/u.test(character)
+  return Array.from(value).every(
+    (character) => character.trim() !== "" && !/[\p{Cc}\p{Cf}]/u.test(character),
   );
 }
 
-export const gmailMessageInputSchema = z.object({
-  action: z.enum(["trash", "delete", "restore", "mark_read", "mark_unread"]).describe(
-    "Точное изменение состояния одного Gmail-письма",
-  ),
-  messageId: z.string().min(1).max(512).refine(
-    isVisibleMessageId,
-    "messageId должен состоять из видимых символов без пробелов",
-  ).describe("Точный Gmail message ID из результата чтения или поиска"),
-  profileRef: z.string().min(1).max(512).refine(
-    isVisibleMessageId,
-    "profileRef должен состоять из видимых символов без пробелов",
-  ).describe("Точная ссылка на Google-профиль из результата чтения Gmail"),
-}).strict();
+export const gmailMessageInputSchema = z
+  .object({
+    action: z
+      .enum(["trash", "delete", "restore", "mark_read", "mark_unread"])
+      .describe("Точное изменение состояния одного Gmail-письма"),
+    messageId: z
+      .string()
+      .min(1)
+      .max(512)
+      .refine(isVisibleMessageId, "messageId должен состоять из видимых символов без пробелов")
+      .describe("Точный Gmail message ID из результата чтения или поиска"),
+    profileRef: z
+      .string()
+      .min(1)
+      .max(512)
+      .refine(isVisibleMessageId, "profileRef должен состоять из видимых символов без пробелов")
+      .describe("Точная ссылка на Google-профиль из результата чтения Gmail"),
+  })
+  .strict();
 
 export type GmailMessageInput = z.infer<typeof gmailMessageInputSchema>;
 

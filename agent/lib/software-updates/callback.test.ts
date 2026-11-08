@@ -53,10 +53,12 @@ describe("software update callback handler", () => {
       telegramUserId: "101",
     });
     expect(transport.removeKeyboard).toHaveBeenCalledWith({ chatId: "101", messageId: "77" });
-    expect(transport.answerCallback).toHaveBeenCalledWith(expect.objectContaining({
-      callbackQueryId: "query-1",
-      text: expect.stringContaining("подтверждено"),
-    }));
+    expect(transport.answerCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callbackQueryId: "query-1",
+        text: expect.stringContaining("подтверждено"),
+      }),
+    );
   });
 
   it("rejects a foreign owner callback without exposing it to Eve", async () => {
@@ -70,15 +72,21 @@ describe("software update callback handler", () => {
     };
     const handle = createSoftwareUpdateCallbackHandler({ repository, transport });
 
-    await expect(handle(callbackQuery({
-      from: { firstName: "Чужой", id: "202", isBot: false },
-    }))).resolves.toBe(true);
+    await expect(
+      handle(
+        callbackQuery({
+          from: { firstName: "Чужой", id: "202", isBot: false },
+        }),
+      ),
+    ).resolves.toBe(true);
 
     expect(transport.removeKeyboard).not.toHaveBeenCalled();
-    expect(transport.answerCallback).toHaveBeenCalledWith(expect.objectContaining({
-      showAlert: true,
-      text: expect.stringContaining("AGENT_SOFTWARE_UPDATE_FORBIDDEN"),
-    }));
+    expect(transport.answerCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        showAlert: true,
+        text: expect.stringContaining("AGENT_SOFTWARE_UPDATE_FORBIDDEN"),
+      }),
+    );
   });
 
   it("keeps the committed decision when Telegram cleanup is ambiguous", async () => {

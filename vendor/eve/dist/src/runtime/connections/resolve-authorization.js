@@ -2,9 +2,7 @@ import { contextStorage } from "#context/container.js";
 import { buildCallbackContext } from "#context/build-callback-context.js";
 import { ContextKey } from "#context/key.js";
 import { normalizeAuthorizationSpec } from "#runtime/connections/validate-authorization.js";
-const ConnectionAuthorizationResolversKey = new ContextKey(
-  `eve.connectionAuthorizationResolvers`,
-);
+const ConnectionAuthorizationResolversKey = new ContextKey(`eve.connectionAuthorizationResolvers`);
 async function resolveConnectionAuthorization(t, n) {
   let r = t.authorization;
   if (r === void 0 || typeof r != `function`) return r;
@@ -12,10 +10,7 @@ async function resolveConnectionAuthorization(t, n) {
   if (i === void 0) return await resolveDynamicAuthorization(t, n);
   let a = getResolverCache(i),
     o = a.get(t);
-  return (
-    o === void 0 && ((o = resolveDynamicAuthorization(t, n)), a.set(t, o)),
-    await o
-  );
+  return (o === void 0 && ((o = resolveDynamicAuthorization(t, n)), a.set(t, o)), await o);
 }
 async function resolveDynamicAuthorization(e, n) {
   let i = e.authorization;

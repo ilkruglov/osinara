@@ -10,7 +10,7 @@ import type { DynamicSubagentAgentConfig } from "#runtime/subagents/dynamic-agen
  * drive the turn loop.
  */
 export interface CreateSessionStepResult {
-    readonly state: DurableSessionState;
+  readonly state: DurableSessionState;
 }
 /**
  * Creates the durable session and returns the initial snapshot-bearing
@@ -19,14 +19,14 @@ export interface CreateSessionStepResult {
  * the root agent.
  */
 export declare function createSessionStep(input: {
-    readonly compiledArtifactsSource: DurableCompiledArtifactsSource;
-    readonly continuationToken: string;
-    readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
-    readonly inheritedLimits?: RunSessionLimits;
-    readonly outputSchema?: JsonObject;
-    readonly nodeId?: string;
-    readonly rootSessionId?: string;
-    readonly sessionId: string;
-    readonly subagentDepth?: number;
-    readonly taskOwned?: boolean;
+  readonly compiledArtifactsSource: DurableCompiledArtifactsSource;
+  readonly continuationToken: string;
+  readonly dynamicSubagentAgentConfig?: DynamicSubagentAgentConfig;
+  readonly inheritedLimits?: RunSessionLimits;
+  readonly outputSchema?: JsonObject;
+  readonly nodeId?: string;
+  readonly rootSessionId?: string;
+  readonly sessionId: string;
+  readonly subagentDepth?: number;
+  readonly taskOwned?: boolean;
 }): Promise<CreateSessionStepResult>;

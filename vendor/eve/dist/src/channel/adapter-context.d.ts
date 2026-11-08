@@ -8,4 +8,6 @@ import type { ChannelAdapter, ChannelAdapterContext } from "#channel/adapter.js"
  * supplied accessor so handlers can read identity / auth and call
  * `session.continuation.rekey(...)` to re-key the parked session.
  */
-export declare function buildAdapterContext<TCtx extends ChannelAdapterContext<any> = ChannelAdapterContext>(adapter: ChannelAdapter<TCtx>, accessor: ContextAccessor): TCtx;
+export declare function buildAdapterContext<
+  TCtx extends ChannelAdapterContext<any> = ChannelAdapterContext,
+>(adapter: ChannelAdapter<TCtx>, accessor: ContextAccessor): TCtx;

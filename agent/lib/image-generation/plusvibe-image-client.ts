@@ -43,10 +43,13 @@ const JOB_ID_PATTERN = /^[a-z0-9]{8,64}$/u;
 /** Nano Banana 2 offers 1:1, 16:9, 9:16, 4:3 and 3:4 at 1K; the tool's landscape and portrait sizes map to 4:3 and 3:4. */
 export function plusVibeAspectRatio(size: ImageGenerationRequest["size"]): "1:1" | "3:4" | "4:3" {
   switch (size) {
-    case "1536x1024": return "4:3";
-    case "1024x1536": return "3:4";
+    case "1536x1024":
+      return "4:3";
+    case "1024x1536":
+      return "3:4";
     case "1024x1024":
-    case "auto": return "1:1";
+    case "auto":
+      return "1:1";
   }
 }
 
@@ -66,22 +69,24 @@ interface JobStatus {
 const FAILED_JOB_STATUSES = new Set(["error", "fail", "failed"]);
 const REASON_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
 
-export function createPlusVibeImageClient(
-  options: {
-    apiKey: string;
-    baseUrl?: string;
-    fetch?: typeof globalThis.fetch;
-    pollTimeoutMs?: number;
-    sleep?: (milliseconds: number) => Promise<void>;
-  },
-): FluxImageClient {
+export function createPlusVibeImageClient(options: {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof globalThis.fetch;
+  pollTimeoutMs?: number;
+  sleep?: (milliseconds: number) => Promise<void>;
+}): FluxImageClient {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const sleep = options.sleep ?? defaultSleep;
   const baseUrl = (options.baseUrl ?? PLUSVIBE_API_BASE_URL).replace(/\/$/u, "");
   const pollTimeoutMs = options.pollTimeoutMs ?? POLL_TIMEOUT_MS;
   const headers = { authorization: `Bearer ${options.apiKey}`, "content-type": "application/json" };
 
-  async function createJob(model: string, prompt: string, opts: Record<string, unknown>): Promise<string> {
+  async function createJob(
+    model: string,
+    prompt: string,
+    opts: Record<string, unknown>,
+  ): Promise<string> {
     let response: Response;
     try {
       response = await fetchImplementation(`${baseUrl}/api/media/generate`, {
@@ -94,17 +99,24 @@ export function createPlusVibeImageClient(
       throw ambiguous(PROVIDER, error instanceof Error ? error.message : String(error));
     }
     if (isAmbiguousStatus(response.status)) throw ambiguous(PROVIDER, `create ${response.status}`);
-    interface CreatePayload { jobId?: unknown; message?: unknown; ok?: unknown }
+    interface CreatePayload {
+      jobId?: unknown;
+      message?: unknown;
+      ok?: unknown;
+    }
     let payload: CreatePayload | null;
     try {
-      payload = await response.json() as CreatePayload;
+      payload = (await response.json()) as CreatePayload;
     } catch {
       payload = null;
     }
     const message = scrubProviderText(payload?.message, options.apiKey);
-    if (isProviderUnavailableStatus(response.status)) throw unavailable(PROVIDER, `create ${response.status} ${message}`.trim());
-    if (!response.ok || payload?.ok === false) throw rejected(PROVIDER, `${model} create ${response.status} ${message}`.trim());
-    if (typeof payload?.jobId !== "string" || !JOB_ID_PATTERN.test(payload.jobId)) throw ambiguous(PROVIDER, "job id missing");
+    if (isProviderUnavailableStatus(response.status))
+      throw unavailable(PROVIDER, `create ${response.status} ${message}`.trim());
+    if (!response.ok || payload?.ok === false)
+      throw rejected(PROVIDER, `${model} create ${response.status} ${message}`.trim());
+    if (typeof payload?.jobId !== "string" || !JOB_ID_PATTERN.test(payload.jobId))
+      throw ambiguous(PROVIDER, "job id missing");
     return payload.jobId;
   }
 
@@ -113,23 +125,40 @@ export function createPlusVibeImageClient(
     let job: JobStatus;
     for (;;) {
       await sleep(POLL_INTERVAL_MS);
-      const response = await bounded((signal) => fetchImplementation(`${baseUrl}/api/media/jobs/${jobId}`, { headers, method: "GET", signal }));
+      const response = await bounded((signal) =>
+        fetchImplementation(`${baseUrl}/api/media/jobs/${jobId}`, {
+          headers,
+          method: "GET",
+          signal,
+        }),
+      );
       if (!response.ok) throw ambiguous(PROVIDER, `status ${response.status}`);
       job = await bounded(() => response.json() as Promise<JobStatus>);
       if (job.status === "success") break;
       if (typeof job.status === "string" && FAILED_JOB_STATUSES.has(job.status)) {
         // Only identifiers reach the log: `failMsg` is free provider text and may echo the prompt.
-        const reasons = [job.errorCode, job.failReason, job.failure?.code]
-          .filter((part): part is string => typeof part === "string" && REASON_CODE_PATTERN.test(part));
+        const reasons = [job.errorCode, job.failReason, job.failure?.code].filter(
+          (part): part is string => typeof part === "string" && REASON_CODE_PATTERN.test(part),
+        );
         throw rejected(PROVIDER, `${model} job ${jobId} ${job.status} ${reasons.join(" ")}`.trim());
       }
       remaining();
     }
     const resultUrl = Array.isArray(job.resultUrls) ? job.resultUrls[0] : undefined;
-    if (typeof resultUrl !== "string" || !resultUrl.startsWith("https://")) throw ambiguous(PROVIDER, "result url missing");
-    console.log(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_BILLED", model, priceRub: typeof job.priceRub === "number" ? job.priceRub : null, provider: PROVIDER }));
+    if (typeof resultUrl !== "string" || !resultUrl.startsWith("https://"))
+      throw ambiguous(PROVIDER, "result url missing");
+    console.log(
+      JSON.stringify({
+        code: "AGENT_IMAGE_GENERATION_BILLED",
+        model,
+        priceRub: typeof job.priceRub === "number" ? job.priceRub : null,
+        provider: PROVIDER,
+      }),
+    );
     // The result link is pre-signed; the key stays with the API host only.
-    const result = await bounded((signal) => fetchImplementation(resultUrl, { method: "GET", signal }));
+    const result = await bounded((signal) =>
+      fetchImplementation(resultUrl, { method: "GET", signal }),
+    );
     if (!result.ok) throw ambiguous(PROVIDER, `result ${result.status}`);
     return await bounded(() => readImageBody(result));
   }
@@ -139,18 +168,26 @@ export function createPlusVibeImageClient(
     supportsEditing: true,
     assertConfigured() {
       if (!options.apiKey || /\s/u.test(options.apiKey)) {
-        throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Не настроен доступ к PlusVibe API");
+        throw new AppError(
+          "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+          "Не настроен доступ к PlusVibe API",
+        );
       }
     },
     async generate(input) {
       this.assertConfigured();
-      const opts: Record<string, unknown> = { aspect_ratio: plusVibeAspectRatio(input.size), resolution: "1K" };
+      const opts: Record<string, unknown> = {
+        aspect_ratio: plusVibeAspectRatio(input.size),
+        resolution: "1K",
+      };
       let model: string = PLUSVIBE_GENERATION_MODEL;
       if (input.referenceImages?.length) {
         assertReferenceCount(input.referenceImages);
         const references: string[] = [];
         for (const reference of input.referenceImages) {
-          references.push(`data:image/jpeg;base64,${(await prepareUploadReference(reference)).toString("base64")}`);
+          references.push(
+            `data:image/jpeg;base64,${(await prepareUploadReference(reference)).toString("base64")}`,
+          );
         }
         opts.input_base64 = references;
         model = PLUSVIBE_EDITING_MODEL;

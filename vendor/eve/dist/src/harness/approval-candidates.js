@@ -15,10 +15,7 @@ function createApprovalCandidate(e) {
     n.candidateHistory.some((t) => t.candidateId === e.candidateIdPrefix)
       ? `${e.candidateIdPrefix}.${n.nextCandidateSequence.toString(36)}`
       : e.candidateIdPrefix;
-  if (
-    n.activeCandidates[i] !== void 0 ||
-    n.candidateHistory.some((e) => e.candidateId === i)
-  )
+  if (n.activeCandidates[i] !== void 0 || n.candidateHistory.some((e) => e.candidateId === i))
     throw Error(`Approval candidate id collision: "${i}".`);
   let a = {
     candidateId: i,
@@ -58,9 +55,7 @@ function markApprovalCandidateHistoryEventEmitted(e) {
         ? t
         : ((n = !0), { ...t, eventEmitted: !0 }),
     );
-  return n
-    ? writeApprovalState(e.state, { ...t, candidateHistory: r })
-    : e.state;
+  return n ? writeApprovalState(e.state, { ...t, candidateHistory: r }) : e.state;
 }
 function markApprovalSettlementEventEmitted(e) {
   let t = readApprovalState(e.state),
@@ -131,8 +126,7 @@ function settleAllowedCandidate(e) {
     r = n.activeCandidates[e.candidateId];
   if (r === void 0) {
     let r = n.candidateHistory.find((t) => t.candidateId === e.candidateId);
-    if ((r && n.settlements[r.requestId]) !== void 0)
-      return { changed: !1, state: t };
+    if ((r && n.settlements[r.requestId]) !== void 0) return { changed: !1, state: t };
     throw Error(`Unknown approval candidate "${e.candidateId}".`);
   }
   return settleRequest({
@@ -167,8 +161,7 @@ function getApprovalAuditState(e) {
 }
 function settleRequest(e) {
   let t = readApprovalState(e.state);
-  if (t.settlements[e.requestId] !== void 0)
-    return { changed: !1, state: e.state };
+  if (t.settlements[e.requestId] !== void 0) return { changed: !1, state: e.state };
   let n = {
       actor: e.actor,
       candidateId: e.candidateId,
@@ -240,19 +233,14 @@ function readApprovalState(t) {
       typeof r.activeCandidates == `object` && r.activeCandidates !== null
         ? r.activeCandidates
         : {},
-    candidateHistory: Array.isArray(r.candidateHistory)
-      ? r.candidateHistory
-      : [],
+    candidateHistory: Array.isArray(r.candidateHistory) ? r.candidateHistory : [],
     nextCandidateSequence:
       typeof r.nextCandidateSequence == `number` &&
       Number.isSafeInteger(r.nextCandidateSequence) &&
       r.nextCandidateSequence >= 0
         ? r.nextCandidateSequence
         : deriveNextCandidateSequence(r),
-    settlements:
-      typeof r.settlements == `object` && r.settlements !== null
-        ? r.settlements
-        : {},
+    settlements: typeof r.settlements == `object` && r.settlements !== null ? r.settlements : {},
   };
 }
 function deriveNextCandidateSequence(e) {

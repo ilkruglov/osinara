@@ -28,14 +28,20 @@ const TARGET_ENVIRONMENT_KEYS = [
 ] as const;
 const environmentLinePattern = /^([A-Z][A-Z0-9_]*)=(.*)$/u;
 
-const oauthClientSchema = z.object({
-  web: z.object({
-    client_id: z.string().min(1).max(500),
-    client_secret: z.string().min(1).max(500),
-    project_id: z.string().min(1).max(255),
-    redirect_uris: z.array(z.url()).min(1),
-  }).strict().passthrough(),
-}).strict().passthrough();
+const oauthClientSchema = z
+  .object({
+    web: z
+      .object({
+        client_id: z.string().min(1).max(500),
+        client_secret: z.string().min(1).max(500),
+        project_id: z.string().min(1).max(255),
+        redirect_uris: z.array(z.url()).min(1),
+      })
+      .strict()
+      .passthrough(),
+  })
+  .strict()
+  .passthrough();
 
 export interface GoogleOAuthClient {
   clientId: string;
@@ -147,9 +153,7 @@ export function parseGoogleOAuthClient(
   }
   const parsed = oauthClientSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new Error(
-      "AGENT_GOOGLE_SETUP_CLIENT_INVALID: Нужен OAuth client типа Web application",
-    );
+    throw new Error("AGENT_GOOGLE_SETUP_CLIENT_INVALID: Нужен OAuth client типа Web application");
   }
 
   // Every environment callback must be registered before any secret reaches `.env`.
@@ -194,9 +198,7 @@ export function buildGoogleWorkspaceEnvironment(
   // Persisted credentials require the original key; generate one only for an unconfigured env.
   const existingEncryptionKey = values.get("INTEGRATION_TOKEN_ENCRYPTION_KEY");
   const encryptionKeyGenerated = !existingEncryptionKey;
-  const encryptionKey = validateEncryptionKey(
-    existingEncryptionKey || generateEncryptionKey(),
-  );
+  const encryptionKey = validateEncryptionKey(existingEncryptionKey || generateEncryptionKey());
   const replacements: Record<(typeof TARGET_ENVIRONMENT_KEYS)[number], string> = {
     GOOGLE_OAUTH_CLIENT_ID: safeEnvironmentValue(input.clientId, "GOOGLE_OAUTH_CLIENT_ID"),
     GOOGLE_OAUTH_CLIENT_SECRET: safeEnvironmentValue(
@@ -240,10 +242,7 @@ export async function configureGoogleWorkspaceEnvironment(
 ): Promise<{ encryptionKeyGenerated: boolean; projectId: string }> {
   const clientJsonPath = resolve(input.clientJsonPath);
   const envFilePath = resolve(input.envFilePath);
-  const [clientMode, envMode] = await Promise.all([
-    stat(clientJsonPath),
-    stat(envFilePath),
-  ]);
+  const [clientMode, envMode] = await Promise.all([stat(clientJsonPath), stat(envFilePath)]);
   if ((clientMode.mode & 0o777) !== 0o600 || (envMode.mode & 0o777) !== 0o600) {
     throw new Error(
       "AGENT_GOOGLE_SETUP_FILE_MODE_INVALID: OAuth JSON и .env должны иметь права 0600",
@@ -280,10 +279,7 @@ export async function syncGoogleWorkspaceEnvironment(
       "AGENT_GOOGLE_SETUP_SOURCE_TARGET_EQUAL: Исходный и целевой .env должны быть разными файлами",
     );
   }
-  const [sourceMode, envMode] = await Promise.all([
-    stat(sourceEnvFilePath),
-    stat(envFilePath),
-  ]);
+  const [sourceMode, envMode] = await Promise.all([stat(sourceEnvFilePath), stat(envFilePath)]);
   if ((sourceMode.mode & 0o777) !== 0o600 || (envMode.mode & 0o777) !== 0o600) {
     throw new Error(
       "AGENT_GOOGLE_SETUP_FILE_MODE_INVALID: Исходный и целевой .env должны иметь права 0600",

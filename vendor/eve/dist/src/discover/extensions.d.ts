@@ -14,19 +14,22 @@ export declare const DISCOVER_EXTENSION_MOUNT_AMBIGUOUS = "discover/extension-mo
  * Emitted when a directory mount (`extensions/<ns>/`) is missing its required
  * `extension.<ext>` mount declaration.
  */
-export declare const DISCOVER_EXTENSION_MOUNT_MISSING_DECLARATION = "discover/extension-mount-missing-declaration";
+export declare const DISCOVER_EXTENSION_MOUNT_MISSING_DECLARATION =
+  "discover/extension-mount-missing-declaration";
 /**
  * Emitted when an extension declares its own `extensions/` mount slot. Extensions
  * cannot mount other extensions yet; the slot is reserved so enabling nesting
  * later is additive rather than a surprise.
  */
-export declare const DISCOVER_EXTENSION_NESTED_MOUNT_UNSUPPORTED = "discover/extension-nested-mount-unsupported";
+export declare const DISCOVER_EXTENSION_NESTED_MOUNT_UNSUPPORTED =
+  "discover/extension-nested-mount-unsupported";
 /**
  * Emitted when a consumer's agent-root contribution (e.g. `agent/tools/crm__x.ts`)
  * uses a mounted extension's `<ns>__` prefix. That prefix is reserved for the
  * extension and its co-located overrides, not the agent root.
  */
-export declare const DISCOVER_EXTENSION_OVERRIDE_OUTSIDE_MOUNT = "discover/extension-override-outside-mount";
+export declare const DISCOVER_EXTENSION_OVERRIDE_OUTSIDE_MOUNT =
+  "discover/extension-override-outside-mount";
 /**
  * Emitted when a resolved package is not a valid eve extension.
  */
@@ -35,38 +38,42 @@ export declare const DISCOVER_EXTENSION_PACKAGE_INVALID = "discover/extension-pa
  * Emitted when an extension distribution's compatibility manifest is missing
  * or malformed.
  */
-export declare const DISCOVER_EXTENSION_COMPATIBILITY_INVALID = "discover/extension-compatibility-invalid";
+export declare const DISCOVER_EXTENSION_COMPATIBILITY_INVALID =
+  "discover/extension-compatibility-invalid";
 /**
  * Emitted when this eve cannot consume one of the extension capabilities the
  * distribution requires.
  */
-export declare const DISCOVER_EXTENSION_CAPABILITY_INCOMPATIBLE = "discover/extension-capability-incompatible";
+export declare const DISCOVER_EXTENSION_CAPABILITY_INCOMPATIBLE =
+  "discover/extension-capability-incompatible";
 /**
  * Emitted when an extension source tree declares agent-level config (`agent.ts`),
  * which is the consuming agent's to own.
  */
-export declare const DISCOVER_EXTENSION_AGENT_CONFIG_UNSUPPORTED = "discover/extension-agent-config-unsupported";
+export declare const DISCOVER_EXTENSION_AGENT_CONFIG_UNSUPPORTED =
+  "discover/extension-agent-config-unsupported";
 /**
  * Emitted when an extension source tree declares a `sandbox`, which is the
  * consuming agent's to own.
  */
-export declare const DISCOVER_EXTENSION_SANDBOX_UNSUPPORTED = "discover/extension-sandbox-unsupported";
+export declare const DISCOVER_EXTENSION_SANDBOX_UNSUPPORTED =
+  "discover/extension-sandbox-unsupported";
 /**
  * Resolved on-disk location of one mounted extension package.
  */
 export interface ExtensionMountLocation {
-    /** Mount namespace derived from the mount filename (e.g. `crm`). */
-    readonly namespace: string;
-    /** Package specifier the mount imports (e.g. `@acme/crm`). */
-    readonly specifier: string;
-    /** Package name from the resolved `package.json`, used to scope state. */
-    readonly packageName: string;
-    /** Absolute path to the resolved package root. */
-    readonly packageRoot: string;
-    /** Absolute path to the extension's agent-shaped distribution root. */
-    readonly sourceRoot: string;
-    /** Runtime packages this extension requires the consuming application to externalize. */
-    readonly externalDependencies: readonly string[];
+  /** Mount namespace derived from the mount filename (e.g. `crm`). */
+  readonly namespace: string;
+  /** Package specifier the mount imports (e.g. `@acme/crm`). */
+  readonly specifier: string;
+  /** Package name from the resolved `package.json`, used to scope state. */
+  readonly packageName: string;
+  /** Absolute path to the resolved package root. */
+  readonly packageRoot: string;
+  /** Absolute path to the extension's agent-shaped distribution root. */
+  readonly sourceRoot: string;
+  /** Runtime packages this extension requires the consuming application to externalize. */
+  readonly externalDependencies: readonly string[];
 }
 /**
  * Package roots resolved from one extension mount before its distribution is
@@ -74,18 +81,18 @@ export interface ExtensionMountLocation {
  * before the consumer requires its dist tree to exist.
  */
 export interface ExtensionMountPackageLocation {
-    /** Mount namespace derived from the mount filename. */
-    readonly namespace: string;
-    /** Package specifier read from the mount declaration. */
-    readonly specifier: string;
-    /** Package name from the resolved package manifest. */
-    readonly packageName: string;
-    /** Absolute path to the resolved package root. */
-    readonly packageRoot: string;
-    /** Absolute authoring root when the package publishes a source-backed contract. */
-    readonly authoredSourceRoot?: string;
-    /** Absolute path to the agent-shaped distribution root. */
-    readonly distRoot: string;
+  /** Mount namespace derived from the mount filename. */
+  readonly namespace: string;
+  /** Package specifier read from the mount declaration. */
+  readonly specifier: string;
+  /** Package name from the resolved package manifest. */
+  readonly packageName: string;
+  /** Absolute path to the resolved package root. */
+  readonly packageRoot: string;
+  /** Absolute authoring root when the package publishes a source-backed contract. */
+  readonly authoredSourceRoot?: string;
+  /** Absolute path to the agent-shaped distribution root. */
+  readonly distRoot: string;
 }
 /**
  * Derives the mount namespace from an `extensions/<name>.<ext>` logical path.
@@ -111,30 +118,30 @@ export declare function packageStateNamespace(packageName: string): string;
  * `package.json#eve.extension.dist` for the agent-shaped distribution root.
  */
 export declare function locateExtensionMount(input: {
-    readonly source: ProjectSource;
-    readonly agentRoot: string;
-    readonly appRoot: string;
-    readonly mount: ExtensionSourceRef;
-    /**
-     * Mount namespace the caller derived from the mount path — passed in because
-     * the file and directory mount forms name it at different path positions.
-     */
-    readonly namespace: string;
+  readonly source: ProjectSource;
+  readonly agentRoot: string;
+  readonly appRoot: string;
+  readonly mount: ExtensionSourceRef;
+  /**
+   * Mount namespace the caller derived from the mount path — passed in because
+   * the file and directory mount forms name it at different path positions.
+   */
+  readonly namespace: string;
 }): Promise<{
-    location?: ExtensionMountLocation;
-    diagnostics: DiscoverDiagnostic[];
+  location?: ExtensionMountLocation;
+  diagnostics: DiscoverDiagnostic[];
 }>;
 /**
  * Resolves one extension mount through its package manifest without requiring
  * a built distribution or compatibility manifest.
  */
 export declare function locateExtensionMountPackage(input: {
-    readonly source: ProjectSource;
-    readonly agentRoot: string;
-    readonly appRoot: string;
-    readonly mount: ExtensionSourceRef;
-    readonly namespace: string;
+  readonly source: ProjectSource;
+  readonly agentRoot: string;
+  readonly appRoot: string;
+  readonly mount: ExtensionSourceRef;
+  readonly namespace: string;
 }): Promise<{
-    location?: ExtensionMountPackageLocation;
-    diagnostics: DiscoverDiagnostic[];
+  location?: ExtensionMountPackageLocation;
+  diagnostics: DiscoverDiagnostic[];
 }>;

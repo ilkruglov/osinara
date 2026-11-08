@@ -3,11 +3,11 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * Input shape accepted by {@link defineGlobTool}.
  */
 export interface DefineGlobToolInput {
-    /**
-     * Optional model-facing description. Defaults to a generic
-     * "Search for files by glob pattern in the workspace sandbox." line.
-     */
-    readonly description?: string;
+  /**
+   * Optional model-facing description. Defaults to a generic
+   * "Search for files by glob pattern in the workspace sandbox." line.
+   */
+  readonly description?: string;
 }
 /**
  * Defines a model-visible file-search tool that discovers files by

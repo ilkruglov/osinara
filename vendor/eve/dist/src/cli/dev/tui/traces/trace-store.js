@@ -27,8 +27,7 @@ function createTraceStore(i) {
         return;
       }
       let o = a.get(t);
-      o === void 0 &&
-        ((o = { seen: new Set(), spans: new Map() }), a.set(t, o));
+      o === void 0 && ((o = { seen: new Set(), spans: new Map() }), a.set(t, o));
       let s = !1;
       for (let e of r)
         if (!o.seen.has(e)) {

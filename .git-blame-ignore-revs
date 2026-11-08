@@ -1,0 +1,3 @@
+# Mass formatting commits; `git blame` skips them with blame.ignoreRevsFile.
+# Prettier, 2026-11-08
+e55b38a5a11b95c36a8e36a1531d6fb4040a2c71

@@ -137,8 +137,7 @@ async function runIntegrationSetupCommand(
               }),
             ),
             (process.exitCode = 2))
-          : (s.error(e instanceof Error ? e.message : String(e)),
-            (process.exitCode = 1));
+          : (s.error(e instanceof Error ? e.message : String(e)), (process.exitCode = 1));
   }
 }
 export { runIntegrationSetupCommand };

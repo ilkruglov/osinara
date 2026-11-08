@@ -8,16 +8,22 @@ import type { TaskCommand, TaskView } from "#tasks/types.js";
  * - `rejected`: the command is invalid for the current status; the
  *   reason is diagnostic only.
  */
-type TaskTransitionResult = {
-    readonly outcome: "accepted";
-    readonly view: TaskView;
-} | {
-    readonly outcome: "noop";
-    readonly view: TaskView;
-} | {
-    readonly outcome: "rejected";
-    readonly view: TaskView;
-    readonly reason: string;
-};
-export declare function applyTaskTransition(view: TaskView, command: TaskCommand): TaskTransitionResult;
+type TaskTransitionResult =
+  | {
+      readonly outcome: "accepted";
+      readonly view: TaskView;
+    }
+  | {
+      readonly outcome: "noop";
+      readonly view: TaskView;
+    }
+  | {
+      readonly outcome: "rejected";
+      readonly view: TaskView;
+      readonly reason: string;
+    };
+export declare function applyTaskTransition(
+  view: TaskView,
+  command: TaskCommand,
+): TaskTransitionResult;
 export {};

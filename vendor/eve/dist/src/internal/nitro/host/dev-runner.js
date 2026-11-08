@@ -9,9 +9,7 @@ var NodeDevelopmentRunner = class extends BaseEnvRunner {
   #r;
   #i = !1;
   constructor(t) {
-    let n = resolvePackageCompiledFilePath(
-      `src/compiled/env-runner/node-worker.js`,
-    );
+    let n = resolvePackageCompiledFilePath(`src/compiled/env-runner/node-worker.js`);
     (super({
       data: { entry: t.entry, ...t.workerData },
       hooks: {
@@ -34,8 +32,7 @@ var NodeDevelopmentRunner = class extends BaseEnvRunner {
     this.#t.add(e);
   }
   sendMessage(e) {
-    if (this.#n === void 0)
-      throw Error(`Development worker is not initialized.`);
+    if (this.#n === void 0) throw Error(`Development worker is not initialized.`);
     this.#n.postMessage(e);
   }
   async waitForReady(e) {
@@ -63,23 +60,17 @@ var NodeDevelopmentRunner = class extends BaseEnvRunner {
     ((this.#n = void 0), (this.#r = void 0));
     try {
       (this.#i || e.postMessage({ event: `shutdown` }),
-        !this.#i &&
-          t !== void 0 &&
-          !(await waitForWorkerExit(t)) &&
-          (await e.terminate()));
+        !this.#i && t !== void 0 && !(await waitForWorkerExit(t)) && (await e.terminate()));
     } finally {
       e.removeAllListeners();
     }
   }
   _handleMessage(e) {
-    (isWorkerInitializationError(e) && (this.#e = Error(e.error)),
-      super._handleMessage(e));
+    (isWorkerInitializationError(e) && (this.#e = Error(e.error)), super._handleMessage(e));
   }
   #a() {
     if (!existsSync(this._workerEntry)) {
-      this.close(
-        `Development worker entry not found at "${this._workerEntry}".`,
-      );
+      this.close(`Development worker entry not found at "${this._workerEntry}".`);
       return;
     }
     let e = new Worker(this._workerEntry, {

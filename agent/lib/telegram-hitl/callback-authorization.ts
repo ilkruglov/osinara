@@ -19,8 +19,7 @@ import {
 import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
 
 const CALLBACK_ERRORS = {
-  expired:
-    "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.",
+  expired: "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.",
   forbidden:
     "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил.",
 } as const;
@@ -32,11 +31,12 @@ function resolvedApprovalText(result: {
   selectedOptionLabel: string;
 }): string {
   // Eve присылает `cancel`; прежняя проверка на `deny` не срабатывала и оставляла английский ярлык.
-  const resolution = result.selectedOptionId === "approve"
-    ? "Решение: Подтверждено.\nДействие передано на выполнение."
-    : result.selectedOptionId === "cancel"
-    ? "Решение: Отменено.\nДействие не будет выполнено."
-    : `Выбран ответ: ${result.selectedOptionLabel}`;
+  const resolution =
+    result.selectedOptionId === "approve"
+      ? "Решение: Подтверждено.\nДействие передано на выполнение."
+      : result.selectedOptionId === "cancel"
+        ? "Решение: Отменено.\nДействие не будет выполнено."
+        : `Выбран ответ: ${result.selectedOptionLabel}`;
   // Решение уже принято: обещание будущего исполнения снимается, иначе текст противоречит сам себе.
   const settled = settledPromptText(result.promptText);
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
@@ -67,7 +67,9 @@ export function createTelegramHitlCallbackAuthorizer(
     const promptRoute = telegramContinuationToken({
       chatId: message.chat.id,
       conversationId: message.messageId,
-      ...(message.messageThreadId === undefined ? {} : { messageThreadId: message.messageThreadId }),
+      ...(message.messageThreadId === undefined
+        ? {}
+        : { messageThreadId: message.messageThreadId }),
     });
     // The repository atomically binds the exact button, active Eve request, and current DB role.
     const result = await repository.claimCallback({
@@ -88,20 +90,24 @@ export function createTelegramHitlCallbackAuthorizer(
           text: resolvedApprovalText(result),
         });
         if (!edited.ok) {
-          console.warn(JSON.stringify({
-            code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
-            status: edited.status,
-            telegramChatId: message.chat.id,
-            telegramMessageId: message.messageId,
-          }));
+          console.warn(
+            JSON.stringify({
+              code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
+              status: edited.status,
+              telegramChatId: message.chat.id,
+              telegramMessageId: message.messageId,
+            }),
+          );
         }
       } catch (error) {
-        console.warn(JSON.stringify({
-          code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
-          error: error instanceof Error ? error.name : "unknown",
-          telegramChatId: message.chat.id,
-          telegramMessageId: message.messageId,
-        }));
+        console.warn(
+          JSON.stringify({
+            code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
+            error: error instanceof Error ? error.name : "unknown",
+            telegramChatId: message.chat.id,
+            telegramMessageId: message.messageId,
+          }),
+        );
       }
       // Every request of the prompt is answered in one Eve delivery. Eve 0.40.0 never merges
       // answers that arrive one delivery at a time, so a step with several approvals would stay

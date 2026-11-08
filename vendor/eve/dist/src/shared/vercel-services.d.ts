@@ -1,62 +1,62 @@
 interface VercelRequestPathTransform {
-    readonly args: string;
-    readonly op: "set";
-    readonly type: "request.path";
+  readonly args: string;
+  readonly op: "set";
+  readonly type: "request.path";
 }
 interface VercelServiceRouteDestination {
-    readonly service?: string;
-    readonly type?: string;
+  readonly service?: string;
+  readonly type?: string;
 }
 interface VercelRouteConfig {
-    readonly destination?: string | VercelServiceRouteDestination;
-    readonly handle?: string;
-    readonly src?: string;
-    readonly transforms?: readonly VercelRequestPathTransform[];
-    readonly [key: string]: unknown;
+  readonly destination?: string | VercelServiceRouteDestination;
+  readonly handle?: string;
+  readonly src?: string;
+  readonly transforms?: readonly VercelRequestPathTransform[];
+  readonly [key: string]: unknown;
 }
 interface VercelServiceConfig {
-    readonly framework?: string;
-    readonly routes?: readonly VercelRouteConfig[];
-    readonly [key: string]: unknown;
+  readonly framework?: string;
+  readonly routes?: readonly VercelRouteConfig[];
+  readonly [key: string]: unknown;
 }
 /**
  * The top-level Vercel Build Output route that sends eve transport requests to
  * the generated eve service.
  */
 export type EveVercelServiceRoute = {
-    readonly destination: {
-        readonly service: string;
-        readonly type: "service";
-    };
-    readonly src: string;
+  readonly destination: {
+    readonly service: string;
+    readonly type: "service";
+  };
+  readonly src: string;
 };
 /**
  * A service-scoped route carrying the `request.path` transform that pins the
  * path the eve runtime observes to the eve transport namespace.
  */
 export type EveVercelServiceRequestPathRoute = {
-    readonly src: string;
-    readonly transforms: readonly [VercelRequestPathTransform];
+  readonly src: string;
+  readonly transforms: readonly [VercelRequestPathTransform];
 };
 /**
  * The generated eve service entry written into the Vercel Build Output
  * `services` record.
  */
 export type EveVercelGeneratedService = {
-    readonly buildCommand: string;
-    readonly framework: "eve";
-    readonly routes: readonly VercelRouteConfig[];
-    readonly root: string;
+  readonly buildCommand: string;
+  readonly framework: "eve";
+  readonly routes: readonly VercelRouteConfig[];
+  readonly root: string;
 };
 /**
  * Minimal shape of a Vercel Build Output config that can carry generated eve
  * services.
  */
 export interface VercelBuildConfig {
-    version?: number;
-    routes?: unknown[];
-    services?: Record<string, VercelServiceConfig>;
-    [key: string]: unknown;
+  version?: number;
+  routes?: unknown[];
+  services?: Record<string, VercelServiceConfig>;
+  [key: string]: unknown;
 }
 /**
  * Result of {@link ensureEveVercelServicesConfig}: `root` when `vercel.json`
@@ -64,12 +64,14 @@ export interface VercelBuildConfig {
  * generated), `generated` with the service record to merge into a Vercel Build
  * Output config otherwise.
  */
-export type EnsureEveVercelServicesConfigResult = {
-    readonly mode: "root";
-} | {
-    readonly mode: "generated";
-    readonly services: Record<string, EveVercelGeneratedService>;
-};
+export type EnsureEveVercelServicesConfigResult =
+  | {
+      readonly mode: "root";
+    }
+  | {
+      readonly mode: "generated";
+      readonly services: Record<string, EveVercelGeneratedService>;
+    };
 /**
  * Build the top-level Build Output route that exposes the eve service on the
  * eve transport namespace (`/eve/v1/*`).
@@ -96,10 +98,10 @@ export declare function createEveServiceRequestPathRoute(): EveVercelServiceRequ
  * longer routes it.
  */
 export declare function ensureEveVercelServicesConfig(input: {
-    readonly appRoot: string;
-    readonly eveBuildCommand?: string;
-    readonly frameworkName: string;
-    readonly hostRoot: string;
+  readonly appRoot: string;
+  readonly eveBuildCommand?: string;
+  readonly frameworkName: string;
+  readonly hostRoot: string;
 }): Promise<EnsureEveVercelServicesConfigResult>;
 /**
  * Merge the generated eve service and its public route into a Vercel Build
@@ -110,7 +112,13 @@ export declare function ensureEveVercelServicesConfig(input: {
  * the user is preserved and only gains the `request.path` route; everything
  * else passes through untouched.
  */
-export declare function mergeEveVercelConfig(existing: VercelBuildConfig | undefined, generated: Extract<EnsureEveVercelServicesConfigResult, {
-    mode: "generated";
-}>): VercelBuildConfig;
+export declare function mergeEveVercelConfig(
+  existing: VercelBuildConfig | undefined,
+  generated: Extract<
+    EnsureEveVercelServicesConfigResult,
+    {
+      mode: "generated";
+    }
+  >,
+): VercelBuildConfig;
 export {};

@@ -42,7 +42,11 @@ async function stagePair(
   configBytes: Buffer,
   envBytes: Buffer,
 ): Promise<readonly [StagedFile, StagedFile]> {
-  const config = await dependencies.files.stage(dependencies.paths.configPath, configBytes, CONFIG_MODE);
+  const config = await dependencies.files.stage(
+    dependencies.paths.configPath,
+    configBytes,
+    CONFIG_MODE,
+  );
   try {
     const env = await dependencies.files.stage(dependencies.paths.envPath, envBytes, ENV_MODE);
     return [config, env];
@@ -105,11 +109,7 @@ function bytesMatch(left: Buffer, right: Buffer): boolean {
   return left.length === right.length && left.equals(right);
 }
 
-function pairMemberMatches(
-  active: Buffer,
-  previous: Buffer,
-  candidate: Buffer,
-): boolean {
+function pairMemberMatches(active: Buffer, previous: Buffer, candidate: Buffer): boolean {
   return bytesMatch(active, previous) || bytesMatch(active, candidate);
 }
 

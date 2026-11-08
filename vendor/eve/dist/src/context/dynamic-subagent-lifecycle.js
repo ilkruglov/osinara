@@ -14,10 +14,7 @@ import {
 import { normalizeDynamicSubagentAgentConfig } from "#runtime/subagents/dynamic-agent-config.js";
 import { normalizeDynamicRemoteAgentConfig } from "#runtime/subagents/dynamic-remote-agent-config.js";
 const log = createLogger(`dynamic-subagents`),
-  ALLOWED_DYNAMIC_SUBAGENT_EVENTS = new Set([
-    `session.started`,
-    `turn.started`,
-  ]);
+  ALLOWED_DYNAMIC_SUBAGENT_EVENTS = new Set([`session.started`, `turn.started`]);
 async function resolveSelections(e) {
   let t = getSubagentToolInputJsonSchema(e.persistentSessions),
     n = await Promise.allSettled(
@@ -73,10 +70,10 @@ async function resolveSelections(e) {
     let a = n[t],
       o = e.resolvers[t];
     if (a.status === `rejected`) {
-      (log.error(
-        `Dynamic subagent resolver (${e.event.type}) threw — omitting subagent.`,
-        { error: toErrorMessage(a.reason), subagentName: o.name },
-      ),
+      (log.error(`Dynamic subagent resolver (${e.event.type}) threw — omitting subagent.`, {
+        error: toErrorMessage(a.reason),
+        subagentName: o.name,
+      }),
         (r[o.nodeId] = null));
       continue;
     }
@@ -96,8 +93,7 @@ async function dispatchDynamicSubagentEvent(e) {
     : e.ctx.set(TurnDynamicSubagentSelectionsKey, i);
 }
 async function refreshDynamicSessionSubagentsForRuntimeRevision(e) {
-  if (e.ctx.get(SessionDynamicSubagentRuntimeRevisionKey) === e.runtimeRevision)
-    return;
+  if (e.ctx.get(SessionDynamicSubagentRuntimeRevisionKey) === e.runtimeRevision) return;
   let r = e.resolvers.filter((e) => e.eventNames.includes(`session.started`)),
     i = await resolveSelections({ ...e, resolvers: r });
   (e.ctx.set(SessionDynamicSubagentSelectionsKey, i),
@@ -115,8 +111,7 @@ function buildDynamicSubagentTools(e) {
         throw Error(
           `Found multiple active dynamic subagents named "${e.prepared.name}". Subagent names must be unique at runtime.`,
         );
-      (c.add(e.prepared.name),
-        s.push(createHarnessDelegationToolDefinition(e.prepared)));
+      (c.add(e.prepared.name), s.push(createHarnessDelegationToolDefinition(e.prepared)));
     }
   return s;
 }

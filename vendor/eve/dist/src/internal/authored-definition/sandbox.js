@@ -22,17 +22,11 @@ function normalizeSandboxDefinition(n, r) {
   }
   if (
     (i.bootstrap !== void 0 && (a.bootstrap = expectFunction(i.bootstrap, r)),
-    i.revalidationKey !== void 0 &&
-      (a.revalidationKey = expectFunction(i.revalidationKey, r)),
+    i.revalidationKey !== void 0 && (a.revalidationKey = expectFunction(i.revalidationKey, r)),
     a.bootstrap === void 0 && a.revalidationKey !== void 0)
   )
-    throw Error(
-      `${r} The "revalidationKey" field can only be set when "bootstrap" is set.`,
-    );
-  return (
-    i.onSession !== void 0 && (a.onSession = expectFunction(i.onSession, r)),
-    a
-  );
+    throw Error(`${r} The "revalidationKey" field can only be set when "bootstrap" is set.`);
+  return (i.onSession !== void 0 && (a.onSession = expectFunction(i.onSession, r)), a);
 }
 function expectSandboxBackend(e, t) {
   if (typeof e == `function`) return lazyBackend(e);
@@ -41,15 +35,11 @@ function expectSandboxBackend(e, t) {
     `${t} The "backend" field must be a SandboxBackend value (use docker(), vercel(), or your own factory) or a zero-arg function returning one.`,
   );
   if (typeof r.name != `string` || r.name.length === 0)
-    throw Error(
-      `${t} The "backend" value must expose a non-empty string "name" identifier.`,
-    );
+    throw Error(`${t} The "backend" value must expose a non-empty string "name" identifier.`);
   if (typeof r.create != `function`)
     throw Error(`${t} The "backend" value must expose a "create" function.`);
   if (r.prewarm !== void 0 && typeof r.prewarm != `function`)
-    throw Error(
-      `${t} The "backend.prewarm" property must be a function when set.`,
-    );
+    throw Error(`${t} The "backend.prewarm" property must be a function when set.`);
   return r;
 }
 export { normalizeSandboxDefinition };

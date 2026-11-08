@@ -58,8 +58,7 @@ function resolveTargetByRouteFingerprint(e, n) {
   let r = createRouteFingerprint(e);
   if (r === null) return null;
   let i = new Map();
-  for (let e of n)
-    createRouteFingerprint(e.definition) === r && i.set(e.name, e);
+  for (let e of n) createRouteFingerprint(e.definition) === r && i.set(e.name, e);
   if (i.size === 1) return [...i.values()][0];
   if (i.size > 1)
     throw Error(

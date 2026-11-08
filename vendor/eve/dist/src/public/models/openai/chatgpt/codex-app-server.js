@@ -63,8 +63,7 @@ var CodexAppServerClient = class {
       return this.#i;
     }
     close() {
-      (this.#e.kill(),
-        this.#u(Error(`Codex app-server connection was restarted.`)));
+      (this.#e.kill(), this.#u(Error(`Codex app-server connection was restarted.`)));
     }
     static async start(e) {
       let t;
@@ -96,9 +95,7 @@ var CodexAppServerClient = class {
         refreshToken: e.refreshToken,
       });
       if (!isObject(n))
-        throw Error(
-          `Codex app-server returned an invalid authentication response.`,
-        );
+        throw Error(`Codex app-server returned an invalid authentication response.`);
       return {
         ...(typeof n.authMethod == `string` && { authMethod: n.authMethod }),
         ...(typeof n.authToken == `string` && { authToken: n.authToken }),
@@ -108,10 +105,7 @@ var CodexAppServerClient = class {
       };
     }
     #o(e, t) {
-      if (this.#i)
-        return Promise.reject(
-          this.#a ?? Error(`Codex app-server is not running.`),
-        );
+      if (this.#i) return Promise.reject(this.#a ?? Error(`Codex app-server is not running.`));
       let n = this.#r++,
         r = new Promise((e, t) => {
           this.#n.set(n, { reject: t, resolve: e });
@@ -135,12 +129,7 @@ var CodexAppServerClient = class {
       let n = this.#n.get(t.id);
       if (n !== void 0) {
         if ((this.#n.delete(t.id), t.error !== void 0)) {
-          n.reject(
-            Error(
-              t.error.message ??
-                `Codex app-server request failed (${t.error.code}).`,
-            ),
-          );
+          n.reject(Error(t.error.message ?? `Codex app-server request failed (${t.error.code}).`));
           return;
         }
         n.resolve(t.result);

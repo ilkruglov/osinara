@@ -61,24 +61,15 @@ async function captureTeamPage(e, t, n) {
   if ((t.signal?.throwIfAborted(), !r.ok))
     throw (
       isForbiddenApiFailure(r.failure) && requireVercelTeamAccess(r.failure),
-      isUnsupportedTeamListFailure(r.failure) &&
-        requireVercelCliUpgrade(r.failure),
+      isUnsupportedTeamListFailure(r.failure) && requireVercelCliUpgrade(r.failure),
       Error(`Could not list Vercel teams. ${r.failure.message}`)
     );
   return r.stdout;
 }
 async function listTeams(e, t = {}) {
-  let n = await captureTeamPage(e, t, [
-      `teams`,
-      `ls`,
-      `--format`,
-      `json`,
-      `--limit`,
-      `100`,
-    ]),
+  let n = await captureTeamPage(e, t, [`teams`, `ls`, `--format`, `json`, `--limit`, `100`]),
     r = VercelTeamPageSchema.safeParse(parseVercelJson(n, `teams`));
-  if (!r.success)
-    throw Error(`Could not read teams from Vercel CLI JSON output.`);
+  if (!r.success) throw Error(`Could not read teams from Vercel CLI JSON output.`);
   return r.data;
 }
 async function fetchProjectPage(e, t, n) {
@@ -95,11 +86,8 @@ async function fetchProjectPage(e, t, n) {
       isForbiddenApiFailure(i.failure) && requireVercelTeamAccess(i.failure),
       Error(`Could not list Vercel projects in ${t}. ${i.failure.message}`)
     );
-  let s = VercelProjectPageSchema.safeParse(
-    parseVercelJson(i.stdout, `projects`),
-  );
-  if (!s.success)
-    throw Error(`Could not read projects from Vercel CLI JSON output.`);
+  let s = VercelProjectPageSchema.safeParse(parseVercelJson(i.stdout, `projects`));
+  if (!s.success) throw Error(`Could not read projects from Vercel CLI JSON output.`);
   return s.data;
 }
 async function listRecentProjects(e, t, n = {}) {
@@ -112,9 +100,7 @@ function projectSearchRank(e, t) {
 }
 function rankProjectSearchResults(e, t) {
   let n = t.trim();
-  return [...e].sort(
-    (e, t) => projectSearchRank(e, n) - projectSearchRank(t, n),
-  );
+  return [...e].sort((e, t) => projectSearchRank(e, n) - projectSearchRank(t, n));
 }
 async function searchProjects(e, t, n, r = {}) {
   let i = n.trim();

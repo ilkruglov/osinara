@@ -33,10 +33,7 @@ function connectClause(e) {
 }
 function vercelRequirements(e) {
   let t = [];
-  return (
-    e.connectSlugs.length > 0 && t.push(connectClause(e.connectSlugs)),
-    t
-  );
+  return (e.connectSlugs.length > 0 && t.push(connectClause(e.connectSlugs)), t);
 }
 function resolveProvisioning(l) {
   let u = l.deps ?? {
@@ -59,12 +56,7 @@ function resolveProvisioning(l) {
     if (await u.pathExists(join(n, `.vercel`, `project.json`)))
       return withSpinner(l.prompter, whimsyFor(`project-detect`), async () => {
         let e = await u.detectProjectResolution(n, { signal: t });
-        if (
-          !(
-            !isProjectResolved(e) ||
-            !(await u.isVercelAuthenticated(n, { signal: t }))
-          )
-        )
+        if (!(!isProjectResolved(e) || !(await u.isVercelAuthenticated(n, { signal: t }))))
           return e;
       });
   }
@@ -88,18 +80,14 @@ function resolveProvisioning(l) {
     (await u.requireAuth(parent(), void 0, { signal: r }),
       await u.validateTeam(l.prompter, parent(), t.team, { signal: r }));
     let i = await u.resolveTeam(parent(), t.team, { signal: r }),
-      a =
-        n.apiKey === void 0
-          ? { kind: `inherit` }
-          : { kind: `byok`, apiGatewayKey: n.apiKey },
+      a = n.apiKey === void 0 ? { kind: `inherit` } : { kind: `byok`, apiGatewayKey: n.apiKey },
       o;
     if (t.project === void 0) o = { kind: `new`, project: e, team: i };
     else {
       let e = await u.resolveProjectByNameOrId(parent(), i, t.project, {
         signal: r,
       });
-      if (e === null)
-        throw Error(`Vercel project "${t.project}" was not found in ${i}.`);
+      if (e === null) throw Error(`Vercel project "${t.project}" was not found in ${i}.`);
       o = { kind: `existing`, project: e, team: i };
     }
     return (
@@ -173,9 +161,7 @@ function resolveProvisioning(l) {
                   defaultValue: a,
                   formatHint: (e) => `Name: ${e}`,
                   validate: (e) =>
-                    e.trim().length === 0
-                      ? `Project name cannot be empty.`
-                      : void 0,
+                    e.trim().length === 0 ? `Project name cannot be empty.` : void 0,
                 },
               })
             : void 0;
@@ -260,8 +246,7 @@ function resolveProvisioning(l) {
                 message: `Enter your AI_GATEWAY_API_KEY`,
                 sensitive: !0,
                 environment: `AI_GATEWAY_API_KEY`,
-                validate: (e) =>
-                  e.trim().length === 0 ? `API key cannot be empty.` : null,
+                validate: (e) => (e.trim().length === 0 ? `API key cannot be empty.` : null),
                 required: !0,
               }),
             ),
@@ -278,12 +263,7 @@ function resolveProvisioning(l) {
     id: `resolve-provisioning`,
     async gather({ state: e, signal: t }) {
       if (l.mode.headless) {
-        let n = await plansFromFlags(
-          e.agentName,
-          l.mode.project,
-          l.mode.aiGateway,
-          t,
-        );
+        let n = await plansFromFlags(e.agentName, l.mode.project, l.mode.aiGateway, t);
         if (n.vercelProject.kind === `none`) {
           let t = vercelDemands(e);
           if (t.connectSlugs.length > 0)
@@ -304,10 +284,7 @@ function resolveProvisioning(l) {
         vercelProject: t.vercelProject,
         aiGateway: t.aiGateway,
         modelWiring: t.modelWiring,
-        project:
-          t.project === void 0
-            ? e.project
-            : mergeProjectResolution(e.project, t.project),
+        project: t.project === void 0 ? e.project : mergeProjectResolution(e.project, t.project),
       };
     },
   };

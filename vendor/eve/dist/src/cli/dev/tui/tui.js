@@ -54,8 +54,7 @@ async function runDevelopmentTui(n) {
         ? resolveLocalDevelopmentClientOptions({
             ...f,
             serverUrl: d,
-            token: () =>
-              resolveLinkedDevelopmentOidcToken(u.target.workspaceRoot),
+            token: () => resolveLinkedDevelopmentOidcToken(u.target.workspaceRoot),
           })
         : resolveRemoteDevelopmentClientOptions({
             ...f,
@@ -70,13 +69,10 @@ async function runDevelopmentTui(n) {
       promptCommandHandler: createPromptCommandHandler({ target: r }),
       availablePromptCommands: promptCommandsFor(r.kind),
       formatTransportError: (e) =>
-        isVercelAuthChallenge(e)
-          ? formatRemoteAuthChallengeMessage(d)
-          : toErrorMessage(e),
+        isVercelAuthChallenge(e) ? formatRemoteAuthChallengeMessage(d) : toErrorMessage(e),
     };
   (u.kind === `local`
-    ? ((m.appRoot = u.target.workspaceRoot),
-      (m.probeMcpConnection = probeMcpConnection))
+    ? ((m.appRoot = u.target.workspaceRoot), (m.probeMcpConnection = probeMcpConnection))
     : (m.remote = u.remote),
     a !== void 0 && (m.initialInput = a),
     o !== void 0 && (m.onBootProgress = o),

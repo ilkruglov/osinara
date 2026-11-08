@@ -1,5 +1,9 @@
 import type { ModelMessage } from "ai";
-import type { PublicToolInputSchema, PublicToolOutputSchema, ToolModelOutput } from "#shared/tool-definition.js";
+import type {
+  PublicToolInputSchema,
+  PublicToolOutputSchema,
+  ToolModelOutput,
+} from "#shared/tool-definition.js";
 import type { Approval } from "#public/definitions/approval.js";
 import type { ToolContext } from "#public/definitions/tool.js";
 import type { SessionAuth } from "#context/keys.js";
@@ -9,7 +13,10 @@ import type { UnstampedMessageStreamEvent } from "#protocol/message.js";
  * supports any event; this extract restricts the public surface until
  * more events are validated.
  */
-export type DynamicToolEventName = Extract<UnstampedMessageStreamEvent["type"], "session.started" | "turn.started" | "step.started">;
+export type DynamicToolEventName = Extract<
+  UnstampedMessageStreamEvent["type"],
+  "session.started" | "turn.started" | "step.started"
+>;
 export declare const ALLOWED_DYNAMIC_TOOL_EVENTS: ReadonlySet<string>;
 /**
  * Instructions and skills are restricted to session/turn boundaries.
@@ -26,21 +33,21 @@ export declare const ALLOWED_DYNAMIC_SKILL_EVENTS: ReadonlySet<string>;
  * the session context inside tool `execute` functions.
  */
 export interface DynamicResolveContext {
-    readonly session: {
-        readonly id: string;
-        readonly auth: SessionAuth;
-    };
-    /** Channel metadata for the request that triggered this resolve. */
-    readonly channel: {
-        /** Channel type that produced the request (e.g. `"slack"`, `"http"`), when known. */
-        readonly kind?: string;
-        /** Channel-owned resume handle for the conversation, when the channel supplies one. */
-        readonly continuationToken?: string;
-        /** Free-form channel-specific metadata attached to the request. */
-        readonly metadata?: Readonly<Record<string, unknown>>;
-    };
-    /** Conversation history visible at this resolve point, oldest first. */
-    readonly messages: readonly ModelMessage[];
+  readonly session: {
+    readonly id: string;
+    readonly auth: SessionAuth;
+  };
+  /** Channel metadata for the request that triggered this resolve. */
+  readonly channel: {
+    /** Channel type that produced the request (e.g. `"slack"`, `"http"`), when known. */
+    readonly kind?: string;
+    /** Channel-owned resume handle for the conversation, when the channel supplies one. */
+    readonly continuationToken?: string;
+    /** Free-form channel-specific metadata attached to the request. */
+    readonly metadata?: Readonly<Record<string, unknown>>;
+  };
+  /** Conversation history visible at this resolve point, oldest first. */
+  readonly messages: readonly ModelMessage[];
 }
 /**
  * A single tool entry within a resolved dynamic tool set.
@@ -55,20 +62,20 @@ export interface DynamicResolveContext {
  * (Standard Schema) to infer and check the executor return type.
  */
 export interface DynamicToolEntry<TInput = Record<string, unknown>, TOutput = any> {
-    readonly description: string;
-    readonly inputSchema: PublicToolInputSchema<TInput>;
-    readonly outputSchema?: PublicToolOutputSchema<TOutput>;
-    execute(input: TInput, ctx: ToolContext): TOutput | Promise<TOutput>;
-    readonly toModelOutput?: (output: TOutput) => ToolModelOutput | Promise<ToolModelOutput>;
-    /**
-     * Optional per-call approval gate, mirroring the authored-tool
-     * `approval` contract: return `"user-approval"` to require user approval
-     * before the call executes. Only honored for step-scoped dynamic
-     * tools, whose live `execute` closures survive into the harness;
-     * session/turn-scoped tools replay from durable metadata and cannot
-     * carry a function across replay.
-     */
-    readonly approval?: Approval;
+  readonly description: string;
+  readonly inputSchema: PublicToolInputSchema<TInput>;
+  readonly outputSchema?: PublicToolOutputSchema<TOutput>;
+  execute(input: TInput, ctx: ToolContext): TOutput | Promise<TOutput>;
+  readonly toModelOutput?: (output: TOutput) => ToolModelOutput | Promise<ToolModelOutput>;
+  /**
+   * Optional per-call approval gate, mirroring the authored-tool
+   * `approval` contract: return `"user-approval"` to require user approval
+   * before the call executes. Only honored for step-scoped dynamic
+   * tools, whose live `execute` closures survive into the harness;
+   * session/turn-scoped tools replay from durable metadata and cannot
+   * carry a function across replay.
+   */
+  readonly approval?: Approval;
 }
 /**
  * A resolved tool set: keys are entry identifiers, values are
@@ -94,7 +101,10 @@ export type DynamicToolResult = DynamicToolEntry<any, any> | DynamicToolSet | nu
  * return type at authoring time.
  */
 export type DynamicToolEvents = {
-    readonly [K in DynamicToolEventName]?: (event: unknown, ctx: DynamicResolveContext) => DynamicToolResult | Promise<DynamicToolResult>;
+  readonly [K in DynamicToolEventName]?: (
+    event: unknown,
+    ctx: DynamicResolveContext,
+  ) => DynamicToolResult | Promise<DynamicToolResult>;
 };
 /**
  * Base event handler map accepted by `defineDynamic`. Intentionally
@@ -103,7 +113,10 @@ export type DynamicToolEvents = {
  * validated at runtime by the respective resolver.
  */
 export type DynamicEvents<TResult = unknown> = {
-    readonly [K in DynamicToolEventName]?: (event: unknown, ctx: DynamicResolveContext) => TResult | Promise<TResult>;
+  readonly [K in DynamicToolEventName]?: (
+    event: unknown,
+    ctx: DynamicResolveContext,
+  ) => TResult | Promise<TResult>;
 };
 /**
  * Marker discriminator for a `defineDynamic({ events })` export.
@@ -114,10 +127,13 @@ export declare const DYNAMIC_SENTINEL_KIND: "eve:dynamic";
  * stamped with a sentinel kind the compiler/normalizer detects.
  */
 export type DynamicSentinel<TResult = unknown> = {
-    readonly kind: typeof DYNAMIC_SENTINEL_KIND;
-    readonly events: DynamicEvents<TResult>;
+  readonly kind: typeof DYNAMIC_SENTINEL_KIND;
+  readonly events: DynamicEvents<TResult>;
 };
-export declare function assertResolverOnlyDynamicSentinel(sentinel: DynamicSentinel, message: string): void;
+export declare function assertResolverOnlyDynamicSentinel(
+  sentinel: DynamicSentinel,
+  message: string,
+): void;
 export declare function isDynamicSentinel(value: unknown): value is DynamicSentinel;
 /**
  * Symbol-based brand stamped by `defineTool` on every entry. Invisible

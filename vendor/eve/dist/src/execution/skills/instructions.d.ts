@@ -1,9 +1,9 @@
 export interface AvailableSkillDescription {
-    readonly description: string;
-    readonly name: string;
+  readonly description: string;
+  readonly name: string;
 }
 interface FormatAvailableSkillsSectionOptions {
-    readonly skillRoot?: string;
+  readonly skillRoot?: string;
 }
 /**
  * Formats the "Available skills" system prompt section.
@@ -19,5 +19,8 @@ interface FormatAvailableSkillsSectionOptions {
  * (`defineDynamic` in `agent/skills/`) reuse the same formatter for
  * durable context announcements.
  */
-export declare function formatAvailableSkillsSection(skills: readonly AvailableSkillDescription[], options?: FormatAvailableSkillsSectionOptions): string | null;
+export declare function formatAvailableSkillsSection(
+  skills: readonly AvailableSkillDescription[],
+  options?: FormatAvailableSkillsSectionOptions,
+): string | null;
 export {};

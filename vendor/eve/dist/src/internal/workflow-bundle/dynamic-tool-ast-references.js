@@ -16,9 +16,7 @@ function collectReferencedIdentifierNames(e) {
   let t = new Set(),
     visit = (e, n) => {
       if (e.type?.startsWith(`TS`)) {
-        isRuntimeTypeScriptExpression(e) &&
-          e.expression &&
-          visit(e.expression, `reference`);
+        isRuntimeTypeScriptExpression(e) && e.expression && visit(e.expression, `reference`);
         return;
       }
       e.type === `Identifier` && e.name && n === `reference` && t.add(e.name);
@@ -43,8 +41,7 @@ function getChildContext(e, t, n) {
           e.type === `FunctionDeclaration`) &&
           (t === `id` || t === `params`)) ||
         (e.type === `CatchClause` && t === `param`) ||
-        ((e.type === `ClassDeclaration` || e.type === `ClassExpression`) &&
-          t === `id`)
+        ((e.type === `ClassDeclaration` || e.type === `ClassExpression`) && t === `id`)
       ? `binding`
       : e.type === `Property` && t === `key`
         ? e.computed === !0
@@ -61,11 +58,9 @@ function getChildContext(e, t, n) {
                   e.type === `RestElement`) &&
                 (t === `properties` || t === `elements` || t === `argument`)
               ? n
-              : ((e.type === `MemberExpression` ||
-                    e.type === `OptionalMemberExpression`) &&
+              : ((e.type === `MemberExpression` || e.type === `OptionalMemberExpression`) &&
                     t === `property`) ||
-                  ((e.type === `MethodDefinition` ||
-                    e.type === `PropertyDefinition`) &&
+                  ((e.type === `MethodDefinition` || e.type === `PropertyDefinition`) &&
                     t === `key`)
                 ? e.computed === !0
                   ? `reference`

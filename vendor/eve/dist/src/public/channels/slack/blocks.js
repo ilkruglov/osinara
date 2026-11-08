@@ -27,9 +27,7 @@ function preserveLinkActionId(e) {
       ? {
           ...e,
           children: e.children.map((e) =>
-            e.type === `link-button` && e.id === void 0
-              ? { ...e, id: `link:${e.url}` }
-              : e,
+            e.type === `link-button` && e.id === void 0 ? { ...e, id: `link:${e.url}` } : e,
           ),
         }
       : e;

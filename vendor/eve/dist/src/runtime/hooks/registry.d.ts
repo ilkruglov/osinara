@@ -8,9 +8,9 @@ import type { ResolvedHookDefinition } from "../types.js";
  * event name.
  */
 interface RuntimeStreamEventHookEntry {
-    readonly slug: string;
-    readonly handler: StreamEventHook<MessageStreamEvent>;
-    readonly eventType: string;
+  readonly slug: string;
+  readonly handler: StreamEventHook<MessageStreamEvent>;
+  readonly eventType: string;
 }
 /**
  * Per-node runtime hook registry. Stream-event subscribers are split
@@ -19,8 +19,8 @@ interface RuntimeStreamEventHookEntry {
  * without scanning every entry.
  */
 export interface RuntimeHookRegistry {
-    readonly streamEventsByType: ReadonlyMap<string, readonly RuntimeStreamEventHookEntry[]>;
-    readonly streamEventsWildcard: readonly RuntimeStreamEventHookEntry[];
+  readonly streamEventsByType: ReadonlyMap<string, readonly RuntimeStreamEventHookEntry[]>;
+  readonly streamEventsWildcard: readonly RuntimeStreamEventHookEntry[];
 }
 /**
  * Returns an empty registry. Used by tests that build a runtime bundle
@@ -37,5 +37,7 @@ export declare function createEmptyHookRegistry(): RuntimeHookRegistry;
  * lexicographic ordering on full slug is preserved by the discovery
  * helper, so callers usually pass `resolvedHooks` directly.
  */
-export declare function createRuntimeHookRegistry(resolvedHooks: readonly ResolvedHookDefinition[]): RuntimeHookRegistry;
+export declare function createRuntimeHookRegistry(
+  resolvedHooks: readonly ResolvedHookDefinition[],
+): RuntimeHookRegistry;
 export {};

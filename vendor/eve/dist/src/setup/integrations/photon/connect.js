@@ -4,10 +4,7 @@ import {
   string,
 } from "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/schemas.js";
 import "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
-import {
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 import { replaceConnectTrigger } from "#setup/connect-provisioning.js";
 const PHOTON_CONNECT_SERVICE = `photon`,
@@ -34,18 +31,13 @@ function createData(e) {
 }
 function requireCreatedConnector(e) {
   if (!e.ok) {
-    let t = [e.stderr, e.stdout]
-      .map((e) => e?.trim())
-      .find((e) => e !== void 0 && e.length > 0);
+    let t = [e.stderr, e.stdout].map((e) => e?.trim()).find((e) => e !== void 0 && e.length > 0);
     throw Error(
-      t
-        ? `Photon connector creation failed:\n${t}`
-        : `Photon connector creation failed.`,
+      t ? `Photon connector creation failed:\n${t}` : `Photon connector creation failed.`,
     );
   }
   let t = parseCreatedPhotonConnector(e.stdout);
-  if (t === void 0)
-    throw Error(`Vercel returned an invalid Photon connector after creation.`);
+  if (t === void 0) throw Error(`Vercel returned an invalid Photon connector after creation.`);
   return t;
 }
 async function provisionPhotonConnector(e) {

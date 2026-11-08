@@ -1,8 +1,5 @@
 import { hasInteractiveTerminal } from "./preconditions.js";
-import {
-  isNonInteractiveProjectCommand,
-  runNonInteractiveLink,
-} from "./vercel-non-interactive.js";
+import { isNonInteractiveProjectCommand, runNonInteractiveLink } from "./vercel-non-interactive.js";
 import { createPrompter } from "#setup/prompter.js";
 import { runLinkFlow } from "#setup/flows/link.js";
 const defaultDependencies = { hasInteractiveTerminal };
@@ -29,8 +26,7 @@ async function runLinkCommand(e, n, r = defaultDependencies, i = {}) {
     });
     a.outro(e.kind === `cancelled` ? `Cancelled.` : `Project linked.`);
   } catch (t) {
-    (e.error(t instanceof Error ? t.message : String(t)),
-      (process.exitCode = 1));
+    (e.error(t instanceof Error ? t.message : String(t)), (process.exitCode = 1));
   }
 }
 export { runLinkCommand };

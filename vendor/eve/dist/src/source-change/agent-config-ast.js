@@ -34,8 +34,7 @@ async function checkAgentConfigSource(e) {
 }
 function findDefineAgentObject(e) {
   for (let t of e.body ?? []) {
-    if (t.type !== `ExportDefaultDeclaration` || t.declaration == null)
-      continue;
+    if (t.type !== `ExportDefaultDeclaration` || t.declaration == null) continue;
     let e = unwrapExpression(t.declaration);
     if (
       e.type !== `CallExpression` ||
@@ -62,7 +61,6 @@ function unwrapExpression(e) {
     t.type === `ParenthesizedExpression` ||
     t.type === `TSAsExpression` ||
     t.type === `TSSatisfiesExpression`;
-
   ) {
     if (t.expression == null) return t;
     t = t.expression;

@@ -34,7 +34,10 @@ import {
   type AuthoredSkillExample,
   type AuthoredSkillTrial,
 } from "./authored-skill-example-repository.js";
-import { skillEvaluationRepository, type SkillPublicationEvidence } from "./skill-evaluation-repository.js";
+import {
+  skillEvaluationRepository,
+  type SkillPublicationEvidence,
+} from "./skill-evaluation-repository.js";
 import { requireCurrentOwner } from "./authored-skill-owner.js";
 import { sha256Json } from "../json-hash.js";
 
@@ -128,7 +131,11 @@ async function replayedVersion(
   return row ? { name: row.name, replayed: true, version: row.version } : null;
 }
 
-async function activeSkill(client: PoolClient, familyId: string, name: string): Promise<SkillRow | null> {
+async function activeSkill(
+  client: PoolClient,
+  familyId: string,
+  name: string,
+): Promise<SkillRow | null> {
   const result = await client.query<SkillRow>(
     `SELECT id, name, description, markdown, files, version, status, updated_at
        FROM authored_skills WHERE family_id = $1 AND name = $2 AND status = 'active' FOR UPDATE`,
@@ -137,31 +144,50 @@ async function activeSkill(client: PoolClient, familyId: string, name: string): 
   return result.rows[0] ?? null;
 }
 
-async function insertVersion(client: PoolClient, input: {
-  evaluation?: SkillPublicationEvidence;
-  caller: FamilyCaller;
-  changeNote: string;
-  content: { description: string; files: Readonly<Record<string, string>>; markdown: string };
-  operationKey: string;
-  provenance: AuthoredSkillProvenance;
-  skillId: string;
-  trials: readonly AuthoredSkillTrial[];
-  trialSummary: string;
-  version: number;
-}): Promise<void> {
+async function insertVersion(
+  client: PoolClient,
+  input: {
+    evaluation?: SkillPublicationEvidence;
+    caller: FamilyCaller;
+    changeNote: string;
+    content: { description: string; files: Readonly<Record<string, string>>; markdown: string };
+    operationKey: string;
+    provenance: AuthoredSkillProvenance;
+    skillId: string;
+    trials: readonly AuthoredSkillTrial[];
+    trialSummary: string;
+    version: number;
+  },
+): Promise<void> {
   await client.query(
     `INSERT INTO authored_skill_versions
        (skill_id, family_id, version, description, markdown, files, change_note, trial_summary,
         operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials, evaluation_candidate_id, evaluation_run_id, evaluation_experiment_id)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16)`,
-    [input.skillId, input.caller.familyId, input.version, input.content.description,
-      input.content.markdown, JSON.stringify(input.content.files), input.changeNote,
-      input.trialSummary, input.operationKey, input.provenance.eveSessionId,
-      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials), input.evaluation?.candidateId ?? null, input.evaluation?.runId ?? null, input.evaluation?.experimentId ?? null],
+    [
+      input.skillId,
+      input.caller.familyId,
+      input.version,
+      input.content.description,
+      input.content.markdown,
+      JSON.stringify(input.content.files),
+      input.changeNote,
+      input.trialSummary,
+      input.operationKey,
+      input.provenance.eveSessionId,
+      input.provenance.eveTurnId,
+      input.caller.userId,
+      JSON.stringify(input.trials),
+      input.evaluation?.candidateId ?? null,
+      input.evaluation?.runId ?? null,
+      input.evaluation?.experimentId ?? null,
+    ],
   );
 }
 
-function summary(row: SkillRow & { last_outcome: string | null; usage_count: string }): AuthoredSkillSummary {
+function summary(
+  row: SkillRow & { last_outcome: string | null; usage_count: string },
+): AuthoredSkillSummary {
   return {
     description: row.description,
     lastOutcome: row.last_outcome as AuthoredSkillOutcome | null,
@@ -202,8 +228,15 @@ export const authoredSkillRepository = {
       }
       const existing = await activeSkill(client, caller.familyId, draft.name);
       if (input.evaluation) {
-        await skillEvaluationRepository.verify(client, caller.familyId, input.evaluation, draft,
-          existing?.version ?? 0, existing ? await activeExamples(client, existing.id) : [], input.trialRequest);
+        await skillEvaluationRepository.verify(
+          client,
+          caller.familyId,
+          input.evaluation,
+          draft,
+          existing?.version ?? 0,
+          existing ? await activeExamples(client, existing.id) : [],
+          input.trialRequest,
+        );
       }
       let skillId: string;
       let version: number;
@@ -234,28 +267,53 @@ export const authoredSkillRepository = {
           `INSERT INTO authored_skills
              (family_id, name, description, markdown, files, version, status, created_by_user_id)
            VALUES ($1, $2, $3, $4, $5::jsonb, 1, 'active', $6) RETURNING id`,
-          [caller.familyId, draft.name, draft.description, draft.markdown,
-            JSON.stringify(draft.files), caller.userId],
+          [
+            caller.familyId,
+            draft.name,
+            draft.description,
+            draft.markdown,
+            JSON.stringify(draft.files),
+            caller.userId,
+          ],
         );
         skillId = inserted.rows[0]!.id;
       }
       await insertVersion(client, {
-        caller, changeNote: draft.changeNote, content: draft, operationKey: input.operationKey,
-        provenance: input.provenance, skillId, trials, evaluation: input.evaluation, trialSummary: draft.trialSummary, version,
+        caller,
+        changeNote: draft.changeNote,
+        content: draft,
+        operationKey: input.operationKey,
+        provenance: input.provenance,
+        skillId,
+        trials,
+        evaluation: input.evaluation,
+        trialSummary: draft.trialSummary,
+        version,
       });
       // The trial run of this publish becomes a stored example, so the next version reruns it.
-      const exampleAdded = typeof input.trialRequest === "string" && input.trialRequest.trim().length > 0
-        ? await insertExample(client, {
-          createdByUserId: caller.userId, expected: draft.trialSummary, familyId: caller.familyId,
-          request: input.trialRequest, skillId,
-        })
-        : null;
+      const exampleAdded =
+        typeof input.trialRequest === "string" && input.trialRequest.trim().length > 0
+          ? await insertExample(client, {
+              createdByUserId: caller.userId,
+              expected: draft.trialSummary,
+              familyId: caller.familyId,
+              request: input.trialRequest,
+              skillId,
+            })
+          : null;
       await client.query("COMMIT");
-      console.info(JSON.stringify({
-        code: "AGENT_SKILL_PUBLISHED", familyId: caller.familyId, name: draft.name, version,
-        markdownChars: draft.markdown.length, fileCount: Object.keys(draft.files).length,
-        trials: trials.length, exampleAdded: exampleAdded !== null,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_PUBLISHED",
+          familyId: caller.familyId,
+          name: draft.name,
+          version,
+          markdownChars: draft.markdown.length,
+          fileCount: Object.keys(draft.files).length,
+          trials: trials.length,
+          exampleAdded: exampleAdded !== null,
+        }),
+      );
       return { exampleAdded, name: draft.name, replayed: false, version, warnings };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -286,18 +344,29 @@ export const authoredSkillRepository = {
         return replayed;
       }
       const skill = await activeSkill(client, caller.familyId, input.name);
-      if (!skill) throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
-      const target = await client.query<{ description: string; files: Record<string, string>; markdown: string }>(
+      if (!skill)
+        throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
+      const target = await client.query<{
+        description: string;
+        files: Record<string, string>;
+        markdown: string;
+      }>(
         `SELECT description, markdown, files FROM authored_skill_versions
           WHERE skill_id = $1 AND version = $2`,
         [skill.id, input.version],
       );
       const content = target.rows[0];
       if (!content) {
-        throw new AppError("AGENT_SKILL_VERSION_NOT_FOUND", `У навыка ${input.name} нет версии ${input.version}`);
+        throw new AppError(
+          "AGENT_SKILL_VERSION_NOT_FOUND",
+          `У навыка ${input.name} нет версии ${input.version}`,
+        );
       }
       // The old version passed the rubric of its day; the tool catalog may have changed since.
-      const warnings = assertStoredSkillContent({ ...content, name: input.name }, input.knownToolNames);
+      const warnings = assertStoredSkillContent(
+        { ...content, name: input.name },
+        input.knownToolNames,
+      );
       const version = skill.version + 1;
       await client.query(
         `UPDATE authored_skills
@@ -307,15 +376,26 @@ export const authoredSkillRepository = {
       );
       // A rollback restores content that already passed its examples; no rerun is demanded.
       await insertVersion(client, {
-        caller, changeNote: `Откат к версии ${input.version}`, content,
-        operationKey: input.operationKey, provenance: input.provenance, skillId: skill.id,
-        trials: [], trialSummary: `Возврат содержимого версии ${input.version} без изменений`, version,
+        caller,
+        changeNote: `Откат к версии ${input.version}`,
+        content,
+        operationKey: input.operationKey,
+        provenance: input.provenance,
+        skillId: skill.id,
+        trials: [],
+        trialSummary: `Возврат содержимого версии ${input.version} без изменений`,
+        version,
       });
       await client.query("COMMIT");
-      console.info(JSON.stringify({
-        code: "AGENT_SKILL_ROLLED_BACK", familyId: caller.familyId, name: input.name,
-        toVersion: input.version, version,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_ROLLED_BACK",
+          familyId: caller.familyId,
+          name: input.name,
+          toVersion: input.version,
+          version,
+        }),
+      );
       return { name: input.name, replayed: false, version, warnings };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -325,22 +405,31 @@ export const authoredSkillRepository = {
     }
   },
 
-  async retire(caller: FamilyCaller, input: { name: string }): Promise<{ name: string; version: number }> {
+  async retire(
+    caller: FamilyCaller,
+    input: { name: string },
+  ): Promise<{ name: string; version: number }> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
       await requireCurrentOwner(client, caller);
       await lockFamilyLibrary(client, caller.familyId);
       const skill = await activeSkill(client, caller.familyId, input.name);
-      if (!skill) throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
+      if (!skill)
+        throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
       await client.query(
         "UPDATE authored_skills SET status = 'retired', retired_at = now(), updated_at = now() WHERE id = $1",
         [skill.id],
       );
       await client.query("COMMIT");
-      console.info(JSON.stringify({
-        code: "AGENT_SKILL_RETIRED", familyId: caller.familyId, name: input.name, version: skill.version,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_RETIRED",
+          familyId: caller.familyId,
+          name: input.name,
+          version: skill.version,
+        }),
+      );
       return { name: input.name, version: skill.version };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -351,7 +440,9 @@ export const authoredSkillRepository = {
   },
 
   async list(familyId: string): Promise<AuthoredSkillSummary[]> {
-    const result = await database().query<SkillRow & { last_outcome: string | null; usage_count: string }>(
+    const result = await database().query<
+      SkillRow & { last_outcome: string | null; usage_count: string }
+    >(
       `${SUMMARY_SELECT} WHERE skill.family_id = $1 AND skill.status = 'active' ORDER BY skill.name`,
       [familyId],
     );
@@ -359,7 +450,9 @@ export const authoredSkillRepository = {
   },
 
   async read(familyId: string, name: string, version?: number): Promise<AuthoredSkillContent> {
-    const result = await database().query<SkillRow & { last_outcome: string | null; usage_count: string }>(
+    const result = await database().query<
+      SkillRow & { last_outcome: string | null; usage_count: string }
+    >(
       `${SUMMARY_SELECT} WHERE skill.family_id = $1 AND skill.name = $2 AND skill.status = 'active'`,
       [familyId, name],
     );
@@ -367,16 +460,26 @@ export const authoredSkillRepository = {
     if (!skill) throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${name} нет среди активных`);
     const wanted = version ?? skill.version;
     const stored = await database().query<{
-      change_note: string; description: string; files: Record<string, string>; markdown: string;
-      trial_summary: string; trials: AuthoredSkillTrial[];
+      change_note: string;
+      description: string;
+      files: Record<string, string>;
+      markdown: string;
+      trial_summary: string;
+      trials: AuthoredSkillTrial[];
     }>(
       `SELECT description, markdown, files, change_note, trial_summary, trials
          FROM authored_skill_versions WHERE skill_id = $1 AND version = $2`,
       [skill.id, wanted],
     );
     const content = stored.rows[0];
-    if (!content) throw new AppError("AGENT_SKILL_VERSION_NOT_FOUND", `У навыка ${name} нет версии ${wanted}`);
-    const examples = await database().query<{ created_at: Date; expected: string; id: string; request: string }>(
+    if (!content)
+      throw new AppError("AGENT_SKILL_VERSION_NOT_FOUND", `У навыка ${name} нет версии ${wanted}`);
+    const examples = await database().query<{
+      created_at: Date;
+      expected: string;
+      id: string;
+      request: string;
+    }>(
       `SELECT id, request, expected, created_at FROM authored_skill_examples
         WHERE skill_id = $1 AND active ORDER BY created_at`,
       [skill.id],
@@ -386,7 +489,10 @@ export const authoredSkillRepository = {
       changeNote: content.change_note,
       description: content.description,
       examples: examples.rows.map((row) => ({
-        createdAt: row.created_at.toISOString(), expected: row.expected, id: row.id, request: row.request,
+        createdAt: row.created_at.toISOString(),
+        expected: row.expected,
+        id: row.id,
+        request: row.request,
       })),
       files: content.files,
       markdown: content.markdown,
@@ -398,13 +504,19 @@ export const authoredSkillRepository = {
 
   /** Current content of every active skill: what the dynamic resolver hands to Eve each turn. */
   async activePackages(familyId: string): Promise<AuthoredSkillPackage[]> {
-    const result = await database().query<Pick<SkillRow, "description" | "files" | "markdown" | "name" | "version">>(
+    const result = await database().query<
+      Pick<SkillRow, "description" | "files" | "markdown" | "name" | "version">
+    >(
       `SELECT name, description, markdown, files, version FROM authored_skills
         WHERE family_id = $1 AND status = 'active' ORDER BY name`,
       [familyId],
     );
     return result.rows.map((row) => ({
-      description: row.description, files: row.files, markdown: row.markdown, name: row.name, version: row.version,
+      description: row.description,
+      files: row.files,
+      markdown: row.markdown,
+      name: row.name,
+      version: row.version,
     }));
   },
 
@@ -413,20 +525,26 @@ export const authoredSkillRepository = {
    * the private chat. A family may have several groups; the oldest one used to receive every
    * group's usages and hints (Codex review, 30 September 2026). No group id, no conversation.
    */
-  async conversationId(owner: { chatKind: "family" | "private"; familyId: string; groupId?: string | null; userId: string }): Promise<string | null> {
+  async conversationId(owner: {
+    chatKind: "family" | "private";
+    familyId: string;
+    groupId?: string | null;
+    userId: string;
+  }): Promise<string | null> {
     if (owner.chatKind === "family" && !owner.groupId) return null;
-    const result = owner.chatKind === "family"
-      ? await database().query<{ id: string }>(
-        `SELECT conversation.id FROM application_conversations AS conversation
+    const result =
+      owner.chatKind === "family"
+        ? await database().query<{ id: string }>(
+            `SELECT conversation.id FROM application_conversations AS conversation
            JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
           WHERE conversation.family_id = $1 AND telegram_group.type = 'family_private' AND telegram_group.id = $2`,
-        [owner.familyId, owner.groupId],
-      )
-      : await database().query<{ id: string }>(
-        `SELECT id FROM application_conversations
+            [owner.familyId, owner.groupId],
+          )
+        : await database().query<{ id: string }>(
+            `SELECT id FROM application_conversations
           WHERE family_id = $1 AND owner_user_id = $2 AND scope = 'personal' LIMIT 1`,
-        [owner.familyId, owner.userId],
-      );
+            [owner.familyId, owner.userId],
+          );
     return result.rows[0]?.id ?? null;
   },
 
@@ -447,14 +565,25 @@ export const authoredSkillRepository = {
            AND snapshot.eve_session_id = $4 AND snapshot.eve_turn_id = $5
         WHERE skill.family_id = $1 AND skill.name = $2 AND skill.status = 'active'
        ON CONFLICT (usage_key) DO NOTHING`,
-      [input.familyId, input.skillName, input.conversationId, input.eveSessionId, input.eveTurnId,
-        sha256Json([input.familyId, input.skillName, input.eveSessionId, input.eveTurnId])],
+      [
+        input.familyId,
+        input.skillName,
+        input.conversationId,
+        input.eveSessionId,
+        input.eveTurnId,
+        sha256Json([input.familyId, input.skillName, input.eveSessionId, input.eveTurnId]),
+      ],
     );
     if ((result.rowCount ?? 0) > 0) {
-      console.info(JSON.stringify({
-        code: "AGENT_SKILL_LOADED", familyId: input.familyId, name: input.skillName,
-        eveSessionId: input.eveSessionId, eveTurnId: input.eveTurnId,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_LOADED",
+          familyId: input.familyId,
+          name: input.skillName,
+          eveSessionId: input.eveSessionId,
+          eveTurnId: input.eveTurnId,
+        }),
+      );
     }
     return (result.rowCount ?? 0) > 0;
   },
@@ -469,22 +598,33 @@ export const authoredSkillRepository = {
   },
 
   /** Pin the versions actually resolved for a turn, before the model can load them. */
-  async capturePackages(familyId: string, provenance: AuthoredSkillProvenance, packages: readonly AuthoredSkillPackage[]): Promise<void> {
-    const versions = packages.filter((pkg) => pkg.version !== undefined).map((pkg) => ({ name: pkg.name, version: pkg.version }));
+  async capturePackages(
+    familyId: string,
+    provenance: AuthoredSkillProvenance,
+    packages: readonly AuthoredSkillPackage[],
+  ): Promise<void> {
+    const versions = packages
+      .filter((pkg) => pkg.version !== undefined)
+      .map((pkg) => ({ name: pkg.name, version: pkg.version }));
     if (versions.length === 0) return;
     await database().query(
       `INSERT INTO authored_skill_turn_versions (family_id, eve_session_id, eve_turn_id, skill_id, version)
        SELECT s.family_id,$2,$3,s.id,p.version FROM jsonb_to_recordset($4::jsonb) AS p(name text,version integer)
        JOIN authored_skills s ON s.name=p.name AND s.family_id=$1
        ON CONFLICT (eve_session_id,eve_turn_id,skill_id) DO UPDATE SET version=EXCLUDED.version`,
-      [familyId,provenance.eveSessionId,provenance.eveTurnId,JSON.stringify(versions)],
+      [familyId, provenance.eveSessionId, provenance.eveTurnId, JSON.stringify(versions)],
     );
   },
 
   /** Exact execution facts never overwrite the separately supplied goal outcome. */
   async recordTelemetry(input: {
-    familyId: string; name: string; eveSessionId: string; eveTurnId: string;
-    executionStatus: "completed" | "failed"; note: string; stepCount: number;
+    familyId: string;
+    name: string;
+    eveSessionId: string;
+    eveTurnId: string;
+    executionStatus: "completed" | "failed";
+    note: string;
+    stepCount: number;
   }): Promise<{ usageFound: boolean }> {
     const result = await database().query(
       `UPDATE authored_skill_usage AS usage SET execution_status = $5, execution_note = $6,
@@ -492,7 +632,15 @@ export const authoredSkillRepository = {
         FROM authored_skills AS skill
         WHERE usage.skill_id = skill.id AND skill.family_id = $1 AND skill.name = $2
           AND usage.eve_session_id = $3 AND usage.eve_turn_id = $4 AND usage.usage_key IS NOT NULL`,
-      [input.familyId, input.name, input.eveSessionId, input.eveTurnId, input.executionStatus, input.note, input.stepCount],
+      [
+        input.familyId,
+        input.name,
+        input.eveSessionId,
+        input.eveTurnId,
+        input.executionStatus,
+        input.note,
+        input.stepCount,
+      ],
     );
     return { usageFound: (result.rowCount ?? 0) > 0 };
   },
@@ -505,19 +653,23 @@ export const authoredSkillRepository = {
               usage.execution_note, usage.step_count
          FROM authored_skill_usage AS usage JOIN authored_skills AS skill ON skill.id = usage.skill_id
         WHERE skill.family_id = $1 AND skill.name = $2 AND usage.conversation_id = $3
-        ORDER BY usage.loaded_at DESC LIMIT 20`, [familyId, name, conversationId],
+        ORDER BY usage.loaded_at DESC LIMIT 20`,
+      [familyId, name, conversationId],
     );
     return result.rows;
   },
 
   /** Owner feedback targets an explicit usage in the current conversation, never "the latest". */
-  async recordOutcome(caller: FamilyCaller, input: {
-    conversationId: string | null;
-    usageId: string;
-    name: string;
-    note: string | null;
-    outcome: Exclude<AuthoredSkillOutcome, "unknown">;
-  }): Promise<{ name: string; outcome: AuthoredSkillOutcome; usageFound: boolean }> {
+  async recordOutcome(
+    caller: FamilyCaller,
+    input: {
+      conversationId: string | null;
+      usageId: string;
+      name: string;
+      note: string | null;
+      outcome: Exclude<AuthoredSkillOutcome, "unknown">;
+    },
+  ): Promise<{ name: string; outcome: AuthoredSkillOutcome; usageFound: boolean }> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -528,7 +680,14 @@ export const authoredSkillRepository = {
           FROM authored_skills AS skill
           WHERE usage.skill_id = skill.id AND skill.family_id = $1 AND skill.name = $2
             AND usage.conversation_id = $5::uuid AND usage.id = $6::uuid`,
-        [caller.familyId, input.name, input.outcome, input.note, input.conversationId, input.usageId],
+        [
+          caller.familyId,
+          input.name,
+          input.outcome,
+          input.note,
+          input.conversationId,
+          input.usageId,
+        ],
       );
       if (result.rowCount && input.outcome === "failed") {
         // Two distinct, owner-confirmed failures of the CURRENT version queue one preparation.
@@ -547,7 +706,7 @@ export const authoredSkillRepository = {
              WHERE c.family_id=$1 AND c.owner_user_id=$4 AND c.scope='personal' AND EXISTS (SELECT 1 FROM requested)
              ON CONFLICT (conversation_id) DO UPDATE SET kind='improve',summary=EXCLUDED.summary,
                step_count=NULL,tool_names='{}',created_at=now()`,
-          [caller.familyId,input.name,input.conversationId,caller.userId],
+          [caller.familyId, input.name, input.conversationId, caller.userId],
         );
       }
       await client.query("COMMIT");

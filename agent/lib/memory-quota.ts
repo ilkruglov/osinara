@@ -22,10 +22,9 @@ export async function enforceMemoryQuota(
   scope: MemoryScope,
 ): Promise<void> {
   const identity = quotaIdentity(auth, scope);
-  await client.query(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-    [`memory:${scope}:${auth.familyId}:${identity}`],
-  );
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `memory:${scope}:${auth.familyId}:${identity}`,
+  ]);
   const result = await client.query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM memory_items

@@ -10,4 +10,8 @@ import type { ResolvedToolDefinition } from "#runtime/types.js";
  * otherwise rehydrated into live validators. Optional hooks are reattached
  * from the live module export.
  */
-export declare function resolveToolDefinition(definition: CompiledToolDefinition, moduleMap: CompiledModuleMap, nodeId: string | undefined): Promise<ResolvedToolDefinition>;
+export declare function resolveToolDefinition(
+  definition: CompiledToolDefinition,
+  moduleMap: CompiledModuleMap,
+  nodeId: string | undefined,
+): Promise<ResolvedToolDefinition>;

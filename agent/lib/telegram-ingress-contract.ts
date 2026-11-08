@@ -52,7 +52,10 @@ export interface TelegramPrivateBurstPolicy {
 }
 
 /** No waiting: the head is claimed the moment it is the oldest of its queue (tests, callbacks). */
-export const NO_PRIVATE_BURST: TelegramPrivateBurstPolicy = { maxWaitMilliseconds: 0, quietMilliseconds: 0 };
+export const NO_PRIVATE_BURST: TelegramPrivateBurstPolicy = {
+  maxWaitMilliseconds: 0,
+  quietMilliseconds: 0,
+};
 
 export interface TelegramIngressRepository {
   acceptMedia(input: {
@@ -77,7 +80,10 @@ export interface TelegramIngressRepository {
     queueId: string;
   }): Promise<TelegramIngressClaim[]>;
   /** The oldest claimable update; a private head still receiving a burst is left alone (`burst`). */
-  claimNext(leaseMilliseconds: number, burst?: TelegramPrivateBurstPolicy): Promise<TelegramIngressClaim | null>;
+  claimNext(
+    leaseMilliseconds: number,
+    burst?: TelegramPrivateBurstPolicy,
+  ): Promise<TelegramIngressClaim | null>;
   /** Milliseconds until the earliest held private chat becomes claimable, or null when none is held. */
   heldPrivateChatReadyIn?(burst: TelegramPrivateBurstPolicy): Promise<number | null>;
   complete(updateId: string, leaseToken: string): Promise<void>;
@@ -109,7 +115,11 @@ export interface TelegramIngressRepository {
    * Returns a message Eve provably did not receive (its session hook was missing) to the queue and
    * clears the dispatch marker, so the next attempt is not refused as possibly delivered twice.
    */
-  releaseUndelivered(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
+  releaseUndelivered(
+    updateId: string,
+    leaseToken: string,
+    failure: TelegramIngressFailure,
+  ): Promise<void>;
   /**
    * Expires every live `processing` lease. Only the single agent process holds leases, so the
    * leases found alive at process start belong to a predecessor that died mid-turn; without this

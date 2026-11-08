@@ -16,28 +16,21 @@ function registerIntegrationCommands(n) {
       {},
     )
     .action(async (e, t) => {
-      let { runIntegrationSetupCommand: n } = await import(
-        `./integration-setup.js`
-      );
+      let { runIntegrationSetupCommand: n } = await import(`./integration-setup.js`);
       await n(i, r.root, e, {
         yes: t.yes,
         nonInteractive: t.nonInteractive,
         answers: t.answer,
       });
     }),
-    applicationCommand(
-      o.command(`connect <slug> <service> [canonical-name]`),
-      r,
-    )
+    applicationCommand(o.command(`connect <slug> <service> [canonical-name]`), r)
       .option(`-y, --yes`)
       .option(
         `--non-interactive`,
         `Run without interactive prompts, instead emit structured NDJSON when further input is required`,
       )
       .action(async (e, t, n, a) => {
-        let { runIntegrationConnectCommand: o } = await import(
-          `./integration-connect.js`
-        );
+        let { runIntegrationConnectCommand: o } = await import(`./integration-connect.js`);
         await o(i, r.root, e, t, n, a);
       }));
 }

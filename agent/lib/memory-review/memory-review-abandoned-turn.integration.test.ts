@@ -18,9 +18,8 @@ import {
   insertReviewUserMessage,
 } from "./memory-review.integration-fixtures.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 /** Eight passive messages: the shortest tail an addressed turn still reviews inline here. */
 async function insertReviewTail(
@@ -30,7 +29,9 @@ async function insertReviewTail(
   let last: { id: string } | null = null;
   for (let sequence = from; sequence < from + 8; sequence += 1) {
     last = await insertReviewUserMessage({
-      conversationId: fixture.conversationId, groupId: fixture.groupId, sequence,
+      conversationId: fixture.conversationId,
+      groupId: fixture.groupId,
+      sequence,
     });
   }
   return last!;
@@ -60,10 +61,12 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Ход, продолженный после ответа человека, приходит с авторизацией этого ответа, поэтому
     // метка пакета в ней отсутствует. Привязка хода к пакету живёт в базе и переживает паузу.
-    await expect(memoryReviewRepository.batchIdForTurn({
-      eveSessionId: "eve-resumed",
-      eveTurnId: "turn-resumed",
-    })).resolves.toBe(batch!.batchId);
+    await expect(
+      memoryReviewRepository.batchIdForTurn({
+        eveSessionId: "eve-resumed",
+        eveTurnId: "turn-resumed",
+      }),
+    ).resolves.toBe(batch!.batchId);
 
     await memoryReviewRepository.completeBatch({
       batchId: batch!.batchId,
@@ -74,19 +77,27 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Ход остаётся ходом проверки и после закрытия пакета, иначе повторное событие Eve засчиталось
     // бы как обычный ход разговора и закрыло бы сессию.
-    await expect(memoryReviewRepository.batchIdForTurn({
-      eveSessionId: "eve-resumed",
-      eveTurnId: "turn-resumed",
-    })).resolves.toBe(batch!.batchId);
-    await expect(memoryReviewRepository.batchIdForTurn({
-      eveSessionId: "eve-resumed",
-      eveTurnId: "turn-other",
-    })).resolves.toBeNull();
+    await expect(
+      memoryReviewRepository.batchIdForTurn({
+        eveSessionId: "eve-resumed",
+        eveTurnId: "turn-resumed",
+      }),
+    ).resolves.toBe(batch!.batchId);
+    await expect(
+      memoryReviewRepository.batchIdForTurn({
+        eveSessionId: "eve-resumed",
+        eveTurnId: "turn-other",
+      }),
+    ).resolves.toBeNull();
   });
 
   it("releases a running batch whose session no longer waits for an answer", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-abandoned");
+    const session = await insertReviewSession(
+      fixture.familyId,
+      fixture.groupId,
+      "review-abandoned",
+    );
     const source = await insertReviewTail(fixture, 2);
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session,
@@ -112,10 +123,12 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Ход ничего не записал, поэтому пакет освобождён целиком: источники возвращаются в
     // непроверенный хвост, и следующий обычный ход разбирает их заново.
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
     const repeated = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session,
       groupId: fixture.groupId,
@@ -126,7 +139,11 @@ describeWithDatabase("abandoned memory review turns", () => {
 
   it("resolves an ambiguous head at the cursor by provenance after the time bound", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-ambiguous-head");
+    const session = await insertReviewSession(
+      fixture.familyId,
+      fixture.groupId,
+      "review-ambiguous-head",
+    );
     const source = await insertReviewTail(fixture, 2);
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session,
@@ -147,47 +164,76 @@ describeWithDatabase("abandoned memory review turns", () => {
         WHERE id = $1`,
       [batch!.batchId],
     );
-    await expect(memoryReviewRepository.prepareInteractiveTurn({
-      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: source.id,
-    })).resolves.toBeNull();
+    await expect(
+      memoryReviewRepository.prepareInteractiveTurn({
+        applicationSessionId: session,
+        groupId: fixture.groupId,
+        timelineEntryId: source.id,
+      }),
+    ).resolves.toBeNull();
 
     // Ten minutes later the head is still fresh and still blocks the lane.
     await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T09:10:00.000Z"),
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-08-12T09:10:00.000Z"),
     });
-    await expect(database().query(
-      "SELECT status::text FROM memory_review_batches WHERE id = $1", [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ status: "ambiguous" }] });
+    await expect(
+      database().query("SELECT status::text FROM memory_review_batches WHERE id = $1", [
+        batch!.batchId,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ status: "ambiguous" }] });
 
     // Past the bound it wrote nothing and nothing stands behind it: released to the tail.
     await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T11:00:00.000Z"),
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-08-12T11:00:00.000Z"),
     });
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1", [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
     const repeated = await memoryReviewRepository.prepareInteractiveTurn({
-      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: source.id,
+      applicationSessionId: session,
+      groupId: fixture.groupId,
+      timelineEntryId: source.id,
     });
     expect(repeated?.sourceCount).toBe(9);
   });
 
   it("skips a failed head at the cursor that already has a completed successor", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-failed-head");
+    const session = await insertReviewSession(
+      fixture.familyId,
+      fixture.groupId,
+      "review-failed-head",
+    );
     const head = await insertReviewTail(fixture, 2);
     const failed = await memoryReviewRepository.prepareInteractiveTurn({
-      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: head.id,
+      applicationSessionId: session,
+      groupId: fixture.groupId,
+      timelineEntryId: head.id,
     });
     await memoryReviewRepository.bindEveTurn({
-      applicationSessionId: session, batchId: failed!.batchId, eveSessionId: "eve-failed-head", eveTurnId: "turn-failed-head",
+      applicationSessionId: session,
+      batchId: failed!.batchId,
+      eveSessionId: "eve-failed-head",
+      eveTurnId: "turn-failed-head",
     });
     const successorSource = await insertReviewTail(fixture, 10);
     const successor = await memoryReviewRepository.prepareInteractiveTurn({
-      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: successorSource.id,
+      applicationSessionId: session,
+      groupId: fixture.groupId,
+      timelineEntryId: successorSource.id,
     });
     await memoryReviewRepository.bindEveTurn({
-      applicationSessionId: session, batchId: successor!.batchId, eveSessionId: "eve-successor", eveTurnId: "turn-successor",
+      applicationSessionId: session,
+      batchId: successor!.batchId,
+      eveSessionId: "eve-successor",
+      eveTurnId: "turn-successor",
     });
     await database().query(
       `UPDATE memory_review_batches
@@ -199,18 +245,27 @@ describeWithDatabase("abandoned memory review turns", () => {
     );
 
     await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T11:00:00.000Z"),
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-08-12T11:00:00.000Z"),
     });
 
-    await expect(database().query(
-      `SELECT batch.status::text, lane.processed_through_sequence::text AS cursor
+    await expect(
+      database().query(
+        `SELECT batch.status::text, lane.processed_through_sequence::text AS cursor
          FROM memory_review_batches AS batch JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
         WHERE batch.id = $1`,
-      [failed!.batchId],
-    )).resolves.toMatchObject({ rows: [{ cursor: "17", status: "skipped" }] });
-    await expect(database().query(
-      "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1", [failed!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batch_diagnostic_code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED" }] });
+        [failed!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ cursor: "17", status: "skipped" }] });
+    await expect(
+      database().query(
+        "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1",
+        [failed!.batchId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ batch_diagnostic_code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED" }],
+    });
   });
 
   it("keeps a running batch whose turn is still parked on a human answer", async () => {
@@ -247,10 +302,11 @@ describeWithDatabase("abandoned memory review turns", () => {
       now: new Date("2026-08-12T11:00:00.000Z"),
     });
 
-    await expect(database().query(
-      "SELECT status::text FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ status: "running" }] });
+    await expect(
+      database().query("SELECT status::text FROM memory_review_batches WHERE id = $1", [
+        batch!.batchId,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ status: "running" }] });
   });
 
   it("counts an abandoned turn that already wrote memory as reviewed", async () => {
@@ -286,17 +342,20 @@ describeWithDatabase("abandoned memory review turns", () => {
     });
 
     // Повтор такого хода создал бы дубликаты, поэтому проверка засчитывается и курсор идёт дальше.
-    await expect(database().query(
-      "SELECT status::text FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ status: "completed" }] });
-    await expect(database().query(
-      `SELECT lane.processed_through_sequence::text AS cursor
+    await expect(
+      database().query("SELECT status::text FROM memory_review_batches WHERE id = $1", [
+        batch!.batchId,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ status: "completed" }] });
+    await expect(
+      database().query(
+        `SELECT lane.processed_through_sequence::text AS cursor
          FROM memory_review_lanes AS lane
          JOIN memory_review_batches AS batch ON batch.lane_id = lane.id
         WHERE batch.id = $1`,
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ cursor: "9" }] });
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ cursor: "9" }] });
   });
 
   it("releases a running batch whose application session is already gone", async () => {
@@ -335,10 +394,12 @@ describeWithDatabase("abandoned memory review turns", () => {
     });
 
     // Без сессии ждать нечего: ход умер вместе с ней, и место на курсоре нужно освободить.
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
-      [created!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [created!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
   });
 
   it("skips an abandoned head that already has successors instead of deleting it", async () => {
@@ -378,34 +439,42 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Удаление головы оставило бы наследника недостижимым от курсора. Пакет остаётся строкой в
     // терминальном состоянии, курсор проходит через него, а источники отпускаются.
-    await expect(database().query(
-      `SELECT batch.status::text, batch.diagnostic_code, batch.completed_at IS NOT NULL AS closed,
+    await expect(
+      database().query(
+        `SELECT batch.status::text, batch.diagnostic_code, batch.completed_at IS NOT NULL AS closed,
               lane.processed_through_sequence::text AS cursor,
               (SELECT count(*)::integer FROM memory_review_batch_sources AS source
                 WHERE source.batch_id = batch.id) AS sources
          FROM memory_review_batches AS batch
          JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
         WHERE batch.id = $1`,
-      [abandoned!.batchId],
-    )).resolves.toMatchObject({
-      rows: [{
-        closed: true,
-        cursor: "9",
-        diagnostic_code: "AGENT_MEMORY_REVIEW_TURN_ABANDONED",
-        sources: 0,
-        status: "skipped",
-      }],
+        [abandoned!.batchId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          closed: true,
+          cursor: "9",
+          diagnostic_code: "AGENT_MEMORY_REVIEW_TURN_ABANDONED",
+          sources: 0,
+          status: "skipped",
+        },
+      ],
     });
     // Наследник цел и по-прежнему достижим от сдвинувшегося курсора.
-    await expect(database().query(
-      "SELECT predecessor_sequence::text AS predecessor FROM memory_review_batches WHERE id = $1",
-      [successor!.batchId],
-    )).resolves.toMatchObject({ rows: [{ predecessor: "9" }] });
+    await expect(
+      database().query(
+        "SELECT predecessor_sequence::text AS predecessor FROM memory_review_batches WHERE id = $1",
+        [successor!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ predecessor: "9" }] });
     // Владелец узнаёт о безвозвратно пропущенных сообщениях.
-    await expect(database().query(
-      "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1",
-      [abandoned!.batchId],
-    )).resolves.toMatchObject({
+    await expect(
+      database().query(
+        "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1",
+        [abandoned!.batchId],
+      ),
+    ).resolves.toMatchObject({
       rows: [{ batch_diagnostic_code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED" }],
     });
   });
@@ -437,10 +506,11 @@ describeWithDatabase("abandoned memory review turns", () => {
       now: new Date("2026-08-12T11:00:00.000Z"),
     });
 
-    await expect(database().query(
-      "SELECT status::text FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ status: "running" }] });
+    await expect(
+      database().query("SELECT status::text FROM memory_review_batches WHERE id = $1", [
+        batch!.batchId,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ status: "running" }] });
   });
 
   it("releases a background batch that died before binding its turn", async () => {
@@ -462,14 +532,16 @@ describeWithDatabase("abandoned memory review turns", () => {
         timelineEntryId: message.id,
       });
     }
-    const proactive = (await database().query<{ id: string }>(
-      `INSERT INTO conversation_sessions
+    const proactive = (
+      await database().query<{ id: string }>(
+        `INSERT INTO conversation_sessions
          (thread_id, generation, family_id, group_id, scope, kind, task_state, conversation_key,
           continuation_token, started_at, last_activity_at, memory_review_batch_id)
        VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'proactive', 'running', 'review-unbound',
                'review-unbound', now(), now(), $3) RETURNING id`,
-      [fixture.familyId, fixture.groupId, created!.batchId],
-    )).rows[0]!.id;
+        [fixture.familyId, fixture.groupId, created!.batchId],
+      )
+    ).rows[0]!.id;
     // `markRunning` записывает сессию Eve, а номер хода приходит только из `turn.started`. Между
     // этими шагами память записать невозможно, поэтому такой пакет освобождается без сомнений.
     await database().query(
@@ -486,15 +558,19 @@ describeWithDatabase("abandoned memory review turns", () => {
       now: new Date("2026-08-12T11:00:00.000Z"),
     });
 
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
-      [created!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [created!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
     // Сессия фоновой проверки не закрывается ничем другим: ни уборкой задач, ни ретенцией.
-    await expect(database().query(
-      "SELECT retired_at IS NOT NULL AS retired, task_state::text FROM conversation_sessions WHERE id = $1",
-      [proactive],
-    )).resolves.toMatchObject({ rows: [{ retired: true, task_state: "failed" }] });
+    await expect(
+      database().query(
+        "SELECT retired_at IS NOT NULL AS retired, task_state::text FROM conversation_sessions WHERE id = $1",
+        [proactive],
+      ),
+    ).resolves.toMatchObject({ rows: [{ retired: true, task_state: "failed" }] });
   });
 
   it("accepts a repeated completion event after the batch was released", async () => {
@@ -512,25 +588,33 @@ describeWithDatabase("abandoned memory review turns", () => {
       eveSessionId: "eve-replay",
       eveTurnId: "turn-replay",
     });
-    await expect(memoryReviewRepository.failRunning({
-      batchId: batch!.batchId,
-      diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
-      eveSessionId: "eve-replay",
-      eveTurnId: "turn-replay",
-    })).resolves.toBe("released");
+    await expect(
+      memoryReviewRepository.failRunning({
+        batchId: batch!.batchId,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
+        eveSessionId: "eve-replay",
+        eveTurnId: "turn-replay",
+      }),
+    ).resolves.toBe("released");
 
     // Событие Eve может прийти повторно. Строки уже нет, и это тот же исход, а не конфликт.
-    await expect(memoryReviewRepository.completeBatch({
-      batchId: batch!.batchId,
-      completedAt: new Date(),
-      eveSessionId: "eve-replay",
-      eveTurnId: "turn-replay",
-    })).resolves.toBe("replayed");
+    await expect(
+      memoryReviewRepository.completeBatch({
+        batchId: batch!.batchId,
+        completedAt: new Date(),
+        eveSessionId: "eve-replay",
+        eveTurnId: "turn-replay",
+      }),
+    ).resolves.toBe("replayed");
   });
 
   it("skips a never-started head that already has successors", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-unstarted");
+    const session = await insertReviewSession(
+      fixture.familyId,
+      fixture.groupId,
+      "review-unstarted",
+    );
     const head = await insertReviewTail(fixture, 2);
     const abandoned = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session,
@@ -581,31 +665,41 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Ровно случай 4 сентября: голова не дошла до Eve, а за ней уже стояла готовая работа. Курсор
     // проходит через голову и забирает завершённого наследника, иначе его проход сгорел бы.
-    await expect(database().query(
-      `SELECT batch.status::text, batch.diagnostic_code,
+    await expect(
+      database().query(
+        `SELECT batch.status::text, batch.diagnostic_code,
               lane.processed_through_sequence::text AS cursor
          FROM memory_review_batches AS batch
          JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
         WHERE batch.id = $1`,
-      [abandoned!.batchId],
-    )).resolves.toMatchObject({
-      rows: [{
-        cursor: "17",
-        diagnostic_code: "AGENT_MEMORY_REVIEW_TURN_NEVER_STARTED",
-        status: "skipped",
-      }],
+        [abandoned!.batchId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          cursor: "17",
+          diagnostic_code: "AGENT_MEMORY_REVIEW_TURN_NEVER_STARTED",
+          status: "skipped",
+        },
+      ],
     });
-    await expect(database().query(
-      "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1",
-      [abandoned!.batchId],
-    )).resolves.toMatchObject({
+    await expect(
+      database().query(
+        "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1",
+        [abandoned!.batchId],
+      ),
+    ).resolves.toMatchObject({
       rows: [{ batch_diagnostic_code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED" }],
     });
   });
 
   it("releases a cancelled batch that never bound its turn", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-cancelled");
+    const session = await insertReviewSession(
+      fixture.familyId,
+      fixture.groupId,
+      "review-cancelled",
+    );
     const source = await insertReviewTail(fixture, 2);
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session,
@@ -615,16 +709,20 @@ describeWithDatabase("abandoned memory review turns", () => {
 
     // Отмена следующим сообщением приходит раньше `turn.started`, поэтому привязки к ходу нет и
     // искать пакет по сессии Eve бесполезно: раньше обработчик отмены здесь молча не делал ничего.
-    await expect(memoryReviewRepository.failRunning({
-      batchId: batch!.batchId,
-      diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
-      eveSessionId: "eve-cancelled",
-      eveTurnId: "turn-cancelled",
-    })).resolves.toBe("released");
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      memoryReviewRepository.failRunning({
+        batchId: batch!.batchId,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
+        eveSessionId: "eve-cancelled",
+        eveTurnId: "turn-cancelled",
+      }),
+    ).resolves.toBe("released");
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
   });
 
   it("skips a cancelled head with a successor without warning the owner", async () => {
@@ -643,19 +741,22 @@ describeWithDatabase("abandoned memory review turns", () => {
       timelineEntryId: successorSource.id,
     });
 
-    await expect(memoryReviewRepository.failRunning({
-      batchId: abandoned!.batchId,
-      diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
-      eveSessionId: "eve-steer",
-      eveTurnId: "turn-steer",
-    })).resolves.toBe("skipped");
+    await expect(
+      memoryReviewRepository.failRunning({
+        batchId: abandoned!.batchId,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
+        eveSessionId: "eve-steer",
+        eveTurnId: "turn-steer",
+      }),
+    ).resolves.toBe("skipped");
     // Пакет наследника создаётся ещё в обработчике сообщения, поэтому у отменённой головы он есть
     // почти всегда. Дописанное сообщение — обычное поведение чата, а не авария для владельца.
-    await expect(database().query(
-      `SELECT batch.status::text, (SELECT count(*)::integer FROM memory_review_owner_alerts) AS alerts
+    await expect(
+      database().query(
+        `SELECT batch.status::text, (SELECT count(*)::integer FROM memory_review_owner_alerts) AS alerts
          FROM memory_review_batches AS batch WHERE batch.id = $1`,
-      [abandoned!.batchId],
-    )).resolves.toMatchObject({ rows: [{ alerts: 0, status: "skipped" }] });
+        [abandoned!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ alerts: 0, status: "skipped" }] });
   });
-
 });

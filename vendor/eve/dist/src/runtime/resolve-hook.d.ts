@@ -10,4 +10,8 @@ import type { ResolvedHookDefinition } from "./types.js";
  * {@link ResolveAgentError} so typos surface at resolve time instead of
  * at first dispatch call.
  */
-export declare function resolveHookDefinition(definition: CompiledHookDefinition, moduleMap: CompiledModuleMap, nodeId: string | undefined): Promise<ResolvedHookDefinition>;
+export declare function resolveHookDefinition(
+  definition: CompiledHookDefinition,
+  moduleMap: CompiledModuleMap,
+  nodeId: string | undefined,
+): Promise<ResolvedHookDefinition>;

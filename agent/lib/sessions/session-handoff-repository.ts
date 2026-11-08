@@ -38,7 +38,10 @@ export const sessionHandoffRepository = {
     return result.rows[0]?.handoff_text ?? null;
   },
 
-  async store(applicationSessionId: string, record: SessionHandoffRecord): Promise<SessionHandoffStoreResult> {
+  async store(
+    applicationSessionId: string,
+    record: SessionHandoffRecord,
+  ): Promise<SessionHandoffStoreResult> {
     const result = await database().query(
       `UPDATE conversation_sessions
           SET handoff_text = $2, handoff_generated_at = now(), handoff_shown_at = NULL,

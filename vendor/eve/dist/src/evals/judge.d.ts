@@ -6,10 +6,10 @@ import type { EveEvalJudgeConfig, JudgeContext } from "#evals/types.js";
  * (the autoevals `input`), and the eval/config judge model.
  */
 export interface JudgeDeps {
-    readonly collector: AssertionCollector;
-    readonly getReply: () => unknown;
-    readonly getInput: () => string;
-    readonly judge: EveEvalJudgeConfig | undefined;
+  readonly collector: AssertionCollector;
+  readonly getReply: () => unknown;
+  readonly getInput: () => string;
+  readonly judge: EveEvalJudgeConfig | undefined;
 }
 /**
  * Builds the `t.judge` namespace bound to the resolved judge model. Each

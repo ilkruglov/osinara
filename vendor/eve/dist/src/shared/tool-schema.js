@@ -32,11 +32,7 @@ function toSchema(e, t) {
   if (e == null || isToolSchema(e)) return e;
   let n = rehydratedSchemas[t],
     r = n.get(e);
-  return (
-    r === void 0 &&
-      ((r = rehydrateJsonSchema(toJsonObject(e, t))), n.set(e, r)),
-    r
-  );
+  return (r === void 0 && ((r = rehydrateJsonSchema(toJsonObject(e, t))), n.set(e, r)), r);
 }
 function rehydrateJsonSchema(n) {
   try {
@@ -85,9 +81,7 @@ function toJsonObject(e, t) {
     throw Error(
       `Standard Schema vendor "${s}" does not support JSON Schema conversion. Provide a Standard Schema implementation with JSON Schema conversion or a plain JSON Schema object.`,
     );
-  let { $schema: c, ...l } = parseJsonObject(
-    i === void 0 ? e : o({ target: `draft-07` }),
-  );
+  let { $schema: c, ...l } = parseJsonObject(i === void 0 ? e : o({ target: `draft-07` }));
   return l;
 }
 function getStandardSchemaProperties(e) {

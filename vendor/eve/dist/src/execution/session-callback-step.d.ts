@@ -3,20 +3,25 @@ import type { TokenUsage } from "#shared/token-usage.js";
 import type { UnstampedMessageStreamEvent } from "#protocol/message.js";
 /** Sends task-owned remote HITL and authorization events to the parent callback capability. */
 export declare function fireTaskEventCallbackStep(input: {
-    readonly callback: unknown;
-    readonly childContinuationToken: string;
-    readonly childSessionId: string;
-    readonly event: SubagentAuthorizationEvent | Extract<UnstampedMessageStreamEvent, {
-        type: "input.requested";
-    }>;
+  readonly callback: unknown;
+  readonly childContinuationToken: string;
+  readonly childSessionId: string;
+  readonly event:
+    | SubagentAuthorizationEvent
+    | Extract<
+        UnstampedMessageStreamEvent,
+        {
+          type: "input.requested";
+        }
+      >;
 }): Promise<void>;
 /** Sends one remote task progress update over its existing parent callback. */
 export declare function fireTaskUpdateCallbackStep(input: {
-    readonly callback: unknown;
-    readonly callId: string;
-    readonly childStepIndex: number;
-    readonly childTurnId: string;
-    readonly message: string;
+  readonly callback: unknown;
+  readonly callId: string;
+  readonly childStepIndex: number;
+  readonly childTurnId: string;
+  readonly message: string;
 }): Promise<string | undefined>;
 /**
  * Sends the configured session terminal callback.
@@ -33,9 +38,9 @@ export declare function fireTaskUpdateCallbackStep(input: {
  * callbacks never carry usage.
  */
 export declare function fireSessionCallbackStep(input: {
-    readonly error?: unknown;
-    readonly output?: unknown;
-    readonly serializedContext: Record<string, unknown>;
-    readonly status: "completed" | "failed";
-    readonly usage?: TokenUsage;
+  readonly error?: unknown;
+  readonly output?: unknown;
+  readonly serializedContext: Record<string, unknown>;
+  readonly status: "completed" | "failed";
+  readonly usage?: TokenUsage;
 }): Promise<void>;

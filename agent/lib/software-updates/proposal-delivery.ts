@@ -19,20 +19,18 @@ import type {
 const PREPARING_TEXT = "Подготавливаю безопасное предложение обновления Мии.";
 
 interface ProposalDeliveryDependencies {
-  repository: Pick<
-    SoftwareUpdateRepository,
-    "bindPendingTelegramMessage" | "markDeliveryFailure"
-  >;
+  repository: Pick<SoftwareUpdateRepository, "bindPendingTelegramMessage" | "markDeliveryFailure">;
   transport: Pick<SoftwareUpdateTelegramTransport, "editProposal" | "sendPlaceholder">;
 }
 
 function failure(error: unknown) {
-  const ambiguous = !(error instanceof SoftwareUpdateTransportError) ||
-    error.delivery === "ambiguous";
+  const ambiguous =
+    !(error instanceof SoftwareUpdateTransportError) || error.delivery === "ambiguous";
   return ambiguous
     ? {
         code: "AGENT_SOFTWARE_UPDATE_DELIVERY_AMBIGUOUS",
-        message: "После сетевой ошибки не удалось однозначно определить результат доставки обновления",
+        message:
+          "После сетевой ошибки не удалось однозначно определить результат доставки обновления",
         status: "delivery_ambiguous" as const,
       }
     : {
@@ -53,18 +51,18 @@ function proposalText(input: DeliverSoftwareUpdateProposalInput): string {
 export function createSoftwareUpdateProposalDelivery(dependencies: ProposalDeliveryDependencies) {
   async function persistFailure(proposalId: string, error: unknown): Promise<void> {
     const state = failure(error);
-    console.error(JSON.stringify({
-      code: state.code,
-      error: error instanceof Error ? error.message : String(error),
-      proposalId,
-      status: state.status,
-    }));
+    console.error(
+      JSON.stringify({
+        code: state.code,
+        error: error instanceof Error ? error.message : String(error),
+        proposalId,
+        status: state.status,
+      }),
+    );
     await dependencies.repository.markDeliveryFailure({ proposalId, ...state });
   }
 
-  return async function deliverProposal(
-    input: DeliverSoftwareUpdateProposalInput,
-  ): Promise<void> {
+  return async function deliverProposal(input: DeliverSoftwareUpdateProposalInput): Promise<void> {
     let message: Awaited<ReturnType<SoftwareUpdateTelegramTransport["sendPlaceholder"]>>;
     try {
       // The first network side effect is intentionally non-actionable.
@@ -77,13 +75,11 @@ export function createSoftwareUpdateProposalDelivery(dependencies: ProposalDeliv
       return;
     }
 
-    if (
-      message.chatId !== input.owner.telegramUserId ||
-      message.chatType !== "private"
-    ) {
-      await persistFailure(input.proposalId, new Error(
-        "AGENT_SOFTWARE_UPDATE_TELEGRAM_BINDING_MISMATCH",
-      ));
+    if (message.chatId !== input.owner.telegramUserId || message.chatType !== "private") {
+      await persistFailure(
+        input.proposalId,
+        new Error("AGENT_SOFTWARE_UPDATE_TELEGRAM_BINDING_MISMATCH"),
+      );
       return;
     }
     const bound = await dependencies.repository.bindPendingTelegramMessage({
@@ -108,10 +104,12 @@ export function createSoftwareUpdateProposalDelivery(dependencies: ProposalDeliv
         chatId: message.chatId,
         messageId: message.messageId,
         replyMarkup: {
-          inline_keyboard: [[
-            { callback_data: `su:a:${input.callbackToken}`, text: "Обновить" },
-            { callback_data: `su:d:${input.callbackToken}`, text: "Не сейчас" },
-          ]],
+          inline_keyboard: [
+            [
+              { callback_data: `su:a:${input.callbackToken}`, text: "Обновить" },
+              { callback_data: `su:d:${input.callbackToken}`, text: "Не сейчас" },
+            ],
+          ],
         },
         text: proposalText(input),
       });

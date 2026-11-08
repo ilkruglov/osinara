@@ -8,10 +8,17 @@ import { timed } from "../lib/turn-timing.js";
 
 export default defineDynamic({
   events: {
-    "turn.started": (_event, ctx) => timed("skills_authored", () => resolveAuthoredTurnSkills(ctx.session.auth, {
-      provenance: { eveSessionId: ctx.session.id, eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data.turnId },
-      memoryReview: isMemoryReviewSession(ctx),
-      subagent: ctx.channel.kind === "subagent",
-    })),
+    "turn.started": (_event, ctx) =>
+      timed("skills_authored", () =>
+        resolveAuthoredTurnSkills(ctx.session.auth, {
+          provenance: {
+            eveSessionId: ctx.session.id,
+            eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data
+              .turnId,
+          },
+          memoryReview: isMemoryReviewSession(ctx),
+          subagent: ctx.channel.kind === "subagent",
+        }),
+      ),
   },
 });

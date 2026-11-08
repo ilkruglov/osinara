@@ -17,7 +17,19 @@ const HOME = "/tmp/osinara-browserless-home";
 const SESSION_FILE = `${HOME}/session.json`;
 const LIFETIME_MS = 120_000;
 // Reading only: an action on a page goes through browser_act, whose gate asks before a form is sent.
-const COMMANDS = new Set(["open", "read", "snapshot", "screenshot", "scroll", "wait", "get", "tab", "back", "forward", "reload"]);
+const COMMANDS = new Set([
+  "open",
+  "read",
+  "snapshot",
+  "screenshot",
+  "scroll",
+  "wait",
+  "get",
+  "tab",
+  "back",
+  "forward",
+  "reload",
+]);
 
 /** The proxy's Browserless endpoint, from the sandbox's proxy address; no key, fixed parameters. */
 export function cloudEndpoint(proxyUrl, sessionId) {
@@ -27,20 +39,35 @@ export function cloudEndpoint(proxyUrl, sessionId) {
   } catch {
     throw new Error("AGENT_BROWSERLESS_PROXY_INVALID");
   }
-  if (proxy.protocol !== "http:" || proxy.username || proxy.password || proxy.pathname !== "/" || proxy.search) {
+  if (
+    proxy.protocol !== "http:" ||
+    proxy.username ||
+    proxy.password ||
+    proxy.pathname !== "/" ||
+    proxy.search
+  ) {
     throw new Error("AGENT_BROWSERLESS_PROXY_INVALID");
   }
-  if (!/^[0-9a-f]{32}$/u.test(sessionId ?? "")) throw new Error("AGENT_BROWSERLESS_SESSION_INVALID");
-  const query = new URLSearchParams({ session: sessionId, solveCaptchas: "true", timeout: String(LIFETIME_MS) });
+  if (!/^[0-9a-f]{32}$/u.test(sessionId ?? ""))
+    throw new Error("AGENT_BROWSERLESS_SESSION_INVALID");
+  const query = new URLSearchParams({
+    session: sessionId,
+    solveCaptchas: "true",
+    timeout: String(LIFETIME_MS),
+  });
   return `ws://${proxy.host}/browserless/chromium/stealth?${query}`;
 }
 
 export function browserEnvironment(source) {
-  const env = Object.fromEntries(Object.entries(source).filter(([key]) =>
-    !key.startsWith("AGENT_BROWSER_") && !key.startsWith("BROWSERLESS_")
-  ));
+  const env = Object.fromEntries(
+    Object.entries(source).filter(
+      ([key]) => !key.startsWith("AGENT_BROWSER_") && !key.startsWith("BROWSERLESS_"),
+    ),
+  );
   return {
-    ...env, HOME, AGENT_BROWSER_SESSION: "osinara-cloud",
+    ...env,
+    HOME,
+    AGENT_BROWSER_SESSION: "osinara-cloud",
     AGENT_BROWSER_IDLE_TIMEOUT_MS: "120000",
   };
 }
@@ -48,8 +75,14 @@ export function browserEnvironment(source) {
 async function liveSession(now = Date.now()) {
   try {
     const session = JSON.parse(await readFile(SESSION_FILE, "utf8"));
-    return typeof session.expiresAt === "number" && session.expiresAt > now && typeof session.id === "string" ? session : null;
-  } catch { return null; }
+    return typeof session.expiresAt === "number" &&
+      session.expiresAt > now &&
+      typeof session.id === "string"
+      ? session
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function runAgentBrowser(args, env) {
@@ -66,7 +99,8 @@ async function runAgentBrowser(args, env) {
       child.once("error", () => reject(new Error("AGENT_BROWSERLESS_CLI_FAILED")));
     });
   } finally {
-    clearTimeout(timer); clearTimeout(killTimer);
+    clearTimeout(timer);
+    clearTimeout(killTimer);
     process.removeListener("SIGTERM", terminate);
     process.removeListener("SIGINT", terminate);
   }
@@ -76,7 +110,12 @@ export async function main(argv) {
   const [command, ...args] = argv;
   const env = browserEnvironment(process.env);
   if (command === "status") {
-    console.log(JSON.stringify({ configured: process.env.BROWSERLESS_AVAILABLE === "true", session: await liveSession() }));
+    console.log(
+      JSON.stringify({
+        configured: process.env.BROWSERLESS_AVAILABLE === "true",
+        session: await liveSession(),
+      }),
+    );
     return;
   }
   if (command === "close") {
@@ -87,15 +126,27 @@ export async function main(argv) {
   }
   // `--fn`/`-f` runs script in the page (agent-browser `wait --fn`): a form could be filled or sent
   // past browser_act's confirmation, so no argument may carry script (Codex review, 6 November 2026).
-  if (!COMMANDS.has(command) || args.some((arg) => /^--(?:session|profile|state|restore|provider|cdp|config|fn)(?:=|$)/u.test(arg) || arg === "-p" || arg === "-f")) {
-    throw new Error("AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Облачный браузер только читает: open, read, snapshot, screenshot, scroll, get. Действия на странице делает browser_act");
+  if (
+    !COMMANDS.has(command) ||
+    args.some(
+      (arg) =>
+        /^--(?:session|profile|state|restore|provider|cdp|config|fn)(?:=|$)/u.test(arg) ||
+        arg === "-p" ||
+        arg === "-f",
+    )
+  ) {
+    throw new Error(
+      "AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Облачный браузер только читает: open, read, snapshot, screenshot, scroll, get. Действия на странице делает browser_act",
+    );
   }
   if (process.env.BROWSERLESS_AVAILABLE !== "true") {
     throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED: Облачный браузер не подключён");
   }
   const live = await liveSession();
   if (!live && command !== "open") {
-    throw new Error("AGENT_BROWSERLESS_SESSION_EXPIRED: Сессия завершена; начните новую через open");
+    throw new Error(
+      "AGENT_BROWSERLESS_SESSION_EXPIRED: Сессия завершена; начните новую через open",
+    );
   }
   const id = live?.id ?? randomBytes(16).toString("hex");
   const endpoint = cloudEndpoint(process.env.HTTPS_PROXY, id);
@@ -103,14 +154,19 @@ export async function main(argv) {
   const startedAt = Date.now();
   const code = await runAgentBrowser(["--cdp", endpoint, command, ...args], env);
   // The cloud session starts with the first open that succeeds and ends with the proxy's deadline.
-  if (!live && code === 0) await writeFile(SESSION_FILE, JSON.stringify({ expiresAt: startedAt + LIFETIME_MS, id }), { mode: 0o600 });
+  if (!live && code === 0)
+    await writeFile(SESSION_FILE, JSON.stringify({ expiresAt: startedAt + LIFETIME_MS, id }), {
+      mode: 0o600,
+    });
   process.exitCode = code;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch((error) => {
     // All errors authored here are token-free; never print transport errors or provider URLs.
-    console.error(error.message?.startsWith("AGENT_BROWSERLESS_") ? error.message : "AGENT_BROWSERLESS_FAILED");
+    console.error(
+      error.message?.startsWith("AGENT_BROWSERLESS_") ? error.message : "AGENT_BROWSERLESS_FAILED",
+    );
     process.exitCode = 1;
   });
 }

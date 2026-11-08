@@ -8,15 +8,18 @@
  *   save the key anyway rather than block on a flaky network. Only an explicit
  *   rejection counts as a wrong key.
  */
-export type GatewayKeyValidation = {
-    kind: "valid";
-} | {
-    kind: "invalid";
-    message: string;
-} | {
-    kind: "inconclusive";
-    message: string;
-};
+export type GatewayKeyValidation =
+  | {
+      kind: "valid";
+    }
+  | {
+      kind: "invalid";
+      message: string;
+    }
+  | {
+      kind: "inconclusive";
+      message: string;
+    };
 /**
  * Confirms an `AI_GATEWAY_API_KEY` authenticates before eve saves it, by making
  * one account-scoped request to the gateway (`getCredits`). That endpoint
@@ -27,4 +30,7 @@ export type GatewayKeyValidation = {
  * cancels it like any other loading state); a user-initiated abort is rethrown,
  * while a timeout or network failure resolves to `inconclusive`.
  */
-export declare function validateGatewayApiKey(apiKey: string, signal?: AbortSignal): Promise<GatewayKeyValidation>;
+export declare function validateGatewayApiKey(
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<GatewayKeyValidation>;

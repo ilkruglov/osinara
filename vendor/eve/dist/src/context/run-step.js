@@ -2,19 +2,13 @@ import { contextStorage } from "#context/container.js";
 import { connectionProvider } from "#context/providers/connection.js";
 import { sandboxProvider } from "#context/providers/sandbox.js";
 import { sessionProvider } from "#context/providers/session.js";
-const frameworkProviders = [
-  sessionProvider,
-  connectionProvider,
-  sandboxProvider,
-];
+const frameworkProviders = [sessionProvider, connectionProvider, sandboxProvider];
 async function withContextScope(t, n, r) {
   let a = n;
   t.clearVirtualContext();
   for (let e of frameworkProviders) {
     let n = await e.create(t, a);
-    n !== void 0 &&
-      (t.setVirtualContext(e.key, n.value),
-      n.session !== void 0 && (a = n.session));
+    n !== void 0 && (t.setVirtualContext(e.key, n.value), n.session !== void 0 && (a = n.session));
   }
   let o = await contextStorage.run(t, () => r(a)),
     s = o.session;

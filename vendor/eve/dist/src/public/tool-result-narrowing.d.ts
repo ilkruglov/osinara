@@ -8,9 +8,9 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * `TOutput` is inferred from the tool definition's `execute` return type.
  */
 export interface MatchedToolResult<TOutput> {
-    readonly callId: string;
-    readonly output: TOutput;
-    readonly toolName: string;
+  readonly callId: string;
+  readonly output: TOutput;
+  readonly toolName: string;
 }
 /**
  * Narrowed tool result returned by {@link toolResultFrom} when the
@@ -22,24 +22,26 @@ export interface MatchedToolResult<TOutput> {
  * (e.g. `"linear__list_issues"`).
  */
 export interface MatchedConnectionResult {
-    readonly callId: string;
-    readonly connectionToolName: string;
-    readonly output: unknown;
-    readonly toolName: string;
+  readonly callId: string;
+  readonly connectionToolName: string;
+  readonly output: unknown;
+  readonly toolName: string;
 }
 /**
  * Discriminated source entry stamped on authored definitions during
  * agent resolution via {@link stampDefinitionSource}.
  */
-type DefinitionSourceEntry = {
-    readonly kind: "connection";
-    readonly logicalPath?: string;
-    readonly name: string;
-} | {
-    readonly kind: "tool";
-    readonly logicalPath?: string;
-    readonly name: string;
-};
+type DefinitionSourceEntry =
+  | {
+      readonly kind: "connection";
+      readonly logicalPath?: string;
+      readonly name: string;
+    }
+  | {
+      readonly kind: "tool";
+      readonly logicalPath?: string;
+      readonly name: string;
+    };
 /**
  * Stamps a stable key on the definition so it can be identified across
  * module instances. Definition helpers first stamp an authoring-time
@@ -56,8 +58,14 @@ export declare function registerDefinitionSource(key: string, entry: DefinitionS
  * Overloaded signature for {@link toolResultFrom}.
  */
 export interface ToolResultFromFn {
-    <TInput, TOutput>(result: RuntimeActionResult, tool: ToolDefinition<TInput, TOutput>): MatchedToolResult<TOutput> | undefined;
-    (result: RuntimeActionResult, connection: McpClientConnectionDefinition): MatchedConnectionResult | undefined;
+  <TInput, TOutput>(
+    result: RuntimeActionResult,
+    tool: ToolDefinition<TInput, TOutput>,
+  ): MatchedToolResult<TOutput> | undefined;
+  (
+    result: RuntimeActionResult,
+    connection: McpClientConnectionDefinition,
+  ): MatchedConnectionResult | undefined;
 }
 /**
  * Narrows a {@link RuntimeActionResult} to a typed tool or connection

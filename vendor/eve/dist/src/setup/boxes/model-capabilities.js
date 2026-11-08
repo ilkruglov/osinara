@@ -1,11 +1,4 @@
-const ALL_REASONING_LEVELS = [
-    `none`,
-    `minimal`,
-    `low`,
-    `medium`,
-    `high`,
-    `xhigh`,
-  ],
+const ALL_REASONING_LEVELS = [`none`, `minimal`, `low`, `medium`, `high`, `xhigh`],
   REASONING_LEVELS_BY_PROVIDER = {
     anthropic: ALL_REASONING_LEVELS,
     openai: ALL_REASONING_LEVELS,
@@ -22,9 +15,7 @@ function gatewayModelCapabilities(e, t) {
     a = n.pricing?.service_tiers;
   return {
     reasoning: r,
-    reasoningLevels: r
-      ? (REASONING_LEVELS_BY_PROVIDER[i] ?? DEFAULT_REASONING_LEVELS)
-      : [],
+    reasoningLevels: r ? (REASONING_LEVELS_BY_PROVIDER[i] ?? DEFAULT_REASONING_LEVELS) : [],
     fastMode: a !== void 0 && Object.hasOwn(a, `priority`),
   };
 }

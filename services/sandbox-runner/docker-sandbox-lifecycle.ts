@@ -21,18 +21,20 @@ export const SANDBOX_IDLE_SWEEP_INTERVAL_MS = 60 * 1_000;
 // start of about three seconds on the next command (load stand, 4 October 2026), so the window
 // is tunable: one family keeps its container warm for hours, a thousand families on one machine
 // want minutes so that only the chats of the last few minutes hold a container.
-export const SANDBOX_IDLE_TIMEOUT_MS = integerSetting(
-  "SANDBOX_IDLE_TIMEOUT_MS",
-  { absent: 30 * 60 * 1_000, min: 60 * 1_000, max: 24 * 60 * 60 * 1_000 },
-);
+export const SANDBOX_IDLE_TIMEOUT_MS = integerSetting("SANDBOX_IDLE_TIMEOUT_MS", {
+  absent: 30 * 60 * 1_000,
+  min: 60 * 1_000,
+  max: 24 * 60 * 60 * 1_000,
+});
 // The idle window alone lets as many containers run as chats were active inside it; on one
 // machine for many families the cap below bounds them: a new container at the cap first stops
 // the least recently used one that has been quiet for a minute, and when every container is
 // in use the command is refused rather than the host overcommitted (5 October 2026).
-export const SANDBOX_MAX_RUNNING_CONTAINERS = integerSetting(
-  "SANDBOX_MAX_RUNNING_CONTAINERS",
-  { absent: 1_000, min: 1, max: 100_000 },
-);
+export const SANDBOX_MAX_RUNNING_CONTAINERS = integerSetting("SANDBOX_MAX_RUNNING_CONTAINERS", {
+  absent: 1_000,
+  min: 1,
+  max: 100_000,
+});
 export const SANDBOX_CAPACITY_MIN_IDLE_MS = 60 * 1_000;
 
 const CONTAINER_PREFIX = "osinara-sandbox-";
@@ -50,7 +52,11 @@ export interface SandboxActivityRegistry {
   isIdle(sessionId: string, cutoffMs: number): boolean;
   /** When the session last started an operation in this process; undefined before the first. */
   lastActivityAt(sessionId: string): number | undefined;
-  removeIfIdle(sessionId: string, cutoffMs: number, operation: () => Promise<void>): Promise<boolean>;
+  removeIfIdle(
+    sessionId: string,
+    cutoffMs: number,
+    operation: () => Promise<void>,
+  ): Promise<boolean>;
   /**
    * From inside `runActive`: runs the operation only while the caller's is the session's sole
    * operation, and new ones wait until it ends; false when another was running.
@@ -69,23 +75,31 @@ export function sandboxContainerName(sandboxSessionId: string): string {
 export function sandboxRequestHash(request: SandboxRunnerCreateRequest): string {
   // Mount ordering is not security-significant, while owner, access, and policy version are.
   const mounts = [...request.mounts].sort((left, right) =>
-    `${left.mountPoint}:${left.workspaceId}`.localeCompare(`${right.mountPoint}:${right.workspaceId}`)
+    `${left.mountPoint}:${left.workspaceId}`.localeCompare(
+      `${right.mountPoint}:${right.workspaceId}`,
+    ),
   );
-  return createHash("sha256").update(JSON.stringify({
-    access: request.access,
-    mounts,
-    policyVersion: SANDBOX_CONTAINER_POLICY_VERSION,
-    sandboxSessionId: request.sandboxSessionId,
-    seedDigest: request.seedDigest,
-  })).digest("hex");
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        access: request.access,
+        mounts,
+        policyVersion: SANDBOX_CONTAINER_POLICY_VERSION,
+        sandboxSessionId: request.sandboxSessionId,
+        seedDigest: request.seedDigest,
+      }),
+    )
+    .digest("hex");
 }
 
 export function sandboxContainerNeedsReplacement(
   existing: ExistingSandboxIdentity,
   request: SandboxRunnerCreateRequest,
 ): boolean {
-  return existing.sandboxSessionId !== request.sandboxSessionId ||
-    existing.requestHash !== sandboxRequestHash(request);
+  return (
+    existing.sandboxSessionId !== request.sandboxSessionId ||
+    existing.requestHash !== sandboxRequestHash(request)
+  );
 }
 
 export function createSandboxActivityRegistry(now: () => number): SandboxActivityRegistry {
@@ -146,9 +160,12 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
       // Checked and gated in one synchronous step, so no operation slips in between.
       if ((activeCounts.get(sessionId) ?? 0) > 1 || aloneGates.has(sessionId)) return false;
       let release!: () => void;
-      aloneGates.set(sessionId, new Promise<void>((resolve) => {
-        release = resolve;
-      }));
+      aloneGates.set(
+        sessionId,
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+      );
       try {
         await operation();
         return true;

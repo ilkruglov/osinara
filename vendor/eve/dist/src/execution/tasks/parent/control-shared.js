@@ -1,9 +1,6 @@
 import { getAgentHandleStore } from "#harness/handles/store.js";
 import { readLatestTaskView } from "#execution/tasks/parent/run-parent.js";
-import {
-  findSessionTaskEntry,
-  getSessionTaskIndex,
-} from "#tasks/session-index.js";
+import { findSessionTaskEntry, getSessionTaskIndex } from "#tasks/session-index.js";
 import { isTaskWorkflowTargetGone } from "#execution/tasks/workflow-target.js";
 import { taskViewsToJson } from "#tasks/json.js";
 function lookupTaskEntries(e, t) {
@@ -13,22 +10,16 @@ function lookupTaskEntries(e, t) {
     let t = findSessionTaskEntry(e.state, a);
     t === void 0 ? i.push(a) : r.push(t);
   }
-  return i.length > 0
-    ? { kind: `unknown`, unknown: i }
-    : { entries: r, kind: `found` };
+  return i.length > 0 ? { kind: `unknown`, unknown: i } : { entries: r, kind: `found` };
 }
 async function readTaskViews(e) {
   return Promise.all(e.map(readTaskView));
 }
 async function readTaskView(e) {
   try {
-    return (
-      (await readLatestTaskView({ taskRunId: e.taskRunId })) ??
-      createPendingTaskView(e)
-    );
+    return (await readLatestTaskView({ taskRunId: e.taskRunId })) ?? createPendingTaskView(e);
   } catch (t) {
-    if (isTaskWorkflowTargetGone(t) && e.terminalView !== void 0)
-      return e.terminalView;
+    if (isTaskWorkflowTargetGone(t) && e.terminalView !== void 0) return e.terminalView;
     throw t;
   }
 }

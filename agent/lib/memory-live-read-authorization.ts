@@ -40,9 +40,10 @@ export function liveMemoryReadPredicate(input: LiveMemoryReadPredicateInput): st
         AND live_family_group.type = 'family_private'
     )
   )`;
-  const projection = input.externalProjectionPredicate === undefined
-    ? ""
-    : ` OR ('personal' = ANY($2::memory_scope[])
+  const projection =
+    input.externalProjectionPredicate === undefined
+      ? ""
+      : ` OR ('personal' = ANY($2::memory_scope[])
       AND ${currentMembership}
       AND ${input.externalProjectionPredicate})`;
 

@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import { codeText } from "./vendored-code.js";
 
 async function importEveModule(path: string): Promise<Record<string, unknown>> {
-  return await import(pathToFileURL(resolve(path)).href) as Record<string, unknown>;
+  return (await import(pathToFileURL(resolve(path)).href)) as Record<string, unknown>;
 }
 
 describe("Eve dynamic skill runtime revision patch", () => {
@@ -26,8 +26,12 @@ describe("Eve dynamic skill runtime revision patch", () => {
     ]);
 
     expect(codeText(keys)).toContain(codeText("eve.sessionDynamicSkillRuntimeRevision"));
-    expect(codeText(lifecycle)).toContain(codeText("async function refreshDynamicSessionSkillsForRuntimeRevision"));
-    expect(codeText(workflow)).toContain(codeText("refreshDynamicSessionSkillsForRuntimeRevision({ ctx: c, resolvers: C"));
+    expect(codeText(lifecycle)).toContain(
+      codeText("async function refreshDynamicSessionSkillsForRuntimeRevision"),
+    );
+    expect(codeText(workflow)).toContain(
+      codeText("refreshDynamicSessionSkillsForRuntimeRevision({ ctx: c, resolvers: C"),
+    );
     const text = codeText(workflow);
     const at = (snippet: string) => text.indexOf(codeText(snippet));
     const revisionAssignment = at(
@@ -40,27 +44,30 @@ describe("Eve dynamic skill runtime revision patch", () => {
     expect(revisionAssignment).toBeGreaterThanOrEqual(0);
     expect(revisionAssignment).toBeLessThan(managedScope);
     expect(managedScope).toBeGreaterThanOrEqual(0);
-    expect(text.slice(managedScope, skillRefresh)).toContain(codeText("v.sessionStarted && (await"));
+    expect(text.slice(managedScope, skillRefresh)).toContain(
+      codeText("v.sessionStarted && (await"),
+    );
     expect(skillRefresh).toBeGreaterThan(managedScope);
     expect(skillRefresh).toBeLessThan(turnPreparation);
   });
 
   it("replaces a legacy manifest once before the first turn of a new runtime", async () => {
-    const [{ ContextContainer }, keys, lifecycle] = await Promise.all([
+    const [{ ContextContainer }, keys, lifecycle] = (await Promise.all([
       importEveModule("vendor/eve/dist/src/context/container.js"),
       importEveModule("vendor/eve/dist/src/context/keys.js"),
       importEveModule("vendor/eve/dist/src/context/dynamic-skill-lifecycle.js"),
-    ]) as [
-      { ContextContainer: new () => {
-        get(key: unknown): unknown;
-        set(key: unknown, value: unknown): unknown;
-      } },
+    ])) as [
+      {
+        ContextContainer: new () => {
+          get(key: unknown): unknown;
+          set(key: unknown, value: unknown): unknown;
+        };
+      },
       Record<string, unknown>,
       Record<string, unknown>,
     ];
     const refresh = lifecycle.refreshDynamicSessionSkillsForRuntimeRevision as
-      | ((input: Record<string, unknown>) => Promise<void>)
-      | undefined;
+      ((input: Record<string, unknown>) => Promise<void>) | undefined;
     expect(refresh).toBeTypeOf("function");
 
     const removePath = vi.fn(async () => undefined);
@@ -106,9 +113,11 @@ describe("Eve dynamic skill runtime revision patch", () => {
       path: "/home/eve/.agents/skills/pohuy",
       recursive: true,
     });
-    expect(writeBinaryFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: "/home/eve/.agents/skills/gws/SKILL.md",
-    }));
+    expect(writeBinaryFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/home/eve/.agents/skills/gws/SKILL.md",
+      }),
+    );
     expect(ctx.get(keys.DynamicSkillManifestKey)).toEqual({
       scoped: [{ description: "Current package", name: "gws" }],
     });

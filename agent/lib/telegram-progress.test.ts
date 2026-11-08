@@ -34,72 +34,120 @@ describe("completedTelegramOutput", () => {
   it("delivers nothing for the silence directive, even wrapped in whitespace or prose remnants", () => {
     // The model cannot return a truly empty answer: Eve retries an empty step once and the retry
     // comes back as a placeholder such as "(пусто)". The directive is the explicit way to be quiet.
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-silent>" })).toBeNull();
-    expect(completedTelegramOutput({ finishReason: "stop", message: "\n <telegram-silent> \n" })).toBeNull();
-    expect(completedTelegramOutput({
-      finishReason: "stop",
-      message: "<telegram-silent>\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
-    })).toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "<telegram-silent>" }),
+    ).toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "\n <telegram-silent> \n" }),
+    ).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message:
+          "<telegram-silent>\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+      }),
+    ).toBeNull();
     // A directive next to visible text is a model mistake: the text wins, the directive vanishes.
-    expect(completedTelegramOutput({ finishReason: "stop", message: "Ладно, молчу. <telegram-silent>" }))
-      .toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Ладно, молчу." });
-    expect(completedTelegramOutput({ finishReason: "tool-calls", message: "<telegram-silent>" })).toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "Ладно, молчу. <telegram-silent>" }),
+    ).toEqual({
+      kind: "message",
+      memoryUsedDeclared: false,
+      memoryUsedRefs: [],
+      message: "Ладно, молчу.",
+    });
+    expect(
+      completedTelegramOutput({ finishReason: "tool-calls", message: "<telegram-silent>" }),
+    ).toBeNull();
   });
 
   it("does not deliver an answer made of transport directives alone", () => {
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-split>" }))
-      .toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "<telegram-split>" }),
+    ).toBeNull();
   });
 
   it("separates the memory-used directive from the delivered final answer", () => {
-    expect(completedTelegramOutput({
-      finishReason: "stop",
-      message: "Гоша дома.\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
-    })).toEqual({
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "Гоша дома.\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+      }),
+    ).toEqual({
       kind: "message",
       memoryUsedDeclared: true,
       memoryUsedRefs: ["mem_0123456789abcdef0123456789abcdef"],
       message: "Гоша дома.",
     });
-    expect(completedTelegramOutput({
-      finishReason: "stop",
-      message: "<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
-    })).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+      }),
+    ).toBeNull();
   });
 
   it("strips leaked tool-call markup from a delivered answer and logs it", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const leaked = "Принято.\n<｜DSML｜calls>\n<｜DSML｜invoke name=\"remember\">\n<｜DSML｜parameter name=\"kind\">profile</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜calls>";
+    const leaked =
+      'Принято.\n<｜DSML｜calls>\n<｜DSML｜invoke name="remember">\n<｜DSML｜parameter name="kind">profile</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜calls>';
     // A model that writes a tool call as text must not reach the chat with it.
-    expect(completedTelegramOutput({ finishReason: "stop", message: leaked }))
-      .toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Принято." });
+    expect(completedTelegramOutput({ finishReason: "stop", message: leaked })).toEqual({
+      kind: "message",
+      memoryUsedDeclared: false,
+      memoryUsedRefs: [],
+      message: "Принято.",
+    });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_MODEL_TOOL_MARKUP_LEAKED"));
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<｜DSML｜calls>\n<｜DSML｜invoke name=\"remember\"></｜DSML｜invoke>\n</｜DSML｜calls>" })).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message:
+          '<｜DSML｜calls>\n<｜DSML｜invoke name="remember"></｜DSML｜invoke>\n</｜DSML｜calls>',
+      }),
+    ).toBeNull();
     warn.mockRestore();
   });
 
   it("logs an answer that is the memory-used directive alone", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<memory-used></memory-used>" })).toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "<memory-used></memory-used>" }),
+    ).toBeNull();
     expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_USED_DIRECTIVE_ONLY" }));
     warn.mockClear();
-    expect(completedTelegramOutput({
-      finishReason: "stop",
-      message: "<telegram-silent>\n<memory-used></memory-used>",
-    })).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "<telegram-silent>\n<memory-used></memory-used>",
+      }),
+    ).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("keeps aside directives inside a final answer for the presentation layer", () => {
     expect(
-      completedTelegramOutput({ finishReason: "stop", message: "Готово\n<telegram-split>\nкстати" }),
-    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Готово\n<telegram-split>\nкстати" });
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "Готово\n<telegram-split>\nкстати",
+      }),
+    ).toEqual({
+      kind: "message",
+      memoryUsedDeclared: false,
+      memoryUsedRefs: [],
+      message: "Готово\n<telegram-split>\nкстати",
+    });
   });
 
   it("trims surrounding whitespace from a delivered message", () => {
     expect(
       completedTelegramOutput({ finishReason: "stop", message: "\n\nГотовый ответ  " }),
-    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Готовый ответ" });
+    ).toEqual({
+      kind: "message",
+      memoryUsedDeclared: false,
+      memoryUsedRefs: [],
+      message: "Готовый ответ",
+    });
   });
 
   it.each(["👍", "❤", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕"])(
@@ -116,23 +164,28 @@ describe("completedTelegramOutput", () => {
 
   it("canonicalizes a reaction written with a variation selector", () => {
     expect(
-      completedTelegramOutput({ finishReason: "stop", message: "<telegram-reaction>❤️</telegram-reaction>" }),
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "<telegram-reaction>❤️</telegram-reaction>",
+      }),
     ).toEqual({ emoji: "❤", kind: "reaction" });
   });
 
   // An emoji outside Telegram's reaction set would be refused with 400 and leave the person with
   // nothing; the gesture becomes the closest reaction Telegram accepts.
-  it.each([["😸", "🥰"], ["1️⃣", "👍"], ["🇺🇸", "👍"], ["😂", "🤣"]])(
-    "replaces a non-reaction emoji %s with the closest allowed reaction %s",
-    (emoji, expected) => {
-      expect(
-        completedTelegramOutput({
-          finishReason: "stop",
-          message: `<telegram-reaction>${emoji}</telegram-reaction>`,
-        }),
-      ).toEqual({ emoji: expected, kind: "reaction" });
-    },
-  );
+  it.each([
+    ["😸", "🥰"],
+    ["1️⃣", "👍"],
+    ["🇺🇸", "👍"],
+    ["😂", "🤣"],
+  ])("replaces a non-reaction emoji %s with the closest allowed reaction %s", (emoji, expected) => {
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: `<telegram-reaction>${emoji}</telegram-reaction>`,
+      }),
+    ).toEqual({ emoji: expected, kind: "reaction" });
+  });
 
   it.each([
     "<telegram-reaction>не emoji</telegram-reaction>",
@@ -142,8 +195,9 @@ describe("completedTelegramOutput", () => {
     "<telegram-reaction>👍</telegram-reaction> Молчу",
     "<telegram-reaction></telegram-reaction>",
   ])("rejects malformed or mixed reaction output: %s", (message) => {
-    expect(() => completedTelegramOutput({ finishReason: "stop", message }))
-      .toThrowError(/AGENT_TELEGRAM_REACTION_DIRECTIVE_INVALID/u);
+    expect(() => completedTelegramOutput({ finishReason: "stop", message })).toThrowError(
+      /AGENT_TELEGRAM_REACTION_DIRECTIVE_INVALID/u,
+    );
   });
 
   // «Дизраптим», 16 октября 2026: the whole answer to «хехе» was `<telegereaction>😁</telegereaction>`,
@@ -157,8 +211,13 @@ describe("completedTelegramOutput", () => {
     ["\n<telegereaction>😸</telegereaction>\n<memory-used></memory-used>", "🥰"],
   ])("repairs a misspelled reaction directive %s into the reaction %s", (message, emoji) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(completedTelegramOutput({ finishReason: "stop", message })).toEqual({ emoji, kind: "reaction" });
-    const repaired = warn.mock.calls.map(([line]) => String(line)).find((line) => line.includes("AGENT_TELEGRAM_REACTION_DIRECTIVE_REPAIRED"));
+    expect(completedTelegramOutput({ finishReason: "stop", message })).toEqual({
+      emoji,
+      kind: "reaction",
+    });
+    const repaired = warn.mock.calls
+      .map(([line]) => String(line))
+      .find((line) => line.includes("AGENT_TELEGRAM_REACTION_DIRECTIVE_REPAIRED"));
     // The log names the tags the model wrote, never what it wrapped.
     expect(repaired).toBeDefined();
     expect(repaired).toContain('"open":"');
@@ -166,14 +225,26 @@ describe("completedTelegramOutput", () => {
   });
 
   it("drops interim text that is only a misspelled reaction directive", () => {
-    expect(completedTelegramOutput({ finishReason: "tool-calls", message: "<telegereaction>😁</telegereaction>" })).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "tool-calls",
+        message: "<telegereaction>😁</telegereaction>",
+      }),
+    ).toBeNull();
   });
 
   it("never sends an answer or progress that is only an empty tag pair", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(completedTelegramOutput({ finishReason: "stop", message: "<foo></foo>" })).toBeNull();
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegereaction></telegereaction>" })).toBeNull();
-    expect(completedTelegramOutput({ finishReason: "tool-calls", message: "<foo></foo>" })).toBeNull();
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: "<telegereaction></telegereaction>",
+      }),
+    ).toBeNull();
+    expect(
+      completedTelegramOutput({ finishReason: "tool-calls", message: "<foo></foo>" }),
+    ).toBeNull();
   });
 
   // Words inside a tag that merely resembles the directive are an answer, not a broken gesture.
@@ -182,9 +253,16 @@ describe("completedTelegramOutput", () => {
     "<reaction>Скорость реакции выросла</reaction>",
     "<telegereaction>не emoji</telegereaction>",
   ])("keeps text wrapped in a tag that is not a reaction: %s", (message) => {
-    expect(completedTelegramOutput({ finishReason: "stop", message }))
-      .toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message });
-    expect(completedTelegramOutput({ finishReason: "tool-calls", message })).toEqual({ kind: "progress", message });
+    expect(completedTelegramOutput({ finishReason: "stop", message })).toEqual({
+      kind: "message",
+      memoryUsedDeclared: false,
+      memoryUsedRefs: [],
+      message,
+    });
+    expect(completedTelegramOutput({ finishReason: "tool-calls", message })).toEqual({
+      kind: "progress",
+      message,
+    });
   });
 
   it.each([

@@ -1,9 +1,9 @@
 import { type CodexTokenBroker } from "./token-broker.js";
 type Fetch = typeof globalThis.fetch;
 export interface CodexTransportOptions {
-    readonly broker?: CodexTokenBroker;
-    readonly codexApiEndpoint?: string;
-    readonly fetch?: Fetch;
+  readonly broker?: CodexTokenBroker;
+  readonly codexApiEndpoint?: string;
+  readonly fetch?: Fetch;
 }
 /**
  * Routes OpenAI Responses requests through the Codex backend. Authentication is

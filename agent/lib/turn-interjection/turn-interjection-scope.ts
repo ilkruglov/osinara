@@ -35,9 +35,9 @@ function forumTopic(value: unknown): number | null | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-export function resolveTurnInterjectionScope(
-  ctx: { session: { auth: SessionAuth; parent?: unknown } },
-): TurnInterjectionScope | null {
+export function resolveTurnInterjectionScope(ctx: {
+  session: { auth: SessionAuth; parent?: unknown };
+}): TurnInterjectionScope | null {
   if (ctx.session.parent !== undefined && ctx.session.parent !== null) return null;
   if (isScheduledSession(ctx)) return null;
   const attributes = ctx.session.auth.current?.attributes;
@@ -51,18 +51,33 @@ export function resolveTurnInterjectionScope(
   } = attributes;
   const marker = attributes[TURN_INTERJECTION_MARKER_ATTRIBUTE];
   if (
-    typeof currentUpdateId !== "string" || typeof telegramUserId !== "string" ||
-    typeof marker !== "string" || !marker || typeof applicationSessionId !== "string" ||
-    typeof telegramChatId !== "string" || attributes.telegramActorKind !== "telegram_user"
-  ) return null;
+    typeof currentUpdateId !== "string" ||
+    typeof telegramUserId !== "string" ||
+    typeof marker !== "string" ||
+    !marker ||
+    typeof applicationSessionId !== "string" ||
+    typeof telegramChatId !== "string" ||
+    attributes.telegramActorKind !== "telegram_user"
+  )
+    return null;
   const telegramForumTopicId = forumTopic(attributes.telegramForumTopicId);
   if (telegramForumTopicId === undefined) return null;
-  const base = { applicationSessionId, currentUpdateId, marker, telegramChatId, telegramForumTopicId, telegramUserId };
+  const base = {
+    applicationSessionId,
+    currentUpdateId,
+    marker,
+    telegramChatId,
+    telegramForumTopicId,
+    telegramUserId,
+  };
   if (chatType === "private") {
     return attributes.groupType === undefined ? { ...base, chatType, groupId: null } : null;
   }
-  if ((chatType === "group" || chatType === "supergroup") && attributes.groupType === "family_private" &&
-    typeof attributes.groupId === "string") {
+  if (
+    (chatType === "group" || chatType === "supergroup") &&
+    attributes.groupType === "family_private" &&
+    typeof attributes.groupId === "string"
+  ) {
     return { ...base, chatType, groupId: attributes.groupId };
   }
   return null;

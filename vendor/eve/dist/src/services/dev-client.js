@@ -8,15 +8,13 @@ var LocalDevelopmentRuntimeArtifactRefresher = class {
   #t;
   #n;
   constructor(t) {
-    ((this.#e = isLocalDevelopmentServerUrl(t.serverUrl)),
-      (this.#t = t.serverUrl));
+    ((this.#e = isLocalDevelopmentServerUrl(t.serverUrl)), (this.#t = t.serverUrl));
   }
   clear() {
     this.#n = void 0;
   }
   async refresh(e) {
-    shouldRefreshRuntimeArtifactsForTurn(e) &&
-      (await this.#r({ ...e, rebuild: !0 }));
+    shouldRefreshRuntimeArtifactsForTurn(e) && (await this.#r({ ...e, rebuild: !0 }));
   }
   async refreshIdle(e) {
     await this.#r({ ...e, rebuild: !1 });
@@ -32,8 +30,7 @@ var LocalDevelopmentRuntimeArtifactRefresher = class {
             force: e.force,
             serverUrl: this.#t,
           })
-        : void 0) ??
-      (await readDevelopmentRuntimeArtifactsRevision({ serverUrl: this.#t }));
+        : void 0) ?? (await readDevelopmentRuntimeArtifactsRevision({ serverUrl: this.#t }));
     if (n === void 0) return;
     let r = this.#n;
     (r !== void 0 &&

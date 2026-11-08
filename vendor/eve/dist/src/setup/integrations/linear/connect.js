@@ -4,10 +4,7 @@ import {
   string,
 } from "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/schemas.js";
 import "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
-import {
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 import { replaceConnectTrigger } from "#setup/connect-provisioning.js";
 const LINEAR_TRIGGER_PATH = `/eve/v1/linear`,
@@ -25,9 +22,7 @@ function parseCreatedLinearConnector(e) {
   }
 }
 async function findLinearConnector(e) {
-  let t = await (
-    e.deps ?? { runVercel, runVercelCaptureStdout }
-  ).runVercelCaptureStdout(
+  let t = await (e.deps ?? { runVercel, runVercelCaptureStdout }).runVercelCaptureStdout(
     [
       `connect`,
       `list`,
@@ -46,9 +41,7 @@ async function findLinearConnector(e) {
       let n = JSON.parse(t.stdout);
       if (!Array.isArray(n.connectors)) return;
       let r = `linear/${e.slug}`,
-        i = n.connectors.find(
-          (e) => typeof e == `object` && !!e && e.uid === r,
-        );
+        i = n.connectors.find((e) => typeof e == `object` && !!e && e.uid === r);
       return typeof i?.id == `string` ? { id: i.id, uid: r } : void 0;
     } catch {
       return;
@@ -103,13 +96,9 @@ async function provisionLinearConnector(e) {
       ),
     );
   if ((e.signal?.throwIfAborted(), !a.ok)) {
-    let e = [a.stderr, a.stdout].find(
-      (e) => e !== void 0 && e.trim().length > 0,
-    );
+    let e = [a.stderr, a.stdout].find((e) => e !== void 0 && e.trim().length > 0);
     throw Error(
-      e
-        ? `Linear connector creation failed:\n${e}`
-        : `Linear connector creation failed.`,
+      e ? `Linear connector creation failed:\n${e}` : `Linear connector creation failed.`,
     );
   }
   let o = parseCreatedLinearConnector(a.stdout);

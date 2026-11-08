@@ -1,8 +1,4 @@
-import {
-  UNSPECIFIED_INPUT_SCHEMA,
-  toInputSchema,
-  toOutputSchema,
-} from "#shared/tool-schema.js";
+import { UNSPECIFIED_INPUT_SCHEMA, toInputSchema, toOutputSchema } from "#shared/tool-schema.js";
 function createHarnessDelegationToolDefinition(e) {
   let t =
     e.kind === `remote`

@@ -6,7 +6,9 @@ import { experimentPath } from "../../../../agent/lib/authored-skills/skill-expe
 export default defineTool({
   ...writeFile,
   async execute(input, ctx) {
-    z.object({ filePath: experimentPath, content: z.string().max(32_000) }).strict().parse(input);
+    z.object({ filePath: experimentPath, content: z.string().max(32_000) })
+      .strict()
+      .parse(input);
     return writeFile.execute(input, ctx);
   },
 });

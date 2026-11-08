@@ -37,10 +37,7 @@ var AgentTraceSpanProcessor = class {
     await Promise.all(this.#e.map((e) => e.shutdown()));
   }
   #r(e) {
-    return (
-      e.instrumentationScope?.name !== `workflow` &&
-      this.#t.has(e.spanContext().traceId)
-    );
+    return e.instrumentationScope?.name !== `workflow` && this.#t.has(e.spanContext().traceId);
   }
 };
 function isSpanLike(e) {

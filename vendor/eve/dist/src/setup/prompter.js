@@ -6,11 +6,7 @@ import {
   settings as h,
 } from "../node_modules/.pnpm/@clack_core@1.3.1/node_modules/@clack/core/dist/index.js";
 import { WizardCancelledError } from "./step.js";
-import {
-  initialQuitGuardState,
-  quitHintNote,
-  reduceQuitGuard,
-} from "./quit-guard.js";
+import { initialQuitGuardState, quitHintNote, reduceQuitGuard } from "./quit-guard.js";
 import {
   cornerFor,
   createRailLog,
@@ -27,9 +23,7 @@ var import_picocolors = __toESM(require_picocolors(), 1);
 function guardCancel(e) {
   if (q(e))
     throw (
-      process.stdout.write(
-        formatPromptCancellation(`Setup cancelled.`, import_picocolors.default),
-      ),
+      process.stdout.write(formatPromptCancellation(`Setup cancelled.`, import_picocolors.default)),
       new WizardCancelledError()
     );
   return e;
@@ -79,22 +73,16 @@ function textPrompt(e, t) {
           i = t.placeholder
             ? import_picocolors.default.inverse(t.placeholder[0]) +
               import_picocolors.default.dim(t.placeholder.slice(1))
-            : import_picocolors.default.inverse(
-                import_picocolors.default.hidden(`_`),
-              ),
+            : import_picocolors.default.inverse(import_picocolors.default.hidden(`_`)),
           a = this.value ? `•`.repeat(this.value.length) : i,
           o = i;
-        switch (
-          (t.mask ? (o = a) : this.value && (o = this.userInputWithCursor),
-          this.state)
-        ) {
+        switch ((t.mask ? (o = a) : this.value && (o = this.userInputWithCursor), this.state)) {
           case `error`:
             return `${n.trim()}\n${railForState(this.state)}  ${o}\n${cornerForState(this.state)}  ${import_picocolors.default.red(this.error)}\n`;
           case `submit`: {
             let n = this.value || t.placeholder || ``;
             return (
-              t.mask &&
-                (n = this.value ? REDACTED_DISPLAY : (t.placeholder ?? ``)),
+              t.mask && (n = this.value ? REDACTED_DISPLAY : (t.placeholder ?? ``)),
               formatPromptSubmission(this.state, t.message, n, {
                 colors: import_picocolors.default,
                 leadingRail: e === 0 ? `white` : `green`,
@@ -204,9 +192,7 @@ function createPrompter() {
     note(e, n, r) {
       t.settle();
       let i =
-        r?.tone === `success`
-          ? import_picocolors.default.green
-          : import_picocolors.default.red;
+        r?.tone === `success` ? import_picocolors.default.green : import_picocolors.default.red;
       (n &&
         process.stdout.write(
           formatRailLine(
@@ -215,19 +201,13 @@ function createPrompter() {
             process.stdout,
           ),
         ),
-        process.stdout.write(
-          formatRailLine(i(e), import_picocolors.default, process.stdout),
-        ));
+        process.stdout.write(formatRailLine(i(e), import_picocolors.default, process.stdout)));
     },
     intro(e, n = `Production-grade agent framework.`) {
-      (t.settle(),
-        process.stdout.write(
-          formatPromptOpener(e, n, import_picocolors.default),
-        ));
+      (t.settle(), process.stdout.write(formatPromptOpener(e, n, import_picocolors.default)));
     },
     outro(e) {
-      (t.settle(),
-        process.stdout.write(formatPromptOutro(e, import_picocolors.default)));
+      (t.settle(), process.stdout.write(formatPromptOutro(e, import_picocolors.default)));
     },
     log: t,
   };

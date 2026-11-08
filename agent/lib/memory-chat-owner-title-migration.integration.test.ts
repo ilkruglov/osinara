@@ -40,7 +40,14 @@ describeWithDatabase("131 chat owner title", () => {
             sensitivity, operation_key, attribute, embedding_status)
          VALUES ($1, 'family', 'fact', $2, $3, 'test:131', $4, 'model_high', 'normal', $5, $6, 'indexed')
          RETURNING id`,
-        [fixture.familyId, content, normalizeMemoryClaimContent(content), fixture.userId, randomUUID(), attribute],
+        [
+          fixture.familyId,
+          content,
+          normalizeMemoryClaimContent(content),
+          fixture.userId,
+          randomUUID(),
+          attribute,
+        ],
       );
       return row.rows[0]!.id;
     };
@@ -53,7 +60,10 @@ describeWithDatabase("131 chat owner title", () => {
       "общение с Мией",
     );
     // Another person's real title stays: only Kruglov's name is matched (Codex review).
-    const other = await insert("Владелец чата Ильдар Иванов утвердил правила.", "оценка владельца чата");
+    const other = await insert(
+      "Владелец чата Ильдар Иванов утвердил правила.",
+      "оценка владельца чата",
+    );
     const quoted = await insert(
       "Serje добивался от Мии, спрашивала ли она владельца чата, прежде чем писать заметки.",
       "общение с Мией",
@@ -61,7 +71,13 @@ describeWithDatabase("131 chat owner title", () => {
 
     await database().query(await readFile(MIGRATION, "utf8"));
 
-    const rows = await database().query<{ attribute: string; content: string; content_normalized: string; embedding_status: string; id: string }>(
+    const rows = await database().query<{
+      attribute: string;
+      content: string;
+      content_normalized: string;
+      embedding_status: string;
+      id: string;
+    }>(
       "SELECT id, content, content_normalized, attribute, embedding_status FROM memory_items_all WHERE id = ANY($1::uuid[])",
       [[titled, english, quoted, other]],
     );
@@ -69,7 +85,9 @@ describeWithDatabase("131 chat owner title", () => {
     expect(byId[titled]).toMatchObject({
       attribute: "оценка Ильи Круглова",
       content: "По словам Ильи Круглова (ilya_kruglov) 18 сентября 2026, Егор — умный.",
-      content_normalized: normalizeMemoryClaimContent("По словам Ильи Круглова (ilya_kruglov) 18 сентября 2026, Егор — умный."),
+      content_normalized: normalizeMemoryClaimContent(
+        "По словам Ильи Круглова (ilya_kruglov) 18 сентября 2026, Егор — умный.",
+      ),
       embedding_status: "pending",
     });
     expect(byId[english]).toMatchObject({
@@ -78,7 +96,8 @@ describeWithDatabase("131 chat owner title", () => {
       embedding_status: "pending",
     });
     expect(byId[quoted]).toMatchObject({
-      content: "Serje добивался от Мии, спрашивала ли она владельца чата, прежде чем писать заметки.",
+      content:
+        "Serje добивался от Мии, спрашивала ли она владельца чата, прежде чем писать заметки.",
       embedding_status: "indexed",
     });
     expect(byId[other]).toMatchObject({
@@ -93,7 +112,10 @@ describeWithDatabase("131 chat owner title", () => {
     expect(jobs.rows.map((row) => row.memory_item_id).sort()).toEqual([titled, english].sort());
 
     // Idempotent: nothing left to match on a second run.
-    await database().query("UPDATE memory_items_all SET embedding_status = 'indexed' WHERE id = ANY($1::uuid[])", [[titled, english]]);
+    await database().query(
+      "UPDATE memory_items_all SET embedding_status = 'indexed' WHERE id = ANY($1::uuid[])",
+      [[titled, english]],
+    );
     await database().query(await readFile(MIGRATION, "utf8"));
     const again = await database().query<{ embedding_status: string }>(
       "SELECT embedding_status FROM memory_items_all WHERE id = ANY($1::uuid[])",

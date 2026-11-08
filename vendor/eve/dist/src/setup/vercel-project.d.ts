@@ -6,42 +6,51 @@ import type { ResolvedVercelProjectSpec, VercelProjectIdentity } from "./state.j
 import { type VercelProjectOperationOptions } from "./vercel-project-api.js";
 import { type CreatedProjectFrameworkOptions } from "./vercel-project-framework.js";
 export interface PickProjectOptions extends VercelProjectOperationOptions {
-    /** Whether an empty project list may fall back to entering a name to create. */
-    allowCreateWhenEmpty?: boolean;
-    /**
-     * Searches the team for a project with this name before the list opens and
-     * suggests the best match: floated to the top, cursor on it, marked
-     * "suggested". Best-effort — a failed lookup falls back to the plain list.
-     */
-    suggestedName?: string;
+  /** Whether an empty project list may fall back to entering a name to create. */
+  allowCreateWhenEmpty?: boolean;
+  /**
+   * Searches the team for a project with this name before the list opens and
+   * suggests the best match: floated to the top, cursor on it, marked
+   * "suggested". Best-effort — a failed lookup falls back to the plain list.
+   */
+  suggestedName?: string;
 }
 export interface PickTeamOptions extends VercelProjectOperationOptions {
-    /** Builds the team selector heading from the current team's display name. */
-    selectMessage?: (currentTeam: string) => string;
+  /** Builds the team selector heading from the current team's display name. */
+  selectMessage?: (currentTeam: string) => string;
 }
-export interface LinkProjectOperationOptions extends CreatedProjectFrameworkOptions {
-}
+export interface LinkProjectOperationOptions extends CreatedProjectFrameworkOptions {}
 /** Effects used to ensure an interactive Vercel project link. */
 export interface EnsureLinkedVercelProjectDeps {
-    readProjectLink: typeof readProjectLink;
-    runVercel: typeof runVercel;
+  readProjectLink: typeof readProjectLink;
+  runVercel: typeof runVercel;
 }
 /**
  * Returns the existing Vercel project link or creates one through the Vercel
  * CLI's interactive flow. The CLI owns team and project selection.
  */
 export declare function ensureLinkedVercelProject(input: {
-    projectRoot: string;
-    prompter: Prompter;
-    signal?: AbortSignal;
-    deps?: EnsureLinkedVercelProjectDeps;
+  projectRoot: string;
+  prompter: Prompter;
+  signal?: AbortSignal;
+  deps?: EnsureLinkedVercelProjectDeps;
 }): Promise<NonNullable<Awaited<ReturnType<typeof readProjectLink>>>>;
 export declare function unresolvedProject(): ProjectResolution;
 /** Resolves the linked project id from a resolution, if any. */
 export declare function projectIdFromResolution(project: ProjectResolution): string | undefined;
 /** Resolves one project by exact name or id through the Vercel API. */
-export declare function resolveProjectByNameOrId(projectRoot: string, team: string, projectNameOrId: string, options?: VercelProjectOperationOptions): Promise<VercelProjectIdentity | null>;
-export declare function assertNewProjectNameAvailable(projectRoot: string, team: string, projectName: string, options?: VercelProjectOperationOptions): Promise<void>;
+export declare function resolveProjectByNameOrId(
+  projectRoot: string,
+  team: string,
+  projectNameOrId: string,
+  options?: VercelProjectOperationOptions,
+): Promise<VercelProjectIdentity | null>;
+export declare function assertNewProjectNameAvailable(
+  projectRoot: string,
+  team: string,
+  projectName: string,
+  options?: VercelProjectOperationOptions,
+): Promise<void>;
 /**
  * Throws the login action. When the underlying `vercel whoami` failure is
  * known, its diagnostic is folded into the reason: without it the agent only
@@ -67,24 +76,38 @@ export declare function requireVercelAuth(failure: VercelCaptureFailure): never;
 export type VercelAuthStatus = "authenticated" | "logged-out" | "cli-missing" | "unavailable";
 /** Returns the user-facing reason Vercel-backed setup is unavailable. */
 export declare function vercelAuthBlockerReason(authStatus: VercelAuthStatus): string | undefined;
-export declare function getVercelAuthStatus(projectRoot: string, options?: VercelProjectOperationOptions): Promise<VercelAuthStatus>;
+export declare function getVercelAuthStatus(
+  projectRoot: string,
+  options?: VercelProjectOperationOptions,
+): Promise<VercelAuthStatus>;
 /**
  * Ensures Vercel authentication before any provisioning. `vercel whoami` exits
  * non-zero when not logged in; any other failure (a missing CLI, a transient
  * API error) is surfaced verbatim rather than mislabeled as a login problem.
  */
-export declare function requireAuth(projectRoot: string, prompter?: Prompter, options?: VercelProjectOperationOptions): Promise<void>;
+export declare function requireAuth(
+  projectRoot: string,
+  prompter?: Prompter,
+  options?: VercelProjectOperationOptions,
+): Promise<void>;
 /**
  * Non-throwing auth probe: whether the Vercel CLI has a logged-in user. Used
  * where authentication changes a decision (e.g. adopting an existing link)
  * rather than being a precondition to enforce.
  */
-export declare function isVercelAuthenticated(projectRoot: string, options?: VercelProjectOperationOptions): Promise<boolean>;
+export declare function isVercelAuthenticated(
+  projectRoot: string,
+  options?: VercelProjectOperationOptions,
+): Promise<boolean>;
 /**
  * Resolves a passed team slug, or the current scope when unset, to a concrete
  * slug so every provisioning command can pass an explicit `--scope`.
  */
-export declare function resolveTeam(projectRoot: string, team: string | undefined, options?: VercelProjectOperationOptions): Promise<string>;
+export declare function resolveTeam(
+  projectRoot: string,
+  team: string | undefined,
+  options?: VercelProjectOperationOptions,
+): Promise<string>;
 /**
  * Validates a passed team slug against the account's teams, failing fast.
  *
@@ -96,17 +119,38 @@ export declare function resolveTeam(projectRoot: string, team: string | undefine
  * `prompter` is accepted so callers can pass it uniformly across the team
  * resolution helpers; it is unused now that an invalid slug throws.
  */
-export declare function validateTeam(prompter: Prompter, projectRoot: string, team: string | undefined, options?: VercelProjectOperationOptions): Promise<void>;
+export declare function validateTeam(
+  prompter: Prompter,
+  projectRoot: string,
+  team: string | undefined,
+  options?: VercelProjectOperationOptions,
+): Promise<void>;
 /**
  * Picks the Vercel team (scope). A passed slug is validated and resolved; with
  * zero or one team the current scope is used without prompting; otherwise the
  * user filters and chooses from the list with a single-selection picker.
  */
-export declare function pickTeam(prompter: Prompter, projectRoot: string, presetTeam: string | undefined, options?: PickTeamOptions): Promise<string>;
+export declare function pickTeam(
+  prompter: Prompter,
+  projectRoot: string,
+  presetTeam: string | undefined,
+  options?: PickTeamOptions,
+): Promise<string>;
 /** Picks an existing project under a team, or a name to create when none exist. */
-export declare function pickProject(prompter: Prompter, projectRoot: string, team: string, options?: PickProjectOptions): Promise<ResolvedVercelProjectSpec>;
+export declare function pickProject(
+  prompter: Prompter,
+  projectRoot: string,
+  team: string,
+  options?: PickProjectOptions,
+): Promise<ResolvedVercelProjectSpec>;
 /** Returns a project name for a new Vercel project, prompting when the default exists. */
-export declare function pickNewProjectName(prompter: Prompter, projectRoot: string, team: string, defaultProjectName: string, options?: VercelProjectOperationOptions): Promise<string>;
+export declare function pickNewProjectName(
+  prompter: Prompter,
+  projectRoot: string,
+  team: string,
+  defaultProjectName: string,
+  options?: VercelProjectOperationOptions,
+): Promise<string>;
 /**
  * Ensures the concrete project exists (creating it for a `new` plan) and links
  * this directory to it. Acts on a fully-resolved spec — never prompts for a
@@ -115,4 +159,10 @@ export declare function pickNewProjectName(prompter: Prompter, projectRoot: stri
  * unsupported, or rejected framework detections are switched back to eve.
  * Returns the linked project, or undefined if `vercel link` did not complete.
  */
-export declare function linkProject(prompter: Prompter, projectRoot: string, spec: ResolvedVercelProjectSpec, onOutput: ReturnType<typeof createPromptCommandOutput>, options?: LinkProjectOperationOptions): Promise<VercelProjectIdentity | undefined>;
+export declare function linkProject(
+  prompter: Prompter,
+  projectRoot: string,
+  spec: ResolvedVercelProjectSpec,
+  onOutput: ReturnType<typeof createPromptCommandOutput>,
+  options?: LinkProjectOperationOptions,
+): Promise<VercelProjectIdentity | undefined>;

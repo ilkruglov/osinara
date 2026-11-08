@@ -33,11 +33,7 @@ function extractQuestionInputRequests(e) {
 function extractQuestionRequests(e) {
   let t = [];
   for (let n of e.toolCalls) {
-    if (
-      n.toolName !== ASK_QUESTION_TOOL_NAME ||
-      e.excludedCallIds.has(n.toolCallId)
-    )
-      continue;
+    if (n.toolName !== ASK_QUESTION_TOOL_NAME || e.excludedCallIds.has(n.toolCallId)) continue;
     let r = createRuntimeToolCallActionFromToolCall({ toolCall: n }),
       i = r.input,
       o = {
@@ -68,13 +64,11 @@ function extractApprovalRequests(e) {
     if (!i.success) continue;
     let a = i.data;
     if (
-      (e.includedRequestIds !== void 0 &&
-        !e.includedRequestIds.has(a.approvalId)) ||
+      (e.includedRequestIds !== void 0 && !e.includedRequestIds.has(a.approvalId)) ||
       a.isAutomatic === !0
     )
       continue;
-    let o =
-      a.toolCall ?? (a.toolCallId === void 0 ? void 0 : n.get(a.toolCallId));
+    let o = a.toolCall ?? (a.toolCallId === void 0 ? void 0 : n.get(a.toolCallId));
     o !== void 0 &&
       (e.excludedCallIds?.has(o.toolCallId) ||
         t.push({
@@ -111,10 +105,7 @@ function extractHistoricalInputRequests(e) {
           includedRequestIds: e.requestIds,
         }),
       ];
-    for (let n of a)
-      !e.requestIds.has(n.requestId) ||
-        t.has(n.requestId) ||
-        t.set(n.requestId, n);
+    for (let n of a) !e.requestIds.has(n.requestId) || t.has(n.requestId) || t.set(n.requestId, n);
     if (t.size === e.requestIds.size) break;
   }
   return t;

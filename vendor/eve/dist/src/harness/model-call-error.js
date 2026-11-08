@@ -2,8 +2,7 @@ import { isObject } from "#shared/guards.js";
 import { toError, walkCauseChain } from "#shared/errors.js";
 import { summarizeKnownError } from "#harness/semantic-errors/index.js";
 import { isTurnCancellation } from "#harness/turn-cancellation.js";
-const UNSUPPORTED_TOOL_TYPE_REGEX =
-  /tool type ['"]([\w.-]+)['"] is not supported/i;
+const UNSUPPORTED_TOOL_TYPE_REGEX = /tool type ['"]([\w.-]+)['"] is not supported/i;
 function extractUpstreamRejectionMessage(e) {
   let t = readModelCallErrorSignals(e);
   if (isTransientHttpStatus(t.statusCode ?? t.upstreamStatusCode)) return null;
@@ -18,9 +17,7 @@ function extractUpstreamRejectionMessage(e) {
   return r === void 0 ? null : { name: upstreamRejectionName(t), message: r };
 }
 function upstreamRejectionName(e) {
-  return isGatewayErrorSignal(e)
-    ? `AI Gateway model request rejected`
-    : `Model provider API error`;
+  return isGatewayErrorSignal(e) ? `AI Gateway model request rejected` : `Model provider API error`;
 }
 function isTransientHttpStatus(e) {
   return e === 408 || e === 429 || (e !== void 0 && e >= 500);
@@ -51,9 +48,7 @@ function collectUnsupportedToolTypesFromValue(t, n) {
       for (let e of t) collectUnsupportedToolTypesFromValue(e, n);
       return;
     }
-    if (isObject(t))
-      for (let e of Object.values(t))
-        collectUnsupportedToolTypesFromValue(e, n);
+    if (isObject(t)) for (let e of Object.values(t)) collectUnsupportedToolTypesFromValue(e, n);
   }
 }
 function extractModelCallErrorDetails(e) {
@@ -73,13 +68,10 @@ function extractModelCallErrorDetails(e) {
   );
 }
 function readErrorName(t) {
-  if (t instanceof Error || (isObject(t) && typeof t.name == `string`))
-    return t.name;
+  if (t instanceof Error || (isObject(t) && typeof t.name == `string`)) return t.name;
 }
 function readErrorMessage(t) {
-  return t instanceof Error || (isObject(t) && typeof t.message == `string`)
-    ? t.message
-    : ``;
+  return t instanceof Error || (isObject(t) && typeof t.message == `string`) ? t.message : ``;
 }
 var EmptyModelResponseError = class extends Error {
   constructor(e) {
@@ -89,15 +81,10 @@ var EmptyModelResponseError = class extends Error {
 };
 function normalizeModelStreamError(e) {
   let n = toError(e);
-  return (
-    n === e ||
-      Object.defineProperty(n, "cause", { configurable: !0, value: e }),
-    n
-  );
+  return (n === e || Object.defineProperty(n, "cause", { configurable: !0, value: e }), n);
 }
 function isNoOutputGeneratedError(e) {
-  for (let t of walkCauseChain(e))
-    if (readErrorName(t) === `AI_NoOutputGeneratedError`) return !0;
+  for (let t of walkCauseChain(e)) if (readErrorName(t) === `AI_NoOutputGeneratedError`) return !0;
   return !1;
 }
 function classifyModelCallError(e) {
@@ -124,8 +111,7 @@ function classifyModelCallError(e) {
   return `recoverable`;
 }
 function hasRetryableFlag(t) {
-  for (let r of walkCauseChain(t))
-    if (isObject(r) && r.isRetryable === !0) return !0;
+  for (let r of walkCauseChain(t)) if (isObject(r) && r.isRetryable === !0) return !0;
   return !1;
 }
 function readModelCallErrorSignals(e) {
@@ -135,8 +121,7 @@ function readModelCallErrorSignals(e) {
     i = readGatewayErrorBody(n);
   return {
     apiCallError: n !== void 0,
-    apiErrorMessage:
-      i?.apiErrorMessage ?? firstInformativeApiMessage([readErrorMessage(n)]),
+    apiErrorMessage: i?.apiErrorMessage ?? firstInformativeApiMessage([readErrorMessage(n)]),
     gatewayName: readErrorName(t),
     gatewayType: readStringField(t, `type`),
     generationId: readStringField(t, `generationId`) ?? i?.generationId,
@@ -151,12 +136,7 @@ function findGatewayError(e) {
   for (let t of walkCauseChain(e)) {
     let e = readErrorName(t),
       n = readStringField(t, `type`);
-    if (
-      e?.startsWith(`Gateway`) ||
-      n?.endsWith(`_error`) ||
-      n === `rate_limit_exceeded`
-    )
-      return t;
+    if (e?.startsWith(`Gateway`) || n?.endsWith(`_error`) || n === `rate_limit_exceeded`) return t;
   }
 }
 function findUpstreamApiCallError(e) {
@@ -196,8 +176,7 @@ function readGatewayErrorBodyFromValue(t) {
     : { apiErrorMessage: o, generationId: r, message: i, type: a };
 }
 function readStatusCode(t) {
-  if (isObject(t))
-    return typeof t.statusCode == `number` ? t.statusCode : void 0;
+  if (isObject(t)) return typeof t.statusCode == `number` ? t.statusCode : void 0;
 }
 function findStatusCode(e) {
   for (let t of walkCauseChain(e)) {
@@ -242,9 +221,7 @@ function appendString(e, t) {
   t !== void 0 && e.push(t);
 }
 function firstInformativeApiMessage(e) {
-  for (let t of e)
-    if (t !== void 0 && isInformativeApiMessage(t))
-      return truncateSnippet(t, 800);
+  for (let t of e) if (t !== void 0 && isInformativeApiMessage(t)) return truncateSnippet(t, 800);
 }
 function isInformativeApiMessage(e) {
   let t = e.trim();
@@ -265,9 +242,7 @@ function formatApiCallErrorFallback(e) {
         ? e.upstreamType
         : void 0;
   if (t === void 0 && n === void 0 && r === void 0) return;
-  let i = [t === void 0 ? void 0 : `HTTP ${t}`, r]
-      .filter((e) => e !== void 0)
-      .join(`, `),
+  let i = [t === void 0 ? void 0 : `HTTP ${t}`, r].filter((e) => e !== void 0).join(`, `),
     a =
       i.length === 0
         ? `Model provider API request failed`
@@ -275,18 +250,10 @@ function formatApiCallErrorFallback(e) {
   return n === void 0 ? `${a}.` : `${a}: ${n}`;
 }
 function isRetryableGatewayType(e) {
-  return (
-    e === `overloaded_error` ||
-    e === `rate_limit_exceeded` ||
-    e === `timeout_error`
-  );
+  return e === `overloaded_error` || e === `rate_limit_exceeded` || e === `timeout_error`;
 }
 function isTerminalGatewayType(e) {
-  return (
-    e === `authentication_error` ||
-    e === `invalid_request_error` ||
-    e === `model_not_found`
-  );
+  return e === `authentication_error` || e === `invalid_request_error` || e === `model_not_found`;
 }
 function isGatewayErrorSignal(e) {
   return e.gatewayName !== void 0 || e.gatewayType !== void 0;
@@ -294,8 +261,7 @@ function isGatewayErrorSignal(e) {
 function isAmbiguousGatewayInternalBadRequest(e) {
   return (
     e.statusCode === 400 &&
-    (e.gatewayName === `GatewayInternalServerError` ||
-      e.gatewayType === `internal_server_error`) &&
+    (e.gatewayName === `GatewayInternalServerError` || e.gatewayType === `internal_server_error`) &&
     (e.upstreamType === void 0 || e.upstreamType === `internal_server_error`)
   );
 }

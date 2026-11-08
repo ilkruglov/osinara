@@ -32,12 +32,21 @@ import { AppError, isAppError } from "../app-error.js";
 import { database } from "../database.js";
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
-import { type FormProfile, parseFormProfile, type ProfileField, upsertProfileField } from "./form-profile.js";
+import {
+  type FormProfile,
+  parseFormProfile,
+  type ProfileField,
+  upsertProfileField,
+} from "./form-profile.js";
 
 const LEGACY_PROFILE_PATH = "forms/profile.json";
 
 /** `groupId` is the Telegram group the call comes from, `null` in the private chat. */
-export interface FormProfileOwner { familyId: string; groupId: string | null; userId: string; }
+export interface FormProfileOwner {
+  familyId: string;
+  groupId: string | null;
+  userId: string;
+}
 
 /** $1 user, $2 family, $3 group or null: evaluated in the statement that reads or writes. */
 const ACCESS = `EXISTS (SELECT 1 FROM family_memberships m WHERE m.family_id = $2 AND m.user_id = $1)
@@ -52,7 +61,10 @@ function revoked(): AppError {
 }
 
 /** Locks and returns the owner's row, creating it; throws when the membership is gone. */
-async function lockRow(client: PoolClient, owner: FormProfileOwner): Promise<{ fields: FormProfile; legacyImported: boolean }> {
+async function lockRow(
+  client: PoolClient,
+  owner: FormProfileOwner,
+): Promise<{ fields: FormProfile; legacyImported: boolean }> {
   await client.query(
     `INSERT INTO browser_form_profiles (user_id, family_id)
      SELECT $1, $2 WHERE ${ACCESS}
@@ -67,7 +79,10 @@ async function lockRow(client: PoolClient, owner: FormProfileOwner): Promise<{ f
   );
   const row = current.rows[0];
   if (!row) throw revoked();
-  return { fields: parseFormProfile(JSON.stringify(row.fields)), legacyImported: row.legacy_imported };
+  return {
+    fields: parseFormProfile(JSON.stringify(row.fields)),
+    legacyImported: row.legacy_imported,
+  };
 }
 
 /** Old fields fill only the gaps: whatever the row already has is newer. */
@@ -94,13 +109,22 @@ export function createFormProfileRepository() {
   return {
     /** The access check alone, for callers that touch the browser without reading the profile. */
     async requireAccess(owner: FormProfileOwner): Promise<void> {
-      const result = await database().query<{ allowed: boolean }>(`SELECT ${ACCESS} AS allowed`, accessParams(owner));
+      const result = await database().query<{ allowed: boolean }>(
+        `SELECT ${ACCESS} AS allowed`,
+        accessParams(owner),
+      );
       if (!result.rows[0]?.allowed) throw revoked();
     },
 
     /** `null` when the person has no row yet; throws when the membership is gone. */
-    async get(owner: FormProfileOwner): Promise<{ fields: FormProfile; legacyImported: boolean } | null> {
-      const result = await database().query<{ allowed: boolean; fields: FormProfile | null; legacy_imported: boolean | null }>(
+    async get(
+      owner: FormProfileOwner,
+    ): Promise<{ fields: FormProfile; legacyImported: boolean } | null> {
+      const result = await database().query<{
+        allowed: boolean;
+        fields: FormProfile | null;
+        legacy_imported: boolean | null;
+      }>(
         `SELECT ${ACCESS} AS allowed, p.fields, p.legacy_imported
            FROM (SELECT 1) AS one
            LEFT JOIN browser_form_profiles p ON p.user_id = $1 AND p.family_id = $2`,
@@ -109,7 +133,10 @@ export function createFormProfileRepository() {
       const row = result.rows[0]!;
       if (!row.allowed) throw revoked();
       if (row.fields === null) return null;
-      return { fields: parseFormProfile(JSON.stringify(row.fields)), legacyImported: row.legacy_imported === true };
+      return {
+        fields: parseFormProfile(JSON.stringify(row.fields)),
+        legacyImported: row.legacy_imported === true,
+      };
     },
 
     /** Folds the old file in once it could be read; a `null` legacy leaves the row waiting. */
@@ -157,7 +184,11 @@ async function readLegacyProfile(auth: WorkspaceAuthorization): Promise<LegacyPr
     return parseFormProfile(Buffer.from(file.bytes).toString("utf8"));
   } catch (error) {
     if (!isAppError(error)) throw error;
-    if (error.code === "AGENT_WORKSPACE_FILE_NOT_FOUND" || error.code === "AGENT_BROWSER_TASK_PROFILE_INVALID") return {};
+    if (
+      error.code === "AGENT_WORKSPACE_FILE_NOT_FOUND" ||
+      error.code === "AGENT_BROWSER_TASK_PROFILE_INVALID"
+    )
+      return {};
     if (error.code === "AGENT_WORKSPACE_ACCESS_DENIED") return null;
     throw error;
   }
@@ -168,7 +199,10 @@ export async function requireFormProfileAccess(owner: FormProfileOwner): Promise
   await formProfileRepository.requireAccess(owner);
 }
 
-export async function loadFormProfile(auth: WorkspaceAuthorization, owner: FormProfileOwner): Promise<FormProfile> {
+export async function loadFormProfile(
+  auth: WorkspaceAuthorization,
+  owner: FormProfileOwner,
+): Promise<FormProfile> {
   const stored = await formProfileRepository.get(owner);
   if (stored?.legacyImported) return stored.fields;
   const legacy = await readLegacyProfile(auth);

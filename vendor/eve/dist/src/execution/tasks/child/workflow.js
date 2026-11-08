@@ -1,9 +1,5 @@
 import { createHook } from "#compiled/@workflow/core/index.js";
-import {
-  claimHookOwnership,
-  disposeHook,
-  isHookConflictError,
-} from "#execution/hook-ownership.js";
+import { claimHookOwnership, disposeHook, isHookConflictError } from "#execution/hook-ownership.js";
 import {
   isReadyTaskStatus,
   isTerminalTaskStatus,
@@ -43,7 +39,7 @@ async function taskRunWorkflow(i) {
       c = [],
       l = [],
       u = !1;
-    for (await appendTaskViewStep({ view: e }); !isTaskRunFinished(e, u); ) {
+    for (await appendTaskViewStep({ view: e }); !isTaskRunFinished(e, u);) {
       let t = await o.next();
       if (t.done === !0) return;
       let r =
@@ -52,8 +48,7 @@ async function taskRunWorkflow(i) {
           : t.value;
       if (
         r.kind === `authorization-event` &&
-        (r.event.type === `approval.candidate` ||
-          r.event.type === `approval.settled`)
+        (r.event.type === `approval.candidate` || r.event.type === `approval.settled`)
       )
         continue;
       let a = r.kind === `task-command` && r.command.kind === `ready`,
@@ -105,9 +100,7 @@ async function taskRunWorkflow(i) {
       }
       let m = applyTaskTransition(e, p);
       if (m.outcome !== `accepted`) continue;
-      let h =
-          !isTerminalTaskStatus(e.status) &&
-          isTerminalTaskStatus(m.view.status),
+      let h = !isTerminalTaskStatus(e.status) && isTerminalTaskStatus(m.view.status),
         g = !isReadyTaskStatus(e.status) && isReadyTaskStatus(m.view.status);
       ((e = m.view), await appendTaskViewStep({ view: e }));
       let _ = u && !h ? c : [];
@@ -163,8 +156,7 @@ async function resolveAnsweredCommand(e, t) {
     r = t.inputResponses.map((e) => e.requestId).filter((e) => n.has(e));
   return r.length === 0
     ? void 0
-    : (await deliverTaskInputResponsesStep({ answer: t, requestIds: r })) ===
-        `delivered`
+    : (await deliverTaskInputResponsesStep({ answer: t, requestIds: r })) === `delivered`
       ? { kind: `answered`, requestIds: r }
       : void 0;
 }

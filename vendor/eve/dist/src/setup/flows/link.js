@@ -5,42 +5,27 @@ import { interactiveAsker, withAnswers } from "../ask.js";
 import { detectProjectIdentity } from "../project-resolution.js";
 import { withSpinner } from "../with-spinner.js";
 import { snapshotSetupState } from "../state.js";
-import {
-  detectAiGateway,
-  findEnvFileWithKey,
-} from "../boxes/detect-ai-gateway.js";
+import { detectAiGateway, findEnvFileWithKey } from "../boxes/detect-ai-gateway.js";
 import { applyAiGatewayCredential } from "../boxes/apply-ai-gateway-credential.js";
 import { linkVercelProject } from "../boxes/link-project.js";
 import { resolveProvisioning } from "../boxes/resolve-provisioning.js";
 import { WizardCancelledError } from "../step.js";
 import { runInteractive } from "../runner.js";
 import { inProjectSetupState, prompterSink } from "./in-project.js";
-import {
-  hasEnvValue,
-  resolveGatewayCredential,
-} from "#internal/resolve-model-endpoint-status.js";
+import { hasEnvValue, resolveGatewayCredential } from "#internal/resolve-model-endpoint-status.js";
 var import_picocolors = __toESM(require_picocolors(), 1);
 async function runLinkFlow(e) {
-  let {
-      appRoot: t,
-      prompter: a,
-      signal: o,
-      projectSelection: s = `existing-only`,
-    } = e,
+  let { appRoot: t, prompter: a, signal: o, projectSelection: s = `existing-only` } = e,
     c = {
       detectProjectIdentity,
       findEnvFileWithKey,
       env: process.env,
       ...e.deps,
     },
-    l = await withSpinner(
-      a,
-      `Checking the current Vercel link...`,
-      async () => {
-        let e = await c.detectProjectIdentity(t, { signal: o });
-        return (o?.throwIfAborted(), e);
-      },
-    );
+    l = await withSpinner(a, `Checking the current Vercel link...`, async () => {
+      let e = await c.detectProjectIdentity(t, { signal: o });
+      return (o?.throwIfAborted(), e);
+    });
   if (l === void 0) {
     let [n, r] = await Promise.all([
         c.findEnvFileWithKey(t, AI_GATEWAY_API_KEY_ENV_VAR),

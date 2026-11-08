@@ -1,9 +1,6 @@
 import { INTERNAL_CHANNEL_DELIVER } from "#channel/channel-operations.js";
 import { parseJsonValue } from "#shared/json.js";
-import {
-  RunExpiredError,
-  WorkflowRunNotFoundError,
-} from "#compiled/@workflow/errors/index.js";
+import { RunExpiredError, WorkflowRunNotFoundError } from "#compiled/@workflow/errors/index.js";
 import { getRun, getWorld } from "#internal/workflow/runtime.js";
 import { parseNdjsonStream } from "#execution/ndjson-stream.js";
 import {
@@ -32,62 +29,38 @@ var WorkflowAgentInvocationExecution = class {
         mode: `task`,
       }),
       r = await this.#n(n.sessionId, e.auth);
-    if (r === void 0)
-      throw Error(`Invocation run was unavailable after durable creation.`);
-    return workingInvocation(
-      n.sessionId,
-      r.createdAt.toISOString(),
-      r.expiredAt?.toISOString(),
-    );
+    if (r === void 0) throw Error(`Invocation run was unavailable after durable creation.`);
+    return workingInvocation(n.sessionId, r.createdAt.toISOString(), r.expiredAt?.toISOString());
   }
   async read(e) {
     let t = await this.#n(e.invocationId, e.auth);
     if (t === void 0) return;
     if (isTerminalRunStatus(t.status)) return await terminalInvocation(t);
     let n = await readRecentPersistedEvents(e.invocationId);
-    return projectNonterminal(
-      t.runId,
-      t.createdAt.toISOString(),
-      t.expiredAt?.toISOString(),
-      n,
-    );
+    return projectNonterminal(t.runId, t.createdAt.toISOString(), t.expiredAt?.toISOString(), n);
   }
   async update(t) {
     let r = await this.read(t);
     if (r === void 0) return { type: `not_found` };
-    if (r.status !== `input_required`)
-      return conflict(`Invocation is not waiting for input.`);
+    if (r.status !== `input_required`) return conflict(`Invocation is not waiting for input.`);
     let i = await this.#n(t.invocationId, t.auth);
     if (i === void 0) return { type: `not_found` };
-    let a = latestPendingInputBatch(
-      await readRecentPersistedEvents(t.invocationId),
-    );
+    let a = latestPendingInputBatch(await readRecentPersistedEvents(t.invocationId));
     if (a === void 0)
-      return conflict(
-        `Invocation input changed before the update could be applied.`,
-      );
+      return conflict(`Invocation input changed before the update could be applied.`);
     let o = new Set(),
       s = [];
     for (let e of t.responses) {
       let t = a.rawRequestIds[e.requestId];
-      if (t === void 0)
-        return conflict(`Unknown input request: ${e.requestId}`);
+      if (t === void 0) return conflict(`Unknown input request: ${e.requestId}`);
       (o.add(e.requestId), s.push({ ...e, requestId: t }));
     }
-    if (
-      o.size !== t.responses.length ||
-      o.size !== Object.keys(a.requests).length
-    )
-      return conflict(
-        `Responses must answer the complete pending input batch exactly once.`,
-      );
+    if (o.size !== t.responses.length || o.size !== Object.keys(a.requests).length)
+      return conflict(`Responses must answer the complete pending input batch exactly once.`);
     let l = i.attributes[INVOCATION_TOKEN_ATTRIBUTE];
     if (l === void 0) return { type: `not_found` };
     try {
-      await this.#t(l)[INTERNAL_CHANNEL_DELIVER](
-        { inputResponses: s },
-        { auth: t.auth },
-      );
+      await this.#t(l)[INTERNAL_CHANNEL_DELIVER]({ inputResponses: s }, { auth: t.auth });
     } catch (e) {
       if (RunExpiredError.is(e)) return { type: `not_found` };
       throw e;
@@ -126,23 +99,18 @@ var WorkflowAgentInvocationExecution = class {
 async function readRecentPersistedEvents(e) {
   let t = getRun(e).getReadable({ startIndex: -64 }),
     n = await t.getTailIndex();
-  if (n < 0)
-    return (
-      await t.cancel(`invocation event stream is empty`).catch(() => {}),
-      []
-    );
+  if (n < 0) return (await t.cancel(`invocation event stream is empty`).catch(() => {}), []);
   let r = Math.min(n + 1, 64),
     a = parseNdjsonStream(() => t).getReader(),
     s = [];
   try {
-    for (; s.length < r; ) {
+    for (; s.length < r;) {
       let { done: e, value: t } = await a.read();
       if (e) break;
       s.push(t);
     }
   } finally {
-    (await a.cancel(`invocation event window read complete`).catch(() => {}),
-      a.releaseLock());
+    (await a.cancel(`invocation event window read complete`).catch(() => {}), a.releaseLock());
   }
   return s;
 }
@@ -172,8 +140,7 @@ function projectNonterminal(e, t, n, r) {
     else if (e.type === `turn.started`) (i.clear(), (a = void 0), (o = void 0));
     else if (e.type === `authorization.required`) {
       let t = { description: e.data.description, name: e.data.name };
-      (e.data.authorization !== void 0 &&
-        (t.authorization = e.data.authorization),
+      (e.data.authorization !== void 0 && (t.authorization = e.data.authorization),
         e.data.webhookUrl !== void 0 && (t.webhookUrl = e.data.webhookUrl),
         i.set(e.data.name, t));
     } else

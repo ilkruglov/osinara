@@ -45,8 +45,4 @@ function formatSlackThreadContext(e) {
 function slackThreadSenderType(e) {
   return e.isMe ? `agent` : e.botId ? `bot` : e.user ? `user` : `unknown`;
 }
-export {
-  formatSlackInboundMessage,
-  formatSlackModelMessage,
-  formatSlackThreadContext,
-};
+export { formatSlackInboundMessage, formatSlackModelMessage, formatSlackThreadContext };

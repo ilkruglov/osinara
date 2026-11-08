@@ -24,7 +24,10 @@ const SESSION_SETTINGS = "-c hnsw.iterative_scan=relaxed_order -c hnsw.max_scan_
  * The pool's connection: node-pg lets an `options` parameter of the URL override the config's
  * `options`, so one in the URL is taken out of it and joined with the session settings.
  */
-export function poolConnection(connectionString: string): { connectionString: string; options: string } {
+export function poolConnection(connectionString: string): {
+  connectionString: string;
+  options: string;
+} {
   try {
     const url = new URL(connectionString);
     const fromUrl = url.searchParams.get("options");
@@ -42,9 +45,7 @@ export function database(): Pool {
   // Resolve at first use so Eve discovery and image builds do not require runtime secrets.
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error(
-      "AGENT_DATABASE_CONFIG_MISSING: Не задано подключение к базе данных",
-    );
+    throw new Error("AGENT_DATABASE_CONFIG_MISSING: Не задано подключение к базе данных");
   }
   // Session settings go as a startup option so every pooled connection has them before its
   // first query.

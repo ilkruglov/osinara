@@ -8,6 +8,6 @@
  * loudly, never reinterpret" wire contract.
  */
 export declare function reportDroppedWirePayloadStep(input: {
-    readonly detail: string;
-    readonly family: string;
+  readonly detail: string;
+  readonly family: string;
 }): Promise<void>;

@@ -114,25 +114,29 @@ export function createGoogleOAuthCallbackHandler(dependencies: GoogleOAuthCallba
         );
       }
       const identity = await dependencies.getAccountIdentity(tokens.accessToken);
-      await dependencies.completeAuthorization(claim, {
-        accessToken: tokens.accessToken,
-        accessTokenExpiresAt: new Date(
-          dependencies.now().getTime() + tokens.expiresInSeconds * 1_000,
-        ),
-        displayName: identity.email,
-        encryptionKey: config.encryptionKey,
-        externalAccountId: identity.subject,
-        refreshToken: tokens.refreshToken,
-        scopes: tokens.scopes,
-      }, async () => {
-        // Native gws receives only a complete profile belonging to the target workspace volume.
-        await dependencies.writeProfile(claim.workspaceId, {
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-          refresh_token: tokens.refreshToken,
-          type: "authorized_user",
-        });
-      });
+      await dependencies.completeAuthorization(
+        claim,
+        {
+          accessToken: tokens.accessToken,
+          accessTokenExpiresAt: new Date(
+            dependencies.now().getTime() + tokens.expiresInSeconds * 1_000,
+          ),
+          displayName: identity.email,
+          encryptionKey: config.encryptionKey,
+          externalAccountId: identity.subject,
+          refreshToken: tokens.refreshToken,
+          scopes: tokens.scopes,
+        },
+        async () => {
+          // Native gws receives only a complete profile belonging to the target workspace volume.
+          await dependencies.writeProfile(claim.workspaceId, {
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            refresh_token: tokens.refreshToken,
+            type: "authorized_user",
+          });
+        },
+      );
       return htmlResponse(
         200,
         "Google Workspace подключён",
@@ -141,10 +145,12 @@ export function createGoogleOAuthCallbackHandler(dependencies: GoogleOAuthCallba
     })();
     return completion.then(undefined, async (error: unknown) => {
       await dependencies.failAuthorization(claim, "AGENT_GOOGLE_OAUTH_COMPLETION_FAILED");
-      console.error(JSON.stringify({
-        code: "AGENT_GOOGLE_OAUTH_COMPLETION_FAILED",
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_GOOGLE_OAUTH_COMPLETION_FAILED",
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
       throw error;
     });
   };

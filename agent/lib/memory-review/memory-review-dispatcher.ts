@@ -15,9 +15,7 @@ import {
   MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
   MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS,
 } from "./memory-review-config.js";
-import {
-  type MemoryReviewClaim,
-} from "./memory-review-repository.js";
+import { type MemoryReviewClaim } from "./memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
 import { memoryReviewSessionRepository } from "./memory-review-session-repository.js";
 import { isTurnStartPaused } from "../deploy/turn-start-pause.js";
@@ -32,10 +30,7 @@ interface MemoryReviewDispatcherDependencies {
     limit: number;
     now: Date;
   }): Promise<ClaimedMemoryReviewBatch[]>;
-  discardSession(
-    batch: ClaimedMemoryReviewBatch,
-    applicationSessionId: string,
-  ): Promise<void>;
+  discardSession(batch: ClaimedMemoryReviewBatch, applicationSessionId: string): Promise<void>;
   failClaim(
     batch: ClaimedMemoryReviewBatch,
     diagnosticCode: string,
@@ -78,9 +73,7 @@ function reviewAuth(batch: ClaimedMemoryReviewBatch, prepared: PreparedSession) 
       telegramChatId: batch.telegramChatId,
       telegramChatType: batch.telegramChatType,
       telegramConversationId: batch.conversationId,
-      ...(batch.messageThreadId === null
-        ? {}
-        : { telegramForumTopicId: batch.messageThreadId }),
+      ...(batch.messageThreadId === null ? {} : { telegramForumTopicId: batch.messageThreadId }),
       telegramTimelineSequence: batch.throughSequence,
       telegramUserId: batch.ownerTelegramUserId,
       ...(batch.groupType === "external" ? { toolAllowlist: batch.toolAllowlist } : {}),
@@ -124,7 +117,8 @@ async function dispatchOne(
   let session: { id: string };
   try {
     // The authored internal channel selects task mode and has no Telegram delivery adapter.
-    session = await dependencies.to(memoryReviewChannel, { batchId: batch.batchId })
+    session = await dependencies
+      .to(memoryReviewChannel, { batchId: batch.batchId })
       .send(batch.prompt, { auth: reviewAuth(batch, prepared) });
   } catch (error) {
     await dependencies.markAmbiguous(batch, "AGENT_MEMORY_REVIEW_HANDOFF_AMBIGUOUS", prepared.id);
@@ -147,17 +141,21 @@ export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatche
     });
     // Each handoff is its own session preparation and Eve enqueue; the claimed batches are
     // independent, so they go out together rather than one after another.
-    await Promise.all(batches.map(async (batch) => {
-      try {
-        await dispatchOne(dependencies, batch, now);
-      } catch (error) {
-        console.error(JSON.stringify({
-          batchId: batch.batchId,
-          code: "AGENT_MEMORY_REVIEW_DISPATCH_FAILED",
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        }));
-      }
-    }));
+    await Promise.all(
+      batches.map(async (batch) => {
+        try {
+          await dispatchOne(dependencies, batch, now);
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              batchId: batch.batchId,
+              code: "AGENT_MEMORY_REVIEW_DISPATCH_FAILED",
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            }),
+          );
+        }
+      }),
+    );
     return batches.length;
   };
 }
@@ -175,10 +173,8 @@ export function dispatchPendingMemoryReviews(to: ScheduleToFn): Promise<number> 
     markRunning: (batch, input) => memoryReviewDispatchRepository.markRunning(batch, input),
     prepareSession: (batch, currentTime) =>
       memoryReviewSessionRepository.prepare(batch, currentTime),
-    syncParticipants: (batch) => conversationRepository.syncTimelineParticipants(
-      batch.conversationId,
-      batch.sourceEntryIds,
-    ),
+    syncParticipants: (batch) =>
+      conversationRepository.syncTimelineParticipants(batch.conversationId, batch.sourceEntryIds),
     to,
     turnStartsPaused: () => isTurnStartPaused(),
   })();

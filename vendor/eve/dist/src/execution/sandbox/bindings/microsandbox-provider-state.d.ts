@@ -6,6 +6,15 @@ import type { MicrosandboxModule } from "#execution/sandbox/bindings/microsandbo
 export declare function isMicrosandboxNotFoundError(error: unknown): boolean;
 export declare function isMicrosandboxStillRunningError(error: unknown): boolean;
 export declare function isMicrosandboxSnapshotSourceRunningError(error: unknown): boolean;
-export declare function snapshotExists(module: MicrosandboxModule, snapshotName: string): Promise<boolean>;
-export declare function sandboxExists(module: MicrosandboxModule, sandboxName: string): Promise<boolean>;
-export declare function removeSnapshotIfExists(module: MicrosandboxModule, snapshotName: string): Promise<void>;
+export declare function snapshotExists(
+  module: MicrosandboxModule,
+  snapshotName: string,
+): Promise<boolean>;
+export declare function sandboxExists(
+  module: MicrosandboxModule,
+  sandboxName: string,
+): Promise<boolean>;
+export declare function removeSnapshotIfExists(
+  module: MicrosandboxModule,
+  snapshotName: string,
+): Promise<void>;

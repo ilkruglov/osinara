@@ -2,10 +2,7 @@ import { createHash } from "node:crypto";
 import { buildSessionHandle } from "#channel/session.js";
 import { createLogger } from "#internal/logging.js";
 import { getAdapterKind } from "#channel/adapter.js";
-import {
-  deserializeUrlFilePart,
-  isSerializedUrlFilePart,
-} from "#internal/attachments/url-refs.js";
+import { deserializeUrlFilePart, isSerializedUrlFilePart } from "#internal/attachments/url-refs.js";
 import { SandboxKey } from "#context/keys.js";
 import { basename } from "node:path";
 import { toErrorMessage } from "#shared/errors.js";
@@ -25,9 +22,7 @@ const ATTACHMENTS_ROOT = `/workspace/attachments`,
 async function stageAttachmentsForAdapter(e, t, n) {
   if (typeof e == `string`) return e;
   let r = reconstitueFilePartUrls(e);
-  return Promise.all(
-    r.map(async (e) => (e.type === `file` ? stageFilePart(e, t, n) : e)),
-  );
+  return Promise.all(r.map(async (e) => (e.type === `file` ? stageFilePart(e, t, n) : e)));
 }
 async function stageAttachmentsToSandbox(e) {
   if (typeof e == `string` || !Array.isArray(e) || !hasFileParts(e)) return e;
@@ -40,9 +35,7 @@ async function stageAttachmentsToSandbox(e) {
   return stageAttachmentsForAdapter(
     e,
     i,
-    a
-      ? buildAdapterContext(a, n)
-      : { ctx: n, state: {}, session: buildSessionHandle(n) },
+    a ? buildAdapterContext(a, n) : { ctx: n, state: {}, session: buildSessionHandle(n) },
   );
 }
 async function hydrateSandboxAttachments(e) {
@@ -80,9 +73,7 @@ function messageContainsSandboxRef(e) {
   return !1;
 }
 function isSandboxRefFilePart(e) {
-  return (
-    typeof e == `object` && !!e && e.type === `file` && isSandboxRefUrl(e.data)
-  );
+  return typeof e == `object` && !!e && e.type === `file` && isSandboxRefUrl(e.data);
 }
 async function hydrateMessageContent(e, t) {
   return Array.isArray(e)
@@ -91,8 +82,7 @@ async function hydrateMessageContent(e, t) {
           if (!isSandboxRefFilePart(e)) return e;
           let n = e,
             r = decodeSandboxRef(n.data);
-          if (!shouldInlineSandboxRefAsBytes(r))
-            return renderSandboxRefAsTextPart(r);
+          if (!shouldInlineSandboxRefAsBytes(r)) return renderSandboxRefAsTextPart(r);
           let i = await t.readBinaryFile({ path: r.path });
           return i === null
             ? (log.warn(

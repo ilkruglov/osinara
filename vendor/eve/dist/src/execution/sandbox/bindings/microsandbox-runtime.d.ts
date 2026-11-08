@@ -2,59 +2,78 @@ import { type ResolvedMicrosandboxOptions } from "#execution/sandbox/bindings/mi
 import { type MicrosandboxSessionMetadata } from "#execution/sandbox/bindings/microsandbox-metadata.js";
 import type { SandboxBackendTags } from "#public/definitions/sandbox-backend.js";
 import type { SandboxNetworkPolicy } from "#shared/sandbox-network-policy.js";
-import type { SandboxProcess, SandboxRemovePathOptions, SandboxSpawnOptions } from "#shared/sandbox-session.js";
+import type {
+  SandboxProcess,
+  SandboxRemovePathOptions,
+  SandboxSpawnOptions,
+} from "#shared/sandbox-session.js";
 import type { Sandbox as MicrosandboxSandbox } from "microsandbox";
-export { isMicrosandboxNotFoundError, removeSnapshotIfExists, sandboxExists, snapshotExists, } from "#execution/sandbox/bindings/microsandbox-provider-state.js";
+export {
+  isMicrosandboxNotFoundError,
+  removeSnapshotIfExists,
+  sandboxExists,
+  snapshotExists,
+} from "#execution/sandbox/bindings/microsandbox-provider-state.js";
 export type MicrosandboxModule = typeof import("microsandbox");
 export declare class MicrosandboxVm {
-    #private;
-    constructor(input: {
-        readonly module: MicrosandboxModule;
-        readonly options: ResolvedMicrosandboxOptions;
-        readonly sessionKey: string;
-        readonly tags?: SandboxBackendTags;
-    }, sandbox: MicrosandboxSandbox, sandboxName: string, networkPolicy: SandboxNetworkPolicy | undefined, metadataPath?: string, optionsHash?: string, stateSnapshotName?: string);
-    get id(): string;
-    captureState(optionsHash: string): Promise<MicrosandboxSessionMetadata>;
-    detach(): Promise<void>;
-    /**
-     * Stops the VM and releases the SDK client for server shutdown. The
-     * stopped sandbox persists on disk, so a later `connect` restarts it
-     * (dev) or restores from the last captured snapshot (production).
-     */
-    shutdown(): Promise<void>;
-    stop(): Promise<void>;
-    readFileBytes(path: string): Promise<Buffer | null>;
-    removePath(options: SandboxRemovePathOptions): Promise<void>;
-    removePersisted(): Promise<void>;
-    setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
-    spawn(options: SandboxSpawnOptions): Promise<SandboxProcess>;
-    stopAndSnapshot(snapshotName: string): Promise<void>;
-    writeFiles(files: ReadonlyArray<{
-        path: string;
-        content: string | Uint8Array;
-    }>): Promise<void>;
-    writeMetadata(path: string, optionsHash: string): Promise<void>;
-    private runInternalCommand;
+  #private;
+  constructor(
+    input: {
+      readonly module: MicrosandboxModule;
+      readonly options: ResolvedMicrosandboxOptions;
+      readonly sessionKey: string;
+      readonly tags?: SandboxBackendTags;
+    },
+    sandbox: MicrosandboxSandbox,
+    sandboxName: string,
+    networkPolicy: SandboxNetworkPolicy | undefined,
+    metadataPath?: string,
+    optionsHash?: string,
+    stateSnapshotName?: string,
+  );
+  get id(): string;
+  captureState(optionsHash: string): Promise<MicrosandboxSessionMetadata>;
+  detach(): Promise<void>;
+  /**
+   * Stops the VM and releases the SDK client for server shutdown. The
+   * stopped sandbox persists on disk, so a later `connect` restarts it
+   * (dev) or restores from the last captured snapshot (production).
+   */
+  shutdown(): Promise<void>;
+  stop(): Promise<void>;
+  readFileBytes(path: string): Promise<Buffer | null>;
+  removePath(options: SandboxRemovePathOptions): Promise<void>;
+  removePersisted(): Promise<void>;
+  setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
+  spawn(options: SandboxSpawnOptions): Promise<SandboxProcess>;
+  stopAndSnapshot(snapshotName: string): Promise<void>;
+  writeFiles(
+    files: ReadonlyArray<{
+      path: string;
+      content: string | Uint8Array;
+    }>,
+  ): Promise<void>;
+  writeMetadata(path: string, optionsHash: string): Promise<void>;
+  private runInternalCommand;
 }
 export declare function createPreparedMicrosandbox(input: {
-    readonly fromSnapshot?: string;
-    readonly log?: (message: string) => void;
-    readonly module: MicrosandboxModule;
-    readonly name: string;
-    readonly networkPolicy?: SandboxNetworkPolicy;
-    readonly options: ResolvedMicrosandboxOptions;
-    readonly sessionKey: string;
-    readonly setupBaseRuntime: boolean;
-    readonly tags?: SandboxBackendTags;
+  readonly fromSnapshot?: string;
+  readonly log?: (message: string) => void;
+  readonly module: MicrosandboxModule;
+  readonly name: string;
+  readonly networkPolicy?: SandboxNetworkPolicy;
+  readonly options: ResolvedMicrosandboxOptions;
+  readonly sessionKey: string;
+  readonly setupBaseRuntime: boolean;
+  readonly tags?: SandboxBackendTags;
 }): Promise<MicrosandboxVm>;
 export declare function connectMicrosandbox(input: {
-    readonly metadata: MicrosandboxSessionMetadata;
-    readonly metadataPath: string;
-    readonly module: MicrosandboxModule;
-    readonly options: ResolvedMicrosandboxOptions;
-    readonly sessionKey: string;
-    readonly tags?: SandboxBackendTags;
+  readonly metadata: MicrosandboxSessionMetadata;
+  readonly metadataPath: string;
+  readonly module: MicrosandboxModule;
+  readonly options: ResolvedMicrosandboxOptions;
+  readonly sessionKey: string;
+  readonly tags?: SandboxBackendTags;
 }): Promise<MicrosandboxVm | null>;
 /**
  * Loads the microsandbox npm package and ensures its VM runtime is
@@ -65,16 +84,22 @@ export declare function connectMicrosandbox(input: {
  * errors instead.
  */
 export declare function loadMicrosandboxModule(input: {
-    readonly appRoot: string;
-    readonly log?: (message: string) => void;
-    readonly options: ResolvedMicrosandboxOptions;
+  readonly appRoot: string;
+  readonly log?: (message: string) => void;
+  readonly options: ResolvedMicrosandboxOptions;
 }): Promise<MicrosandboxModule>;
 /**
  * Loads microsandbox only when its package and runtime are already
  * present — used by cleanup paths that must never trigger installs.
  */
-export declare function loadMicrosandboxWithoutInstall(appRoot: string): Promise<MicrosandboxModule | null>;
-export declare function stopAndSnapshotMicrosandboxSandbox(module: MicrosandboxModule, sandboxName: string, snapshotName: string): Promise<void>;
+export declare function loadMicrosandboxWithoutInstall(
+  appRoot: string,
+): Promise<MicrosandboxModule | null>;
+export declare function stopAndSnapshotMicrosandboxSandbox(
+  module: MicrosandboxModule,
+  sandboxName: string,
+  snapshotName: string,
+): Promise<void>;
 export declare function createProviderName(prefix: string, key: string, extra?: string): string;
 export declare function createStableHash(value: string): string;
 export declare function doesPathExist(path: string): Promise<boolean>;

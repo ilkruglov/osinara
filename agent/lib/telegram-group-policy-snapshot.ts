@@ -12,9 +12,13 @@ export function sameTelegramGroupPolicy(
 ): boolean {
   if (!right) return false;
   if (
-    left.familyId !== right.familyId || left.groupId !== right.groupId ||
-    left.messageMode !== right.messageMode || left.telegramChatId !== right.telegramChatId ||
-    left.type !== right.type || left.toolAllowlist.length !== right.toolAllowlist.length
-  ) return false;
+    left.familyId !== right.familyId ||
+    left.groupId !== right.groupId ||
+    left.messageMode !== right.messageMode ||
+    left.telegramChatId !== right.telegramChatId ||
+    left.type !== right.type ||
+    left.toolAllowlist.length !== right.toolAllowlist.length
+  )
+    return false;
   return left.toolAllowlist.every((capability, index) => capability === right.toolAllowlist[index]);
 }

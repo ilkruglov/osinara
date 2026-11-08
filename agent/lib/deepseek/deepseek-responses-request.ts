@@ -47,8 +47,9 @@ export function normalizeDeepSeekResponsesBody(
   }
 
   if (Array.isArray(normalized.tools)) {
-    const tools = normalized.tools.filter((tool) =>
-      isRecord(tool) && typeof tool.type === "string" && SUPPORTED_TOOL_TYPES.has(tool.type)
+    const tools = normalized.tools.filter(
+      (tool) =>
+        isRecord(tool) && typeof tool.type === "string" && SUPPORTED_TOOL_TYPES.has(tool.type),
     );
     if (tools.length === 0) {
       delete normalized.tools;

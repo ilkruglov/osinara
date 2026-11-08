@@ -77,8 +77,15 @@ function integerSetting(
   const raw = env[name];
   if (raw === undefined) return bounds.absent;
   const value = Number(raw);
-  if (!/^\d+$/u.test(raw) || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
-    throw new Error(`AGENT_RUNTIME_TUNING_INVALID: ${name} должно быть целым от ${bounds.min} до ${bounds.max}`);
+  if (
+    !/^\d+$/u.test(raw) ||
+    !Number.isSafeInteger(value) ||
+    value < bounds.min ||
+    value > bounds.max
+  ) {
+    throw new Error(
+      `AGENT_RUNTIME_TUNING_INVALID: ${name} должно быть целым от ${bounds.min} до ${bounds.max}`,
+    );
   }
   return value;
 }
@@ -132,7 +139,8 @@ function chatKey(body: unknown): { id: string; group: boolean } | null {
 
 export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}): TelegramSendPacer {
   const now = options.now ?? Date.now;
-  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const globalPerSecond = options.globalPerSecond ?? 25;
   const groupPerMinute = options.groupPerMinute ?? 20;
   const privateGapMs = options.privateGapMs ?? 250;
@@ -167,7 +175,8 @@ export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}):
   function globalWait(at: number): number {
     let wait = Math.max(0, pauseUntil - at);
     pruneSends(globalSends, GLOBAL_WINDOW_MS, at);
-    if (globalSends.length >= globalPerSecond) wait = Math.max(wait, globalSends[0]! + GLOBAL_WINDOW_MS - at);
+    if (globalSends.length >= globalPerSecond)
+      wait = Math.max(wait, globalSends[0]! + GLOBAL_WINDOW_MS - at);
     return wait;
   }
 
@@ -228,10 +237,12 @@ export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}):
       entry.waiting += 1;
       chatQueues.set(key, entry);
       const turn = entry.tail.then(() => takeSlot(chat));
-      entry.tail = turn.catch(() => undefined).then(() => {
-        entry.waiting -= 1;
-        if (entry.waiting === 0 && chatQueues.get(key) === entry) chatQueues.delete(key);
-      });
+      entry.tail = turn
+        .catch(() => undefined)
+        .then(() => {
+          entry.waiting -= 1;
+          if (entry.waiting === 0 && chatQueues.get(key) === entry) chatQueues.delete(key);
+        });
       return turn;
     },
     retryAfter(seconds) {
@@ -280,15 +291,20 @@ export async function reportTelegramDeliveryFailure(
   const report = { body: answer.body, chatId: chat.id, method, startedAt, status: answer.status };
   const settled = Promise.resolve()
     .then(() => (observer as (failure: unknown) => unknown)(report))
-    .then(() => "settled", (error: unknown) => {
-      console.error(JSON.stringify({
-        chatId: chat.id,
-        code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_FAILED",
-        errorName: error instanceof Error ? error.name : "UnknownError",
-        method,
-      }));
-      return "settled";
-    });
+    .then(
+      () => "settled",
+      (error: unknown) => {
+        console.error(
+          JSON.stringify({
+            chatId: chat.id,
+            code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_FAILED",
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            method,
+          }),
+        );
+        return "settled";
+      },
+    );
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<string>((resolve) => {
     timer = setTimeout(() => resolve("timeout"), timeoutMs);
@@ -296,8 +312,17 @@ export async function reportTelegramDeliveryFailure(
   const outcome = await Promise.race([settled, timedOut]);
   clearTimeout(timer);
   if (outcome === "timeout") {
-    console.error(JSON.stringify({ chatId: chat.id, code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_REPORT_TIMEOUT", method, timeoutMs }));
+    console.error(
+      JSON.stringify({
+        chatId: chat.id,
+        code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_REPORT_TIMEOUT",
+        method,
+        timeoutMs,
+      }),
+    );
   }
 }
 
-export const telegramSendPacer: TelegramSendPacer = createTelegramSendPacer(telegramSendPacerSettings());
+export const telegramSendPacer: TelegramSendPacer = createTelegramSendPacer(
+  telegramSendPacerSettings(),
+);

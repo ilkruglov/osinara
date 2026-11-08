@@ -11,6 +11,6 @@ function isVercelSandboxMissingError(e) {
 function* walkErrorChain(e) {
   let t = e,
     n = new Set();
-  for (; t != null && !n.has(t); ) (n.add(t), yield t, (t = t.cause));
+  for (; t != null && !n.has(t);) (n.add(t), yield t, (t = t.cause));
 }
 export { isVercelSandboxMissingError, isVercelSnapshotUnavailableError };

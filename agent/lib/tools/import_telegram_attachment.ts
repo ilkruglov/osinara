@@ -9,11 +9,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { materializeTelegramAttachment } from "../attachments/telegram-attachment-materializer.js";
-import {
-  requireInputRecord,
-  requireOnlyFields,
-  requiredUuid,
-} from "../tool-input-validation.js";
+import { requireInputRecord, requireOnlyFields, requiredUuid } from "../tool-input-validation.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_ATTACHMENT_IMPORT_INPUT_INVALID";
@@ -28,15 +24,17 @@ export default defineTool({
     "Результат: метаданные вложения и path, который затем передай в read_file или inspect_workspace_image.",
     "Ошибка: при NOT_FOUND заново получи attachmentId через list_telegram_attachments или историю; transport failure автоматически не повторяй.",
   ].join(" "),
-  inputSchema: z.object({
-    attachmentId: z.uuid().describe("Обязательный UUID вложения из <telegram_attachment_refs> или журнала текущей группы"),
-  }).strict(),
+  inputSchema: z
+    .object({
+      attachmentId: z
+        .uuid()
+        .describe(
+          "Обязательный UUID вложения из <telegram_attachment_refs> или журнала текущей группы",
+        ),
+    })
+    .strict(),
   async execute(input, ctx) {
-    const payload = requireInputRecord(
-      input,
-      "import_telegram_attachment",
-      INPUT_ERROR_CODE,
-    );
+    const payload = requireInputRecord(input, "import_telegram_attachment", INPUT_ERROR_CODE);
     requireOnlyFields(payload, TOP_LEVEL_FIELDS, "import_telegram_attachment", INPUT_ERROR_CODE);
     const attachmentId = requiredUuid(
       payload,

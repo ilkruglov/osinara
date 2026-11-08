@@ -18,10 +18,10 @@ export declare const AGENT_TOOL_DESCRIPTION: string;
  * model cannot call.
  */
 export declare function isImplicitAgentToolAvailable(input: {
-    readonly disabledFrameworkTools: readonly string[];
-    readonly hasAuthoredAgentTool: boolean;
-    /** Undefined when the caller prepares a turn without a graph node (never root). */
-    readonly nodeId: string | undefined;
+  readonly disabledFrameworkTools: readonly string[];
+  readonly hasAuthoredAgentTool: boolean;
+  /** Undefined when the caller prepares a turn without a graph node (never root). */
+  readonly nodeId: string | undefined;
 }): boolean;
 /**
  * Shared metadata for the root-only agent delegation tool.

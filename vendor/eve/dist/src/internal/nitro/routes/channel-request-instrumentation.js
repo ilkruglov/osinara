@@ -22,11 +22,7 @@ async function traceChannelRequest(i, a) {
     c = propagation.extract(context.active(), o.headers, headersGetter),
     l = trace
       .getTracer(`eve.channel`)
-      .startSpan(
-        s,
-        { attributes: baseAttributes(o, s), kind: SpanKind.SERVER },
-        c,
-      ),
+      .startSpan(s, { attributes: baseAttributes(o, s), kind: SpanKind.SERVER }, c),
     u = trace.setSpan(c, l);
   try {
     let e = await context.with(u, () => a(l));
@@ -46,8 +42,7 @@ function baseAttributes(e, t) {
     r = parseRequestUrl(e.url);
   return (
     r !== void 0 &&
-      ((n[`url.scheme`] = r.protocol.replace(/:$/, ``)),
-      (n[`server.address`] = r.hostname)),
+      ((n[`url.scheme`] = r.protocol.replace(/:$/, ``)), (n[`server.address`] = r.hostname)),
     n
   );
 }

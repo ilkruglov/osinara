@@ -52,8 +52,9 @@ describe("external group tool catalog", () => {
 
   it("offers owner-grantable subscription image generation with Telegram delivery", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("generate_image");
-    expect(EXTERNAL_GROUP_CAPABILITY_CATALOG.find(({ name }) => name === "generate_image")?.usage)
-      .toMatch(/создавать.*отправлять/iu);
+    expect(
+      EXTERNAL_GROUP_CAPABILITY_CATALOG.find(({ name }) => name === "generate_image")?.usage,
+    ).toMatch(/создавать.*отправлять/iu);
   });
 
   it("defines non-empty model usage for every persisted and always-available capability", () => {
@@ -80,9 +81,9 @@ describe("external group tool catalog", () => {
   });
 
   it("describes external memory mutations through model-safe memoryRef values", () => {
-    const mutationUsage = EXTERNAL_GROUP_CAPABILITY_CATALOG
-      .filter(({ name }) => name.startsWith("manage_memory."))
-      .map(({ usage }) => usage);
+    const mutationUsage = EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(({ name }) =>
+      name.startsWith("manage_memory."),
+    ).map(({ usage }) => usage);
 
     expect(mutationUsage).toHaveLength(3);
     for (const usage of mutationUsage) {

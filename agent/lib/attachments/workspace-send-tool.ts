@@ -36,9 +36,10 @@ import { TELEGRAM_SILENT_DIRECTIVE } from "../telegram-progress.js";
 
 // A scheduled run is completed only by its final text (`channels/telegram.ts`), so there the
 // model is never told it may stay silent (Codex review of 1.8.54).
-const captionSentNote = (what: "картинкой" | "файлом", scheduled: boolean) => scheduled
-  ? `Подпись уже в чате вместе с ${what}. Итоговое сообщение расписания обязательно: напиши коротко то, чего в подписи нет, без «Готово» и без пересказа.`
-  : `Подпись уже в чате вместе с ${what}. В следующем сообщении пиши только то, чего в подписи нет, без «Готово» и без пересказа; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
+const captionSentNote = (what: "картинкой" | "файлом", scheduled: boolean) =>
+  scheduled
+    ? `Подпись уже в чате вместе с ${what}. Итоговое сообщение расписания обязательно: напиши коротко то, чего в подписи нет, без «Готово» и без пересказа.`
+    : `Подпись уже в чате вместе с ${what}. В следующем сообщении пиши только то, чего в подписи нет, без «Готово» и без пересказа; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
 
 export function createWorkspaceSendTool(options: {
   description: string;
@@ -47,21 +48,27 @@ export function createWorkspaceSendTool(options: {
 }) {
   return defineTool({
     description: options.description,
-    inputSchema: z.object({
-      caption: z.string().max(1_024).optional().describe("Необязательная подпись Telegram"),
-      path: z.string().min(1).max(512).describe(
-        `Относительный путь внутри выбранного scope, например ${options.pathExample}`,
-      ),
-      scope: z.enum(["personal", "family", "group"]).describe(
-        "Workspace, относительно которого задан path",
-      ),
-    }).strict(),
+    inputSchema: z
+      .object({
+        caption: z.string().max(1_024).optional().describe("Необязательная подпись Telegram"),
+        path: z
+          .string()
+          .min(1)
+          .max(512)
+          .describe(`Относительный путь внутри выбранного scope, например ${options.pathExample}`),
+        scope: z
+          .enum(["personal", "family", "group"])
+          .describe("Workspace, относительно которого задан path"),
+      })
+      .strict(),
     async execute(input, ctx) {
       const auth = requireWorkspaceAuthorization(ctx);
       const target = requireTelegramDeliveryTarget(ctx);
       const forumTopicId = ctx.session.auth.current?.attributes.telegramForumTopicId;
-      if (forumTopicId !== undefined &&
-        (typeof forumTopicId !== "string" || !/^[1-9][0-9]*$/u.test(forumTopicId))) {
+      if (
+        forumTopicId !== undefined &&
+        (typeof forumTopicId !== "string" || !/^[1-9][0-9]*$/u.test(forumTopicId))
+      ) {
         throw new AppError(
           "AGENT_TELEGRAM_FORUM_TOPIC_INVALID",
           "Не удалось определить тему для истории отправленного файла",
@@ -120,11 +127,13 @@ export function createWorkspaceSendTool(options: {
           persistenceCompleted = true;
         } catch (error) {
           // Telegram confirmed delivery, so a bookkeeping error must not turn into a retryable send.
-          console.error(JSON.stringify({
-            code: "AGENT_WORKSPACE_FILE_COMPLETION_FAILED",
-            error: error instanceof Error ? error.message : String(error),
-            telegramMessageId: delivery.telegramMessageId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_WORKSPACE_FILE_COMPLETION_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+              telegramMessageId: delivery.telegramMessageId,
+            }),
+          );
         }
       }
       let projectionCompleted = true;
@@ -146,10 +155,10 @@ export function createWorkspaceSendTool(options: {
             deliveredAt: new Date(),
             groupId: auth.groupId,
             messageThreadId: forumTopicId ?? null,
-            replyToEntryId: typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId ===
-                "string"
-              ? ctx.session.auth.current.attributes.telegramTimelineEntryId
-              : null,
+            replyToEntryId:
+              typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId === "string"
+                ? ctx.session.auth.current.attributes.telegramTimelineEntryId
+                : null,
             telegramMessageIds: [delivery.telegramMessageId],
           });
           await registerTelegramMessageRoutes({
@@ -163,17 +172,24 @@ export function createWorkspaceSendTool(options: {
         } catch (error) {
           // Telegram already confirmed the side effect; surfacing an error would invite a duplicate send.
           projectionCompleted = false;
-          console.error(JSON.stringify({
-            code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED",
-            error: error instanceof Error ? error.message : String(error),
-            telegramMessageId: delivery.telegramMessageId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+              telegramMessageId: delivery.telegramMessageId,
+            }),
+          );
         }
       }
       return {
         alreadySent: false,
         ...(input.caption?.trim()
-          ? { caption_already_sent: captionSentNote(options.presentation === "photo" ? "картинкой" : "файлом", isScheduledSession(ctx)) }
+          ? {
+              caption_already_sent: captionSentNote(
+                options.presentation === "photo" ? "картинкой" : "файлом",
+                isScheduledSession(ctx),
+              ),
+            }
           : {}),
         delivered: true,
         path: reservation.file.path,

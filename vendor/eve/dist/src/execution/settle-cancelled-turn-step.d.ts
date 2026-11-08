@@ -1,9 +1,9 @@
 import { type DurableSessionState } from "#execution/durable-session-store.js";
 import type { TokenUsage } from "#shared/token-usage.js";
 export interface CancelledTurnSettleResult {
-    readonly serializedContext: Record<string, unknown>;
-    readonly sessionState: DurableSessionState;
-    readonly usage?: TokenUsage;
+  readonly serializedContext: Record<string, unknown>;
+  readonly sessionState: DurableSessionState;
+  readonly usage?: TokenUsage;
 }
 /**
  * Settles one cancelled turn: emits `turn.cancelled` → `session.waiting`,
@@ -12,7 +12,7 @@ export interface CancelledTurnSettleResult {
  * cancel hook, so a queued cancel wake cannot re-dispatch it.
  */
 export declare function settleCancelledTurnStep(input: {
-    readonly parentWritable: WritableStream<Uint8Array>;
-    readonly serializedContext: Record<string, unknown>;
-    readonly sessionState: DurableSessionState;
+  readonly parentWritable: WritableStream<Uint8Array>;
+  readonly serializedContext: Record<string, unknown>;
+  readonly sessionState: DurableSessionState;
 }): Promise<CancelledTurnSettleResult>;

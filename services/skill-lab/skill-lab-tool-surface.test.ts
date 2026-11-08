@@ -25,12 +25,14 @@ async function toolNames(path: string): Promise<string[]> {
   const source = await readFile(path, "utf8");
   const names = new Set<string>();
   for (const [, file] of source.matchAll(/#runtime\/framework-tools\/([a-z-]+)\.js/gu)) {
-    if (!["file-state", "todo", "skill", "tasks"].includes(file)) names.add(file.replaceAll("-", "_"));
+    if (!["file-state", "todo", "skill", "tasks"].includes(file))
+      names.add(file.replaceAll("-", "_"));
   }
   if (source.includes("TASK_TOOL_DEFINITIONS")) {
     // The task tools are named in tasks.js; read them there so a new one is not missed.
     const tasks = await readFile("vendor/eve/dist/src/runtime/framework-tools/tasks.js", "utf8");
-    for (const [, name] of tasks.matchAll(/TASK_[A-Z_]+_TOOL_NAME = `([a-z_]+)`/gu)) names.add(name);
+    for (const [, name] of tasks.matchAll(/TASK_[A-Z_]+_TOOL_NAME = `([a-z_]+)`/gu))
+      names.add(name);
   }
   if (source.includes("TODO_TOOL_DEFINITION")) names.add("todo");
   if (source.includes("SKILL_TOOL_DEFINITION")) names.add("load_skill");
@@ -46,8 +48,12 @@ describe("skill lab tool surface", () => {
     const labAgent = await readFile("services/skill-lab/agent/agent.ts", "utf8");
     expect(labAgent).not.toMatch(/connections\s*:/u);
     const expected = [...new Set([...framework, ...defaults])]
-      .filter((name) => name !== "load_skill" && name !== "connection_search_dynamic").sort();
-    const present = (await readdir(LAB_TOOLS)).filter((file) => file.endsWith(".ts")).map((file) => file.slice(0, -3)).sort();
+      .filter((name) => name !== "load_skill" && name !== "connection_search_dynamic")
+      .sort();
+    const present = (await readdir(LAB_TOOLS))
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => file.slice(0, -3))
+      .sort();
 
     // Everything Eve would hand the lab's model has a file here; `load_skill` is the lab's
     // purpose and is routed through the scenario tool instead.

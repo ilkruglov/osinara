@@ -1,18 +1,12 @@
 import { hasInteractiveTerminal } from "./preconditions.js";
-import {
-  reportHeadlessSetupCompletion,
-  serializeHeadlessSetupEvent,
-} from "./setup-headless.js";
+import { reportHeadlessSetupCompletion, serializeHeadlessSetupEvent } from "./setup-headless.js";
 import { runDeclaredSetups } from "./registry-declared-setups.js";
 import { runRegistryPackage } from "./registry-package.js";
 import {
   eveMetadataFromRegistryItem,
   parseOfficialRegistrySearchMetadata,
 } from "./registry-metadata.js";
-import {
-  printRegistrySearchResults,
-  registryViewText,
-} from "./registry-presentation.js";
+import { printRegistrySearchResults, registryViewText } from "./registry-presentation.js";
 import { addRegistryMappings, readRegistryConfig } from "./registry-project.js";
 import {
   errorMessage,
@@ -36,9 +30,7 @@ const defaultAddCommandDependencies = {
   loadSetupCommandRunner: async () =>
     (await import(`./registry-setup-command.js`)).runRegistrySetupCommand,
 };
-function resolveOfficialRegistryUrl(
-  e = process.env.EVE_DEV_OFFICIAL_REGISTRY_URL,
-) {
+function resolveOfficialRegistryUrl(e = process.env.EVE_DEV_OFFICIAL_REGISTRY_URL) {
   if (e === void 0) return `https://eve.dev/r`;
   let t;
   try {
@@ -51,13 +43,8 @@ function resolveOfficialRegistryUrl(
   if (t.username !== `` || t.password !== ``)
     throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must not include credentials.`);
   if (t.search !== `` || t.hash !== ``)
-    throw Error(
-      `EVE_DEV_OFFICIAL_REGISTRY_URL must not include a query or fragment.`,
-    );
-  return (
-    (t.pathname = t.pathname.replace(/\/+$/, ``)),
-    t.toString().replace(/\/$/, ``)
-  );
+    throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must not include a query or fragment.`);
+  return ((t.pathname = t.pathname.replace(/\/+$/, ``)), t.toString().replace(/\/$/, ``));
 }
 const OFFICIAL_REGISTRY = resolveOfficialRegistryUrl(),
   OFFICIAL_CATALOG = `${OFFICIAL_REGISTRY}/registry.json`,
@@ -121,11 +108,7 @@ function enrichSearchItem(e, t) {
   return { item: e, address: n, ...t.get(n) };
 }
 function registrySourceLabel(e) {
-  return e === OFFICIAL_CATALOG
-    ? `eve`
-    : e === SKILLS_REGISTRY
-      ? `skills.sh`
-      : e;
+  return e === OFFICIAL_CATALOG ? `eve` : e === SKILLS_REGISTRY ? `skills.sh` : e;
 }
 function searchPresentationSections(e, t, n) {
   return e.flatMap((e) => {
@@ -151,8 +134,7 @@ async function printAddSuggestions(e, t, n) {
       } = await searchRegistryCatalog(t, { limit: 5, query: r }),
       c = searchPresentationSections(a, i, o);
     if (c.every((e) => e.items.length === 0)) return;
-    (e.log(`Did you mean?`),
-      printRegistrySearchResults(e, { query: r, sections: c }));
+    (e.log(`Did you mean?`), printRegistrySearchResults(e, { query: r, sections: c }));
   } catch {}
 }
 async function searchRegistryCatalog(e, t) {
@@ -185,8 +167,7 @@ async function searchRegistryCatalog(e, t) {
     a = [],
     o = new Map();
   for (let e of i)
-    if (`error` in e)
-      a.push({ message: errorMessage(e.error), registry: e.source });
+    if (`error` in e) a.push({ message: errorMessage(e.error), registry: e.source });
     else {
       let t = e.result.errors ?? [];
       if ((a.push(...t), t.length === 0)) {
@@ -196,23 +177,17 @@ async function searchRegistryCatalog(e, t) {
           items: t,
           pagination: {
             ...e.result.pagination,
-            total:
-              e.result.items.length === t.length
-                ? e.result.pagination.total
-                : 0,
+            total: e.result.items.length === t.length ? e.result.pagination.total : 0,
           },
         });
       }
     }
   let s = new Map(a.map((e) => [`${e.registry}\0${e.message}`, e])),
-    c = o.has(OFFICIAL_CATALOG)
-      ? await loadOfficialSearchMetadata()
-      : new Map(),
+    c = o.has(OFFICIAL_CATALOG) ? await loadOfficialSearchMetadata() : new Map(),
     l = o.get(OFFICIAL_CATALOG);
   l !== void 0 &&
     l.items.sort((e, t) => {
-      let rank = (e) =>
-        c.get(searchItemAddress(e))?.implementation === `native` ? 0 : 1;
+      let rank = (e) => (c.get(searchItemAddress(e))?.implementation === `native` ? 0 : 1);
       return rank(e) - rank(t);
     });
   let u = [...o.values()];
@@ -238,8 +213,7 @@ async function browseRegistryCatalog(e, t = {}) {
   return {
     items: n.items.map((e) => {
       let t = {
-        address:
-          e.registry === OFFICIAL_CATALOG ? e.name : e.addCommandArgument,
+        address: e.registry === OFFICIAL_CATALOG ? e.name : e.addCommandArgument,
         name: e.name,
         source: e.registry === OFFICIAL_CATALOG ? `Vercel` : e.registry,
       };
@@ -275,12 +249,7 @@ async function getRegistryItemManifest(e, t) {
     r = await getRegistryItems([itemAddress(t)], { config: n });
   return r.length === 1 ? r[0] : r;
 }
-async function installRegistryItem(
-  e,
-  t,
-  n = {},
-  r = defaultAddCommandDependencies,
-) {
+async function installRegistryItem(e, t, n = {}, r = defaultAddCommandDependencies) {
   let i,
     a = [],
     o = {
@@ -310,14 +279,10 @@ async function runAddCommand(e, t, o, s, c = defaultAddCommandDependencies) {
     let l = await readEveRegistryConfig(t),
       u = itemAddress(o);
     if (s.skipInstall === !0) {
-      if (s.overwrite === !0)
-        throw Error(`--overwrite cannot be used with --skip-install.`);
-      if (s.skipSetup === !0)
-        throw Error(`--skip-install cannot be used with --skip-setup.`);
+      if (s.overwrite === !0) throw Error(`--overwrite cannot be used with --skip-install.`);
+      if (s.skipSetup === !0) throw Error(`--skip-install cannot be used with --skip-setup.`);
       if (!isOfficialItemAddress(u))
-        throw Error(
-          `Setup flows are currently supported only for official eve registry items.`,
-        );
+        throw Error(`Setup flows are currently supported only for official eve registry items.`);
     }
     let d = await resolveRegistryItemForAdd(
       e,
@@ -369,8 +334,7 @@ async function runAddCommand(e, t, o, s, c = defaultAddCommandDependencies) {
       );
     }
     if (s.skipInstall === !0) {
-      if (p?.setup === void 0)
-        throw Error(`Registry item "${o}" does not declare a setup flow.`);
+      if (p?.setup === void 0) throw Error(`Registry item "${o}" does not declare a setup flow.`);
       return reportCompletion(
         e,
         o,
@@ -397,9 +361,7 @@ async function runAddCommand(e, t, o, s, c = defaultAddCommandDependencies) {
       p?.setup === void 0)
     )
       return reportCompletion(e, o, { facts: [] }, s);
-    let m =
-      c.hasInteractiveTerminal?.() ??
-      defaultAddCommandDependencies.hasInteractiveTerminal();
+    let m = c.hasInteractiveTerminal?.() ?? defaultAddCommandDependencies.hasInteractiveTerminal();
     if (
       (s.nonInteractive &&
         e.log(
@@ -471,10 +433,8 @@ function reportCompletion(e, n, r, i) {
 async function runRegistryAddCommand(e, t, n) {
   await runRegistryAction(e, t, async () => {
     let r = await addRegistryMappings(t, n);
-    for (let t of r.skippedBuiltIn)
-      e.log(`Skipped ${t} because it is built in.`);
-    for (let t of r.skippedExisting)
-      e.log(`Skipped ${t} because it is already configured.`);
+    for (let t of r.skippedBuiltIn) e.log(`Skipped ${t} because it is built in.`);
+    for (let t of r.skippedExisting) e.log(`Skipped ${t} because it is already configured.`);
     r.added.length > 0 && e.log(`Added ${r.added.join(`, `)} to package.json.`);
   });
 }

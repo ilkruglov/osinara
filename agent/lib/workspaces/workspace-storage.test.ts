@@ -47,8 +47,9 @@ describe("workspace storage", () => {
     await expect(listWorkspaceStoredFiles(root, WORKSPACE_ID)).resolves.toEqual([
       expect.objectContaining({ path: "output/report.txt" }),
     ]);
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/report.txt"))
-      .resolves.toEqual(Buffer.from("готово"));
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/report.txt")).resolves.toEqual(
+      Buffer.from("готово"),
+    );
   });
 
   it("rejects a symlink instead of resolving it outside the workspace", async () => {
@@ -58,8 +59,9 @@ describe("workspace storage", () => {
     await mkdir(directory, { recursive: true });
     await symlink("/etc/passwd", join(directory, "secret.txt"));
 
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "secret.txt"))
-      .rejects.toThrowError(/AGENT_WORKSPACE_SYMLINK_FORBIDDEN/);
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "secret.txt")).rejects.toThrowError(
+      /AGENT_WORKSPACE_SYMLINK_FORBIDDEN/,
+    );
   });
 
   it("lists only files under one Telegram inbox directory", async () => {
@@ -71,8 +73,9 @@ describe("workspace storage", () => {
     await writeFile(join(directory, "inbox", "773", "image.jpg"), "image");
     await writeFile(join(directory, "inbox", "775", "other.jpg"), "other");
 
-    await expect(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "inbox/773"))
-      .resolves.toEqual([expect.objectContaining({ path: "inbox/773/image.jpg" })]);
+    await expect(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "inbox/773")).resolves.toEqual([
+      expect.objectContaining({ path: "inbox/773/image.jpg" }),
+    ]);
   });
 
   it("writes and deletes a nested file and reports its metadata", async () => {
@@ -82,16 +85,24 @@ describe("workspace storage", () => {
 
     await writeWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt", Buffer.from("v1"));
     await writeWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt", Buffer.from("v22"));
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toEqual(Buffer.from("v22"));
-    await expect(getWorkspaceStoredFile(root, WORKSPACE_ID, "output/deep/report.txt"))
-      .resolves.toMatchObject({ byteSize: 3, path: "output/deep/report.txt" });
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toEqual(
+      Buffer.from("v22"),
+    );
+    await expect(
+      getWorkspaceStoredFile(root, WORKSPACE_ID, "output/deep/report.txt"),
+    ).resolves.toMatchObject({ byteSize: 3, path: "output/deep/report.txt" });
     await expect(listWorkspaceStoredFiles(root, WORKSPACE_ID)).resolves.toEqual([
       expect.objectContaining({ path: "output/deep/report.txt" }),
     ]);
-    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toBe(true);
-    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toBe(false);
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt"))
-      .rejects.toThrowError(/AGENT_WORKSPACE_FILE_NOT_FOUND/);
+    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toBe(
+      true,
+    );
+    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toBe(
+      false,
+    );
+    await expect(
+      readWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt"),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_FILE_NOT_FOUND/);
   });
 
   it("writes a file whose name takes the whole 255-byte limit", async () => {
@@ -103,7 +114,9 @@ describe("workspace storage", () => {
 
     await writeWorkspaceFile(root, WORKSPACE_ID, `inbox/${name}`, Buffer.from("v1"));
 
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, `inbox/${name}`)).resolves.toEqual(Buffer.from("v1"));
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, `inbox/${name}`)).resolves.toEqual(
+      Buffer.from("v1"),
+    );
   });
 
   it("rejects a symlinked directory and a path through a regular file", async () => {
@@ -114,11 +127,18 @@ describe("workspace storage", () => {
     await symlink("/etc", join(directory, "etc"));
     await writeFile(join(directory, "plain.txt"), "x");
 
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "etc/hostname")).rejects.toThrowError(/AGENT_WORKSPACE_SYMLINK_FORBIDDEN/);
-    await expect(writeWorkspaceFile(root, WORKSPACE_ID, "etc/evil.txt", Buffer.from("x")))
-      .rejects.toThrowError(/AGENT_WORKSPACE_SYMLINK_FORBIDDEN/);
-    await expect(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "etc")).rejects.toThrowError(/AGENT_WORKSPACE_SYMLINK_FORBIDDEN/);
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "plain.txt/x")).rejects.toThrowError(/AGENT_WORKSPACE_PATH_INVALID/);
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "etc/hostname")).rejects.toThrowError(
+      /AGENT_WORKSPACE_SYMLINK_FORBIDDEN/,
+    );
+    await expect(
+      writeWorkspaceFile(root, WORKSPACE_ID, "etc/evil.txt", Buffer.from("x")),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_SYMLINK_FORBIDDEN/);
+    await expect(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "etc")).rejects.toThrowError(
+      /AGENT_WORKSPACE_SYMLINK_FORBIDDEN/,
+    );
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "plain.txt/x")).rejects.toThrowError(
+      /AGENT_WORKSPACE_PATH_INVALID/,
+    );
   });
 
   it("never reaches outside the workspace while a sandbox swaps paths for symlinks", async () => {
@@ -138,7 +158,8 @@ describe("workspace storage", () => {
     // shared memory and a failure of the flipping itself is reported, so the test cannot pass
     // on a sandbox that stopped swapping.
     const swaps = new Int32Array(new SharedArrayBuffer(4));
-    const worker = new Worker(`
+    const worker = new Worker(
+      `
       const { parentPort, workerData } = require("node:worker_threads");
       const fs = require("node:fs");
       const { directory, outside, swaps } = workerData;
@@ -170,7 +191,9 @@ describe("workspace storage", () => {
           } catch {}
         }
       }
-    `, { eval: true, workerData: { directory, outside, swaps } });
+    `,
+      { eval: true, workerData: { directory, outside, swaps } },
+    );
     const workerFailures: string[] = [];
     await new Promise((resolve) => worker.once("message", resolve));
     worker.on("message", (message: string) => workerFailures.push(message));
@@ -188,7 +211,11 @@ describe("workspace storage", () => {
     const succeeded = { delete: 0, list: 0, read: 0, write: 0 };
     // The race runs until enough interleavings were observed, at least three seconds and at most
     // twenty, so a slow machine extends the run instead of failing the counts.
-    const enough = () => Atomics.load(swaps, 0) > 100 && succeeded.read > 10 && succeeded.write > 5 && succeeded.list > 5;
+    const enough = () =>
+      Atomics.load(swaps, 0) > 100 &&
+      succeeded.read > 10 &&
+      succeeded.write > 5 &&
+      succeeded.list > 5;
     try {
       const started = Date.now();
       while (Date.now() - started < 20_000 && (Date.now() - started < 3_000 || !enough())) {
@@ -197,10 +224,15 @@ describe("workspace storage", () => {
           expect(read?.toString()).not.toBe("OUTSIDE_WORKSPACE_SENTINEL");
           if (read?.toString() === "inside") succeeded.read += 1;
         }
-        if (await settle(writeWorkspaceFile(root, WORKSPACE_ID, "docs/written.txt", Buffer.from("x"))) !== null) {
+        if (
+          (await settle(
+            writeWorkspaceFile(root, WORKSPACE_ID, "docs/written.txt", Buffer.from("x")),
+          )) !== null
+        ) {
           succeeded.write += 1;
         }
-        if (await settle(deleteWorkspaceFile(root, WORKSPACE_ID, "docs/secret.txt")) !== null) succeeded.delete += 1;
+        if ((await settle(deleteWorkspaceFile(root, WORKSPACE_ID, "docs/secret.txt"))) !== null)
+          succeeded.delete += 1;
         const listed = await settle(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "docs"));
         if (listed) {
           succeeded.list += 1;
@@ -219,6 +251,8 @@ describe("workspace storage", () => {
     expect(succeeded.list).toBeGreaterThan(5);
     // Nothing was written into or deleted from the outside directory.
     expect(existsSync(join(outside, "written.txt"))).toBe(false);
-    await expect(readFile(join(outside, "secret.txt"), "utf8")).resolves.toBe("OUTSIDE_WORKSPACE_SENTINEL");
+    await expect(readFile(join(outside, "secret.txt"), "utf8")).resolves.toBe(
+      "OUTSIDE_WORKSPACE_SENTINEL",
+    );
   }, 60_000);
 });

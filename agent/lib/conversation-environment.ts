@@ -59,17 +59,19 @@ export function resolveConversationEnvironment(auth: SessionAuth): ConversationE
   }
 
   // Registered Telegram groups are distinguished by their persisted trust-zone type.
-  if (actor.kind === "telegram_user" &&
-    (memoryReview || GROUP_CHAT_TYPES.has(String(chatType))) && groupType === "family_private") {
+  if (
+    actor.kind === "telegram_user" &&
+    (memoryReview || GROUP_CHAT_TYPES.has(String(chatType))) &&
+    groupType === "family_private"
+  ) {
     if (scopesEqual(memoryScopes, ["family"])) return "family";
     throw environmentError();
   }
   if (
     (memoryReview || GROUP_CHAT_TYPES.has(String(chatType))) &&
     groupType === "external" &&
-    (actor.kind === "telegram_user" || (
-      caller.principalType === "service" && attributes.role === "external"
-    ))
+    (actor.kind === "telegram_user" ||
+      (caller.principalType === "service" && attributes.role === "external"))
   ) {
     if (scopesEqual(memoryScopes, ["group"])) return "external";
     throw environmentError();

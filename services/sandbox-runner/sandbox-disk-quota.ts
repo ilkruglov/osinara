@@ -39,7 +39,6 @@ export function isCleanupCommand(command: string): boolean {
   return /^[ \t]*(?:rm|rmdir|ls|du|df)(?:[ \t][^;&|`$<>(){}'"\r\n\\]*)?$/u.test(command);
 }
 
-
 export interface DiskProbe {
   /** Bytes allocated under the directories that exist; missing ones count zero. */
   usedBytes(directories: readonly string[]): Promise<number>;
@@ -76,12 +75,16 @@ export function createSandboxDiskQuota(input: {
     if (cached && input.now() - cached.at < MEASURE_TTL_MS) return cached.bytes;
     const running = pending.get(workspace.key);
     if (running) return await running;
-    const measuring = input.probe.usedBytes(workspace.directories).then((bytes) => {
-      measured.delete(workspace.key);
-      measured.set(workspace.key, { at: input.now(), bytes });
-      while (measured.size > MAX_CACHED_WORKSPACES) measured.delete(measured.keys().next().value!);
-      return bytes;
-    }).finally(() => pending.delete(workspace.key));
+    const measuring = input.probe
+      .usedBytes(workspace.directories)
+      .then((bytes) => {
+        measured.delete(workspace.key);
+        measured.set(workspace.key, { at: input.now(), bytes });
+        while (measured.size > MAX_CACHED_WORKSPACES)
+          measured.delete(measured.keys().next().value!);
+        return bytes;
+      })
+      .finally(() => pending.delete(workspace.key));
     pending.set(workspace.key, measuring);
     return await measuring;
   };
@@ -90,27 +93,35 @@ export function createSandboxDiskQuota(input: {
     async refusal(workspaces) {
       const free = await input.probe.freeBytes();
       if (free < minFree) {
-        return "AGENT_SANDBOX_DISK_LOW: На сервере заканчивается место " +
+        return (
+          "AGENT_SANDBOX_DISK_LOW: На сервере заканчивается место " +
           `(свободно ${gib(free)} ГБ), запись из песочницы остановлена. Удалите ненужные файлы командой rm ` +
-          "и скажите человеку, что место на сервере на исходе.";
+          "и скажите человеку, что место на сервере на исходе."
+        );
       }
       for (const workspace of workspaces) {
         let used: number;
         try {
           used = await usage(workspace);
         } catch (error) {
-          console.error(JSON.stringify({
-            code: "AGENT_SANDBOX_DISK_UNMEASURED",
-            error: error instanceof Error ? error.message.slice(0, 200) : String(error),
-            workspace: workspace.key,
-          }));
-          return "AGENT_SANDBOX_DISK_UNMEASURED: Не удалось измерить, сколько места занимает рабочая папка, " +
-            "запись остановлена. Удалите ненужные файлы командой rm или повторите позже.";
+          console.error(
+            JSON.stringify({
+              code: "AGENT_SANDBOX_DISK_UNMEASURED",
+              error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+              workspace: workspace.key,
+            }),
+          );
+          return (
+            "AGENT_SANDBOX_DISK_UNMEASURED: Не удалось измерить, сколько места занимает рабочая папка, " +
+            "запись остановлена. Удалите ненужные файлы командой rm или повторите позже."
+          );
         }
         if (used > limit) {
-          return "AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED: Рабочая папка занимает " +
+          return (
+            "AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED: Рабочая папка занимает " +
             `${gib(used)} ГБ при лимите ${gib(limit)} ГБ, запись остановлена. Посмотрите, что занимает место ` +
-            "(du -sh /workspace/* /tools/*), удалите ненужное командой rm и только потом продолжайте.";
+            "(du -sh /workspace/* /tools/*), удалите ненужное командой rm и только потом продолжайте."
+          );
         }
       }
       return null;
@@ -143,9 +154,17 @@ export function createHostDiskProbe(volumeRoot: string): DiskProbe {
         maxBuffer: 1024 * 1024,
         timeout: 60_000,
       });
-      const sizes = stdout.trim().split("\n").map((line) => Number(line.split("\t", 1)[0]));
-      if (sizes.length !== existing.length || sizes.some((size) => !Number.isSafeInteger(size) || size < 0)) {
-        throw new Error(`AGENT_SANDBOX_DISK_UNMEASURED: du printed ${sizes.length} sizes for ${existing.length} directories`);
+      const sizes = stdout
+        .trim()
+        .split("\n")
+        .map((line) => Number(line.split("\t", 1)[0]));
+      if (
+        sizes.length !== existing.length ||
+        sizes.some((size) => !Number.isSafeInteger(size) || size < 0)
+      ) {
+        throw new Error(
+          `AGENT_SANDBOX_DISK_UNMEASURED: du printed ${sizes.length} sizes for ${existing.length} directories`,
+        );
       }
       return sizes.reduce((total, size) => total + size, 0);
     },

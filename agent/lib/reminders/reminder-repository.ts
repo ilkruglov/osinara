@@ -120,12 +120,22 @@ export const reminderRepository = {
     const content = requireReminderContent(input.content);
     const firstRunAt = requireReminderDate(input.firstRunAt);
     const recurrence = requireReminderRecurrence(input.recurrence);
-    const inputHash = reminderOperationHash({ ...input, content, firstRunAt: firstRunAt.toISOString() });
+    const inputHash = reminderOperationHash({
+      ...input,
+      content,
+      firstRunAt: firstRunAt.toISOString(),
+    });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
       await requireCurrentMembership(client, auth);
-      const replay = await findReminderOperation(client, auth, input.operationKey, "create", inputHash);
+      const replay = await findReminderOperation(
+        client,
+        auth,
+        input.operationKey,
+        "create",
+        inputHash,
+      );
       if (replay !== undefined) {
         if (!replay) {
           throw new AppError(
@@ -234,8 +244,15 @@ export const reminderRepository = {
     auth: ReminderAuthorization,
     options: { cursor?: string; limit: number },
   ): Promise<{ items: ReminderRecord[]; nextCursor: string | null }> {
-    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > REMINDER_LIST_MAX_LIMIT) {
-      throw new AppError("AGENT_REMINDER_LIMIT_INVALID", "Некорректный размер страницы напоминаний");
+    if (
+      !Number.isInteger(options.limit) ||
+      options.limit < 1 ||
+      options.limit > REMINDER_LIST_MAX_LIMIT
+    ) {
+      throw new AppError(
+        "AGENT_REMINDER_LIMIT_INVALID",
+        "Некорректный размер страницы напоминаний",
+      );
     }
     const cursor = decodeDateUuidCursor(
       options.cursor,
@@ -257,9 +274,15 @@ export const reminderRepository = {
           AND ($3::timestamptz IS NULL OR (reminder.created_at, reminder.id) < ($3, $4::uuid))
         ORDER BY reminder.created_at DESC, reminder.id DESC
         LIMIT $5`,
-      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1,
+      [
+        auth.familyId,
+        auth.userId,
+        cursor?.timestamp ?? null,
+        cursor?.id ?? null,
+        options.limit + 1,
         // Personal reminders are private-chat text; the family group lists only shared ones.
-        auth.telegramChatType === "private"],
+        auth.telegramChatType === "private",
+      ],
     );
     const hasNext = result.rows.length > options.limit;
     const rows = result.rows.slice(0, options.limit);
@@ -275,17 +298,34 @@ export const reminderRepository = {
     id: string,
     input: ReminderUpdateInput,
   ): Promise<ReminderRecord> {
-    if (input.content === undefined && input.enabled === undefined && input.firstRunAt === undefined && input.recurrence === undefined) {
+    if (
+      input.content === undefined &&
+      input.enabled === undefined &&
+      input.firstRunAt === undefined &&
+      input.recurrence === undefined
+    ) {
       throw new AppError("AGENT_REMINDER_UPDATE_INVALID", "Не указаны изменения напоминания");
     }
     const content = input.content === undefined ? undefined : requireReminderContent(input.content);
-    const firstRunAt = input.firstRunAt === undefined ? undefined : requireReminderDate(input.firstRunAt);
-    const recurrence = input.recurrence === undefined ? undefined : requireReminderRecurrence(input.recurrence);
-    const inputHash = reminderOperationHash({ ...input, content, firstRunAt: firstRunAt?.toISOString() });
+    const firstRunAt =
+      input.firstRunAt === undefined ? undefined : requireReminderDate(input.firstRunAt);
+    const recurrence =
+      input.recurrence === undefined ? undefined : requireReminderRecurrence(input.recurrence);
+    const inputHash = reminderOperationHash({
+      ...input,
+      content,
+      firstRunAt: firstRunAt?.toISOString(),
+    });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const replay = await findReminderOperation(client, auth, input.operationKey, "update", inputHash);
+      const replay = await findReminderOperation(
+        client,
+        auth,
+        input.operationKey,
+        "update",
+        inputHash,
+      );
       if (replay) {
         const existing = await selectReminder(client, auth.familyId, replay);
         if (!existing) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание уже удалено");
@@ -296,7 +336,10 @@ export const reminderRepository = {
       if (!reminder) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
       await requireReminderMutationAccess(client, auth, reminder);
       const updated = await applyReminderUpdate(client, reminder, {
-        content, enabled: input.enabled, firstRunAt, recurrence,
+        content,
+        enabled: input.enabled,
+        firstRunAt,
+        recurrence,
       });
       await client.query(
         `INSERT INTO reminder_operations

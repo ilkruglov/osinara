@@ -42,10 +42,18 @@ interface ExampleRow {
 }
 
 function rowToExample(row: ExampleRow): AuthoredSkillExample {
-  return { createdAt: row.created_at.toISOString(), expected: row.expected, id: row.id, request: row.request };
+  return {
+    createdAt: row.created_at.toISOString(),
+    expected: row.expected,
+    id: row.id,
+    request: row.request,
+  };
 }
 
-export async function activeExamples(client: PoolClient, skillId: string): Promise<AuthoredSkillExample[]> {
+export async function activeExamples(
+  client: PoolClient,
+  skillId: string,
+): Promise<AuthoredSkillExample[]> {
   const result = await client.query<ExampleRow>(
     `SELECT id, request, expected, created_at FROM authored_skill_examples
       WHERE skill_id = $1 AND active ORDER BY created_at`,
@@ -60,21 +68,33 @@ export async function activeExamples(client: PoolClient, skillId: string): Promi
  * used to insert a duplicate and burn the cap (Codex review, 30 September 2026). Callers hold the
  * skill row lock, so the check and the insert cannot interleave.
  */
-export async function insertExample(client: PoolClient, input: {
-  createdByUserId: string;
-  expected: string;
-  familyId: string;
-  request: string;
-  skillId: string;
-}): Promise<AuthoredSkillExample | null> {
+export async function insertExample(
+  client: PoolClient,
+  input: {
+    createdByUserId: string;
+    expected: string;
+    familyId: string;
+    request: string;
+    skillId: string;
+  },
+): Promise<AuthoredSkillExample | null> {
   const existing = await activeExamples(client, input.skillId);
-  const same = existing.find((example) => example.request === input.request.trim() && example.expected === input.expected.trim());
+  const same = existing.find(
+    (example) =>
+      example.request === input.request.trim() && example.expected === input.expected.trim(),
+  );
   if (same) return same;
   if (existing.length >= AUTHORED_SKILL_EXAMPLES_MAX) return null;
   const result = await client.query<ExampleRow>(
     `INSERT INTO authored_skill_examples (skill_id, family_id, request, expected, created_by_user_id)
      VALUES ($1, $2, $3, $4, $5) RETURNING id, request, expected, created_at`,
-    [input.skillId, input.familyId, input.request.trim(), input.expected.trim(), input.createdByUserId],
+    [
+      input.skillId,
+      input.familyId,
+      input.request.trim(),
+      input.expected.trim(),
+      input.createdByUserId,
+    ],
   );
   return rowToExample(result.rows[0]!);
 }
@@ -85,21 +105,32 @@ export function requireTrials(
   trials: readonly AuthoredSkillTrial[],
 ): void {
   const known = new Set(examples.map((example) => example.id));
-  const unknown = trials.filter((trial) => !known.has(trial.exampleId)).map((trial) => trial.exampleId);
+  const unknown = trials
+    .filter((trial) => !known.has(trial.exampleId))
+    .map((trial) => trial.exampleId);
   if (unknown.length > 0) {
-    throw new AppError("AGENT_SKILL_EVAL_UNKNOWN_EXAMPLE", `Таких примеров у навыка нет: ${unknown.join(", ")}`);
+    throw new AppError(
+      "AGENT_SKILL_EVAL_UNKNOWN_EXAMPLE",
+      `Таких примеров у навыка нет: ${unknown.join(", ")}`,
+    );
   }
   const rerun = new Set(trials.map((trial) => trial.exampleId));
   const missing = examples.filter((example) => !rerun.has(example.id));
   if (missing.length === 0) return;
-  const listed = missing.map((example) => `${example.id}: ${example.request.slice(0, 80)}`).join("; ");
+  const listed = missing
+    .map((example) => `${example.id}: ${example.request.slice(0, 80)}`)
+    .join("; ");
   throw new AppError(
     "AGENT_SKILL_EVAL_MISSING",
     `Перед новой версией прогони все примеры навыка и передай trials по каждому. Не прогнаны: ${listed}`,
   );
 }
 
-async function lockedActiveSkill(client: PoolClient, familyId: string, name: string): Promise<{ id: string }> {
+async function lockedActiveSkill(
+  client: PoolClient,
+  familyId: string,
+  name: string,
+): Promise<{ id: string }> {
   const result = await client.query<{ id: string }>(
     "SELECT id FROM authored_skills WHERE family_id = $1 AND name = $2 AND status = 'active' FOR UPDATE",
     [familyId, name],
@@ -110,15 +141,21 @@ async function lockedActiveSkill(client: PoolClient, familyId: string, name: str
 }
 
 export const authoredSkillExampleRepository = {
-  async add(caller: FamilyCaller, input: { expected: string; name: string; request: string }): Promise<AuthoredSkillExample> {
+  async add(
+    caller: FamilyCaller,
+    input: { expected: string; name: string; request: string },
+  ): Promise<AuthoredSkillExample> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
       await requireCurrentOwner(client, caller);
       const skill = await lockedActiveSkill(client, caller.familyId, input.name);
       const example = await insertExample(client, {
-        createdByUserId: caller.userId, expected: input.expected, familyId: caller.familyId,
-        request: input.request, skillId: skill.id,
+        createdByUserId: caller.userId,
+        expected: input.expected,
+        familyId: caller.familyId,
+        request: input.request,
+        skillId: skill.id,
       });
       if (example === null) {
         throw new AppError(
@@ -136,7 +173,10 @@ export const authoredSkillExampleRepository = {
     }
   },
 
-  async remove(caller: FamilyCaller, input: { exampleId: string; name: string }): Promise<{ exampleId: string; name: string }> {
+  async remove(
+    caller: FamilyCaller,
+    input: { exampleId: string; name: string },
+  ): Promise<{ exampleId: string; name: string }> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -148,7 +188,10 @@ export const authoredSkillExampleRepository = {
         [input.exampleId, skill.id],
       );
       if ((removed.rowCount ?? 0) === 0) {
-        throw new AppError("AGENT_SKILL_EXAMPLE_NOT_FOUND", `У навыка ${input.name} нет активного примера ${input.exampleId}`);
+        throw new AppError(
+          "AGENT_SKILL_EXAMPLE_NOT_FOUND",
+          `У навыка ${input.name} нет активного примера ${input.exampleId}`,
+        );
       }
       await client.query("COMMIT");
       return { exampleId: input.exampleId, name: input.name };

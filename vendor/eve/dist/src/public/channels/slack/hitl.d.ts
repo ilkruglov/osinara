@@ -45,11 +45,11 @@ export declare const HITL_FREEFORM_MODAL_ACTION_ID = "eve_freeform_text";
  * Mirrors the relevant fields of `SlackInteractionAction`.
  */
 interface SlackHitlAction {
-    readonly actionId: string;
-    /** `value` field on Slack `button` payloads. */
-    readonly value?: string;
-    /** `selected_option.value` field on radio / static-select payloads. */
-    readonly selectedOptionValue?: string;
+  readonly actionId: string;
+  /** `value` field on Slack `button` payloads. */
+  readonly value?: string;
+  /** `selected_option.value` field on radio / static-select payloads. */
+  readonly selectedOptionValue?: string;
 }
 /**
  * Resolved HITL response derived from one Slack interactivity action.
@@ -57,9 +57,9 @@ interface SlackHitlAction {
  * come back through a different interaction path.
  */
 interface DerivedHitlResponse {
-    readonly requestId: string;
-    readonly optionId: string;
-    readonly kind?: "tool-approval";
+  readonly requestId: string;
+  readonly optionId: string;
+  readonly kind?: "tool-approval";
 }
 /**
  * Decodes one Slack interactivity action into an HITL response, or
@@ -93,8 +93,8 @@ export declare function isHitlAction(actionId: string): boolean;
  */
 export declare function renderInputRequestBlocks(request: InputRequest): unknown[];
 export interface SlackInputRequestPostPart {
-    readonly blocks: unknown[];
-    readonly text: string;
+  readonly blocks: unknown[];
+  readonly text: string;
 }
 /**
  * Splits approval details from their interactive controls. Slack includes the
@@ -102,8 +102,8 @@ export interface SlackInputRequestPostPart {
  * the buttons makes the callback body grow with model-authored input.
  */
 export declare function renderInputRequestPostParts(request: InputRequest): {
-    readonly controls: SlackInputRequestPostPart;
-    readonly details?: SlackInputRequestPostPart;
+  readonly controls: SlackInputRequestPostPart;
+  readonly details?: SlackInputRequestPostPart;
 };
 /**
  * Creates the fallback text for one HITL request. Slack clients use this
@@ -118,11 +118,11 @@ export declare function formatInputRequestFallbackText(request: InputRequest): s
  * deliver the answer back to the right session.
  */
 export interface HitlFreeformModalMetadata {
-    readonly continuationToken: string;
-    readonly channelId: string;
-    readonly threadTs: string;
-    readonly messageTs: string;
-    readonly requestId: string;
+  readonly continuationToken: string;
+  readonly channelId: string;
+  readonly threadTs: string;
+  readonly messageTs: string;
+  readonly requestId: string;
 }
 /**
  * Builds the `views.open` payload for the freeform-answer modal. The
@@ -132,8 +132,8 @@ export interface HitlFreeformModalMetadata {
  * Title is auto-truncated to the Slack modal-title limit.
  */
 export declare function buildFreeformModalView(input: {
-    readonly metadata: HitlFreeformModalMetadata;
-    readonly prompt?: string;
+  readonly metadata: HitlFreeformModalMetadata;
+  readonly prompt?: string;
 }): Record<string, unknown>;
 /**
  * True when an `action_id` was minted by the framework's freeform-answer
@@ -155,8 +155,8 @@ export declare function freeformRequestIdFromActionId(actionId: string): string 
  * `text`.
  */
 export declare function buildAnsweredBlocks(input: {
-    readonly promptBlocks: readonly unknown[];
-    readonly answerLabel: string;
-    readonly userId?: string;
+  readonly promptBlocks: readonly unknown[];
+  readonly answerLabel: string;
+  readonly userId?: string;
 }): unknown[];
 export {};

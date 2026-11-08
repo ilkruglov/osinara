@@ -7,45 +7,45 @@ import type { CompiledRuntimeAgentBundle } from "#runtime/sessions/compiled-agen
 import type { ResolvedRuntimeRemoteAgentNode } from "#runtime/types.js";
 import type { JsonObject } from "#shared/json.js";
 type RemoteAgentSessionCoordinates = {
-    readonly sessionId: string;
+  readonly sessionId: string;
 };
 export declare function startRemoteAgentSession(input: {
-    readonly action: RuntimeRemoteAgentCallActionRequest;
-    /** The dispatching turn's session principal, forwarded when `remote.forwardPrincipal` is set. */
-    readonly auth?: SessionAuthContext | null;
-    readonly callbackBaseUrl: string | undefined;
-    readonly callbackToken?: string;
-    /** The root initiator's principal, forwarded alongside {@link auth}. */
-    readonly initiatorAuth?: SessionAuthContext | null;
-    /**
-     * Replay-stable identity of this create attempt. A retried dispatch step
-     * re-sends the same value, letting the receiver return the child it already
-     * created instead of starting a second one.
-     */
-    readonly operationId?: string;
-    /**
-     * Whether the dispatching agent opted into
-     * `experimental.subagentPersistentSessions`. Persistent remote children run
-     * in conversation mode so their sessions accept follow-up messages.
-     */
-    readonly persistentSessions?: boolean;
-    readonly parentTraceContext?: SessionTraceContext;
-    readonly remote: ResolvedRuntimeRemoteAgentNode;
-    readonly session: HarnessSession;
+  readonly action: RuntimeRemoteAgentCallActionRequest;
+  /** The dispatching turn's session principal, forwarded when `remote.forwardPrincipal` is set. */
+  readonly auth?: SessionAuthContext | null;
+  readonly callbackBaseUrl: string | undefined;
+  readonly callbackToken?: string;
+  /** The root initiator's principal, forwarded alongside {@link auth}. */
+  readonly initiatorAuth?: SessionAuthContext | null;
+  /**
+   * Replay-stable identity of this create attempt. A retried dispatch step
+   * re-sends the same value, letting the receiver return the child it already
+   * created instead of starting a second one.
+   */
+  readonly operationId?: string;
+  /**
+   * Whether the dispatching agent opted into
+   * `experimental.subagentPersistentSessions`. Persistent remote children run
+   * in conversation mode so their sessions accept follow-up messages.
+   */
+  readonly persistentSessions?: boolean;
+  readonly parentTraceContext?: SessionTraceContext;
+  readonly remote: ResolvedRuntimeRemoteAgentNode;
+  readonly session: HarnessSession;
 }): Promise<RemoteAgentSessionCoordinates>;
 /** Continues one remote-agent session by its immutable session ID. */
 export declare function continueRemoteAgentSession(input: {
-    readonly callback: {
-        readonly callId: string;
-        readonly subagentName: string;
-        readonly taskId?: string;
-        readonly token: string;
-        readonly url: string;
-    };
-    readonly message: string;
-    readonly outputSchema?: JsonObject;
-    readonly remote: ResolvedRuntimeRemoteAgentNode;
-    readonly sessionId: string;
+  readonly callback: {
+    readonly callId: string;
+    readonly subagentName: string;
+    readonly taskId?: string;
+    readonly token: string;
+    readonly url: string;
+  };
+  readonly message: string;
+  readonly outputSchema?: JsonObject;
+  readonly remote: ResolvedRuntimeRemoteAgentNode;
+  readonly sessionId: string;
 }): Promise<void>;
 /**
  * Failure of a continue-session request, classified at the HTTP boundary.
@@ -53,12 +53,15 @@ export declare function continueRemoteAgentSession(input: {
  * with real instances instead of re-encoding the classification.
  */
 export declare class RemoteAgentContinueRequestError extends Error {
-    readonly deliveryAmbiguous: boolean;
-    readonly retryable: boolean;
-    constructor(message: string, options: {
-        readonly deliveryAmbiguous: boolean;
-        readonly retryable: boolean;
-    });
+  readonly deliveryAmbiguous: boolean;
+  readonly retryable: boolean;
+  constructor(
+    message: string,
+    options: {
+      readonly deliveryAmbiguous: boolean;
+      readonly retryable: boolean;
+    },
+  );
 }
 /**
  * Returns true when a failed continue request may be retried. Only a
@@ -73,17 +76,17 @@ export declare function isRetryableRemoteAgentContinueError(error: unknown): boo
 /** Whether the callee may have accepted the continuation before delivery failed. */
 export declare function isAmbiguousRemoteAgentContinueError(error: unknown): boolean;
 export declare function cancelRemoteAgentTurn(input: {
-    readonly remote: ResolvedRuntimeRemoteAgentNode;
-    readonly sessionId: string;
-    readonly taskId?: string;
-    readonly turnId?: string;
+  readonly remote: ResolvedRuntimeRemoteAgentNode;
+  readonly sessionId: string;
+  readonly taskId?: string;
+  readonly turnId?: string;
 }): Promise<CancelTurnResult>;
 export declare function isRetryableRemoteAgentCancelError(error: unknown): boolean;
 export declare function resolveRemoteAgentForAction(input: {
-    readonly dynamicRemoteAgent?: DynamicRemoteAgentConfig;
-    readonly nodeId: string;
-    readonly registry: RuntimeSubagentRegistry["subagentsByNodeId"];
-    readonly remoteAgentName: string;
+  readonly dynamicRemoteAgent?: DynamicRemoteAgentConfig;
+  readonly nodeId: string;
+  readonly registry: RuntimeSubagentRegistry["subagentsByNodeId"];
+  readonly remoteAgentName: string;
 }): ResolvedRuntimeRemoteAgentNode;
 /**
  * Resolves authored outbound headers for a server-authored remote child event.
@@ -98,9 +101,9 @@ export declare function resolveRemoteAgentForAction(input: {
  * than minting headers for the wrong upstream.
  */
 export declare function resolveRemoteAgentStreamHeaders(input: {
-    readonly bundle: CompiledRuntimeAgentBundle;
-    readonly name: string;
-    readonly resolverId?: string;
-    readonly url: string;
+  readonly bundle: CompiledRuntimeAgentBundle;
+  readonly name: string;
+  readonly resolverId?: string;
+  readonly url: string;
 }): Promise<Record<string, string>>;
 export {};

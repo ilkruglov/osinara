@@ -9,12 +9,12 @@ export declare function inputTextWidth(input: string): number;
 /** Expands editor tabs to the same fixed four cells used by {@link inputTextWidth}. */
 export declare function renderInputText(input: string): string;
 interface BlockCursorInput {
-    readonly before: string;
-    readonly under: string;
-    readonly after: string;
-    readonly visible: boolean;
-    readonly inverse: (text: string) => string;
-    readonly render?: (text: string) => string;
+  readonly before: string;
+  readonly under: string;
+  readonly after: string;
+  readonly visible: boolean;
+  readonly inverse: (text: string) => string;
+  readonly render?: (text: string) => string;
 }
 /** Renders a blinking block cursor without inserting or removing a terminal cell. */
 export declare function renderInputWithBlockCursor(input: BlockCursorInput): string;

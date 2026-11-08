@@ -121,7 +121,6 @@ function detectUnicode(e = process.env) {
       ? !0
       : e.TERM === `dumb`
         ? !1
-        : process.platform !== `win32` ||
-          !!(e.WT_SESSION || e.TERM_PROGRAM === `vscode`);
+        : process.platform !== `win32` || !!(e.WT_SESSION || e.TERM_PROGRAM === `vscode`);
 }
 export { createTheme, detectUnicode };

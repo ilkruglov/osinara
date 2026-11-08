@@ -36,33 +36,39 @@ import type { EveAttributeValue } from "#runtime/attributes/normalize.js";
  * `$eve.subagent`.
  */
 export interface SessionIdentitySummary {
-    readonly nodeId: string;
+  readonly nodeId: string;
 }
 /**
  * Parent session lineage decoded from the serialized run context.
  */
 export interface SessionParentLineage {
-    readonly callId?: string;
-    readonly rootSessionId?: string;
-    readonly sessionId?: string;
-    readonly turnId?: string;
+  readonly callId?: string;
+  readonly rootSessionId?: string;
+  readonly sessionId?: string;
+  readonly turnId?: string;
 }
 /**
  * Reads the active channel kind from a deserialized context map.
  * Returns `undefined` when the channel slot is missing or malformed —
  * tag emission silently drops undefined values.
  */
-export declare function readChannelKind(serializedContext: Record<string, unknown>): string | undefined;
+export declare function readChannelKind(
+  serializedContext: Record<string, unknown>,
+): string | undefined;
 /**
  * Reads parent session lineage from a deserialized context map. Returns
  * an empty object for top-level runs or malformed delegated contexts.
  */
-export declare function readParentLineage(serializedContext: Record<string, unknown>): SessionParentLineage;
+export declare function readParentLineage(
+  serializedContext: Record<string, unknown>,
+): SessionParentLineage;
 /**
  * Reads the immediate parent session id from a deserialized context map.
  * Returns `undefined` when the run is a top-level session.
  */
-export declare function readParentSessionId(serializedContext: Record<string, unknown>): string | undefined;
+export declare function readParentSessionId(
+  serializedContext: Record<string, unknown>,
+): string | undefined;
 /**
  * Reads the **root** session id from a deserialized context map.
  *
@@ -72,13 +78,17 @@ export declare function readParentSessionId(serializedContext: Record<string, un
  * session without walking the chain. Returns `undefined` for top-level
  * runs, which carry no `eve.parentSession`.
  */
-export declare function readRootSessionId(serializedContext: Record<string, unknown>): string | undefined;
+export declare function readRootSessionId(
+  serializedContext: Record<string, unknown>,
+): string | undefined;
 /**
  * Reads the channel request id minted by an inbound channel route.
  * Returns `undefined` when the active run was not started from an
  * inbound route, such as a schedule.
  */
-export declare function readChannelRequestId(serializedContext: Record<string, unknown>): string | undefined;
+export declare function readChannelRequestId(
+  serializedContext: Record<string, unknown>,
+): string | undefined;
 /**
  * Maximum visible length (in code points) of a derived `$eve.title`.
  *
@@ -110,8 +120,8 @@ export declare function deriveSessionTitle(message: unknown): string | undefined
  * so its own `workflowRunId` already identifies the chain root.
  */
 export declare function buildSessionAttributes(input: {
-    readonly inputMessage: unknown;
-    readonly serializedContext: Record<string, unknown>;
+  readonly inputMessage: unknown;
+  readonly serializedContext: Record<string, unknown>;
 }): Record<string, EveAttributeValue>;
 /**
  * Builds the `$eve.*` attribute payload for a delegated subagent root
@@ -123,12 +133,12 @@ export declare function buildSessionAttributes(input: {
  * session in a single round trip.
  */
 export declare function buildSubagentRootAttributes(input: {
-    readonly identity: SessionIdentitySummary;
-    readonly parentCallId?: string;
-    readonly parentSessionId: string;
-    readonly parentTurnId?: string;
-    readonly rootSessionId: string;
-    readonly serializedContext: Record<string, unknown>;
+  readonly identity: SessionIdentitySummary;
+  readonly parentCallId?: string;
+  readonly parentSessionId: string;
+  readonly parentTurnId?: string;
+  readonly rootSessionId: string;
+  readonly serializedContext: Record<string, unknown>;
 }): Record<string, EveAttributeValue>;
 /**
  * Builds the `$eve.*` attribute payload for one turn workflow run.
@@ -141,7 +151,7 @@ export declare function buildSubagentRootAttributes(input: {
  * emitted.
  */
 export declare function buildTurnAttributes(input: {
-    readonly parentSessionId: string;
-    readonly requestId?: string;
-    readonly rootSessionId: string;
+  readonly parentSessionId: string;
+  readonly requestId?: string;
+  readonly rootSessionId: string;
 }): Record<string, EveAttributeValue>;

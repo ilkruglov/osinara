@@ -27,7 +27,8 @@ export const TELEGRAM_RECIPIENT_UNREACHABLE_REASONS = [
   "not_started",
 ] as const;
 
-export type TelegramRecipientUnreachableReason = typeof TELEGRAM_RECIPIENT_UNREACHABLE_REASONS[number];
+export type TelegramRecipientUnreachableReason =
+  (typeof TELEGRAM_RECIPIENT_UNREACHABLE_REASONS)[number];
 
 const DESCRIPTION_LOG_MAX_LENGTH = 200;
 
@@ -38,9 +39,21 @@ const RECIPIENT_FAILURES: ReadonlyArray<{
 }> = [
   { pattern: /^Forbidden: bot was blocked by the user$/u, reason: "blocked", status: 403 },
   { pattern: /^Forbidden: user is deactivated$/u, reason: "deactivated", status: 403 },
-  { pattern: /^Forbidden: bot was kicked from the (?:group|supergroup|channel) chat$/u, reason: "kicked", status: 403 },
-  { pattern: /^Forbidden: bot is not a member of the (?:group|supergroup|channel) chat$/u, reason: "not_member", status: 403 },
-  { pattern: /^Forbidden: bot can't initiate conversation with a user$/u, reason: "not_started", status: 403 },
+  {
+    pattern: /^Forbidden: bot was kicked from the (?:group|supergroup|channel) chat$/u,
+    reason: "kicked",
+    status: 403,
+  },
+  {
+    pattern: /^Forbidden: bot is not a member of the (?:group|supergroup|channel) chat$/u,
+    reason: "not_member",
+    status: 403,
+  },
+  {
+    pattern: /^Forbidden: bot can't initiate conversation with a user$/u,
+    reason: "not_started",
+    status: 403,
+  },
   { pattern: /^Bad Request: chat not found$/u, reason: "not_found", status: 400 },
 ];
 
@@ -63,6 +76,9 @@ export function classifyTelegramRecipientFailure(
   const code = typeof errorCode === "number" ? errorCode : status;
   const description = rawDescription(body)?.trim();
   if (description === undefined) return null;
-  return RECIPIENT_FAILURES.find((failure) =>
-    failure.status === code && failure.pattern.test(description))?.reason ?? null;
+  return (
+    RECIPIENT_FAILURES.find(
+      (failure) => failure.status === code && failure.pattern.test(description),
+    )?.reason ?? null
+  );
 }

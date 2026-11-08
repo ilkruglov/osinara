@@ -15,9 +15,18 @@
 import { AppError } from "../app-error.js";
 import { approvalFact, buildApprovalMessage } from "../telegram-hitl/approval-message.js";
 import { yandexTaxiInput } from "./yandex-taxi-input.js";
-import { requireYandexTaxiPoint, YANDEX_TAXI_CANCEL_LABELS, yandexTaxiMaxPrice, type YandexTaxiPoint } from "./yandex-taxi-model.js";
+import {
+  requireYandexTaxiPoint,
+  YANDEX_TAXI_CANCEL_LABELS,
+  yandexTaxiMaxPrice,
+  type YandexTaxiPoint,
+} from "./yandex-taxi-model.js";
 
-const invalid = () => new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить заказ такси для подтверждения");
+const invalid = () =>
+  new AppError(
+    "AGENT_APPROVAL_SUBJECT_INVALID",
+    "Не удалось определить заказ такси для подтверждения",
+  );
 
 /**
  * The full address with its city: a short text such as «Тверская 1» exists in many cities, and the
@@ -25,7 +34,10 @@ const invalid = () => new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не уд�
  */
 function place(point: YandexTaxiPoint, porch?: string): string {
   const address = point.fullText || point.shortText;
-  const city = point.city && !address.toLocaleLowerCase("ru").includes(point.city.toLocaleLowerCase("ru")) ? `${point.city}, ` : "";
+  const city =
+    point.city && !address.toLocaleLowerCase("ru").includes(point.city.toLocaleLowerCase("ru"))
+      ? `${point.city}, `
+      : "";
   return `${city}${address}${porch ? `, подъезд ${porch}` : ""}`;
 }
 
@@ -38,15 +50,28 @@ export function yandexTaxiApprovalPrompt(raw: unknown): string {
     const terms = YANDEX_TAXI_CANCEL_LABELS[input.cancelState];
     return buildApprovalMessage({
       actionLabel: `отменить заказ такси Яндекс Go ${terms === YANDEX_TAXI_CANCEL_LABELS.free ? "бесплатно" : `(${terms})`}`,
-      consequence: "Яндекс Go отменит заказ. Если отмена платная, он спишет плату по своим правилам. Если условия отмены изменились после проверки, отмена не уйдёт.",
+      consequence:
+        "Яндекс Go отменит заказ. Если отмена платная, он спишет плату по своим правилам. Если условия отмены изменились после проверки, отмена не уйдёт.",
       facts: [
         ...approvalFact("Заказ", input.orderId),
         ...approvalFact("Отмена", terms),
-        ...(input.cancelState === "free" ? [] : approvalFact("Условия Яндекс Go", input.cancelMessage ?? "")),
+        ...(input.cancelState === "free"
+          ? []
+          : approvalFact("Условия Яндекс Go", input.cancelMessage ?? "")),
       ],
     });
   }
-  if (input.action !== "order" || !input.from || !input.to || !input.payment?.label || input.price === undefined || !input.currency || input.fixedPrice === undefined || !input.tariff || !input.tariffName) {
+  if (
+    input.action !== "order" ||
+    !input.from ||
+    !input.to ||
+    !input.payment?.label ||
+    input.price === undefined ||
+    !input.currency ||
+    input.fixedPrice === undefined ||
+    !input.tariff ||
+    !input.tariffName
+  ) {
     throw invalid();
   }
   const from = requireYandexTaxiPoint(input.from, "from");
@@ -62,9 +87,17 @@ export function yandexTaxiApprovalPrompt(raw: unknown): string {
       ...approvalFact("Откуда", place(from, input.porch)),
       ...approvalFact("Куда", place(to)),
       ...approvalFact("Тариф", input.tariffName),
-      ...approvalFact("Цена", `${price}, ${input.fixedPrice ? "фиксированная" : "не фиксированная"}`),
+      ...approvalFact(
+        "Цена",
+        `${price}, ${input.fixedPrice ? "фиксированная" : "не фиксированная"}`,
+      ),
       ...approvalFact("Не дороже", ceiling),
-      ...approvalFact("Подача", typeof input.waitingMinutes === "number" ? `примерно через ${input.waitingMinutes} мин (оценка)` : "Яндекс Go не оценил"),
+      ...approvalFact(
+        "Подача",
+        typeof input.waitingMinutes === "number"
+          ? `примерно через ${input.waitingMinutes} мин (оценка)`
+          : "Яндекс Go не оценил",
+      ),
       ...approvalFact("Оплата", input.payment.label),
       ...approvalFact("Комментарий водителю", input.comment ?? ""),
     ],

@@ -9,6 +9,6 @@ import type { CompiledAgentManifest } from "#compiler/manifest.js";
  * tree.
  */
 export declare function materializeWorkspaceResources(input: {
-    readonly compileDirectoryPath: string;
-    readonly manifest: CompiledAgentManifest;
+  readonly compileDirectoryPath: string;
+  readonly manifest: CompiledAgentManifest;
 }): Promise<CompiledAgentManifest>;

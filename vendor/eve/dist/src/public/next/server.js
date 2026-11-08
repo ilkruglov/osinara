@@ -10,10 +10,7 @@ const DEFAULT_SERVER_READY_TIMEOUT_MS = 18e4,
   globalStateSymbol = Symbol.for(`eve.next.state`);
 function getGlobalState() {
   let e = globalThis;
-  return (
-    (e[globalStateSymbol] ??= { servers: new Map() }),
-    e[globalStateSymbol]
-  );
+  return ((e[globalStateSymbol] ??= { servers: new Map() }), e[globalStateSymbol]);
 }
 function joinRoutePrefix(e, t) {
   return `${e.replace(/\/+$/, ``)}/${t.replace(/^\/+/, ``)}`;
@@ -86,9 +83,7 @@ async function readUsableEveDevServerRegistry(e) {
     let t = normalizeDevServerRegistry(
       JSON.parse(await readFile(resolveEveDevServerRegistryPath(e), `utf8`)),
     );
-    return t === void 0 ||
-      t.appRoot !== e ||
-      !(await isEveServerHealthy(t.origin))
+    return t === void 0 || t.appRoot !== e || !(await isEveServerHealthy(t.origin))
       ? void 0
       : t.origin;
   } catch (e) {
@@ -115,7 +110,7 @@ async function acquireEveDevServerLock(n, i) {
   let a = resolveEveCacheDirectory(n),
     o = resolveEveDevServerLockPath(n),
     s = Date.now() + i;
-  for (await mkdir(a, { recursive: !0 }); ; )
+  for (await mkdir(a, { recursive: !0 }); ;)
     try {
       let e = await open(o, `wx`);
       return (
@@ -127,12 +122,9 @@ async function acquireEveDevServerLock(n, i) {
       );
     } catch (e) {
       if (!isNodeErrorWithCode(e, `EEXIST`)) throw e;
-      if ((await readUsableEveDevServerRegistry(n)) !== void 0)
-        return async () => {};
+      if ((await readUsableEveDevServerRegistry(n)) !== void 0) return async () => {};
       if ((await removeStaleEveDevServerLock(o), Date.now() > s))
-        throw Error(
-          `Timed out after ${i}ms waiting for another Next.js process to start eve.`,
-        );
+        throw Error(`Timed out after ${i}ms waiting for another Next.js process to start eve.`);
       await delay(100);
     }
 }
@@ -140,23 +132,16 @@ function createEveBinaryPath() {
   return join(resolvePackageRoot(), `bin`, `eve.js`);
 }
 function isLoopbackHostname(e) {
-  return (
-    e === `localhost` ||
-    e === `::1` ||
-    e === `[::1]` ||
-    /^127(?:\.\d{1,3}){3}$/.test(e)
-  );
+  return e === `localhost` || e === `::1` || e === `[::1]` || /^127(?:\.\d{1,3}){3}$/.test(e);
 }
 function parseLocalServerOrigin(e) {
   let t = URL.parse(e);
-  if (
-    !(
-      t === null ||
-      (t.protocol !== `http:` && t.protocol !== `https:`) ||
-      !isLoopbackHostname(t.hostname) ||
-      t.port.length === 0
-    )
-  )
+  if (!(
+    t === null ||
+    (t.protocol !== `http:` && t.protocol !== `https:`) ||
+    !isLoopbackHostname(t.hostname) ||
+    t.port.length === 0
+  ))
     return t.origin;
 }
 function findLocalServerOrigin(e) {
@@ -223,9 +208,7 @@ function startServerProcess(e) {
           ));
       }, e.timeoutMs ?? DEFAULT_SERVER_READY_TIMEOUT_MS),
       cleanup = () => {
-        (clearTimeout(o),
-          r.off(`error`, handleError),
-          r.off(`exit`, handleEarlyExit));
+        (clearTimeout(o), r.off(`error`, handleError), r.off(`exit`, handleEarlyExit));
       },
       flushOutput = () => {
         (a.flush(), i.flush());
@@ -301,8 +284,7 @@ async function resolveSharedEveDevServer(e, t, n) {
 async function resolveEveDestinationPrefix(e) {
   let t = getGlobalState();
   if (process.env.NODE_ENV === `production`) {
-    if (e.phase === `phase-production-build`)
-      return e.productionDestinationPrefix;
+    if (e.phase === `phase-production-build`) return e.productionDestinationPrefix;
     let n = `production:${e.appRoot}`,
       r = t.servers.get(n);
     return (
@@ -324,19 +306,16 @@ async function resolveEveDestinationPrefix(e) {
   }
   let n = readEveBaseUrlEnvironment();
   if (n !== void 0) return n;
-  if (process.env.NODE_ENV !== `development`)
-    return e.productionDestinationPrefix;
+  if (process.env.NODE_ENV !== `development`) return e.productionDestinationPrefix;
   let r = `dev:${e.appRoot}`,
     i = t.servers.get(r);
   return (
     i === void 0 &&
-      ((i = resolveSharedEveDevServer(
-        e.appRoot,
-        e.devServerTimeoutMs ?? 18e4,
-        e.logLabel,
-      ).catch((e) => {
-        throw (t.servers.delete(r), e);
-      })),
+      ((i = resolveSharedEveDevServer(e.appRoot, e.devServerTimeoutMs ?? 18e4, e.logLabel).catch(
+        (e) => {
+          throw (t.servers.delete(r), e);
+        },
+      )),
       t.servers.set(r, i)),
     (await i).origin
   );

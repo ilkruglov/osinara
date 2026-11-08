@@ -14,9 +14,7 @@ function buildCallbackContext() {
         );
       return t.get().then((e) => {
         if (e === null)
-          throw Error(
-            `The sandbox is not available in the current authored runtime context.`,
-          );
+          throw Error(`The sandbox is not available in the current authored runtime context.`);
         return withRuntimeSandboxStop(e, async () => await t.stop());
       });
     },

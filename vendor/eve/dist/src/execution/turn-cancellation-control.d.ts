@@ -5,16 +5,16 @@
  * `"use workflow"` body.
  */
 export interface TurnCancellationControl {
-    /** Turn signal to serialize into each `turnStep` input. */
-    readonly signal: AbortSignal;
-    /**
-     * Resolves `"cancel"` once a matching cancel payload is consumed and
-     * the signal aborted. Race it against turn-owned awaits — never
-     * `await` it alone.
-     */
-    readonly requested: Promise<"cancel">;
-    /** Disposes the hook, abandoning any outstanding read. Idempotent. */
-    dispose(): Promise<void>;
+  /** Turn signal to serialize into each `turnStep` input. */
+  readonly signal: AbortSignal;
+  /**
+   * Resolves `"cancel"` once a matching cancel payload is consumed and
+   * the signal aborted. Race it against turn-owned awaits — never
+   * `await` it alone.
+   */
+  readonly requested: Promise<"cancel">;
+  /** Disposes the hook, abandoning any outstanding read. Idempotent. */
+  dispose(): Promise<void>;
 }
 /**
  * Creates and claims the private cancel hook for one turn workflow run.
@@ -22,6 +22,6 @@ export interface TurnCancellationControl {
  * run — the turn then runs uncancellable rather than failing.
  */
 export declare function createTurnCancellationControl(input: {
-    readonly controlToken: string;
-    readonly expectedTurnId: string;
+  readonly controlToken: string;
+  readonly expectedTurnId: string;
 }): Promise<TurnCancellationControl | undefined>;

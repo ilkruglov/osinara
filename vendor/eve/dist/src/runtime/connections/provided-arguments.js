@@ -9,8 +9,7 @@ async function resolveProvidedArguments(r) {
   let i = r.connection.toolCall?.providedArguments;
   if (i === void 0 || Object.keys(i).length === 0) return r.args;
   let a,
-    getContext = () =>
-      (a ??= { ...buildCallbackContext(), toolName: r.toolName }),
+    getContext = () => (a ??= { ...buildCallbackContext(), toolName: r.toolName }),
     o = {};
   for (let [e, n] of Object.entries(i)) {
     let i = typeof n == `function` ? await n(getContext()) : await n;
@@ -30,13 +29,9 @@ function omitProvidedArgumentsFromSchema(t, n) {
     i = { ...t };
   return (
     isObject(t.properties) &&
-      (i.properties = Object.fromEntries(
-        Object.entries(t.properties).filter(([e]) => !r.has(e)),
-      )),
+      (i.properties = Object.fromEntries(Object.entries(t.properties).filter(([e]) => !r.has(e)))),
     Array.isArray(t.required) &&
-      (i.required = t.required.filter(
-        (e) => typeof e != `string` || !r.has(e),
-      )),
+      (i.required = t.required.filter((e) => typeof e != `string` || !r.has(e))),
     i
   );
 }

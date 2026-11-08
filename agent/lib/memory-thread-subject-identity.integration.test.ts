@@ -9,10 +9,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
-  embedMemoryPassages: vi.fn(async () => [
-    [1, ...Array.from({ length: 767 }, () => 0)],
-  ]),
+  ...(await importOriginal<typeof import("./memory-embedding-client.js")>()),
+  embedMemoryPassages: vi.fn(async () => [[1, ...Array.from({ length: 767 }, () => 0)]]),
 }));
 
 import { closeDatabase, database } from "./database.js";
@@ -20,9 +18,8 @@ import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-f
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("memory thread subject identity", () => {
   beforeEach(async () => {
@@ -87,22 +84,24 @@ describeWithDatabase("memory thread subject identity", () => {
       userId: reporter.rows[0]!.id,
     };
 
-    await expect(memoryRepository.create(reporterAuth, {
-      confirmation: "model_high",
-      content: "Анна пробежала первые десять километров",
-      explicitSource: {
-        conversationId: fixture.conversationId,
-        subject: { kind: "none" },
-        timelineEntryId: reportSource.rows[0]!.id,
-      },
-      kind: "episode",
-      operationKey: "implicit-cross-author-attach",
-      provenance: { sessionId: "report-session", turnId: "report-turn" },
-      scope: "family",
-      sensitivity: "normal",
-      source: "eve:report-session:report-turn",
-      thread: { action: "attach", role: "outcome", threadRef: subjectThread.thread!.threadRef },
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_THREAD_INPUT_INVALID" });
+    await expect(
+      memoryRepository.create(reporterAuth, {
+        confirmation: "model_high",
+        content: "Анна пробежала первые десять километров",
+        explicitSource: {
+          conversationId: fixture.conversationId,
+          subject: { kind: "none" },
+          timelineEntryId: reportSource.rows[0]!.id,
+        },
+        kind: "episode",
+        operationKey: "implicit-cross-author-attach",
+        provenance: { sessionId: "report-session", turnId: "report-turn" },
+        scope: "family",
+        sensitivity: "normal",
+        source: "eve:report-session:report-turn",
+        thread: { action: "attach", role: "outcome", threadRef: subjectThread.thread!.threadRef },
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_THREAD_INPUT_INVALID" });
 
     const subject = await database().query<{ id: string; subject_ref: string }>(
       `SELECT id, subject_ref FROM profile_subjects
@@ -139,13 +138,15 @@ describeWithDatabase("memory thread subject identity", () => {
       source: "eve:report-session:report-turn",
       thread: { action: "attach", role: "outcome", threadRef: subjectThread.thread!.threadRef },
     });
-    await expect(database().query(
-      `SELECT item.subject_user_id, evidence.evidence_kind
+    await expect(
+      database().query(
+        `SELECT item.subject_user_id, evidence.evidence_kind
          FROM memory_items AS item
          JOIN claim_evidence AS evidence ON evidence.claim_id = item.id
         WHERE item.id = $1`,
-      [reported.id],
-    )).resolves.toMatchObject({
+        [reported.id],
+      ),
+    ).resolves.toMatchObject({
       rows: [{ evidence_kind: "reported", subject_user_id: fixture.userId }],
     });
 
@@ -204,14 +205,16 @@ describeWithDatabase("memory thread subject identity", () => {
       source: "eve:subject-session:project-author-turn",
       thread: { action: "attach", role: "episode", threadRef: project.thread!.threadRef },
     });
-    await expect(database().query(
-      `SELECT count(DISTINCT item.author_user_id)::integer AS authors,
+    await expect(
+      database().query(
+        `SELECT count(DISTINCT item.author_user_id)::integer AS authors,
               count(*)::integer AS entries
          FROM memory_thread_entries AS entry
          JOIN memory_items AS item ON item.id = entry.source_claim_id
          JOIN memory_threads AS thread ON thread.id = entry.thread_id
         WHERE thread.thread_ref = $1`,
-      [project.thread!.threadRef],
-    )).resolves.toMatchObject({ rows: [{ authors: 2, entries: 2 }] });
+        [project.thread!.threadRef],
+      ),
+    ).resolves.toMatchObject({ rows: [{ authors: 2, entries: 2 }] });
   });
 });

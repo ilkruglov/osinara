@@ -1,11 +1,13 @@
-export declare const EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY_ENV = "EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY";
-export declare const EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY_ENV = "EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY";
+export declare const EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY_ENV =
+  "EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY";
+export declare const EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY_ENV =
+  "EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY";
 export interface ApplicationInfo {
-    appRoot: string;
-    outputDir: string;
-    workflowId: string;
-    workflowBuildDir: string;
-    workflowSourceDir: string;
+  appRoot: string;
+  outputDir: string;
+  workflowId: string;
+  workflowBuildDir: string;
+  workflowSourceDir: string;
 }
 /**
  * Resolves an application root from the current working directory.

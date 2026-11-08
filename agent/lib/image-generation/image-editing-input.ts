@@ -20,25 +20,45 @@ export function editingUnavailable(): AppError {
 
 export function assertReferenceCount(references: readonly ImageReference[]): void {
   if (references.length < MIN_REFERENCE_IMAGES || references.length > MAX_REFERENCE_IMAGES) {
-    throw new AppError("AGENT_IMAGE_EDITING_INPUT_INVALID", "Передайте от одного до четырёх исходников");
+    throw new AppError(
+      "AGENT_IMAGE_EDITING_INPUT_INVALID",
+      "Передайте от одного до четырёх исходников",
+    );
   }
 }
 
-async function prepareReference(image: ImageReference, maxSide: number, format: "jpeg" | "png"): Promise<Buffer> {
+async function prepareReference(
+  image: ImageReference,
+  maxSide: number,
+  format: "jpeg" | "png",
+): Promise<Buffer> {
   try {
     if (image.bytes.byteLength > 10 * 1024 * 1024) throw new Error("Image exceeds byte limit");
     await validateVisionImageBytes(image.bytes);
     const decoder = sharp(image.bytes, { failOn: "warning", limitInputPixels: 40_000_000 });
     const metadata = await decoder.metadata();
-    if (!metadata.format || !["jpeg", "png", "webp"].includes(metadata.format) || (metadata.pages ?? 1) !== 1) {
+    if (
+      !metadata.format ||
+      !["jpeg", "png", "webp"].includes(metadata.format) ||
+      (metadata.pages ?? 1) !== 1
+    ) {
       throw new Error("Unsupported static image");
     }
     // Preserve the whole image and its aspect ratio; only the longer side is bounded.
-    const resized = decoder.rotate().resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true });
+    const resized = decoder
+      .rotate()
+      .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true });
     // Uploads go as JPEG: four PNG photos serialised as base64 reached 48 MiB of JSON.
-    return await (format === "jpeg" ? resized.flatten({ background: "#ffffff" }).jpeg({ quality: 92 }) : resized.png()).toBuffer();
+    return await (
+      format === "jpeg"
+        ? resized.flatten({ background: "#ffffff" }).jpeg({ quality: 92 })
+        : resized.png()
+    ).toBuffer();
   } catch {
-    throw new AppError("AGENT_IMAGE_EDITING_INPUT_INVALID", "Не удалось прочитать исходник: нужен неповреждённый PNG, JPEG или WebP до 10 МБ и 40 мегапикселей");
+    throw new AppError(
+      "AGENT_IMAGE_EDITING_INPUT_INVALID",
+      "Не удалось прочитать исходник: нужен неповреждённый PNG, JPEG или WebP до 10 МБ и 40 мегапикселей",
+    );
   }
 }
 

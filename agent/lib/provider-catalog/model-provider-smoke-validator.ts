@@ -39,9 +39,9 @@ export async function validateModelProviderSmoke(
   options: ModelProviderSmokeOptions,
 ): Promise<void> {
   if (
-    !Number.isInteger(options.timeoutMs)
-    || options.timeoutMs < 1
-    || options.timeoutMs > MAX_SMOKE_TIMEOUT_MS
+    !Number.isInteger(options.timeoutMs) ||
+    options.timeoutMs < 1 ||
+    options.timeoutMs > MAX_SMOKE_TIMEOUT_MS
   ) {
     throw new AppError(
       "AGENT_PROVIDER_SMOKE_TIMEOUT_INVALID",
@@ -58,20 +58,20 @@ export async function validateModelProviderSmoke(
     modelId: primary.id,
     transport: options.config.agent.transport,
   });
-  const usesDeepSeekThinking = options.config.provider === "deepseek"
-    && options.config.agent.transport.protocol === "openai-chat-completions"
-    && options.config.agent.transport.reasoning?.type === "effort";
+  const usesDeepSeekThinking =
+    options.config.provider === "deepseek" &&
+    options.config.agent.transport.protocol === "openai-chat-completions" &&
+    options.config.agent.transport.reasoning?.type === "effort";
   const result = await generateText({
     abortSignal: AbortSignal.timeout(options.timeoutMs),
     maxRetries: 0,
     model,
-    prepareStep: ({ stepNumber }) => usesDeepSeekThinking
-      ? {}
-      : {
-          toolChoice: stepNumber === 0
-            ? { toolName: SMOKE_TOOL_NAME, type: "tool" }
-            : "none",
-        },
+    prepareStep: ({ stepNumber }) =>
+      usesDeepSeekThinking
+        ? {}
+        : {
+            toolChoice: stepNumber === 0 ? { toolName: SMOKE_TOOL_NAME, type: "tool" } : "none",
+          },
     prompt: SMOKE_PROMPT,
     stopWhen: stepCountIs(2),
     tools: {
@@ -85,15 +85,18 @@ export async function validateModelProviderSmoke(
   // A successful provider request is insufficient: enforce the complete semantic handshake.
   const firstStep = result.steps[0];
   const secondStep = result.steps[1];
-  const exactToolCall = firstStep?.toolCalls.length === 1
-    && firstStep.toolCalls[0]?.toolName === SMOKE_TOOL_NAME
-    && JSON.stringify(firstStep.toolCalls[0].input) === JSON.stringify({ value: SMOKE_TOOL_VALUE });
-  const exactToolResult = firstStep?.toolResults.length === 1
-    && firstStep.toolResults[0]?.toolName === SMOKE_TOOL_NAME
-    && JSON.stringify(firstStep.toolResults[0].output) === JSON.stringify({ accepted: true });
-  const exactFinalStep = result.steps.length === 2
-    && secondStep?.toolCalls.length === 0
-    && result.text === SMOKE_FINAL_TEXT;
+  const exactToolCall =
+    firstStep?.toolCalls.length === 1 &&
+    firstStep.toolCalls[0]?.toolName === SMOKE_TOOL_NAME &&
+    JSON.stringify(firstStep.toolCalls[0].input) === JSON.stringify({ value: SMOKE_TOOL_VALUE });
+  const exactToolResult =
+    firstStep?.toolResults.length === 1 &&
+    firstStep.toolResults[0]?.toolName === SMOKE_TOOL_NAME &&
+    JSON.stringify(firstStep.toolResults[0].output) === JSON.stringify({ accepted: true });
+  const exactFinalStep =
+    result.steps.length === 2 &&
+    secondStep?.toolCalls.length === 0 &&
+    result.text === SMOKE_FINAL_TEXT;
   if (!exactToolCall || !exactToolResult || !exactFinalStep) {
     throw new AppError(
       "AGENT_PROVIDER_SMOKE_RESPONSE_INVALID",

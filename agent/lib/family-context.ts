@@ -74,9 +74,12 @@ export function requireTrustedTelegramOwner(ctx: SessionContext): TrustedTelegra
   const caller = resolveSessionCaller(ctx);
   const attributes = caller?.attributes;
   const chatType = attributes?.telegramChatType;
-  const chatKind = chatType === "private"
-    ? "private"
-    : attributes?.groupType === "family_private" ? "family" : null;
+  const chatKind =
+    chatType === "private"
+      ? "private"
+      : attributes?.groupType === "family_private"
+        ? "family"
+        : null;
   if (
     caller?.authenticator !== "telegram" ||
     chatKind === null ||
@@ -87,6 +90,7 @@ export function requireTrustedTelegramOwner(ctx: SessionContext): TrustedTelegra
       "Это действие доступно владельцу только в личном чате или семейной группе",
     );
   }
-  const groupId = chatKind === "family" && typeof attributes.groupId === "string" ? attributes.groupId : null;
+  const groupId =
+    chatKind === "family" && typeof attributes.groupId === "string" ? attributes.groupId : null;
   return { ...owner, chatKind, groupId, telegramChatId: attributes.telegramChatId };
 }

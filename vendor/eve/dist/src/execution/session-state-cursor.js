@@ -12,8 +12,7 @@ var SessionStateCursor = class {
     return this.currentSessionState;
   }
   adoptState(e) {
-    ((this.currentSerializedContext =
-      e.serializedContext ?? this.currentSerializedContext),
+    ((this.currentSerializedContext = e.serializedContext ?? this.currentSerializedContext),
       (this.currentSessionState = e.sessionState ?? this.currentSessionState));
   }
 };

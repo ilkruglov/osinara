@@ -19,9 +19,9 @@ export declare const SCHEDULE_ADAPTER: ChannelAdapter;
  * defined (authored handler) or `markdown` is defined (fire-and-forget).
  */
 export interface ScheduleDispatchInput {
-    readonly scheduleId: string;
-    readonly run?: ScheduleRunHandler;
-    readonly markdown?: string;
+  readonly scheduleId: string;
+  readonly run?: ScheduleRunHandler;
+  readonly markdown?: string;
 }
 /**
  * Dispatches scheduled task execution.
@@ -41,22 +41,26 @@ export interface ScheduleDispatchInput {
  * `waitUntil` promises the handler registered.
  */
 export interface ScheduleDispatchResult {
-    readonly sessions: readonly Session[];
-    readonly waitUntilTasks: readonly Promise<unknown>[];
+  readonly sessions: readonly Session[];
+  readonly waitUntilTasks: readonly Promise<unknown>[];
 }
 export declare class ScheduleDispatcher {
-    private readonly runtime;
-    private readonly channels;
-    constructor(config: {
-        readonly runtime: Runtime;
-        readonly channels: readonly ResolvedChannelDefinition[];
-    });
-    trigger(input: ScheduleDispatchInput): Promise<ScheduleDispatchResult>;
-    private runMarkdown;
+  private readonly runtime;
+  private readonly channels;
+  constructor(config: {
+    readonly runtime: Runtime;
+    readonly channels: readonly ResolvedChannelDefinition[];
+  });
+  trigger(input: ScheduleDispatchInput): Promise<ScheduleDispatchResult>;
+  private runMarkdown;
 }
 /**
  * Convenience: extract a `run` function from one loaded schedule module
  * value, or throw with the file path so misconfigured modules fail
  * obviously instead of crashing deep inside the dispatcher.
  */
-export declare function expectScheduleRun(value: unknown, logicalPath: string, exportName: string | undefined): ScheduleRunHandler;
+export declare function expectScheduleRun(
+  value: unknown,
+  logicalPath: string,
+  exportName: string | undefined,
+): ScheduleRunHandler;

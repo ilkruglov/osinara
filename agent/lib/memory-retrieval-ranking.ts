@@ -39,9 +39,9 @@ export function collapseExactDuplicateRetrievalResults(
 
   // Equal wording belongs to one read cluster only inside the same trust-zone and subject identity.
   for (const result of rankedResults) {
-    const duplicateKey = `${result.exactDuplicateIdentity}\u0000${
-      normalizeMemoryExactDuplicateKey(result.memory.content)
-    }`;
+    const duplicateKey = `${result.exactDuplicateIdentity}\u0000${normalizeMemoryExactDuplicateKey(
+      result.memory.content,
+    )}`;
     if (seen.has(duplicateKey)) continue;
     seen.add(duplicateKey);
     unique.push(result);

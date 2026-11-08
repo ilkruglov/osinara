@@ -42,12 +42,12 @@ import {
 } from "./telegram-memory-thread-notice.js";
 import { telegramRepository, type TelegramRepository } from "./telegram-repository.js";
 import { workspaceBinaryRepository } from "./workspaces/workspace-binary-repository.js";
-import type {
-  WorkspaceAuthorization,
-  WorkspaceScope,
-} from "./workspaces/workspace-repository.js";
+import type { WorkspaceAuthorization, WorkspaceScope } from "./workspaces/workspace-repository.js";
 import { memoryReviewRepository } from "./memory-review/memory-review-repository.js";
-import { buildTelegramMemoryContext, buildTelegramWhisperMemoryContext } from "./telegram-turn-memory-context.js";
+import {
+  buildTelegramMemoryContext,
+  buildTelegramWhisperMemoryContext,
+} from "./telegram-turn-memory-context.js";
 import { turnInterjectionRepository } from "./turn-interjection/turn-interjection-repository.js";
 import { telegramWhisperGate } from "./whisper/telegram-whisper-gate.js";
 import type { TelegramWhisperTurnDependencies } from "./whisper/telegram-whisper-turn.js";
@@ -89,7 +89,10 @@ export interface TelegramMessageRepositories {
   sessionHandoff: { prepare: SessionHandoffPreparer };
   telegram: TelegramRepository;
   timeline: Pick<typeof conversationTimelineRepository, "recordInbound">;
-  turnInterjections: Pick<typeof turnInterjectionRepository, "findDeliveredContentKind" | "findDeliveredContentKinds">;
+  turnInterjections: Pick<
+    typeof turnInterjectionRepository,
+    "findDeliveredContentKind" | "findDeliveredContentKinds"
+  >;
   /** Removes a whisper's placeholder and reads memory for it without the group's skill hint. */
   whisper: TelegramWhisperTurnDependencies["whisper"];
 }

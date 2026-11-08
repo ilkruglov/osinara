@@ -46,14 +46,14 @@ export function requireReminderAuthorization(
   const groupId = attributes.groupId;
   return {
     familyId: attributes.familyId,
-    forumTopicId: typeof attributes.telegramForumTopicId === "string"
-      ? attributes.telegramForumTopicId
-      : null,
+    forumTopicId:
+      typeof attributes.telegramForumTopicId === "string" ? attributes.telegramForumTopicId : null,
     groupId: typeof groupId === "string" ? groupId : null,
     groupType: groupType === "family_private" ? groupType : null,
-    messageThreadId: typeof attributes.telegramMessageThreadId === "string"
-      ? attributes.telegramMessageThreadId
-      : null,
+    messageThreadId:
+      typeof attributes.telegramMessageThreadId === "string"
+        ? attributes.telegramMessageThreadId
+        : null,
     role: role as ReminderAuthorization["role"],
     telegramChatId: attributes.telegramChatId,
     telegramChatType: chatType as ReminderAuthorization["telegramChatType"],

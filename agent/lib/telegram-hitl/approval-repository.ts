@@ -10,11 +10,11 @@ import type { SessionAuthContext } from "eve/context";
 import type { PoolClient } from "pg";
 
 import { database } from "../database.js";
-import { requireToolExecutionApprovalEvidence, type ToolExecutionApprovalInput } from "./approval-evidence.js";
 import {
-  resolveCurrentApprovalAuth,
-  type ApprovalAuthRow,
-} from "./approval-auth.js";
+  requireToolExecutionApprovalEvidence,
+  type ToolExecutionApprovalInput,
+} from "./approval-evidence.js";
+import { resolveCurrentApprovalAuth, type ApprovalAuthRow } from "./approval-auth.js";
 
 type TelegramChatType = "group" | "private" | "supergroup";
 
@@ -144,10 +144,12 @@ async function lockApprovals(
 }
 
 function isPendingApproval(row: ApprovalRow): boolean {
-  return row.consumed_at === null &&
+  return (
+    row.consumed_at === null &&
     row.pending_operation &&
     row.retired_at === null &&
-    row.session_eve_session_id === row.eve_session_id;
+    row.session_eve_session_id === row.eve_session_id
+  );
 }
 
 function selectedCallbackOption(
@@ -160,9 +162,12 @@ function selectedCallbackOption(
     const value = option as Record<string, unknown>;
     if (
       value.callbackData === callbackData &&
-      typeof value.label === "string" && value.label &&
-      typeof value.optionId === "string" && value.optionId
-    ) return { label: value.label, optionId: value.optionId };
+      typeof value.label === "string" &&
+      value.label &&
+      typeof value.optionId === "string" &&
+      value.optionId
+    )
+      return { label: value.label, optionId: value.optionId };
   }
   return null;
 }
@@ -272,10 +277,11 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
       if (
         !row ||
         !selectedOption ||
-        rows.some((candidate) =>
-          !isPendingApproval(candidate) ||
-          !candidate.callback_data.includes(input.callbackData) ||
-          !candidate.prompt_text
+        rows.some(
+          (candidate) =>
+            !isPendingApproval(candidate) ||
+            !candidate.callback_data.includes(input.callbackData) ||
+            !candidate.prompt_text,
         )
       ) {
         await client.query("ROLLBACK");
@@ -285,11 +291,13 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         await client.query("ROLLBACK");
         return { status: "forbidden" };
       }
-      if (!await routeBelongsToSession(
-        client,
-        input.baseContinuationToken,
-        row.application_session_id,
-      )) {
+      if (
+        !(await routeBelongsToSession(
+          client,
+          input.baseContinuationToken,
+          row.application_session_id,
+        ))
+      ) {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }

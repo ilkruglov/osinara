@@ -13,10 +13,7 @@ import {
   encodeMessageStreamEvent,
   stampMessageStreamEvent,
 } from "#protocol/message.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 import { getAgentHandleStore } from "#harness/handles/store.js";
 import { workflowEntryReference } from "#execution/workflow-runtime.js";
 import { deserializeContext } from "#context/serialize.js";
@@ -75,10 +72,7 @@ async function prepareRuntimeActionDispatch(e) {
         await withContextScope(
           s,
           u,
-          async (e) => (
-            await s.require(SandboxKey).get(),
-            { result: void 0, session: e }
-          ),
+          async (e) => (await s.require(SandboxKey).get(), { result: void 0, session: e }),
         )
       ).session;
     } finally {
@@ -92,13 +86,9 @@ async function prepareRuntimeActionDispatch(e) {
     bundle: c,
     capabilities: s.get(CapabilitiesKey),
     channelMetadata: s.get(ChannelInstrumentationKey),
-    fanoutSize: f.filter((e) => e.kind === `start` && e.target.kind === `local`)
-      .length,
+    fanoutSize: f.filter((e) => e.kind === `start` && e.target.kind === `local`).length,
     initiatorAuth: s.get(InitiatorAuthKey) ?? null,
-    parentTraceContext: readSessionTraceContext(
-      e.serializedContext,
-      u.sessionId,
-    ),
+    parentTraceContext: readSessionTraceContext(e.serializedContext, u.sessionId),
     plan: f,
     sandboxSessionId: p,
     serializedContext: e.serializedContext,
@@ -112,10 +102,8 @@ function planSharesSandbox(e) {
     if (n.kind !== `start` || n.target.kind !== `local`) return !1;
     let r = n.target.action;
     return (
-      (r.subagentName === `agent` &&
-        !e.bundle.subagentRegistry.subagentsByNodeId.has(r.nodeId)) ||
-      t?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox.definition
-        .inheritsParent === !0
+      (r.subagentName === `agent` && !e.bundle.subagentRegistry.subagentsByNodeId.has(r.nodeId)) ||
+      t?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox.definition.inheritsParent === !0
     );
   });
 }
@@ -167,8 +155,7 @@ async function emitSubagentCalled(e) {
 function planDispatch(e) {
   let t = getAgentHandleStore(e.session.state)?.handles ?? [];
   return e.actions.map((n) => {
-    if (e.taskControls && isTaskControlAction(n))
-      return { action: n, kind: `task-control` };
+    if (e.taskControls && isTaskControlAction(n)) return { action: n, kind: `task-control` };
     let r = n.input.agentId,
       i = typeof r == `string` && r.trim() !== `` ? r : void 0;
     if (i !== void 0 && isAgentHandleAction(n)) {
@@ -181,9 +168,7 @@ function planDispatch(e) {
           action: n,
           agentId: i,
           dynamicRemoteAgent:
-            n.kind === `remote-agent-call` && t?.kind === `remote`
-              ? t.remoteAgent
-              : void 0,
+            n.kind === `remote-agent-call` && t?.kind === `remote` ? t.remoteAgent : void 0,
           kind: `resume`,
         };
       }
@@ -240,20 +225,14 @@ function classifyFreshStart(e) {
       let e = o?.kind === `subagent` ? o.agentConfig : void 0,
         r = n.get(t.nodeId),
         i =
-          e?.description ??
-          (r?.definition.kind === `subagent`
-            ? r.definition.description
-            : void 0);
+          e?.description ?? (r?.definition.kind === `subagent` ? r.definition.description : void 0);
       return {
         kind: `start`,
         target: {
           action: t,
           dynamicSubagentAgentConfig: e,
           kind: `local`,
-          source:
-            i === void 0
-              ? { type: `runtime` }
-              : { description: i, type: `local` },
+          source: i === void 0 ? { type: `runtime` } : { description: i, type: `local` },
         },
       };
     }
@@ -267,9 +246,7 @@ function classifyFreshStart(e) {
         },
       };
     default:
-      throw Error(
-        `Unsupported runtime action kind "${t.kind}" in workflow runtime.`,
-      );
+      throw Error(`Unsupported runtime action kind "${t.kind}" in workflow runtime.`);
   }
 }
 async function startSubagent(e) {
@@ -322,8 +299,6 @@ async function startSubagent(e) {
   }
 }
 function isRecursiveAgentAction(e, t) {
-  return (
-    e.kind === `subagent-call` && e.subagentName === `agent` && !t.has(e.nodeId)
-  );
+  return e.kind === `subagent-call` && e.subagentName === `agent` && !t.has(e.nodeId);
 }
 export { emitSubagentCalled, prepareRuntimeActionDispatch, startSubagent };

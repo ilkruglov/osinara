@@ -31,9 +31,14 @@ describe("readBoundedBody", () => {
 
   it("refuses a declared length above the cap before reading", async () => {
     let cancelled = false;
-    const response = new Response(streamOf([new Uint8Array(1)], () => { cancelled = true; }), {
-      headers: { "content-length": "10" },
-    });
+    const response = new Response(
+      streamOf([new Uint8Array(1)], () => {
+        cancelled = true;
+      }),
+      {
+        headers: { "content-length": "10" },
+      },
+    );
     await expect(readBoundedBody(response, 5, tooLarge)).rejects.toThrow("too large");
     expect(cancelled).toBe(true);
   });
@@ -42,8 +47,12 @@ describe("readBoundedBody", () => {
     let cancelled = false;
     // An endless source: only cancellation stops it.
     const endless = new ReadableStream<Uint8Array>({
-      pull(controller) { controller.enqueue(new Uint8Array(4)); },
-      cancel() { cancelled = true; },
+      pull(controller) {
+        controller.enqueue(new Uint8Array(4));
+      },
+      cancel() {
+        cancelled = true;
+      },
     });
     const response = new Response(endless, {
       headers: { "content-length": "1" },

@@ -90,8 +90,7 @@ export const sessionLifecycleEventRepository = {
   async retireUnstartedScheduledSession(id: string): Promise<void> {
     const retired = await applyTerminalMutation({
       id,
-      sql:
-      `UPDATE conversation_sessions
+      sql: `UPDATE conversation_sessions
           SET pending_operation = false, task_state = 'failed', retired_at = now(),
               delete_after = now() + $2 * interval '1 day'
         WHERE id = $1 AND retired_at IS NULL AND kind = 'scheduled'
@@ -171,8 +170,7 @@ export const sessionLifecycleEventRepository = {
   ): Promise<SessionEventResult> {
     const recorded = await applyTerminalMutation({
       id,
-      sql:
-      `UPDATE conversation_sessions
+      sql: `UPDATE conversation_sessions
           SET completed_turns = completed_turns + 1,
               last_activity_at = now(), pending_operation = $3,
               eve_session_id = $2,
@@ -202,8 +200,7 @@ export const sessionLifecycleEventRepository = {
   async recordTurnFailed(id: string, eveSessionId: string): Promise<SessionEventResult> {
     const recorded = await applyTerminalMutation({
       id,
-      sql:
-      `UPDATE conversation_sessions
+      sql: `UPDATE conversation_sessions
           SET pending_operation = false, eve_session_id = $2,
               task_state = CASE
                 WHEN kind <> 'canonical' THEN 'failed'::conversation_task_state

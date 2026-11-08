@@ -9,10 +9,7 @@ import type { TelegramCallbackQuery } from "eve/channels/telegram";
 
 import { softwareUpdateRepository } from "./repository.js";
 import { softwareUpdateTelegramTransport } from "./telegram-transport.js";
-import type {
-  SoftwareUpdateRepository,
-  SoftwareUpdateTelegramTransport,
-} from "./types.js";
+import type { SoftwareUpdateRepository, SoftwareUpdateTelegramTransport } from "./types.js";
 
 const SOFTWARE_UPDATE_CALLBACK_PREFIX = "su:";
 const CALLBACK_PATTERN = /^su:([ad]):([A-Za-z0-9_-]{12,43})$/;
@@ -26,10 +23,7 @@ const CALLBACK_MESSAGES = {
 } as const;
 
 interface SoftwareUpdateCallbackDependencies {
-  repository: Pick<
-    SoftwareUpdateRepository,
-    "claimDecision" | "recordDecisionUiFailure"
-  >;
+  repository: Pick<SoftwareUpdateRepository, "claimDecision" | "recordDecisionUiFailure">;
   transport: Pick<SoftwareUpdateTelegramTransport, "answerCallback" | "removeKeyboard">;
 }
 
@@ -48,11 +42,13 @@ export function createSoftwareUpdateCallbackHandler(
       });
     } catch (error) {
       // Callback UI is best-effort only after the durable authorization result is known.
-      console.error(JSON.stringify({
-        callbackQueryId,
-        code: "AGENT_SOFTWARE_UPDATE_CALLBACK_ANSWER_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          callbackQueryId,
+          code: "AGENT_SOFTWARE_UPDATE_CALLBACK_ANSWER_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   }
 
@@ -62,19 +58,23 @@ export function createSoftwareUpdateCallbackHandler(
       message: "Telegram не подтвердил обновление интерфейса после сохранения решения",
       proposalId,
     };
-    console.error(JSON.stringify({
-      ...failure,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        ...failure,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     try {
       await dependencies.repository.recordDecisionUiFailure(failure);
     } catch (recordError) {
       // The owner decision is already committed and must never be rolled back by UI bookkeeping.
-      console.error(JSON.stringify({
-        code: "AGENT_SOFTWARE_UPDATE_CALLBACK_UI_STATE_FAILED",
-        error: recordError instanceof Error ? recordError.message : String(recordError),
-        proposalId,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_SOFTWARE_UPDATE_CALLBACK_UI_STATE_FAILED",
+          error: recordError instanceof Error ? recordError.message : String(recordError),
+          proposalId,
+        }),
+      );
     }
   }
 

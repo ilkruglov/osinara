@@ -20,9 +20,7 @@ function summarizeLocalTrace(e) {
     o = 0,
     s = 0;
   for (let c of e) {
-    let e =
-      stringAttribute(c, `agent.model.id`) ??
-      stringAttribute(c, `gen_ai.request.model`);
+    let e = stringAttribute(c, `agent.model.id`) ?? stringAttribute(c, `gen_ai.request.model`);
     if (
       (e !== void 0 && !t.includes(e) && t.push(e),
       c.statusCode === 2 && (a += 1),
@@ -32,8 +30,7 @@ function summarizeLocalTrace(e) {
     ((o += numberAttribute(c, `agent.usage.input_tokens`) ?? 0),
       (s += numberAttribute(c, `agent.usage.output_tokens`) ?? 0),
       (n += numberAttribute(c, `gen_ai.usage.cache_read.input_tokens`) ?? 0),
-      (r +=
-        numberAttribute(c, `gen_ai.usage.cache_creation.input_tokens`) ?? 0));
+      (r += numberAttribute(c, `gen_ai.usage.cache_creation.input_tokens`) ?? 0));
     let l = spanCostUsd(c);
     l !== void 0 && (i = (i ?? 0) + l);
   }
@@ -53,10 +50,8 @@ function formatTokenSummary(e) {
     `↓${formatCompactTokenCount(e.outputTokens)} out`,
   ];
   return (
-    e.cacheReadTokens > 0 &&
-      t.push(`${formatCompactTokenCount(e.cacheReadTokens)} cached`),
-    e.cacheWriteTokens > 0 &&
-      t.push(`${formatCompactTokenCount(e.cacheWriteTokens)} cache write`),
+    e.cacheReadTokens > 0 && t.push(`${formatCompactTokenCount(e.cacheReadTokens)} cached`),
+    e.cacheWriteTokens > 0 && t.push(`${formatCompactTokenCount(e.cacheWriteTokens)} cache write`),
     t.join(` · `)
   );
 }
@@ -94,9 +89,7 @@ function spanDetailEntries(n, i) {
     `status: ${s && n.statusMessage !== void 0 ? `ERROR — ${sanitizeForTerminal(n.statusMessage)}` : s ? `ERROR` : `ok`}`,
   ),
     push(`duration: ${formatElapsed(durationMs(n.startTimeNs, n.endTimeNs))}`),
-    push(
-      `started: ${new Date(Number(n.startTimeNs / 1000000n)).toISOString()}`,
-    ),
+    push(`started: ${new Date(Number(n.startTimeNs / 1000000n)).toISOString()}`),
     push(`span: ${n.spanId}`),
     n.parentSpanId !== void 0 && push(`parent: ${n.parentSpanId}`),
     n.scope !== void 0 && push(`scope: ${sanitizeForTerminal(n.scope)}`),
@@ -117,9 +110,7 @@ function spanDetailEntries(n, i) {
           for (let t of Object.keys(i.attributes).sort()) {
             let n = formatAttributeContent(t, i.attributes[t], dim, a - 6),
               o = sanitizeForTerminal(t);
-            n.length === 1
-              ? s.push(`${o}: ${n[0]}`)
-              : s.push(`${o}:`, ...n.map((e) => `  ${e}`));
+            n.length === 1 ? s.push(`${o}: ${n[0]}`) : s.push(`${o}:`, ...n.map((e) => `  ${e}`));
           }
           return {
             entries: [],
@@ -132,10 +123,7 @@ function spanDetailEntries(n, i) {
   );
 }
 function spanCostUsd(e) {
-  return (
-    numberAttribute(e, `gen_ai.usage.gateway_cost`) ??
-    numberAttribute(e, `gen_ai.usage.cost`)
-  );
+  return numberAttribute(e, `gen_ai.usage.gateway_cost`) ?? numberAttribute(e, `gen_ai.usage.cost`);
 }
 function spanKind(e) {
   switch (e) {

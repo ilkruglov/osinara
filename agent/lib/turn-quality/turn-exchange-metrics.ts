@@ -34,12 +34,19 @@ export interface ExchangeMetrics {
   triggerKind: ExchangeTriggerKind;
 }
 
-function repliesToMia(entry: ExchangeEntry, bySequence: ReadonlyMap<string, ExchangeEntry>): boolean {
-  const target = entry.replyToSequenceId === null ? undefined : bySequence.get(entry.replyToSequenceId);
+function repliesToMia(
+  entry: ExchangeEntry,
+  bySequence: ReadonlyMap<string, ExchangeEntry>,
+): boolean {
+  const target =
+    entry.replyToSequenceId === null ? undefined : bySequence.get(entry.replyToSequenceId);
   return target?.actorKind === "agent_self";
 }
 
-function replyChainDepth(trigger: ExchangeEntry, bySequence: ReadonlyMap<string, ExchangeEntry>): number {
+function replyChainDepth(
+  trigger: ExchangeEntry,
+  bySequence: ReadonlyMap<string, ExchangeEntry>,
+): number {
   let depth = 0;
   const seen = new Set<string>();
   let current: ExchangeEntry | undefined = trigger;
@@ -51,12 +58,17 @@ function replyChainDepth(trigger: ExchangeEntry, bySequence: ReadonlyMap<string,
   return depth;
 }
 
-function sameAuthorRun(trigger: ExchangeEntry, before: readonly ExchangeEntry[], bySequence: ReadonlyMap<string, ExchangeEntry>): number {
+function sameAuthorRun(
+  trigger: ExchangeEntry,
+  before: readonly ExchangeEntry[],
+  bySequence: ReadonlyMap<string, ExchangeEntry>,
+): number {
   let run = 0;
   for (let index = before.length - 1; index >= 0; index -= 1) {
     const entry = before[index]!;
     if (entry.actorKind !== "agent_self") continue;
-    const target = entry.replyToSequenceId === null ? undefined : bySequence.get(entry.replyToSequenceId);
+    const target =
+      entry.replyToSequenceId === null ? undefined : bySequence.get(entry.replyToSequenceId);
     if (!target || target.actorKind === "agent_self" || target.actorId !== trigger.actorId) break;
     run += 1;
   }
@@ -70,7 +82,9 @@ export function measureTurnExchange(input: {
   triggeringEntryId: string;
 }): ExchangeMetrics | null {
   const own = new Set(input.ownMessageIds);
-  const entries = input.entries.filter((entry) => entry.telegramMessageId === undefined || !own.has(entry.telegramMessageId));
+  const entries = input.entries.filter(
+    (entry) => entry.telegramMessageId === undefined || !own.has(entry.telegramMessageId),
+  );
   const triggerIndex = entries.findIndex((entry) => entry.entryId === input.triggeringEntryId);
   if (triggerIndex === -1) return null;
   const trigger = entries[triggerIndex]!;

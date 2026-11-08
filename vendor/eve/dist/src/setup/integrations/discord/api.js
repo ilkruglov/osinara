@@ -19,16 +19,10 @@ async function discordRequest(e, t, n, r) {
   });
 }
 async function resolveDiscordApplication(e, t = fetch) {
-  let r = await discordRequest(
-    e,
-    `/oauth2/applications/@me`,
-    { method: `GET` },
-    t,
-  );
+  let r = await discordRequest(e, `/oauth2/applications/@me`, { method: `GET` }, t);
   if (!r.ok) throw Error(`Discord rejected the bot token (HTTP ${r.status}).`);
   let i = DiscordApplicationSchema.safeParse(await r.json());
-  if (!i.success)
-    throw Error(`Discord returned incomplete application details.`);
+  if (!i.success) throw Error(`Discord returned incomplete application details.`);
   return { id: i.data.id, name: i.data.name, publicKey: i.data.verify_key };
 }
 async function registerDiscordCommand(e, t, n, r = fetch) {
@@ -53,8 +47,7 @@ async function registerDiscordCommand(e, t, n, r = fetch) {
     },
     r,
   );
-  if (!i.ok)
-    throw Error(`Discord command registration failed (HTTP ${i.status}).`);
+  if (!i.ok) throw Error(`Discord command registration failed (HTTP ${i.status}).`);
 }
 async function configureDiscordInteractionsEndpoint(e, t, n = fetch) {
   let r = await discordRequest(
@@ -68,13 +61,6 @@ async function configureDiscordInteractionsEndpoint(e, t, n = fetch) {
     },
     n,
   );
-  if (!r.ok)
-    throw Error(
-      `Discord rejected the interactions endpoint (HTTP ${r.status}).`,
-    );
+  if (!r.ok) throw Error(`Discord rejected the interactions endpoint (HTTP ${r.status}).`);
 }
-export {
-  configureDiscordInteractionsEndpoint,
-  registerDiscordCommand,
-  resolveDiscordApplication,
-};
+export { configureDiscordInteractionsEndpoint, registerDiscordCommand, resolveDiscordApplication };

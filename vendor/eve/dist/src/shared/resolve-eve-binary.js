@@ -3,9 +3,7 @@ import { dirname, join } from "node:path";
 function resolveEveBinaryPath(e) {
   try {
     return join(
-      dirname(
-        createRequire(join(e, `package.json`)).resolve(`eve/package.json`),
-      ),
+      dirname(createRequire(join(e, `package.json`)).resolve(`eve/package.json`)),
       `bin`,
       `eve.js`,
     );

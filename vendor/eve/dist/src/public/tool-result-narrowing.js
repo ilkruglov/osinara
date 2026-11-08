@@ -1,8 +1,7 @@
 const DEFINITION_KEY = Symbol.for(`eve.definition-source-key`),
   REGISTRY_SYMBOL = Symbol.for(`eve.definition-source-registry`),
   registryContainer = globalThis;
-registryContainer[REGISTRY_SYMBOL] === void 0 &&
-  (registryContainer[REGISTRY_SYMBOL] = new Map());
+registryContainer[REGISTRY_SYMBOL] === void 0 && (registryContainer[REGISTRY_SYMBOL] = new Map());
 const definitionSourceRegistry = registryContainer[REGISTRY_SYMBOL];
 function stampDefinitionKey(t, n) {
   Object.defineProperty(t, DEFINITION_KEY, { configurable: !0, value: n });

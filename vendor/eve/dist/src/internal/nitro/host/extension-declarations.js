@@ -48,10 +48,9 @@ async function emitExtensionDeclarations(e) {
     });
   } catch (e) {
     let t = declarationEmitOutput(e);
-    throw Error(
-      `Cannot emit extension declarations${t.length > 0 ? `:\n${t}` : `.`}`,
-      { cause: e },
-    );
+    throw Error(`Cannot emit extension declarations${t.length > 0 ? `:\n${t}` : `.`}`, {
+      cause: e,
+    });
   }
   await assertModuleDeclarationsEmitted(e);
 }
@@ -79,10 +78,8 @@ async function assertModuleDeclarationsEmitted(e) {
   );
 }
 function declarationLogicalPath(e) {
-  if (e.endsWith(`.mts`) || e.endsWith(`.mjs`))
-    return `${e.slice(0, -4)}.d.mts`;
-  if (e.endsWith(`.cts`) || e.endsWith(`.cjs`))
-    return `${e.slice(0, -4)}.d.cts`;
+  if (e.endsWith(`.mts`) || e.endsWith(`.mjs`)) return `${e.slice(0, -4)}.d.mts`;
+  if (e.endsWith(`.cts`) || e.endsWith(`.cjs`)) return `${e.slice(0, -4)}.d.cts`;
   if (e.endsWith(`.ts`) || e.endsWith(`.js`)) return `${e.slice(0, -3)}.d.ts`;
   throw Error(`Unsupported extension module path "${e}".`);
 }
@@ -93,9 +90,7 @@ async function collectDeclarationInputs(e) {
     r.isDirectory()
       ? t.push(...(await collectDeclarationInputs(n)))
       : r.isFile() &&
-        SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS.some((e) =>
-          r.name.endsWith(e),
-        ) &&
+        SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS.some((e) => r.name.endsWith(e)) &&
         t.push(n);
   }
   return t.sort();

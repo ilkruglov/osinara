@@ -7,10 +7,7 @@ const SLACK_TYPING_STATUS_MAX_LENGTH = 50,
   SLACK_MAX_BLOCKS_PER_MESSAGE = 50,
   SLACK_MODAL_TITLE_MAX_LENGTH = 24;
 function truncateTypingStatus(e) {
-  return truncateWithEllipsis(
-    stripTypingStatusMarkdown(e).trim().replace(/\s+/gu, ` `),
-    50,
-  );
+  return truncateWithEllipsis(stripTypingStatusMarkdown(e).trim().replace(/\s+/gu, ` `), 50);
 }
 function truncatePlainText(e) {
   if (e !== void 0) return truncateWithEllipsis(e, 75);
@@ -40,10 +37,7 @@ function stripTypingStatusMarkdown(e) {
     .replace(/\[([^\]]+)\]\([^)]+\)/gu, `$1`)
     .replace(/`([^`]+)`/gu, `$1`)
     .replace(/~~([^~]+)~~/gu, `$1`)
-    .replace(
-      /(^|[^\p{L}\p{N}])(\*\*|__)([^*_]+)\2(?=$|[^\p{L}\p{N}])/gu,
-      `$1$3`,
-    )
+    .replace(/(^|[^\p{L}\p{N}])(\*\*|__)([^*_]+)\2(?=$|[^\p{L}\p{N}])/gu, `$1$3`)
     .replace(/(^|[^\p{L}\p{N}*])\*([^*_]+)\*(?=$|[^\p{L}\p{N}*])/gu, `$1$2`)
     .replace(/(^|[^\p{L}\p{N}_])_([^*_]+)_(?=$|[^\p{L}\p{N}_])/gu, `$1$2`);
 }

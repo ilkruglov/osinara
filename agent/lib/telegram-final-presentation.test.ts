@@ -21,8 +21,9 @@ describe("Telegram final presentation", () => {
     "цена $5 + $2",
     "было $100 - $80",
   ])("keeps conversational text plain: %s", (text) => {
-    expect(formatTelegramFinalPresentation(text))
-      .toEqual([{ format: "plain", pacing: "immediate", text }]);
+    expect(formatTelegramFinalPresentation(text)).toEqual([
+      { format: "plain", pacing: "immediate", text },
+    ]);
   });
 
   it.each([
@@ -33,11 +34,13 @@ describe("Telegram final presentation", () => {
     "«_важно_»",
     "<details><summary>Разбор</summary>\n\nТекст\n\n</details>",
   ])("selects Rich Message for supported formatting: %s", (markdown) => {
-    expect(formatTelegramFinalPresentation(markdown)).toEqual([{
-      format: "rich",
-      pacing: "immediate",
-      text: markdown,
-    }]);
+    expect(formatTelegramFinalPresentation(markdown)).toEqual([
+      {
+        format: "rich",
+        pacing: "immediate",
+        text: markdown,
+      },
+    ]);
   });
 
   it("recognizes a GFM table without outer pipes and collapses it", () => {
@@ -135,8 +138,9 @@ describe("Telegram final presentation", () => {
   it("preserves an authored details block without wrapping it again", () => {
     const markdown = `<details><summary>Разбор</summary>\n\n${"текст ".repeat(150)}\n\n</details>`;
 
-    expect(formatTelegramFinalPresentation(markdown))
-      .toEqual([{ format: "rich", pacing: "immediate", text: markdown }]);
+    expect(formatTelegramFinalPresentation(markdown)).toEqual([
+      { format: "rich", pacing: "immediate", text: markdown },
+    ]);
   });
 
   it("recognizes an indented valid details block", () => {
@@ -152,7 +156,7 @@ describe("Telegram final presentation", () => {
 
     const output = formatTelegramFinalPresentation(markdown)[0]!.text;
     expect(output).toContain("<details><summary>Полный ответ</summary>");
-    expect(output).toContain("&lt;details class=\"wide\"&gt;");
+    expect(output).toContain('&lt;details class="wide"&gt;');
   });
 
   it.each([

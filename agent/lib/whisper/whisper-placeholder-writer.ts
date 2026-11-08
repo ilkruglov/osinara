@@ -30,7 +30,9 @@ import {
 
 export interface WhisperPlaceholderApi {
   delete(input: WhisperPlaceholderKey): Promise<TelegramWhisperEditResult>;
-  edit(input: WhisperPlaceholderKey & { content: TelegramWhisperContent }): Promise<TelegramWhisperEditResult>;
+  edit(
+    input: WhisperPlaceholderKey & { content: TelegramWhisperContent },
+  ): Promise<TelegramWhisperEditResult>;
 }
 
 export interface WhisperPlaceholderDependencies {
@@ -50,21 +52,31 @@ function isRemoval(content: WhisperPlaceholderContent): content is { readonly re
   return "remove" in content;
 }
 
-async function call(key: WhisperPlaceholderKey, content: WhisperPlaceholderContent, api: WhisperPlaceholderApi): Promise<WhisperPlaceholderSettlement> {
+async function call(
+  key: WhisperPlaceholderKey,
+  content: WhisperPlaceholderContent,
+  api: WhisperPlaceholderApi,
+): Promise<WhisperPlaceholderSettlement> {
   let result: TelegramWhisperEditResult;
   try {
-    const target = { chatId: key.chatId, placeholderMessageId: key.placeholderMessageId, receiverUserId: key.receiverUserId };
+    const target = {
+      chatId: key.chatId,
+      placeholderMessageId: key.placeholderMessageId,
+      receiverUserId: key.receiverUserId,
+    };
     result = isRemoval(content) ? await api.delete(target) : await api.edit({ ...target, content });
   } catch (error) {
     // A timeout or a lost connection may or may not have reached Telegram; the edit is idempotent.
     return { errorCode: error instanceof Error ? error.name : "UnknownError", outcome: "retry" };
   }
   if (result.ok) return { outcome: "delivered" };
-  console.warn(JSON.stringify({
-    code: "AGENT_TELEGRAM_WHISPER_DELIVERY_FAILED",
-    providerDescription: telegramProviderDescription(result.body),
-    providerStatus: result.status,
-  }));
+  console.warn(
+    JSON.stringify({
+      code: "AGENT_TELEGRAM_WHISPER_DELIVERY_FAILED",
+      providerDescription: telegramProviderDescription(result.body),
+      providerStatus: result.status,
+    }),
+  );
   const retryable = result.status === 429 || result.status >= 500;
   return { errorCode: `TELEGRAM_${result.status}`, outcome: retryable ? "retry" : "refused" };
 }
@@ -77,7 +89,12 @@ async function attempt(
   const settlement = await call(key, change.content, dependencies.api);
   const settled = await dependencies.placeholders.settle(key, change, settlement);
   if (settlement.outcome === "retry" && settled === "final") {
-    console.warn(JSON.stringify({ code: "AGENT_TELEGRAM_WHISPER_DELIVERY_ABANDONED", errorCode: settlement.errorCode }));
+    console.warn(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_WHISPER_DELIVERY_ABANDONED",
+        errorCode: settlement.errorCode,
+      }),
+    );
   }
 }
 
@@ -92,7 +109,9 @@ export async function writeWhisperPlaceholder(
 ): Promise<"missing" | "refused" | "written"> {
   const recorded = await dependencies.placeholders.transition(key, change);
   if (recorded === "missing") {
-    console.warn(JSON.stringify({ code: "AGENT_TELEGRAM_WHISPER_PLACEHOLDER_UNKNOWN", to: change.to }));
+    console.warn(
+      JSON.stringify({ code: "AGENT_TELEGRAM_WHISPER_PLACEHOLDER_UNKNOWN", to: change.to }),
+    );
     return "missing";
   }
   if (recorded === "refused") return "refused";

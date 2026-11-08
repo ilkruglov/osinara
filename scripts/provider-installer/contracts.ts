@@ -8,13 +8,7 @@
 export type AddressMode = "sslip-io" | "custom-domain";
 export type ModelProvider = "deepseek";
 export type ModelProtocol = "anthropic-messages" | "openai-chat-completions";
-export type ReasoningEffort =
-  | "max"
-  | "xhigh"
-  | "high"
-  | "medium"
-  | "low"
-  | "minimal";
+export type ReasoningEffort = "max" | "xhigh" | "high" | "medium" | "low" | "minimal";
 export type ReasoningSelection =
   | { readonly type: "none" }
   | { readonly effort: ReasoningEffort; readonly type: "effort" }
@@ -120,9 +114,7 @@ export interface InstallationExecutionResult {
 }
 
 export interface InstallerDependencies {
-  executeInstallation: (
-    input: InstallationExecutionInput,
-  ) => Promise<InstallationExecutionResult>;
+  executeInstallation: (input: InstallationExecutionInput) => Promise<InstallationExecutionResult>;
   generateSecret: (purpose: string) => string;
   getTelegramMe: GetTelegramMe;
   listModels: ListModels;

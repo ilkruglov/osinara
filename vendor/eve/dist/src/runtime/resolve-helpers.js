@@ -46,8 +46,4 @@ async function loadResolvedModuleExport(n) {
     ),
   );
 }
-export {
-  ResolveAgentError,
-  createResolvedModuleSourceRef,
-  loadResolvedModuleExport,
-};
+export { ResolveAgentError, createResolvedModuleSourceRef, loadResolvedModuleExport };

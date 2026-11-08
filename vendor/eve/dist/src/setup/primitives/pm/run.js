@@ -6,10 +6,7 @@ import {
   pnpmWorkspaceClaimsProject,
 } from "./pnpm.js";
 import { getPackageManagerStrategy } from "./index.js";
-import {
-  createPackageProcessStdoutCollector,
-  resultSucceeded,
-} from "./process-result.js";
+import { createPackageProcessStdoutCollector, resultSucceeded } from "./process-result.js";
 import { spawn } from "node:child_process";
 function abortedTermination(e) {
   let t = e?.reason;
@@ -31,17 +28,12 @@ function spawnPackageManager(n, r, i, s = {}) {
     : new Promise((n) => {
         let i = s.onOutput !== void 0 || s.nonInteractive === !0,
           a = s.onOutput && createProcessOutputBuffer(s.onOutput),
-          l =
-            s.captureStdout === !0
-              ? createPackageProcessStdoutCollector({ command: f })
-              : void 0,
+          l = s.captureStdout === !0 ? createPackageProcessStdoutCollector({ command: f }) : void 0,
           u;
         try {
           u = spawn(d.command, [...d.args], {
             cwd: r,
-            stdio: i
-              ? [s.nonInteractive ? `ignore` : `inherit`, `pipe`, `pipe`]
-              : `inherit`,
+            stdio: i ? [s.nonInteractive ? `ignore` : `inherit`, `pipe`, `pipe`] : `inherit`,
             shell: d.shell,
             signal: s.signal,
           });
@@ -104,17 +96,14 @@ async function runPackageManagerInstall(e, t, o = {}) {
   let c = getPackageManagerStrategy(e),
     l = o;
   if (e === `pnpm` && o.ignoreWorkspace !== !0 && hasAncestorPnpmWorkspace(t)) {
-    let r = await spawnPackageManager(
-      e,
-      t,
-      PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS,
-      { ...o, captureStdout: !0, nonInteractive: !0 },
-    );
-    if (!resultSucceeded(r))
-      return { kind: `workspace-probe-failed`, result: r };
+    let r = await spawnPackageManager(e, t, PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS, {
+      ...o,
+      captureStdout: !0,
+      nonInteractive: !0,
+    });
+    if (!resultSucceeded(r)) return { kind: `workspace-probe-failed`, result: r };
     let a = pnpmWorkspaceClaimsProject(r.stdout, t);
-    if (a === void 0)
-      return { kind: `workspace-probe-unrecognized`, result: r };
+    if (a === void 0) return { kind: `workspace-probe-unrecognized`, result: r };
     a || (l = { ...o, ignoreWorkspace: !0 });
   }
   return {

@@ -71,7 +71,10 @@ export interface WhisperPlaceholderRepository {
     settlement: WhisperPlaceholderSettlement,
   ): Promise<"final" | "superseded" | "waiting">;
   /** "applied", "refused" (another status holds the placeholder) or "missing" (no such record). */
-  transition(key: WhisperPlaceholderKey, transition: WhisperPlaceholderTransition): Promise<"applied" | "missing" | "refused">;
+  transition(
+    key: WhisperPlaceholderKey,
+    transition: WhisperPlaceholderTransition,
+  ): Promise<"applied" | "missing" | "refused">;
 }
 
 interface PlaceholderRow {
@@ -83,8 +86,13 @@ interface PlaceholderRow {
   telegram_chat_id: string;
 }
 
-const KEY_MATCH = "telegram_chat_id = $1 AND placeholder_message_id = $2::bigint AND receiver_user_id = $3";
-const keyValues = (key: WhisperPlaceholderKey) => [key.chatId, String(key.placeholderMessageId), key.receiverUserId];
+const KEY_MATCH =
+  "telegram_chat_id = $1 AND placeholder_message_id = $2::bigint AND receiver_user_id = $3";
+const keyValues = (key: WhisperPlaceholderKey) => [
+  key.chatId,
+  String(key.placeholderMessageId),
+  key.receiverUserId,
+];
 
 export const whisperPlaceholderRepository: WhisperPlaceholderRepository = {
   async claimDue(limit) {

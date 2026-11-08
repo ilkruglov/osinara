@@ -70,19 +70,26 @@ function blockText(block: JsonRecord | null): string[] {
     case "list":
       return Array.isArray(block.items)
         ? block.items.flatMap((item) => {
-          const entry = record(item);
-          const text = richText(entry?.text);
-          return text ? [text] : blocksText(entry?.blocks);
-        })
+            const entry = record(item);
+            const text = richText(entry?.text);
+            return text ? [text] : blocksText(entry?.blocks);
+          })
         : [];
     case "table":
       return Array.isArray(block.rows)
-        ? block.rows.flatMap((row) => {
-          const cells = record(row)?.cells;
-          return Array.isArray(cells)
-            ? [cells.map((cell) => richText(record(cell)?.text ?? cell)).filter(Boolean).join(" | ")]
-            : [];
-        }).filter(Boolean)
+        ? block.rows
+            .flatMap((row) => {
+              const cells = record(row)?.cells;
+              return Array.isArray(cells)
+                ? [
+                    cells
+                      .map((cell) => richText(record(cell)?.text ?? cell))
+                      .filter(Boolean)
+                      .join(" | "),
+                  ]
+                : [];
+            })
+            .filter(Boolean)
         : [];
     case "animation":
     case "audio":
@@ -101,7 +108,10 @@ function blockText(block: JsonRecord | null): string[] {
 export function richMessagePlainText(raw: JsonRecord): string | null {
   const rich = record(raw.rich_message);
   if (!rich) return null;
-  const fromBlocks = blocksText(rich.blocks).map((part) => part.trim()).filter(Boolean).join("\n\n");
+  const fromBlocks = blocksText(rich.blocks)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
   if (fromBlocks) return fromBlocks;
   return typeof rich.text === "string" && rich.text.trim() ? rich.text.trim() : null;
 }
@@ -112,11 +122,17 @@ export function withRichMessageText(update: TelegramUpdate): TelegramUpdate {
   return text === null ? update : { ...update, message: { ...update.message, text } };
 }
 
-const RICH_MEDIA_BLOCKS = new Set(["animation", "audio", "document", "photo", "video", "voice_note"]);
+const RICH_MEDIA_BLOCKS = new Set([
+  "animation",
+  "audio",
+  "document",
+  "photo",
+  "video",
+  "voice_note",
+]);
 
 export type RichMessageMedia =
-  | { kind: "document"; document: JsonRecord }
-  | { kind: "photo"; sizes: JsonRecord[] };
+  { kind: "document"; document: JsonRecord } | { kind: "photo"; sizes: JsonRecord[] };
 
 /** Container blocks nest further blocks: a details block, quotations, list items (Bot API 10.1). */
 const NESTED_BLOCK_KEYS = ["blocks", "items"] as const;
@@ -151,19 +167,28 @@ export function richMessageMedia(raw: JsonRecord): RichMessageMedia | null {
   const block = media[0]!;
   if (block.type === "photo" && Array.isArray(block.photo)) {
     const sizes = block.photo.map(record);
-    if (sizes.length === 0 || sizes.some((size) => size === null || typeof size.file_id !== "string" || size.file_id.length === 0)) return null;
+    if (
+      sizes.length === 0 ||
+      sizes.some(
+        (size) => size === null || typeof size.file_id !== "string" || size.file_id.length === 0,
+      )
+    )
+      return null;
     return { kind: "photo", sizes: sizes as JsonRecord[] };
   }
   if (block.type === "document") {
     const document = record(block.document);
-    if (document === null || typeof document.file_id !== "string" || document.file_id.length === 0) return null;
+    if (document === null || typeof document.file_id !== "string" || document.file_id.length === 0)
+      return null;
     return { document, kind: "document" };
   }
   return null;
 }
 
 function largestSize(sizes: readonly JsonRecord[]): JsonRecord {
-  const area = (size: JsonRecord) => (typeof size.width === "number" ? size.width : 0) * (typeof size.height === "number" ? size.height : 0);
+  const area = (size: JsonRecord) =>
+    (typeof size.width === "number" ? size.width : 0) *
+    (typeof size.height === "number" ? size.height : 0);
   return sizes.reduce((best, size) => (area(size) > area(best) ? size : best), sizes[0]!);
 }
 
@@ -178,7 +203,12 @@ export function normalizeRichMessage(update: TelegramUpdate): TelegramUpdate {
   const withText = withRichMessageText(update);
   if (withText.kind !== "message") return withText;
   const raw = withText.message.raw;
-  if (raw.photo !== undefined || raw.document !== undefined || withText.message.attachments.length > 0) return withText;
+  if (
+    raw.photo !== undefined ||
+    raw.document !== undefined ||
+    withText.message.attachments.length > 0
+  )
+    return withText;
   const media = richMessageMedia(raw);
   if (media === null) return withText;
   if (media.kind === "photo") {
@@ -187,15 +217,19 @@ export function normalizeRichMessage(update: TelegramUpdate): TelegramUpdate {
       ...withText,
       message: {
         ...withText.message,
-        attachments: [{
-          fileId: best.file_id as string,
-          ...(typeof best.file_unique_id === "string" ? { fileUniqueId: best.file_unique_id } : {}),
-          ...(typeof best.height === "number" ? { height: best.height } : {}),
-          kind: "photo",
-          mediaType: "image/jpeg",
-          ...(typeof best.file_size === "number" ? { size: best.file_size } : {}),
-          ...(typeof best.width === "number" ? { width: best.width } : {}),
-        }],
+        attachments: [
+          {
+            fileId: best.file_id as string,
+            ...(typeof best.file_unique_id === "string"
+              ? { fileUniqueId: best.file_unique_id }
+              : {}),
+            ...(typeof best.height === "number" ? { height: best.height } : {}),
+            kind: "photo",
+            mediaType: "image/jpeg",
+            ...(typeof best.file_size === "number" ? { size: best.file_size } : {}),
+            ...(typeof best.width === "number" ? { width: best.width } : {}),
+          },
+        ],
         raw: { ...raw, photo: media.sizes },
       },
     };
@@ -205,14 +239,18 @@ export function normalizeRichMessage(update: TelegramUpdate): TelegramUpdate {
     ...withText,
     message: {
       ...withText.message,
-      attachments: [{
-        fileId: document.file_id as string,
-        ...(typeof document.file_name === "string" ? { fileName: document.file_name } : {}),
-        ...(typeof document.file_unique_id === "string" ? { fileUniqueId: document.file_unique_id } : {}),
-        kind: "document",
-        ...(typeof document.mime_type === "string" ? { mediaType: document.mime_type } : {}),
-        ...(typeof document.file_size === "number" ? { size: document.file_size } : {}),
-      }],
+      attachments: [
+        {
+          fileId: document.file_id as string,
+          ...(typeof document.file_name === "string" ? { fileName: document.file_name } : {}),
+          ...(typeof document.file_unique_id === "string"
+            ? { fileUniqueId: document.file_unique_id }
+            : {}),
+          kind: "document",
+          ...(typeof document.mime_type === "string" ? { mediaType: document.mime_type } : {}),
+          ...(typeof document.file_size === "number" ? { size: document.file_size } : {}),
+        },
+      ],
       raw: { ...raw, document },
     },
   };
@@ -226,7 +264,12 @@ export function richMediaIsLifted(raw: JsonRecord): boolean {
     return raw.photo === undefined && record(raw.document)?.file_id === lifted.document.file_id;
   }
   if (raw.document !== undefined || !Array.isArray(raw.photo)) return false;
-  const ids = (list: readonly unknown[]) => list.map((size) => record(size)?.file_id).filter((id): id is string => typeof id === "string").sort().join("\u0000");
+  const ids = (list: readonly unknown[]) =>
+    list
+      .map((size) => record(size)?.file_id)
+      .filter((id): id is string => typeof id === "string")
+      .sort()
+      .join("\u0000");
   return ids(lifted.sizes) === ids(raw.photo);
 }
 
@@ -239,7 +282,10 @@ export function withoutRichMediaBlocks<T extends JsonRecord>(payload: T): T {
   const message = record(payload.message);
   const rich = record(message?.rich_message);
   if (message === null || rich === null || !Array.isArray(rich.blocks)) return payload;
-  return { ...payload, message: { ...message, rich_message: { ...rich, blocks: stripMediaBlocks(rich.blocks) } } };
+  return {
+    ...payload,
+    message: { ...message, rich_message: { ...rich, blocks: stripMediaBlocks(rich.blocks) } },
+  };
 }
 
 function stripMediaBlocks(blocks: readonly unknown[]): unknown[] {
@@ -250,7 +296,12 @@ function stripMediaBlocks(blocks: readonly unknown[]): unknown[] {
       const caption = richText(record(block.caption)?.text ?? block.caption);
       return caption ? [{ text: caption, type: "paragraph" }] : [];
     }
-    const nested = Object.fromEntries(NESTED_BLOCK_KEYS.filter((key) => Array.isArray(block[key])).map((key) => [key, stripMediaBlocks(block[key] as unknown[])]));
+    const nested = Object.fromEntries(
+      NESTED_BLOCK_KEYS.filter((key) => Array.isArray(block[key])).map((key) => [
+        key,
+        stripMediaBlocks(block[key] as unknown[]),
+      ]),
+    );
     return [{ ...block, ...nested }];
   });
 }

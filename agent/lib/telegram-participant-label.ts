@@ -10,7 +10,10 @@
  * username, in the «Имя (username)» form the memory review already writes. The username is shown,
  * never used as identity: identity stays the Telegram user id.
  */
-export function participantLabel(displayName: string | null, username: string | null): string | null {
+export function participantLabel(
+  displayName: string | null,
+  username: string | null,
+): string | null {
   const name = displayName?.trim() || null;
   const handle = username?.trim().replace(/^@/u, "") || null;
   if (handle === null) return name;

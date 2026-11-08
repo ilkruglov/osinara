@@ -17,7 +17,9 @@ function poolStub(delayMs: number) {
       connect: vi.fn(async () => client),
       query: vi.fn(async () => {
         const until = performance.now() + delayMs;
-        while (performance.now() < until) { /* busy wait keeps the timing real */ }
+        while (performance.now() < until) {
+          /* busy wait keeps the timing real */
+        }
         return { rows: [{ id: 1 }, { id: 2 }] };
       }),
     },
@@ -57,13 +59,15 @@ describe("traceWorkflowPool", () => {
     const stub = poolStub(0);
     stub.client.query.mockImplementation(async () => {
       const until = performance.now() + 30;
-      while (performance.now() < until) { /* busy wait keeps the timing real */ }
+      while (performance.now() < until) {
+        /* busy wait keeps the timing real */
+      }
       return { rows: [{ id: 1 }] };
     });
     const traced = traceWorkflowPool(stub.pool, 10, log);
 
     expect(traceWorkflowPool(traced, 10, log)).toBe(traced);
-    const client = await traced.connect() as { query: (sql: string) => Promise<unknown> };
+    const client = (await traced.connect()) as { query: (sql: string) => Promise<unknown> };
     await client.query("update workflow.workflow_steps set status = $1");
 
     expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({ rows: 1 });

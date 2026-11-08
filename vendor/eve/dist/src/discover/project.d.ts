@@ -8,17 +8,17 @@ export type DiscoveryProjectLayout = "flat" | "nested";
  * Resolved discovery roots for the current application.
  */
 export interface ResolvedDiscoveryProject {
-    agentRoot: string;
-    appRoot: string;
-    layout: DiscoveryProjectLayout;
+  agentRoot: string;
+  appRoot: string;
+  layout: DiscoveryProjectLayout;
 }
 /**
  * Error raised when discovery cannot resolve an eve agent root from a
  * {@link ProjectSource}.
  */
 export declare class DiscoveryProjectResolutionError extends Error {
-    readonly diagnostic: DiscoverDiagnostic;
-    constructor(diagnostic: DiscoverDiagnostic);
+  readonly diagnostic: DiscoverDiagnostic;
+  constructor(diagnostic: DiscoverDiagnostic);
 }
 /**
  * Resolves the nearest eve app root and agent root from an arbitrary
@@ -28,6 +28,9 @@ export declare class DiscoveryProjectResolutionError extends Error {
  * run discovery against an in-memory tree can pass a {@link ProjectSource}
  * created via `createMemoryProjectSource(...)`.
  */
-export declare function resolveDiscoveryProject(startPath?: string, options?: {
+export declare function resolveDiscoveryProject(
+  startPath?: string,
+  options?: {
     source?: ProjectSource;
-}): Promise<ResolvedDiscoveryProject>;
+  },
+): Promise<ResolvedDiscoveryProject>;

@@ -5,19 +5,14 @@ const WRITE_FILE_INPUT_SCHEMA = z.strictObject({
     content: z.string().describe(`Complete replacement file contents.`),
     filePath: z
       .string()
-      .describe(
-        `The absolute path to the file to write. A leading $HOME is supported.`,
-      ),
+      .describe(`The absolute path to the file to write. A leading $HOME is supported.`),
   }),
   WRITE_FILE_OUTPUT_SCHEMA = z.strictObject({
     existed: z.boolean(),
     path: z.string(),
   });
 async function executeWriteFile(e, t) {
-  return executeWriteFileOnSandbox(
-    await requireSandboxSession(t?.abortSignal),
-    e,
-  );
+  return executeWriteFileOnSandbox(await requireSandboxSession(t?.abortSignal), e);
 }
 const WRITE_FILE_TOOL_DEFINITION = {
   description: [
@@ -39,8 +34,4 @@ const WRITE_FILE_TOOL_DEFINITION = {
   sourceId: `eve:write-file-tool`,
   sourceKind: `module`,
 };
-export {
-  WRITE_FILE_INPUT_SCHEMA,
-  WRITE_FILE_OUTPUT_SCHEMA,
-  WRITE_FILE_TOOL_DEFINITION,
-};
+export { WRITE_FILE_INPUT_SCHEMA, WRITE_FILE_OUTPUT_SCHEMA, WRITE_FILE_TOOL_DEFINITION };

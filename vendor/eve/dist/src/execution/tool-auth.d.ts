@@ -31,13 +31,13 @@ import type { ToolExecuteOptions } from "#shared/tool-definition.js";
  * park on.
  */
 export declare function createToolExecuteWithAuth(input: {
-    readonly scope: string;
-    readonly execute: (toolInput: unknown, ctx: unknown) => unknown;
+  readonly scope: string;
+  readonly execute: (toolInput: unknown, ctx: unknown) => unknown;
 }): (toolInput: unknown, options: ToolExecuteOptions) => Promise<unknown> | AsyncIterable<unknown>;
 /** Builds the narrow token capability used by approval response authorizers. */
 export declare function buildApprovalResponseAuth(input: {
-    readonly responder: SessionAuthContext;
-    readonly scope: string;
+  readonly responder: SessionAuthContext;
+  readonly scope: string;
 }): ApprovalResponseAuth;
 /** Starts authorization requested by an approval response authorizer. */
 export declare function handleApprovalResponsePolicyError(error: unknown): Promise<unknown>;

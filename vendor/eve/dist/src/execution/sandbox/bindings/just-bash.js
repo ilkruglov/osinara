@@ -60,14 +60,11 @@ function createJustBashSandboxBackend(n = {}) {
           n.bootstrap !== void 0 &&
             (n.log?.(`running sandbox bootstrap`),
             await n.bootstrap({
-              use: async () =>
-                createLoggingSandboxSession({ log: n.log, session: f }),
+              use: async () => createLoggingSandboxSession({ log: n.log, session: f }),
             })),
           (await d.captureState()) === null)
         )
-          throw Error(
-            `Failed to capture local sandbox template state for "${n.templateKey}".`,
-          );
+          throw Error(`Failed to capture local sandbox template state for "${n.templateKey}".`);
         await mkdir(dirname(o), { recursive: !0 });
         try {
           (await rename(s, o), (u = !0));
@@ -76,16 +73,13 @@ function createJustBashSandboxBackend(n = {}) {
           throw e;
         }
       } finally {
-        (await d.dispose(),
-          u || (await rm(s, { force: !0, recursive: !0 }).catch(() => {})));
+        (await d.dispose(), u || (await rm(s, { force: !0, recursive: !0 }).catch(() => {})));
       }
       return { reused: !1 };
     },
     async create(e) {
       let n = resolveSandboxCacheDirectory(e.runtimeContext.appRoot),
-        r =
-          getLocalRootPath(e.existingMetadata) ??
-          resolveSessionRootPath(n, e.sessionKey);
+        r = getLocalRootPath(e.existingMetadata) ?? resolveSessionRootPath(n, e.sessionKey);
       if (!(await pathExists(r)))
         if (e.templateKey === null) await mkdir(r, { recursive: !0 });
         else {
@@ -145,32 +139,16 @@ async function pruneJustBashSandboxTemplates(e) {
       l.filter((e) => e.isTemporary),
       { now: r, recentWindowMs: a, retainCount: 0 },
     );
-  await Promise.all(
-    [...u, ...d].map(
-      async (e) => await rm(e.path, { force: !0, recursive: !0 }),
-    ),
-  );
+  await Promise.all([...u, ...d].map(async (e) => await rm(e.path, { force: !0, recursive: !0 })));
 }
 function resolveTemplateRootPath(e, t) {
-  return resolveLocalBackendTemplateRootPath(
-    e,
-    JUST_BASH_CACHE_DIRECTORY_NAME,
-    t,
-  );
+  return resolveLocalBackendTemplateRootPath(e, JUST_BASH_CACHE_DIRECTORY_NAME, t);
 }
 function resolveSessionRootPath(e, t) {
-  return resolveLocalBackendSessionRootPath(
-    e,
-    JUST_BASH_CACHE_DIRECTORY_NAME,
-    t,
-  );
+  return resolveLocalBackendSessionRootPath(e, JUST_BASH_CACHE_DIRECTORY_NAME, t);
 }
 function getLocalRootPath(e) {
   let t = e?.rootPath;
   return typeof t == `string` ? t : void 0;
 }
-export {
-  JUST_BASH_BACKEND_NAME,
-  createJustBashSandboxBackend,
-  pruneJustBashSandboxTemplates,
-};
+export { JUST_BASH_BACKEND_NAME, createJustBashSandboxBackend, pruneJustBashSandboxTemplates };

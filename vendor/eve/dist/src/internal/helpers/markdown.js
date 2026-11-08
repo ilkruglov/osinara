@@ -4,16 +4,12 @@ import {
   normalizeScheduleDefinition,
   normalizeSkillDefinition,
 } from "#internal/authored-definition/core.js";
-import {
-  hasFrontmatter,
-  parseFrontmatter,
-} from "#internal/helpers/gray-matter.js";
+import { hasFrontmatter, parseFrontmatter } from "#internal/helpers/gray-matter.js";
 import { defineSchedule } from "#public/definitions/schedule.js";
 import { defineSkill } from "#public/definitions/skill.js";
 const CLOSED_FRONTMATTER_PATTERN = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/;
 function parseMarkdownDocument(t) {
-  if (!hasFrontmatter(t))
-    return { hasFrontmatter: !1, frontmatter: {}, markdown: t };
+  if (!hasFrontmatter(t)) return { hasFrontmatter: !1, frontmatter: {}, markdown: t };
   let n;
   try {
     n = parseFrontmatter(t);
@@ -22,8 +18,7 @@ function parseMarkdownDocument(t) {
       ? Error(`Markdown frontmatter is missing a closing delimiter.`)
       : e;
   }
-  if (!isObject(n.data))
-    throw Error(`Markdown frontmatter must parse to an object.`);
+  if (!isObject(n.data)) throw Error(`Markdown frontmatter must parse to an object.`);
   return {
     hasFrontmatter: !0,
     frontmatter: n.data,
@@ -39,9 +34,7 @@ function lowerInstructionsMarkdown(e) {
 function lowerScheduleMarkdown(e) {
   let t = parseMarkdownDocument(e);
   if (!t.hasFrontmatter)
-    throw Error(
-      `Schedule markdown must start with YAML frontmatter declaring "cron".`,
-    );
+    throw Error(`Schedule markdown must start with YAML frontmatter declaring "cron".`);
   if (`run` in t.frontmatter)
     throw Error(
       'Markdown-form schedules do not support the "run" frontmatter key. Use a TypeScript schedule (`<name>.ts`) to author a handler.',
@@ -99,8 +92,7 @@ function applyOptionalSkillFrontmatter(e, t) {
 }
 function toOptionalString(e, t) {
   if (e != null) {
-    if (typeof e != `string`)
-      throw Error(`Expected "${t}" frontmatter to be a string.`);
+    if (typeof e != `string`) throw Error(`Expected "${t}" frontmatter to be a string.`);
     return e;
   }
 }
@@ -113,8 +105,7 @@ function toOptionalStringRecord(t, n) {
   if (t == null) return;
   if (!isObject(t)) throw Error(`Expected "${n}" frontmatter to be an object.`);
   let r = Object.entries(t).map(([e, t]) => {
-    if (typeof t != `string`)
-      throw Error(`Expected "${n}.${e}" frontmatter to be a string.`);
+    if (typeof t != `string`) throw Error(`Expected "${n}.${e}" frontmatter to be a string.`);
     return [e, t];
   });
   return Object.fromEntries(r);
@@ -126,7 +117,6 @@ function deriveFlatSkillDescription(e, t) {
     .find((e) => e !== `` && !e.startsWith("```"));
   return n === void 0
     ? `Instructions for the ${t} skill.`
-    : n.replace(/^[#>*\-\s]+/u, ``).trim() ||
-        `Instructions for the ${t} skill.`;
+    : n.replace(/^[#>*\-\s]+/u, ``).trim() || `Instructions for the ${t} skill.`;
 }
 export { lowerInstructionsMarkdown, lowerScheduleMarkdown, lowerSkillMarkdown };

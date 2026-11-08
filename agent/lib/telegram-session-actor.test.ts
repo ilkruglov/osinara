@@ -17,81 +17,112 @@ function auth(current: Record<string, unknown>): SessionAuth {
 
 describe("resolveTelegramSessionActor", () => {
   it("resolves an explicit Telegram user actor", () => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: {
-        telegramActorId: "101",
-        telegramActorKind: "telegram_user",
-        telegramUserId: "101",
-      },
-      authenticator: "telegram",
-      principalId: "user-1",
-      principalType: "user",
-    }))).toEqual({ id: "101", kind: "telegram_user" });
+    expect(
+      resolveTelegramSessionActor(
+        auth({
+          attributes: {
+            telegramActorId: "101",
+            telegramActorKind: "telegram_user",
+            telegramUserId: "101",
+          },
+          authenticator: "telegram",
+          principalId: "user-1",
+          principalType: "user",
+        }),
+      ),
+    ).toEqual({ id: "101", kind: "telegram_user" });
   });
 
   it("resolves an exact Telegram channel service actor", () => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: {
-        telegramActorId: "-1001783384254",
-        telegramActorKind: "telegram_channel",
-      },
-      authenticator: "telegram",
-      principalId: "telegram-channel:-1001783384254",
-      principalType: "service",
-    }))).toEqual({ id: "-1001783384254", kind: "telegram_channel" });
+    expect(
+      resolveTelegramSessionActor(
+        auth({
+          attributes: {
+            telegramActorId: "-1001783384254",
+            telegramActorKind: "telegram_channel",
+          },
+          authenticator: "telegram",
+          principalId: "telegram-channel:-1001783384254",
+          principalType: "service",
+        }),
+      ),
+    ).toEqual({ id: "-1001783384254", kind: "telegram_channel" });
   });
 
   it("resolves another bot as an exact service actor", () => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: {
-        telegramActorId: "7000000001",
-        telegramActorKind: "telegram_bot",
-      },
-      authenticator: "telegram",
-      principalId: "telegram-bot:7000000001",
-      principalType: "service",
-    }))).toEqual({ id: "7000000001", kind: "telegram_bot" });
+    expect(
+      resolveTelegramSessionActor(
+        auth({
+          attributes: {
+            telegramActorId: "7000000001",
+            telegramActorKind: "telegram_bot",
+          },
+          authenticator: "telegram",
+          principalId: "telegram-bot:7000000001",
+          principalType: "service",
+        }),
+      ),
+    ).toEqual({ id: "7000000001", kind: "telegram_bot" });
   });
 
   it.each([
     { principalId: "telegram-bot:7000000001", principalType: "user", telegramUserId: undefined },
-    { principalId: "telegram-bot:7000000001", principalType: "service", telegramUserId: "7000000001" },
+    {
+      principalId: "telegram-bot:7000000001",
+      principalType: "service",
+      telegramUserId: "7000000001",
+    },
     { principalId: "user-1", principalType: "service", telegramUserId: undefined },
-  ])("rejects a bot with conflicting principal shape: %o", ({ principalId, principalType, telegramUserId }) => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: {
-        telegramActorId: "7000000001",
-        telegramActorKind: "telegram_bot",
-        ...(telegramUserId === undefined ? {} : { telegramUserId }),
-      },
-      authenticator: "telegram",
-      principalId,
-      principalType,
-    }))).toBeNull();
-  });
+  ])(
+    "rejects a bot with conflicting principal shape: %o",
+    ({ principalId, principalType, telegramUserId }) => {
+      expect(
+        resolveTelegramSessionActor(
+          auth({
+            attributes: {
+              telegramActorId: "7000000001",
+              telegramActorKind: "telegram_bot",
+              ...(telegramUserId === undefined ? {} : { telegramUserId }),
+            },
+            authenticator: "telegram",
+            principalId,
+            principalType,
+          }),
+        ),
+      ).toBeNull();
+    },
+  );
 
   it("invalidates a session that has only the former Telegram user attribute", () => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: { telegramUserId: "101" },
-      authenticator: "telegram",
-      principalId: "user-1",
-      principalType: "user",
-    }))).toBeNull();
+    expect(
+      resolveTelegramSessionActor(
+        auth({
+          attributes: { telegramUserId: "101" },
+          authenticator: "telegram",
+          principalId: "user-1",
+          principalType: "user",
+        }),
+      ),
+    ).toBeNull();
   });
 
   it.each([
     { principalType: "user", telegramUserId: undefined },
     { principalType: "service", telegramUserId: "101" },
   ])("rejects a channel with conflicting principal shape", ({ principalType, telegramUserId }) => {
-    expect(resolveTelegramSessionActor(auth({
-      attributes: {
-        telegramActorId: "-1001783384254",
-        telegramActorKind: "telegram_channel",
-        ...(telegramUserId === undefined ? {} : { telegramUserId }),
-      },
-      authenticator: "telegram",
-      principalId: "telegram-channel:-1001783384254",
-      principalType,
-    }))).toBeNull();
+    expect(
+      resolveTelegramSessionActor(
+        auth({
+          attributes: {
+            telegramActorId: "-1001783384254",
+            telegramActorKind: "telegram_channel",
+            ...(telegramUserId === undefined ? {} : { telegramUserId }),
+          },
+          authenticator: "telegram",
+          principalId: "telegram-channel:-1001783384254",
+          principalType,
+        }),
+      ),
+    ).toBeNull();
   });
 });

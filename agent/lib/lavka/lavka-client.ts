@@ -36,44 +36,131 @@ import { isLavkaNothingSent, lavkaNothingSent } from "./lavka-nothing-sent.js";
 import { sha256Json } from "../json-hash.js";
 
 export interface LavkaDeliveryPoint {
-  city: string; comment: string; country: string; doorcode: string; entrance: string; flat: string; floor: string;
-  house: string; label: string; lat: number; lon: number; placeId: string; street: string;
+  city: string;
+  comment: string;
+  country: string;
+  doorcode: string;
+  entrance: string;
+  flat: string;
+  floor: string;
+  house: string;
+  label: string;
+  lat: number;
+  lon: number;
+  placeId: string;
+  street: string;
 }
-export interface LavkaProduct { amount: string; available: boolean; id: string; oldPrice: number | null; price: number | null; slug: string; title: string; }
-export interface LavkaProductDetails extends LavkaProduct { brand: string; description: string; }
-export interface LavkaCartItem { amount: string; id: string; price: number | null; quantity: number; title: string; unavailableOnDepot: boolean; }
+export interface LavkaProduct {
+  amount: string;
+  available: boolean;
+  id: string;
+  oldPrice: number | null;
+  price: number | null;
+  slug: string;
+  title: string;
+}
+export interface LavkaProductDetails extends LavkaProduct {
+  brand: string;
+  description: string;
+}
+export interface LavkaCartItem {
+  amount: string;
+  id: string;
+  price: number | null;
+  quantity: number;
+  title: string;
+  unavailableOnDepot: boolean;
+}
 export interface LavkaCart {
-  availableForCheckout: boolean | null; cartId: string; cartVersion: number | null; cashbackAvailable: number | null; cashbackWalletId: string;
-  checkoutBlockedReason: string; deliveryFee: number | null; deliveryTimeInfo: unknown; deliveryType: string; discount: number; eta: string; flowVersion: string; itemCount: number;
+  availableForCheckout: boolean | null;
+  cartId: string;
+  cartVersion: number | null;
+  cashbackAvailable: number | null;
+  cashbackWalletId: string;
+  checkoutBlockedReason: string;
+  deliveryFee: number | null;
+  deliveryTimeInfo: unknown;
+  deliveryType: string;
+  discount: number;
+  eta: string;
+  flowVersion: string;
+  itemCount: number;
   /** The token the site expects on the next write; a cart write without the cart's own values is a 400. */
   nextIdempotencyToken: string;
-  items: LavkaCartItem[]; paymentMethod: { bank: string; id: string; system: string; type: string } | null; subtotal: number | null; total: number | null;
+  items: LavkaCartItem[];
+  paymentMethod: { bank: string; id: string; system: string; type: string } | null;
+  subtotal: number | null;
+  total: number | null;
 }
-export interface LavkaAddress extends LavkaDeliveryPoint { addressId: string; fullAddress: string; }
-export interface LavkaPaymentMethod { available: boolean; bank: string; id: string; label: string; type: string; }
-export interface LavkaOrderPlacement { orderId: string; paymentStatus: string; redirectUrl: string; }
+export interface LavkaAddress extends LavkaDeliveryPoint {
+  addressId: string;
+  fullAddress: string;
+}
+export interface LavkaPaymentMethod {
+  available: boolean;
+  bank: string;
+  id: string;
+  label: string;
+  type: string;
+}
+export interface LavkaOrderPlacement {
+  orderId: string;
+  paymentStatus: string;
+  redirectUrl: string;
+}
 
-interface Deps { driver: Pick<BrowserDriver, "eval" | "open" | "settle" | "url">; sleep?: (ms: number) => Promise<void>; }
+interface Deps {
+  driver: Pick<BrowserDriver, "eval" | "open" | "settle" | "url">;
+  sleep?: (ms: number) => Promise<void>;
+}
 
 /**
  * A fingerprint of everything the courier gets: the order confirmation binds to it, so an address
  * edited after the preview (flat, doorcode) cannot ride along with an approved total.
  */
 export function lavkaAddressKey(point: LavkaDeliveryPoint): string {
-  const fields = [point.city, point.street, point.house, point.flat, point.entrance, point.floor, point.doorcode, point.comment, point.lat.toFixed(6), point.lon.toFixed(6)];
+  const fields = [
+    point.city,
+    point.street,
+    point.house,
+    point.flat,
+    point.entrance,
+    point.floor,
+    point.doorcode,
+    point.comment,
+    point.lat.toFixed(6),
+    point.lon.toFixed(6),
+  ];
   return sha256Json(fields).slice(0, 16);
 }
 
 /** Submit failures that prove no order was created. */
-const SUBMIT_DEFINITIVE: ReadonlySet<string> = new Set(["AGENT_LAVKA_AUTH_REQUIRED", "AGENT_LAVKA_CART_CONFLICT", "AGENT_LAVKA_RATE_LIMITED", "AGENT_LAVKA_REJECTED", "AGENT_LAVKA_TAB_MOVED"]);
-const orderAmbiguous = (): AppError => new AppError("AGENT_LAVKA_ORDER_AMBIGUOUS", "Не удалось понять, принят ли заказ. Проверьте заказы (orders) или приложение Лавки, прежде чем повторять");
+const SUBMIT_DEFINITIVE: ReadonlySet<string> = new Set([
+  "AGENT_LAVKA_AUTH_REQUIRED",
+  "AGENT_LAVKA_CART_CONFLICT",
+  "AGENT_LAVKA_RATE_LIMITED",
+  "AGENT_LAVKA_REJECTED",
+  "AGENT_LAVKA_TAB_MOVED",
+]);
+const orderAmbiguous = (): AppError =>
+  new AppError(
+    "AGENT_LAVKA_ORDER_AMBIGUOUS",
+    "Не удалось понять, принят ли заказ. Проверьте заказы (orders) или приложение Лавки, прежде чем повторять",
+  );
 // A cancellation the site did not answer may have reached it (Codex review, 6 November 2026: it
 // was reported as «try later»).
-const cancelAmbiguous = (): AppError => new AppError("AGENT_LAVKA_CANCEL_AMBIGUOUS", "Не удалось понять, отменён ли заказ. Проверьте заказы (orders) или приложение Лавки, прежде чем отменять снова");
+const cancelAmbiguous = (): AppError =>
+  new AppError(
+    "AGENT_LAVKA_CANCEL_AMBIGUOUS",
+    "Не удалось понять, отменён ли заказ. Проверьте заказы (orders) или приложение Лавки, прежде чем отменять снова",
+  );
 
 const unavailable = (diagnostic: string): AppError => {
   console.error(JSON.stringify({ code: "AGENT_LAVKA_UNAVAILABLE", diagnostic }));
-  return new AppError("AGENT_LAVKA_UNAVAILABLE", "Лавка не ответила или ответила непонятно. Попробуйте позже");
+  return new AppError(
+    "AGENT_LAVKA_UNAVAILABLE",
+    "Лавка не ответила или ответила непонятно. Попробуйте позже",
+  );
 };
 
 export function createLavkaClient(deps: Deps) {
@@ -81,7 +168,9 @@ export function createLavkaClient(deps: Deps) {
 
   async function ensureTab(): Promise<void> {
     let host = "";
-    try { host = new URL(await deps.driver.url()).hostname; } catch (error) {
+    try {
+      host = new URL(await deps.driver.url()).hostname;
+    } catch (error) {
       // A restarted browser is reported as such (the repeat guard lets the call run once more).
       if (isBrowserRestarted(error)) throw error;
       host = "";
@@ -91,21 +180,39 @@ export function createLavkaClient(deps: Deps) {
     await deps.driver.settle();
   }
 
-  async function call<T>(request: LavkaPageRequest): Promise<{ data: T; error: string | null; status: number }> {
+  async function call<T>(
+    request: LavkaPageRequest,
+  ): Promise<{ data: T; error: string | null; status: number }> {
     // No request has left the tab while it is being checked or opened.
     await ensureTab().catch((error: unknown) => {
       throw lavkaNothingSent(error);
     });
     const raw = await deps.driver.eval(lavkaPageScript(request, LAVKA_SEARCH_LIMIT));
     let result: LavkaPageResult;
-    try { result = JSON.parse(raw) as LavkaPageResult; } catch { throw unavailable("page_result_not_json"); }
+    try {
+      result = JSON.parse(raw) as LavkaPageResult;
+    } catch {
+      throw unavailable("page_result_not_json");
+    }
     // The page refused to send: the tab moved to another site after the URL check. Nothing left it.
     if (typeof result.error === "string" && result.error.startsWith("wrong_origin:")) {
-      console.error(JSON.stringify({ code: "AGENT_LAVKA_TAB_MOVED", endpoint: request.endpoint, host: result.error.slice(13, 100) }));
-      throw new AppError("AGENT_LAVKA_TAB_MOVED", "Вкладка браузера ушла со страницы Лавки во время запроса. Повторите действие");
+      console.error(
+        JSON.stringify({
+          code: "AGENT_LAVKA_TAB_MOVED",
+          endpoint: request.endpoint,
+          host: result.error.slice(13, 100),
+        }),
+      );
+      throw new AppError(
+        "AGENT_LAVKA_TAB_MOVED",
+        "Вкладка браузера ушла со страницы Лавки во время запроса. Повторите действие",
+      );
     }
     if (!result.authorized) {
-      throw new AppError("AGENT_LAVKA_AUTH_REQUIRED", "Лавка не узнаёт вход: нужно войти в Яндекс в браузере Мии (browser_open https://passport.yandex.ru/auth), потом повторить");
+      throw new AppError(
+        "AGENT_LAVKA_AUTH_REQUIRED",
+        "Лавка не узнаёт вход: нужно войти в Яндекс в браузере Мии (browser_open https://passport.yandex.ru/auth), потом повторить",
+      );
     }
     return { data: result.data as T, error: result.error ?? null, status: result.status };
   }
@@ -115,21 +222,49 @@ export function createLavkaClient(deps: Deps) {
     if (!error) return null;
     try {
       const parsed = JSON.parse(error) as { data?: { errors?: unknown; message?: unknown } };
-      const errors = Array.isArray(parsed.data?.errors) ? parsed.data.errors.filter((e): e is string => typeof e === "string") : [];
-      const message = errors.length > 0 ? errors.join("; ") : typeof parsed.data?.message === "string" ? parsed.data.message : null;
+      const errors = Array.isArray(parsed.data?.errors)
+        ? parsed.data.errors.filter((e): e is string => typeof e === "string")
+        : [];
+      const message =
+        errors.length > 0
+          ? errors.join("; ")
+          : typeof parsed.data?.message === "string"
+            ? parsed.data.message
+            : null;
       return message ? message.replace(/\s+/gu, " ").slice(0, 300) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   async function ok<T>(request: LavkaPageRequest): Promise<T> {
     const { data, error, status } = await call<T | null>(request);
-    if (status === 409) throw new AppError("AGENT_LAVKA_CART_CONFLICT", "Корзина изменилась с другого устройства, повторите действие");
-    if (status === 429) throw new AppError("AGENT_LAVKA_RATE_LIMITED", "Лавка временно ограничила число запросов. Попробуйте позже");
+    if (status === 409)
+      throw new AppError(
+        "AGENT_LAVKA_CART_CONFLICT",
+        "Корзина изменилась с другого устройства, повторите действие",
+      );
+    if (status === 429)
+      throw new AppError(
+        "AGENT_LAVKA_RATE_LIMITED",
+        "Лавка временно ограничила число запросов. Попробуйте позже",
+      );
     if (status >= 400) {
       const reason = refusalReason(error);
-      console.error(JSON.stringify({ code: "AGENT_LAVKA_REJECTED", endpoint: request.endpoint, reason, status }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_LAVKA_REJECTED",
+          endpoint: request.endpoint,
+          reason,
+          status,
+        }),
+      );
       // A refusal the site explains is not an outage: the person hears what was wrong.
-      if (reason && status < 500) throw new AppError("AGENT_LAVKA_REJECTED", `Лавка отклонила запрос (${request.endpoint}): ${reason}`);
+      if (reason && status < 500)
+        throw new AppError(
+          "AGENT_LAVKA_REJECTED",
+          `Лавка отклонила запрос (${request.endpoint}): ${reason}`,
+        );
       throw unavailable(`status_${status}`);
     }
     // The page's own code for a request that failed or ran out (timeout, network:<name>), not site text.
@@ -138,14 +273,28 @@ export function createLavkaClient(deps: Deps) {
     return data;
   }
 
-  const position = (point: LavkaDeliveryPoint | null) => point ? { position: { location: [point.lon, point.lat] } } : {};
-  const baseBody = (point: LavkaDeliveryPoint | null) => ({ additionalData: {}, currencySign: "₽", depotType: "regular", ...position(point) });
+  const position = (point: LavkaDeliveryPoint | null) =>
+    point ? { position: { location: [point.lon, point.lat] } } : {};
+  const baseBody = (point: LavkaDeliveryPoint | null) => ({
+    additionalData: {},
+    currencySign: "₽",
+    depotType: "regular",
+    ...position(point),
+  });
 
   async function cart(point: LavkaDeliveryPoint | null): Promise<LavkaCart> {
     return await ok<LavkaCart>({ body: baseBody(point), endpoint: "cart", project: "cart" });
   }
 
-  const itemBody = (id: string, quantity: number, price: number | null) => ({ currency: "RUB", id, price: price === null ? "" : String(price), pricePerCount: "1", quantity: String(quantity), quantityType: "unit", title: "" });
+  const itemBody = (id: string, quantity: number, price: number | null) => ({
+    currency: "RUB",
+    id,
+    price: price === null ? "" : String(price),
+    pricePerCount: "1",
+    quantity: String(quantity),
+    quantityType: "unit",
+    title: "",
+  });
 
   /**
    * Read-modify-write under `cartVersion`; `build` returns absolute quantities from the fresh cart.
@@ -154,30 +303,67 @@ export function createLavkaClient(deps: Deps) {
    * already there, the catalogue price for a new one). Learned live on 26 September 2026: the
    * upstream capture sent nulls and the update was a 400.
    */
-  async function mutate(point: LavkaDeliveryPoint | null, build: (current: LavkaCart) => Array<{ id: string; price?: number | null; quantity: number }>): Promise<LavkaCart> {
+  async function mutate(
+    point: LavkaDeliveryPoint | null,
+    build: (current: LavkaCart) => Array<{ id: string; price?: number | null; quantity: number }>,
+  ): Promise<LavkaCart> {
     for (let attempt = 0; ; attempt += 1) {
       const current = await cart(point);
-      const items = build(current).map((item) => itemBody(item.id, item.quantity, current.items.find((i) => i.id === item.id)?.price ?? item.price ?? null));
+      const items = build(current).map((item) =>
+        itemBody(
+          item.id,
+          item.quantity,
+          current.items.find((i) => i.id === item.id)?.price ?? item.price ?? null,
+        ),
+      );
       if (items.length === 0) return current;
-      if (items.some((item) => item.price === "")) throw new AppError("AGENT_LAVKA_PRICE_REQUIRED", "Для нового товара в корзине нужна его цена из выдачи search (поле price)");
+      if (items.some((item) => item.price === ""))
+        throw new AppError(
+          "AGENT_LAVKA_PRICE_REQUIRED",
+          "Для нового товара в корзине нужна его цена из выдачи search (поле price)",
+        );
       const body = {
-        ...baseBody(point), cartId: current.cartId, cartVersion: current.cartVersion, deliveryTimeInfo: current.deliveryTimeInfo, deliveryType: current.deliveryType,
-        idempotencyToken: current.nextIdempotencyToken || randomUUID().replace(/-/gu, ""), isUserOrderEdit: false, items,
+        ...baseBody(point),
+        cartId: current.cartId,
+        cartVersion: current.cartVersion,
+        deliveryTimeInfo: current.deliveryTimeInfo,
+        deliveryType: current.deliveryType,
+        idempotencyToken: current.nextIdempotencyToken || randomUUID().replace(/-/gu, ""),
+        isUserOrderEdit: false,
+        items,
       };
       try {
         return await ok<LavkaCart>({ body, endpoint: "cartUpdate", project: "cart" });
       } catch (error) {
-        if (error instanceof AppError && error.code === "AGENT_LAVKA_CART_CONFLICT" && attempt < LAVKA_CART_CONFLICT_RETRIES) { await sleep(500 * (attempt + 1)); continue; }
+        if (
+          error instanceof AppError &&
+          error.code === "AGENT_LAVKA_CART_CONFLICT" &&
+          attempt < LAVKA_CART_CONFLICT_RETRIES
+        ) {
+          await sleep(500 * (attempt + 1));
+          continue;
+        }
         throw error;
       }
     }
   }
 
   return {
-    async addItem(point: LavkaDeliveryPoint | null, id: string, quantity: number, price: number | null): Promise<LavkaCart> {
-      const result = await mutate(point, (current) => [{ id, price, quantity: (current.items.find((i) => i.id === id)?.quantity ?? 0) + quantity }]);
+    async addItem(
+      point: LavkaDeliveryPoint | null,
+      id: string,
+      quantity: number,
+      price: number | null,
+    ): Promise<LavkaCart> {
+      const result = await mutate(point, (current) => [
+        { id, price, quantity: (current.items.find((i) => i.id === id)?.quantity ?? 0) + quantity },
+      ]);
       // The site silently drops a product the current store cannot sell; the tool must say so.
-      if (!result.items.some((i) => i.id === id)) throw new AppError("AGENT_LAVKA_ITEM_DROPPED", "Лавка не положила товар в корзину: в этом магазине его нет. Выберите другой");
+      if (!result.items.some((i) => i.id === id))
+        throw new AppError(
+          "AGENT_LAVKA_ITEM_DROPPED",
+          "Лавка не положила товар в корзину: в этом магазине его нет. Выберите другой",
+        );
       return result;
     },
     // As the site's order page does: orders.cancel({ orderId }).
@@ -186,101 +372,307 @@ export function createLavkaClient(deps: Deps) {
         await ok<unknown>({ body: { orderId }, endpoint: "orderCancel", project: "raw" });
       } catch (error) {
         // A refusal the site explained, or a request that never left the tab, cancelled nothing.
-        if ((error instanceof AppError && SUBMIT_DEFINITIVE.has(error.code)) || isLavkaNothingSent(error)) throw error;
-        console.error(JSON.stringify({ code: "AGENT_LAVKA_CANCEL_AMBIGUOUS", cause: error instanceof AppError ? error.code : "unknown" }));
+        if (
+          (error instanceof AppError && SUBMIT_DEFINITIVE.has(error.code)) ||
+          isLavkaNothingSent(error)
+        )
+          throw error;
+        console.error(
+          JSON.stringify({
+            code: "AGENT_LAVKA_CANCEL_AMBIGUOUS",
+            cause: error instanceof AppError ? error.code : "unknown",
+          }),
+        );
         throw cancelAmbiguous();
       }
       return { cancelled: true, orderId };
     },
     cart,
-    async checkoutPreview(point: LavkaDeliveryPoint): Promise<LavkaCart & { addressKey: string; paymentChoice: LavkaPaymentMethod | null; paymentMethodId: string | null }> {
+    async checkoutPreview(point: LavkaDeliveryPoint): Promise<
+      LavkaCart & {
+        addressKey: string;
+        paymentChoice: LavkaPaymentMethod | null;
+        paymentMethodId: string | null;
+      }
+    > {
       const current = await cart(point);
       const paymentChoice = await resolvePayment(current, point);
-      return { ...current, addressKey: lavkaAddressKey(point), paymentChoice, paymentMethodId: paymentChoice?.id ?? null };
+      return {
+        ...current,
+        addressKey: lavkaAddressKey(point),
+        paymentChoice,
+        paymentMethodId: paymentChoice?.id ?? null,
+      };
     },
-    clearCart: (point: LavkaDeliveryPoint | null) => mutate(point, (current) => current.items.map((i) => ({ id: i.id, quantity: 0 }))),
+    clearCart: (point: LavkaDeliveryPoint | null) =>
+      mutate(point, (current) => current.items.map((i) => ({ id: i.id, quantity: 0 }))),
     addresses: () => ok<LavkaAddress[]>({ body: {}, endpoint: "addresses", project: "addresses" }),
     paymentMethods,
-    paymentStatus: (orderId: string) => ok<{ redirectUrl: string; status: string }>({ body: { orderId, paymentType: "card" }, endpoint: "paymentStatus", project: "payment" }),
-    async placeOrder(point: LavkaDeliveryPoint, expected: { addressKey: string; cartVersion: number; paymentMethodId: string; total: number }): Promise<LavkaOrderPlacement> {
+    paymentStatus: (orderId: string) =>
+      ok<{ redirectUrl: string; status: string }>({
+        body: { orderId, paymentType: "card" },
+        endpoint: "paymentStatus",
+        project: "payment",
+      }),
+    async placeOrder(
+      point: LavkaDeliveryPoint,
+      expected: { addressKey: string; cartVersion: number; paymentMethodId: string; total: number },
+    ): Promise<LavkaOrderPlacement> {
       // Everything before the submit only reads: any failure there sent nothing.
       const body = await orderBody(point, expected).catch((error: unknown) => {
         throw lavkaNothingSent(error);
       });
       let submitted: { orderId: string };
       try {
-        submitted = await ok<{ orderId: string }>({ body, endpoint: "orderSubmit", project: "submit" });
+        submitted = await ok<{ orderId: string }>({
+          body,
+          endpoint: "orderSubmit",
+          project: "submit",
+        });
       } catch (error) {
         // A refusal the site explained (or a request that never left the tab) placed nothing; any
         // other failure after the submit went out may have created the order.
-        if ((error instanceof AppError && SUBMIT_DEFINITIVE.has(error.code)) || isLavkaNothingSent(error)) throw error;
-        console.error(JSON.stringify({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS", cause: error instanceof AppError ? error.code : "unknown" }));
+        if (
+          (error instanceof AppError && SUBMIT_DEFINITIVE.has(error.code)) ||
+          isLavkaNothingSent(error)
+        )
+          throw error;
+        console.error(
+          JSON.stringify({
+            code: "AGENT_LAVKA_ORDER_AMBIGUOUS",
+            cause: error instanceof AppError ? error.code : "unknown",
+          }),
+        );
         throw orderAmbiguous();
       }
       if (!submitted.orderId) throw orderAmbiguous();
       // The order exists from here on: a failing status poll must not hide its number.
-      let status = "unknown"; let redirectUrl = "";
+      let status = "unknown";
+      let redirectUrl = "";
       for (let attempt = 0; attempt < LAVKA_PAYMENT_POLL_ATTEMPTS; attempt += 1) {
         try {
-          const payment = await ok<{ redirectUrl: string; status: string }>({ body: { orderId: submitted.orderId, paymentType: "card" }, endpoint: "paymentStatus", project: "payment" });
-          status = payment.status || "unknown"; redirectUrl = payment.redirectUrl;
+          const payment = await ok<{ redirectUrl: string; status: string }>({
+            body: { orderId: submitted.orderId, paymentType: "card" },
+            endpoint: "paymentStatus",
+            project: "payment",
+          });
+          status = payment.status || "unknown";
+          redirectUrl = payment.redirectUrl;
         } catch (error) {
-          console.error(JSON.stringify({ code: "AGENT_LAVKA_PAYMENT_STATUS_UNKNOWN", cause: error instanceof AppError ? error.code : "unknown", orderId: submitted.orderId }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_LAVKA_PAYMENT_STATUS_UNKNOWN",
+              cause: error instanceof AppError ? error.code : "unknown",
+              orderId: submitted.orderId,
+            }),
+          );
           status = "unknown";
           break;
         }
-        if (["failed", "hold", "paid", "rejected", "success", "wait_user_action"].includes(status)) break;
+        if (["failed", "hold", "paid", "rejected", "success", "wait_user_action"].includes(status))
+          break;
         await sleep(1000);
       }
       return { orderId: submitted.orderId, paymentStatus: status, redirectUrl };
     },
-    product: (slug: string) => ok<LavkaProductDetails>({ body: { ...baseBody(null), enableUnavailable: true, isEcomboReward: false, needCatalogPaths: true, productId: slug, rewardPriceTemplate: "" }, endpoint: "product", project: "product" }),
-    async resolveAddress(text: string, near: LavkaDeliveryPoint | null): Promise<LavkaDeliveryPoint> {
-      const suggestions = await ok<Array<{ lat: number | null; lon: number | null; text: string; uri: string }>>({ body: { action: "user_input", lang: "ru", query: text, ...(near ? { location: { lat: near.lat, lon: near.lon } } : {}) }, endpoint: "geoSuggest", project: "suggest" });
+    product: (slug: string) =>
+      ok<LavkaProductDetails>({
+        body: {
+          ...baseBody(null),
+          enableUnavailable: true,
+          isEcomboReward: false,
+          needCatalogPaths: true,
+          productId: slug,
+          rewardPriceTemplate: "",
+        },
+        endpoint: "product",
+        project: "product",
+      }),
+    async resolveAddress(
+      text: string,
+      near: LavkaDeliveryPoint | null,
+    ): Promise<LavkaDeliveryPoint> {
+      const suggestions = await ok<
+        Array<{ lat: number | null; lon: number | null; text: string; uri: string }>
+      >({
+        body: {
+          action: "user_input",
+          lang: "ru",
+          query: text,
+          ...(near ? { location: { lat: near.lat, lon: near.lon } } : {}),
+        },
+        endpoint: "geoSuggest",
+        project: "suggest",
+      });
       const first = suggestions.find((s) => s.lat !== null && s.lon !== null);
-      if (!first) throw new AppError("AGENT_LAVKA_ADDRESS_NOT_FOUND", `Лавка не нашла адрес «${text.slice(0, 100)}»`);
-      const g = await ok<{ city: string; country: string; entrance: string; house: string; lat: number | null; lon: number | null; placeId: string; street: string; text: string }>({ body: { action: "pin_drop", lang: "ru", point: { lat: first.lat, lon: first.lon }, suppressError: true }, endpoint: "geoGeocode", project: "geocode" });
-      return { city: g.city, comment: "", country: g.country, doorcode: "", entrance: g.entrance, flat: "", floor: "", house: g.house, label: g.text || first.text, lat: g.lat ?? first.lat!, lon: g.lon ?? first.lon!, placeId: g.placeId || first.uri, street: g.street };
+      if (!first)
+        throw new AppError(
+          "AGENT_LAVKA_ADDRESS_NOT_FOUND",
+          `Лавка не нашла адрес «${text.slice(0, 100)}»`,
+        );
+      const g = await ok<{
+        city: string;
+        country: string;
+        entrance: string;
+        house: string;
+        lat: number | null;
+        lon: number | null;
+        placeId: string;
+        street: string;
+        text: string;
+      }>({
+        body: {
+          action: "pin_drop",
+          lang: "ru",
+          point: { lat: first.lat, lon: first.lon },
+          suppressError: true,
+        },
+        endpoint: "geoGeocode",
+        project: "geocode",
+      });
+      return {
+        city: g.city,
+        comment: "",
+        country: g.country,
+        doorcode: "",
+        entrance: g.entrance,
+        flat: "",
+        floor: "",
+        house: g.house,
+        label: g.text || first.text,
+        lat: g.lat ?? first.lat!,
+        lon: g.lon ?? first.lon!,
+        placeId: g.placeId || first.uri,
+        street: g.street,
+      };
     },
-    search: (query: string, point: LavkaDeliveryPoint | null) => ok<LavkaProduct[]>({ body: { ...baseBody(point), productsLimit: LAVKA_SEARCH_LIMIT, source: "manual_input", subcategoriesLimit: 0, text: query, useRetail: true }, endpoint: "search", project: "search" }),
-    setItem: (point: LavkaDeliveryPoint | null, id: string, quantity: number, price: number | null) => mutate(point, () => [{ id, price, quantity }]),
-    trackedOrders: () => ok<Array<{ eta: string; orderId: string; status: string; subtitle: string; title: string }>>({ endpoint: "trackedOrders", project: "orders" }),
+    search: (query: string, point: LavkaDeliveryPoint | null) =>
+      ok<LavkaProduct[]>({
+        body: {
+          ...baseBody(point),
+          productsLimit: LAVKA_SEARCH_LIMIT,
+          source: "manual_input",
+          subcategoriesLimit: 0,
+          text: query,
+          useRetail: true,
+        },
+        endpoint: "search",
+        project: "search",
+      }),
+    setItem: (
+      point: LavkaDeliveryPoint | null,
+      id: string,
+      quantity: number,
+      price: number | null,
+    ) => mutate(point, () => [{ id, price, quantity }]),
+    trackedOrders: () =>
+      ok<Array<{ eta: string; orderId: string; status: string; subtitle: string; title: string }>>({
+        endpoint: "trackedOrders",
+        project: "orders",
+      }),
   };
 
   /** The submit's body after the checks against the confirmed preview; reads only. */
-  async function orderBody(point: LavkaDeliveryPoint, expected: { addressKey: string; cartVersion: number; paymentMethodId: string; total: number }): Promise<Record<string, unknown>> {
+  async function orderBody(
+    point: LavkaDeliveryPoint,
+    expected: { addressKey: string; cartVersion: number; paymentMethodId: string; total: number },
+  ): Promise<Record<string, unknown>> {
     if (lavkaAddressKey(point) !== expected.addressKey) {
-      throw new AppError("AGENT_LAVKA_ADDRESS_CHANGED", "Адрес доставки изменился после предпросмотра. Сделайте новый preview и подтвердите заказ заново");
+      throw new AppError(
+        "AGENT_LAVKA_ADDRESS_CHANGED",
+        "Адрес доставки изменился после предпросмотра. Сделайте новый preview и подтвердите заказ заново",
+      );
     }
     const live = await cart(point);
-    if (live.cartVersion !== expected.cartVersion) throw new AppError("AGENT_LAVKA_CART_CHANGED", `Корзина изменилась после предпросмотра (версия ${expected.cartVersion} → ${live.cartVersion}). Покажите новый предпросмотр и подтвердите заново`);
-    if (live.total === null || Math.abs(live.total - expected.total) > LAVKA_PRICE_TOLERANCE_RUB) throw new AppError("AGENT_LAVKA_CART_CHANGED", `Сумма изменилась после подтверждения (${expected.total} → ${live.total}). Покажите новый предпросмотр и подтвердите заново`);
-    if (live.availableForCheckout === false) throw new AppError("AGENT_LAVKA_CHECKOUT_BLOCKED", `Лавка не принимает эту корзину${live.checkoutBlockedReason ? ` (${live.checkoutBlockedReason})` : ""}. Уберите недоступные позиции и повторите предпросмотр`);
+    if (live.cartVersion !== expected.cartVersion)
+      throw new AppError(
+        "AGENT_LAVKA_CART_CHANGED",
+        `Корзина изменилась после предпросмотра (версия ${expected.cartVersion} → ${live.cartVersion}). Покажите новый предпросмотр и подтвердите заново`,
+      );
+    if (live.total === null || Math.abs(live.total - expected.total) > LAVKA_PRICE_TOLERANCE_RUB)
+      throw new AppError(
+        "AGENT_LAVKA_CART_CHANGED",
+        `Сумма изменилась после подтверждения (${expected.total} → ${live.total}). Покажите новый предпросмотр и подтвердите заново`,
+      );
+    if (live.availableForCheckout === false)
+      throw new AppError(
+        "AGENT_LAVKA_CHECKOUT_BLOCKED",
+        `Лавка не принимает эту корзину${live.checkoutBlockedReason ? ` (${live.checkoutBlockedReason})` : ""}. Уберите недоступные позиции и повторите предпросмотр`,
+      );
     const payment = await resolvePayment(live, point);
-    if (!payment) throw new AppError("AGENT_LAVKA_PAYMENT_MISSING", "У аккаунта Лавки нет выбранной доступной карты. Выберите карту в приложении Лавки");
+    if (!payment)
+      throw new AppError(
+        "AGENT_LAVKA_PAYMENT_MISSING",
+        "У аккаунта Лавки нет выбранной доступной карты. Выберите карту в приложении Лавки",
+      );
     if (payment.id !== expected.paymentMethodId) {
-      throw new AppError("AGENT_LAVKA_PAYMENT_CHANGED", "Карта оплаты изменилась после предпросмотра. Сделайте новый preview и подтвердите заказ заново");
+      throw new AppError(
+        "AGENT_LAVKA_PAYMENT_CHANGED",
+        "Карта оплаты изменилась после предпросмотра. Сделайте новый preview и подтвердите заказ заново",
+      );
     }
-    const service = await ok<{ depotId: string }>({ endpoint: "serviceInfo", project: "serviceInfo", query: `position[location][0]=${point.lon}&position[location][1]=${point.lat}&fallbackCurrencySign=%E2%82%BD&depotType=regular` });
+    const service = await ok<{ depotId: string }>({
+      endpoint: "serviceInfo",
+      project: "serviceInfo",
+      query: `position[location][0]=${point.lon}&position[location][1]=${point.lat}&fallbackCurrencySign=%E2%82%BD&depotType=regular`,
+    });
     return {
-      cartId: live.cartId, cartVersion: live.cartVersion, cashback: live.cashbackWalletId ? { walletId: live.cashbackWalletId } : {},
-      depotOrderContext: { depotType: "regular", position: [point.lon, point.lat] }, flowVersion: live.flowVersion || "grocery_flow_v1",
-      paymentMethodId: payment.id, paymentMethodType: payment.type || "card",
-      position: { buildingName: "", city: point.city, comment: point.comment, country: point.country || "Россия", depotId: service.depotId, doorbellName: "", doorcode: point.doorcode, entrance: point.entrance, flat: point.flat, floor: point.floor, house: point.house, leftAtDoor: false, location: [point.lon, point.lat], meetOutside: false, noDoorCall: false, placeId: point.placeId, street: point.street },
+      cartId: live.cartId,
+      cartVersion: live.cartVersion,
+      cashback: live.cashbackWalletId ? { walletId: live.cashbackWalletId } : {},
+      depotOrderContext: { depotType: "regular", position: [point.lon, point.lat] },
+      flowVersion: live.flowVersion || "grocery_flow_v1",
+      paymentMethodId: payment.id,
+      paymentMethodType: payment.type || "card",
+      position: {
+        buildingName: "",
+        city: point.city,
+        comment: point.comment,
+        country: point.country || "Россия",
+        depotId: service.depotId,
+        doorbellName: "",
+        doorcode: point.doorcode,
+        entrance: point.entrance,
+        flat: point.flat,
+        floor: point.floor,
+        house: point.house,
+        leftAtDoor: false,
+        location: [point.lon, point.lat],
+        meetOutside: false,
+        noDoorCall: false,
+        placeId: point.placeId,
+        street: point.street,
+      },
       useRover: false,
     };
   }
 
-  async function paymentMethods(point: LavkaDeliveryPoint | null): Promise<{ defaultId: string; methods: LavkaPaymentMethod[] }> {
-    return await ok({ body: { countryIso3: "RUS", location: point ? [point.lon, point.lat] : [] }, endpoint: "paymentMethods", project: "paymentMethods" });
+  async function paymentMethods(
+    point: LavkaDeliveryPoint | null,
+  ): Promise<{ defaultId: string; methods: LavkaPaymentMethod[] }> {
+    return await ok({
+      body: { countryIso3: "RUS", location: point ? [point.lon, point.lat] : [] },
+      endpoint: "paymentMethods",
+      project: "paymentMethods",
+    });
   }
 
   /**
    * The card that will be charged: what the cart holds, else the account default when available.
    * Never another card the person did not pick (review, 28 September 2026): no card is an error.
    */
-  async function resolvePayment(current: LavkaCart, point: LavkaDeliveryPoint | null): Promise<LavkaPaymentMethod | null> {
-    if (current.paymentMethod?.id) return { available: true, bank: current.paymentMethod.bank, id: current.paymentMethod.id, label: [current.paymentMethod.system, current.paymentMethod.bank].filter(Boolean).join(" "), type: current.paymentMethod.type || "card" };
+  async function resolvePayment(
+    current: LavkaCart,
+    point: LavkaDeliveryPoint | null,
+  ): Promise<LavkaPaymentMethod | null> {
+    if (current.paymentMethod?.id)
+      return {
+        available: true,
+        bank: current.paymentMethod.bank,
+        id: current.paymentMethod.id,
+        label: [current.paymentMethod.system, current.paymentMethod.bank].filter(Boolean).join(" "),
+        type: current.paymentMethod.type || "card",
+      };
     const { defaultId, methods } = await paymentMethods(point);
     return methods.find((m) => m.id === defaultId && m.available) ?? null;
   }

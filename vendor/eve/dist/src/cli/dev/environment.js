@@ -28,8 +28,7 @@ function readDevelopmentEnvironmentHostValues(e) {
     r = readDevelopmentEnvironmentValues(resolve(e)),
     i = new Set(r.keys());
   i.add(`AI_GATEWAY_API_KEY`);
-  for (let e of [...i].sort((e, t) => e.localeCompare(t)))
-    n[e] = process.env[e] ?? null;
+  for (let e of [...i].sort((e, t) => e.localeCompare(t))) n[e] = process.env[e] ?? null;
   return n;
 }
 function getDevelopmentEnvironmentLoader(e) {
@@ -70,8 +69,7 @@ function createDevelopmentEnvironmentLoader(e) {
             if (!l) {
               ((l = !0), r.clear());
               for (let [e, t] of i) r.set(e, t);
-              for (let [e, t] of c)
-                t === void 0 ? delete process.env[e] : (process.env[e] = t);
+              for (let [e, t] of c) t === void 0 ? delete process.env[e] : (process.env[e] = t);
             }
           },
         }
@@ -93,8 +91,7 @@ function applyDevelopmentEnvironmentValues(e) {
   for (let [t, n] of e.managedValues)
     e.nextValues.has(t) ||
       e.protectedKeys.has(t) ||
-      (process.env[t] === n && delete process.env[t],
-      e.managedValues.delete(t));
+      (process.env[t] === n && delete process.env[t], e.managedValues.delete(t));
   for (let [t, n] of e.nextValues)
     e.protectedKeys.has(t) || ((process.env[t] = n), e.managedValues.set(t, n));
 }

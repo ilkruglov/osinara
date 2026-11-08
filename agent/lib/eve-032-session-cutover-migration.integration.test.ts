@@ -15,9 +15,8 @@ import type { PoolClient } from "pg";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const MIGRATION_NAME = "065_eve_032_session_storage_cutover.sql";
 const TEST_SCHEMA = "test_eve_032_session_cutover";
 const CUTOVER_CODE = "AGENT_EVE_032_SESSION_CUTOVER";
@@ -170,38 +169,52 @@ describeWithDatabase("065 Eve 0.32 session storage cutover migration", () => {
            (SELECT count(*)::integer FROM workspaces WHERE id = $3) AS workspaces`,
         [memory.rows[0]!.id, timeline.rows[0]!.id, workspace.rows[0]!.id],
       );
-      expect(state.rows).toEqual([{
-        audits: 2,
-        hitl: 0,
-        memories: 1,
-        routes: 0,
-        sessions: 0,
-        timeline: 1,
-        workspaces: 1,
-      }]);
+      expect(state.rows).toEqual([
+        {
+          audits: 2,
+          hitl: 0,
+          memories: 1,
+          routes: 0,
+          sessions: 0,
+          timeline: 1,
+          workspaces: 1,
+        },
+      ]);
 
-      expect((await client.query(
-        `SELECT status::text, application_session_id, completed_at IS NOT NULL AS completed,
+      expect(
+        (
+          await client.query(
+            `SELECT status::text, application_session_id, completed_at IS NOT NULL AS completed,
                 error_code
            FROM agent_schedule_runs WHERE id = $1`,
-        [run.rows[0]!.id],
-      )).rows).toEqual([{
-        application_session_id: null,
-        completed: true,
-        error_code: CUTOVER_CODE,
-        status: "ambiguous",
-      }]);
-      expect((await client.query(
-        `SELECT status::text, lease_token, lease_expires_at, dispatch_started_at, last_error_code
+            [run.rows[0]!.id],
+          )
+        ).rows,
+      ).toEqual([
+        {
+          application_session_id: null,
+          completed: true,
+          error_code: CUTOVER_CODE,
+          status: "ambiguous",
+        },
+      ]);
+      expect(
+        (
+          await client.query(
+            `SELECT status::text, lease_token, lease_expires_at, dispatch_started_at, last_error_code
            FROM agent_schedules WHERE id = $1`,
-        [schedule.rows[0]!.id],
-      )).rows).toEqual([{
-        dispatch_started_at: null,
-        last_error_code: CUTOVER_CODE,
-        lease_expires_at: null,
-        lease_token: null,
-        status: "failed",
-      }]);
+            [schedule.rows[0]!.id],
+          )
+        ).rows,
+      ).toEqual([
+        {
+          dispatch_started_at: null,
+          last_error_code: CUTOVER_CODE,
+          lease_expires_at: null,
+          lease_token: null,
+          status: "failed",
+        },
+      ]);
 
       const ingress = await client.query(
         `SELECT update_id::text, status, lease_token, dispatch_started_at IS NOT NULL AS dispatched,
@@ -209,12 +222,54 @@ describeWithDatabase("065 Eve 0.32 session storage cutover migration", () => {
            FROM telegram_ingress_updates ORDER BY update_id`,
       );
       expect(ingress.rows).toEqual([
-        { completed: true, dispatched: true, last_error_code: CUTOVER_CODE, lease_token: null, status: "failed", update_id: "65001" },
-        { completed: false, dispatched: false, last_error_code: null, lease_token: null, status: "pending", update_id: "65002" },
-        { completed: false, dispatched: false, last_error_code: null, lease_token: null, status: "pending", update_id: "65003" },
-        { completed: false, dispatched: true, last_error_code: null, lease_token: null, status: "completed", update_id: "65004" },
-        { completed: true, dispatched: false, last_error_code: CUTOVER_CODE, lease_token: null, status: "failed", update_id: "65005" },
-        { completed: false, dispatched: false, last_error_code: null, lease_token: null, status: "pending", update_id: "65006" },
+        {
+          completed: true,
+          dispatched: true,
+          last_error_code: CUTOVER_CODE,
+          lease_token: null,
+          status: "failed",
+          update_id: "65001",
+        },
+        {
+          completed: false,
+          dispatched: false,
+          last_error_code: null,
+          lease_token: null,
+          status: "pending",
+          update_id: "65002",
+        },
+        {
+          completed: false,
+          dispatched: false,
+          last_error_code: null,
+          lease_token: null,
+          status: "pending",
+          update_id: "65003",
+        },
+        {
+          completed: false,
+          dispatched: true,
+          last_error_code: null,
+          lease_token: null,
+          status: "completed",
+          update_id: "65004",
+        },
+        {
+          completed: true,
+          dispatched: false,
+          last_error_code: CUTOVER_CODE,
+          lease_token: null,
+          status: "failed",
+          update_id: "65005",
+        },
+        {
+          completed: false,
+          dispatched: false,
+          last_error_code: null,
+          lease_token: null,
+          status: "pending",
+          update_id: "65006",
+        },
       ]);
     } finally {
       try {

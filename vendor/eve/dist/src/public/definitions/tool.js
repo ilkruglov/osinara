@@ -1,7 +1,4 @@
-import {
-  DYNAMIC_SENTINEL_KIND,
-  TOOL_BRAND,
-} from "#shared/dynamic-tool-definition.js";
+import { DYNAMIC_SENTINEL_KIND, TOOL_BRAND } from "#shared/dynamic-tool-definition.js";
 import { stampDefinitionKey } from "#public/tool-result-narrowing.js";
 function defineTool(e) {
   if (e.auth !== void 0)
@@ -16,10 +13,7 @@ function defineTool(e) {
 }
 function defineDynamic(t) {
   let n = { kind: DYNAMIC_SENTINEL_KIND, events: t.events };
-  return (
-    stampDefinitionKey(n, `dynamic:${Object.keys(t.events).join(`,`)}`),
-    n
-  );
+  return (stampDefinitionKey(n, `dynamic:${Object.keys(t.events).join(`,`)}`), n);
 }
 const DISABLED_TOOL_SENTINEL_KIND = `eve:disabled-tool`;
 function disableTool() {
@@ -34,9 +28,7 @@ function experimental_workflow(e = {}) {
   return (e.maxSubagents !== void 0 && (t.maxSubagents = e.maxSubagents), t);
 }
 function isExperimentalWorkflowToolDefinition(e) {
-  return (
-    typeof e == `object` && !!e && e.kind === EXPERIMENTAL_WORKFLOW_TOOL_KIND
-  );
+  return typeof e == `object` && !!e && e.kind === EXPERIMENTAL_WORKFLOW_TOOL_KIND;
 }
 export {
   defineDynamic,

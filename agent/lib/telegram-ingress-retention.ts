@@ -37,11 +37,13 @@ export async function purgeCompletedTelegramUpdates(
   );
   const deletedCount = result.rowCount ?? 0;
   if (deletedCount > 0) {
-    console.info(JSON.stringify({
-      batchLimitReached: deletedCount === batchSize,
-      code: "AGENT_TELEGRAM_INGRESS_PURGE_COMPLETED",
-      deletedCount,
-    }));
+    console.info(
+      JSON.stringify({
+        batchLimitReached: deletedCount === batchSize,
+        code: "AGENT_TELEGRAM_INGRESS_PURGE_COMPLETED",
+        deletedCount,
+      }),
+    );
   }
   return deletedCount;
 }

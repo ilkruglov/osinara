@@ -1,7 +1,4 @@
-import {
-  AI_GATEWAY_MODELS_CATALOG_URL,
-  vercelGatewayFetch,
-} from "#internal/gateway.js";
+import { AI_GATEWAY_MODELS_CATALOG_URL, vercelGatewayFetch } from "#internal/gateway.js";
 import {
   findCatalogModelByProviderModelId,
   findCatalogModelBySlug,
@@ -52,9 +49,7 @@ function createRuntimeModelCatalog(i = vercelGatewayFetch) {
 function parseCatalogResponse(e) {
   let t = modelCatalogResponseSchema.safeParse(e);
   if (!t.success)
-    throw Error(
-      `AI Gateway model catalog response did not match the expected schema.`,
-    );
+    throw Error(`AI Gateway model catalog response did not match the expected schema.`);
   return t.data;
 }
 export { createRuntimeModelCatalog };

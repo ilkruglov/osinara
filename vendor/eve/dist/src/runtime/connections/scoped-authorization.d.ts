@@ -12,7 +12,11 @@
 import type { ConnectionAuthorizationChallenge } from "#public/connections/errors.js";
 import { type AuthorizationSignal } from "#harness/authorization.js";
 import type { SessionAuthContext } from "#context/keys.js";
-import { type AuthorizationDefinition, type ConnectionAuthorizationContext, type TokenResult } from "#runtime/connections/types.js";
+import {
+  type AuthorizationDefinition,
+  type ConnectionAuthorizationContext,
+  type TokenResult,
+} from "#runtime/connections/types.js";
 /**
  * Everything the scoped authorization helpers need to drive one
  * authorization strategy: the cache/callback {@link scope}, the
@@ -20,10 +24,10 @@ import { type AuthorizationDefinition, type ConnectionAuthorizationContext, type
  * {@link ConnectionAuthorizationContext} handed to every callback.
  */
 export interface ScopedAuthorization {
-    readonly boundResponder?: SessionAuthContext;
-    readonly scope: string;
-    readonly authorization: Readonly<AuthorizationDefinition>;
-    readonly connection: ConnectionAuthorizationContext;
+  readonly boundResponder?: SessionAuthContext;
+  readonly scope: string;
+  readonly authorization: Readonly<AuthorizationDefinition>;
+  readonly connection: ConnectionAuthorizationContext;
 }
 /**
  * Resolves a bearer token for one scope, consulting the per-step token
@@ -79,11 +83,13 @@ export declare function completeScopedAuthorization(input: ScopedAuthorization):
  * callback URL can be minted (for example outside a deployment), so
  * callers can fall through to rethrowing the original `Required` error.
  */
-export declare function startScopedAuthorization(input: ScopedAuthorization): Promise<AuthorizationSignal | undefined>;
+export declare function startScopedAuthorization(
+  input: ScopedAuthorization,
+): Promise<AuthorizationSignal | undefined>;
 /** Normalizes callback URLs for providers with localhost requirements. */
 export declare function resolveAuthorizationCallbackUrl(input: {
-    readonly authorization: Readonly<AuthorizationDefinition>;
-    readonly callbackUrl: string;
+  readonly authorization: Readonly<AuthorizationDefinition>;
+  readonly callbackUrl: string;
 }): string;
 /**
  * Resolves the user-facing `displayName` onto a challenge before it is
@@ -95,4 +101,7 @@ export declare function resolveAuthorizationCallbackUrl(input: {
  * intent, while strategies provide defaults. Returns the input challenge
  * unchanged when the resolved value does not differ.
  */
-export declare function stampChallengeDisplayName(challenge: ConnectionAuthorizationChallenge, authorization: Readonly<AuthorizationDefinition>): ConnectionAuthorizationChallenge;
+export declare function stampChallengeDisplayName(
+  challenge: ConnectionAuthorizationChallenge,
+  authorization: Readonly<AuthorizationDefinition>,
+): ConnectionAuthorizationChallenge;

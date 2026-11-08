@@ -21,9 +21,9 @@ describe("family invitation code", () => {
     expect(parseInvitationStartCommand(`/start ${invitation.code}`, "osinara_bot")).toBe(
       invitation.code,
     );
-    expect(parseInvitationStartCommand(`/start@osinara_bot ${invitation.code}`, "osinara_bot")).toBe(
-      invitation.code,
-    );
+    expect(
+      parseInvitationStartCommand(`/start@osinara_bot ${invitation.code}`, "osinara_bot"),
+    ).toBe(invitation.code);
   });
 
   it("rejects ordinary messages and commands containing extra text", () => {

@@ -24,8 +24,15 @@ import { isLavkaNothingSent } from "./lavka-nothing-sent.js";
 export type LavkaOperationAction = "add" | "cancel" | "order";
 
 export interface LavkaOperationRepository {
-  begin(input: { action: LavkaOperationAction; key: string; requestHash: string; userId: string }):
-    Promise<{ kind: "started" } | { kind: "existing"; requestHash: string; result: unknown; status: "completed" | "started" }>;
+  begin(input: {
+    action: LavkaOperationAction;
+    key: string;
+    requestHash: string;
+    userId: string;
+  }): Promise<
+    | { kind: "started" }
+    | { kind: "existing"; requestHash: string; result: unknown; status: "completed" | "started" }
+  >;
   complete(input: { key: string; result: unknown; userId: string }): Promise<void>;
   release(input: { key: string; userId: string }): Promise<void>;
 }
@@ -50,8 +57,14 @@ const LAVKA_DEFINITIVE_FAILURES: ReadonlySet<string> = new Set([
 
 function ambiguity(action: LavkaOperationAction): AppError {
   return action === "add"
-    ? new AppError("AGENT_LAVKA_CART_AMBIGUOUS", "Прошлая попытка добавить товар могла дойти до Лавки. Посмотрите корзину (cart), прежде чем добавлять снова")
-    : new AppError("AGENT_LAVKA_ORDER_AMBIGUOUS", "Прошлая попытка могла дойти до Лавки. Проверьте заказы (orders), прежде чем повторять");
+    ? new AppError(
+        "AGENT_LAVKA_CART_AMBIGUOUS",
+        "Прошлая попытка добавить товар могла дойти до Лавки. Посмотрите корзину (cart), прежде чем добавлять снова",
+      )
+    : new AppError(
+        "AGENT_LAVKA_ORDER_AMBIGUOUS",
+        "Прошлая попытка могла дойти до Лавки. Проверьте заказы (orders), прежде чем повторять",
+      );
 }
 
 export async function runLavkaOperation<T>(
@@ -60,10 +73,18 @@ export async function runLavkaOperation<T>(
   run: () => Promise<T>,
 ): Promise<{ replayed: boolean; result: T }> {
   const requestHash = sha256Json(input.request);
-  const begun = await repository.begin({ action: input.action, key: input.key, requestHash, userId: input.userId });
+  const begun = await repository.begin({
+    action: input.action,
+    key: input.key,
+    requestHash,
+    userId: input.userId,
+  });
   if (begun.kind === "existing") {
     if (begun.requestHash !== requestHash) {
-      throw new AppError("AGENT_LAVKA_OPERATION_MISMATCH", "Этот вызов уже выполнялся с другими параметрами. Сделайте новый вызов");
+      throw new AppError(
+        "AGENT_LAVKA_OPERATION_MISMATCH",
+        "Этот вызов уже выполнялся с другими параметрами. Сделайте новый вызов",
+      );
     }
     if (begun.status === "completed") return { replayed: true, result: begun.result as T };
     throw ambiguity(input.action);
@@ -72,7 +93,10 @@ export async function runLavkaOperation<T>(
   try {
     result = await run();
   } catch (error) {
-    if ((isAppError(error) && LAVKA_DEFINITIVE_FAILURES.has(error.code)) || isLavkaNothingSent(error)) {
+    if (
+      (isAppError(error) && LAVKA_DEFINITIVE_FAILURES.has(error.code)) ||
+      isLavkaNothingSent(error)
+    ) {
       await repository.release({ key: input.key, userId: input.userId });
     }
     throw error;
@@ -89,14 +113,23 @@ export const lavkaOperationRepository: LavkaOperationRepository = {
       [input.userId, input.key, input.action, input.requestHash],
     );
     if ((inserted.rowCount ?? 0) > 0) return { kind: "started" };
-    const existing = await database().query<{ request_hash: string; result: unknown; status: "completed" | "started" }>(
+    const existing = await database().query<{
+      request_hash: string;
+      result: unknown;
+      status: "completed" | "started";
+    }>(
       "SELECT request_hash, result, status FROM lavka_operations WHERE user_id = $1 AND operation_key = $2",
       [input.userId, input.key],
     );
     const row = existing.rows[0];
     // Released between the insert and the read: the earlier attempt failed definitively.
     if (!row) return await this.begin(input);
-    return { kind: "existing", requestHash: row.request_hash, result: row.result, status: row.status };
+    return {
+      kind: "existing",
+      requestHash: row.request_hash,
+      result: row.result,
+      status: row.status,
+    };
   },
   async complete(input) {
     await database().query(

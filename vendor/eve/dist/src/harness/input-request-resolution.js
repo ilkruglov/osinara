@@ -40,8 +40,4 @@ function resolveApprovalOutcome(e) {
             status: `invalid`,
           };
 }
-export {
-  TOOL_EXECUTION_DENIED_MESSAGE,
-  buildResolvedInputBatch,
-  resolveApprovalOutcome,
-};
+export { TOOL_EXECUTION_DENIED_MESSAGE, buildResolvedInputBatch, resolveApprovalOutcome };

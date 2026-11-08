@@ -8,25 +8,25 @@
 import type { RgbColor } from "../terminal-background.js";
 /** Truecolor background opens (`ESC[48;2;…m`) for the viewer's card bands. */
 export interface TraceViewerSurfaces {
-    /** Card title band. */
-    readonly header: string;
-    /** Card body band, slightly more elevated than the header. */
-    readonly body: string;
-    readonly errorHeader: string;
-    readonly errorBody: string;
-    /**
-     * Style for primary text over the surfaces (card titles, selection bar,
-     * toast): truecolor white on dark backgrounds, truecolor black on light
-     * ones. The theme's fixed bright-white primary assumes a dark terminal
-     * and washes out on light backgrounds.
-     */
-    readonly primaryText: (text: string) => string;
-    /**
-     * Style for secondary text (control hints, header metadata, drawer
-     * labels): a truecolor grey blended from the probed background toward the
-     * primary, so muted text keeps guaranteed contrast on any background.
-     */
-    readonly mutedText: (text: string) => string;
+  /** Card title band. */
+  readonly header: string;
+  /** Card body band, slightly more elevated than the header. */
+  readonly body: string;
+  readonly errorHeader: string;
+  readonly errorBody: string;
+  /**
+   * Style for primary text over the surfaces (card titles, selection bar,
+   * toast): truecolor white on dark backgrounds, truecolor black on light
+   * ones. The theme's fixed bright-white primary assumes a dark terminal
+   * and washes out on light backgrounds.
+   */
+  readonly primaryText: (text: string) => string;
+  /**
+   * Style for secondary text (control hints, header metadata, drawer
+   * labels): a truecolor grey blended from the probed background toward the
+   * primary, so muted text keeps guaranteed contrast on any background.
+   */
+  readonly mutedText: (text: string) => string;
 }
 /** Closes a surface, restoring the terminal's default background. */
 export declare const SURFACE_CLOSE = "\u001B[49m";

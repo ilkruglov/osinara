@@ -53,11 +53,12 @@ export async function applyReminderUpdate(
   }
   const scheduleChanged = values.firstRunAt !== undefined || values.recurrence !== undefined;
   const nextDue = values.firstRunAt ?? reminder.due_at;
-  const nextRecurrence = values.recurrence === undefined
-    ? reminder.recurrence_unit && reminder.recurrence_interval
-      ? { interval: reminder.recurrence_interval, unit: reminder.recurrence_unit }
-      : null
-    : values.recurrence;
+  const nextRecurrence =
+    values.recurrence === undefined
+      ? reminder.recurrence_unit && reminder.recurrence_interval
+        ? { interval: reminder.recurrence_interval, unit: reminder.recurrence_unit }
+        : null
+      : values.recurrence;
   const updated = await client.query<ReminderRow>(
     `UPDATE reminders
      SET content = $2,

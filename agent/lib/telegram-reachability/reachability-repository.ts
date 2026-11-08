@@ -51,10 +51,19 @@ export interface TelegramInboundEvidence {
 export interface TelegramReachabilityRepository {
   applyMembershipChange(change: TelegramMembershipChange): Promise<boolean>;
   /** Null when the message is not newer than the last membership change; otherwise whether a mark was cleared. */
-  recordInboundMessage(evidence: TelegramInboundEvidence): Promise<{ readonly cleared: boolean } | null>;
+  recordInboundMessage(
+    evidence: TelegramInboundEvidence,
+  ): Promise<{ readonly cleared: boolean } | null>;
   /** False when a proof of reachability arrived after the failed send started. */
-  markUndeliverable(chatId: string, reason: TelegramRecipientUnreachableReason, sendStartedAt: Date): Promise<boolean>;
-  unreachableReason(chatId: string, client?: Pool | PoolClient): Promise<TelegramRecipientUnreachableReason | null>;
+  markUndeliverable(
+    chatId: string,
+    reason: TelegramRecipientUnreachableReason,
+    sendStartedAt: Date,
+  ): Promise<boolean>;
+  unreachableReason(
+    chatId: string,
+    client?: Pool | PoolClient,
+  ): Promise<TelegramRecipientUnreachableReason | null>;
 }
 
 // Keeps the newer proof as one (Telegram date, update id) pair: the later date wins, an equal date goes
@@ -143,10 +152,11 @@ export const telegramReachabilityRepository: TelegramReachabilityRepository = {
   },
 
   async unreachableReason(chatId, client = database()) {
-    const result = await client.query<{ unreachable_reason: TelegramRecipientUnreachableReason | null }>(
-      "SELECT unreachable_reason FROM telegram_chat_reachability WHERE telegram_chat_id = $1",
-      [chatId],
-    );
+    const result = await client.query<{
+      unreachable_reason: TelegramRecipientUnreachableReason | null;
+    }>("SELECT unreachable_reason FROM telegram_chat_reachability WHERE telegram_chat_id = $1", [
+      chatId,
+    ]);
     return result.rows[0]?.unreachable_reason ?? null;
   },
 };

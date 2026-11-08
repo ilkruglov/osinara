@@ -13,8 +13,8 @@ export declare const FORWARDED_BY_ATTRIBUTE = "eve:forwarded-by";
  * Only principal metadata crosses the wire — never tokens or credentials.
  */
 export interface ForwardedPrincipal {
-    readonly current: SessionAuthContext;
-    readonly initiator?: SessionAuthContext;
+  readonly current: SessionAuthContext;
+  readonly initiator?: SessionAuthContext;
 }
 /**
  * Authorizes which transport-authenticated forwarders may assert a forwarded
@@ -22,28 +22,32 @@ export interface ForwardedPrincipal {
  * never the forwarded identity (what is asserted).
  */
 export type TrustedForwarders = (forwarder: SessionAuthContext) => boolean | Promise<boolean>;
-export type ForwardedPrincipalParseResult = {
-    readonly forwardedPrincipal: ForwardedPrincipal;
-    readonly ok: true;
-} | {
-    readonly cause: unknown;
-    readonly message: string;
-    readonly ok: false;
-};
+export type ForwardedPrincipalParseResult =
+  | {
+      readonly forwardedPrincipal: ForwardedPrincipal;
+      readonly ok: true;
+    }
+  | {
+      readonly cause: unknown;
+      readonly message: string;
+      readonly ok: false;
+    };
 /**
  * The create route's effective session principals after the forwarded
  * principal gate: the transport principal untouched when the body carries no
  * assertion, or the stamped forwarded contexts once a trusted forwarder's
  * assertion is accepted.
  */
-export type ResolvedForwardedPrincipal = {
-    readonly accepted: false;
-    readonly auth: SessionAuthContext;
-} | {
-    readonly accepted: true;
-    readonly auth: SessionAuthContext;
-    readonly initiatorAuth: SessionAuthContext;
-};
+export type ResolvedForwardedPrincipal =
+  | {
+      readonly accepted: false;
+      readonly auth: SessionAuthContext;
+    }
+  | {
+      readonly accepted: true;
+      readonly auth: SessionAuthContext;
+      readonly initiatorAuth: SessionAuthContext;
+    };
 /**
  * Gates the create-session `forwardedPrincipal` body field and resolves the
  * effective session principals. Returns the failure `Response` on rejection:
@@ -54,9 +58,9 @@ export type ResolvedForwardedPrincipal = {
  * `onMessage` always sees the transport forwarder on the replaced principal.
  */
 export declare function resolveForwardedPrincipal(input: {
-    readonly trustedForwarders: TrustedForwarders | undefined;
-    readonly forwarder: SessionAuthContext;
-    readonly payload: Record<string, unknown>;
+  readonly trustedForwarders: TrustedForwarders | undefined;
+  readonly forwarder: SessionAuthContext;
+  readonly payload: Record<string, unknown>;
 }): Promise<ResolvedForwardedPrincipal | Response>;
 /**
  * Parses the create-session `forwardedPrincipal` body field against the
@@ -71,4 +75,7 @@ export declare function parseForwardedPrincipal(value: unknown): ForwardedPrinci
  * (`principalKey` reads only issuer + id), so stamping is purely an audit
  * trail.
  */
-export declare function stampForwardedBy(context: SessionAuthContext, forwardedBy: string): SessionAuthContext;
+export declare function stampForwardedBy(
+  context: SessionAuthContext,
+  forwardedBy: string,
+): SessionAuthContext;

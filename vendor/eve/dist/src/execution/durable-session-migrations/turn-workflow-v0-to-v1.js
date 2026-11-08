@@ -2,9 +2,7 @@ const turnWorkflowInputV0ToV1 = {
   from: 0,
   migrate(e) {
     if (!isPreVersionTurnWorkflowInput(e))
-      throw Error(
-        `turn workflow input: version 0 value is not a recognized pre-version shape.`,
-      );
+      throw Error(`turn workflow input: version 0 value is not a recognized pre-version shape.`);
     return {
       capabilities: e.capabilities,
       completionToken: e.completionToken,

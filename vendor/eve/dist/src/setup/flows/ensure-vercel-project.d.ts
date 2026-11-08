@@ -5,17 +5,17 @@ import { readProjectLink, type VercelProjectReference } from "../project-resolut
 import { requireAuth } from "../vercel-project.js";
 import { runLoginFlow } from "./login.js";
 export interface EnsureVercelProjectDeps {
-    resolveProvisioning?: ResolveProvisioningDeps;
-    linkProject?: LinkProjectDeps;
-    readProjectLink: typeof readProjectLink;
-    requireAuth: typeof requireAuth;
-    runLoginFlow: typeof runLoginFlow;
+  resolveProvisioning?: ResolveProvisioningDeps;
+  linkProject?: LinkProjectDeps;
+  readProjectLink: typeof readProjectLink;
+  requireAuth: typeof requireAuth;
+  runLoginFlow: typeof runLoginFlow;
 }
 /** Ensures Vercel authentication and a project link using eve-owned prompts. */
 export declare function ensureVercelProject(input: {
-    appRoot: string;
-    prompter: Prompter;
-    signal?: AbortSignal;
-    teamSelectMessage?: (currentTeam: string) => string;
-    deps?: Partial<EnsureVercelProjectDeps>;
+  appRoot: string;
+  prompter: Prompter;
+  signal?: AbortSignal;
+  teamSelectMessage?: (currentTeam: string) => string;
+  deps?: Partial<EnsureVercelProjectDeps>;
 }): Promise<VercelProjectReference>;

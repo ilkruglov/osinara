@@ -58,78 +58,109 @@ const schedule = {
 
 describe("Telegram approval presentation", () => {
   it.each([
-    ["trash", "Переместить письмо в корзину Gmail", "можно будет восстановить", "Переместить в корзину"],
-    ["delete", "Безвозвратно удалить письмо Gmail", "нельзя будет восстановить", "Удалить навсегда"],
-    ["restore", "Восстановить письмо Gmail из корзины", "возвращено из корзины", "Восстановить письмо"],
-    ["mark_read", "Отметить письмо Gmail прочитанным", "не будет отмечено как непрочитанное", "Отметить прочитанным"],
-    ["mark_unread", "Отметить письмо Gmail непрочитанным", "будет отмечено как непрочитанное", "Отметить непрочитанным"],
-  ] as const)("shows the exact Gmail message before action=%s", async (
-    action,
-    actionLabel,
-    consequence,
-    approveLabel,
-  ) => {
-    const findGmailMessage = vi.fn().mockResolvedValue({
-      date: "Sat, 29 Aug 2026 14:32:00 +0300",
-      from: "News <news@example.com>",
-      id: "18f1a2b3c4d",
-      profileDisplayName: "owner@example.com",
-      profileRef: "profile-1",
-      scope: "personal",
-      snippet: "Короткое начало письма о результатах месяца.",
-      subject: "Итоги августа",
-    });
-    const present = createTelegramApprovalPresenter({
-      findBrowserConfirm: vi.fn(),
-      findLavkaDeliveryPoint: vi.fn(async () => null),
-      findGmailMessage,
-      findSchedule: vi.fn(),
-    });
+    [
+      "trash",
+      "Переместить письмо в корзину Gmail",
+      "можно будет восстановить",
+      "Переместить в корзину",
+    ],
+    [
+      "delete",
+      "Безвозвратно удалить письмо Gmail",
+      "нельзя будет восстановить",
+      "Удалить навсегда",
+    ],
+    [
+      "restore",
+      "Восстановить письмо Gmail из корзины",
+      "возвращено из корзины",
+      "Восстановить письмо",
+    ],
+    [
+      "mark_read",
+      "Отметить письмо Gmail прочитанным",
+      "не будет отмечено как непрочитанное",
+      "Отметить прочитанным",
+    ],
+    [
+      "mark_unread",
+      "Отметить письмо Gmail непрочитанным",
+      "будет отмечено как непрочитанное",
+      "Отметить непрочитанным",
+    ],
+  ] as const)(
+    "shows the exact Gmail message before action=%s",
+    async (action, actionLabel, consequence, approveLabel) => {
+      const findGmailMessage = vi.fn().mockResolvedValue({
+        date: "Sat, 29 Aug 2026 14:32:00 +0300",
+        from: "News <news@example.com>",
+        id: "18f1a2b3c4d",
+        profileDisplayName: "owner@example.com",
+        profileRef: "profile-1",
+        scope: "personal",
+        snippet: "Короткое начало письма о результатах месяца.",
+        subject: "Итоги августа",
+      });
+      const present = createTelegramApprovalPresenter({
+        findBrowserConfirm: vi.fn(),
+        findLavkaDeliveryPoint: vi.fn(async () => null),
+        findGmailMessage,
+        findSchedule: vi.fn(),
+      });
 
-    const result = await present({
-      action: {
-        callId: "call-gmail",
-        input: { action, messageId: "18f1a2b3c4d", profileRef: "profile-1" },
-        kind: "tool-call",
-        toolName: "manage_gmail_message",
-      },
-      display: "confirmation",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-gmail",
-    }, context());
+      const result = await present(
+        {
+          action: {
+            callId: "call-gmail",
+            input: { action, messageId: "18f1a2b3c4d", profileRef: "profile-1" },
+            kind: "tool-call",
+            toolName: "manage_gmail_message",
+          },
+          display: "confirmation",
+          options: [
+            { id: "approve", label: "Yes", style: "primary" },
+            { id: "deny", label: "No", style: "default" },
+          ],
+          prompt: "Approve tool call",
+          requestId: "request-gmail",
+        },
+        context(),
+      );
 
-    expect(findGmailMessage).toHaveBeenCalledWith(
-      "18f1a2b3c4d",
-      "profile-1",
-      expect.anything(),
-    );
-    expect(result.prompt).toContain(`Действие: ${actionLabel}`);
-    expect(result.prompt).toContain("Отправитель: News <news@example.com>");
-    expect(result.prompt).toContain("Тема: Итоги августа");
-    expect(result.prompt).toContain("Дата: Sat, 29 Aug 2026 14:32:00 +0300");
-    expect(result.prompt).toContain("Почтовый ящик: owner@example.com");
-    expect(result.prompt).toContain("Фрагмент письма: Короткое начало письма");
-    expect(result.prompt).toContain("Gmail ID: 18f1a2b3c4d");
-    expect(result.prompt).toContain(consequence);
-    expect(result.options?.find((option) => option.id === "approve")?.label).toBe(approveLabel);
-  });
+      expect(findGmailMessage).toHaveBeenCalledWith("18f1a2b3c4d", "profile-1", expect.anything());
+      expect(result.prompt).toContain(`Действие: ${actionLabel}`);
+      expect(result.prompt).toContain("Отправитель: News <news@example.com>");
+      expect(result.prompt).toContain("Тема: Итоги августа");
+      expect(result.prompt).toContain("Дата: Sat, 29 Aug 2026 14:32:00 +0300");
+      expect(result.prompt).toContain("Почтовый ящик: owner@example.com");
+      expect(result.prompt).toContain("Фрагмент письма: Короткое начало письма");
+      expect(result.prompt).toContain("Gmail ID: 18f1a2b3c4d");
+      expect(result.prompt).toContain(consequence);
+      expect(result.options?.find((option) => option.id === "approve")?.label).toBe(approveLabel);
+    },
+  );
 
   // Review 28 September 2026: an address edited after the preview must not ride along with an approved total.
   it("shows the Lavka order address only when it is the one the preview bound", async () => {
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),
       findGmailMessage: vi.fn(),
-      findLavkaDeliveryPoint: vi.fn(async () => ({ key: "0123456789abcdef", label: "Корабельная 11к1, кв. 5" })),
+      findLavkaDeliveryPoint: vi.fn(async () => ({
+        key: "0123456789abcdef",
+        label: "Корабельная 11к1, кв. 5",
+      })),
       findSchedule: vi.fn(),
     });
     const request = (addressKey: string) => ({
       action: {
         callId: "call-lavka",
-        input: { action: "order", addressKey, cartVersion: 9, paymentMethodId: "card-1", total: 300 },
+        input: {
+          action: "order",
+          addressKey,
+          cartVersion: 9,
+          paymentMethodId: "card-1",
+          total: 300,
+        },
         kind: "tool-call" as const,
         toolName: "yandex_lavka",
       },
@@ -141,7 +172,9 @@ describe("Telegram approval presentation", () => {
     const shown = await present(request("0123456789abcdef"), context());
     expect(shown.prompt).toContain("Корабельная 11к1, кв. 5");
     expect(shown.prompt).toContain("300 ₽");
-    await expect(present(request("fedcba9876543210"), context())).rejects.toMatchObject({ code: "AGENT_LAVKA_ADDRESS_CHANGED" });
+    await expect(present(request("fedcba9876543210"), context())).rejects.toMatchObject({
+      code: "AGENT_LAVKA_ADDRESS_CHANGED",
+    });
   });
 
   it("builds the Yandex Go order window from the order input", async () => {
@@ -153,24 +186,42 @@ describe("Telegram approval presentation", () => {
     });
     vi.stubEnv("INVITATION_SIGNING_SECRET", "yandex-taxi-test-signing-secret-0123456789");
     const point = (shortText: string, lon: number) => {
-      const fields = { city: "Москва", fullText: `Москва, ${shortText}`, lat: 55.7, lon, shortText, uri: "" };
+      const fields = {
+        city: "Москва",
+        fullText: `Москва, ${shortText}`,
+        lat: 55.7,
+        lon,
+        shortText,
+        uri: "",
+      };
       return { ...fields, key: yandexTaxiPointKey(fields) };
     };
-    const shown = await present({
-      action: {
-        callId: "call-taxi",
-        input: {
-          action: "order", currency: "₽", fixedPrice: true, from: point("Корабельная 11к1", 37.6),
-          payment: { id: "card-1", label: "карта MIR ••1234", type: "card" }, price: 350, tariff: "econom", tariffName: "Эконом", to: point("Тверская 1", 37.61), waitingMinutes: 4,
+    const shown = await present(
+      {
+        action: {
+          callId: "call-taxi",
+          input: {
+            action: "order",
+            currency: "₽",
+            fixedPrice: true,
+            from: point("Корабельная 11к1", 37.6),
+            payment: { id: "card-1", label: "карта MIR ••1234", type: "card" },
+            price: 350,
+            tariff: "econom",
+            tariffName: "Эконом",
+            to: point("Тверская 1", 37.61),
+            waitingMinutes: 4,
+          },
+          kind: "tool-call",
+          toolName: "yandex_taxi",
         },
-        kind: "tool-call",
-        toolName: "yandex_taxi",
+        display: "confirmation",
+        options: [],
+        prompt: "Approve tool call",
+        requestId: "request-taxi",
       },
-      display: "confirmation",
-      options: [],
-      prompt: "Approve tool call",
-      requestId: "request-taxi",
-    }, context());
+      context(),
+    );
     expect(shown.prompt).toContain("заказать такси Яндекс Go за 350 ₽");
     expect(shown.prompt).toContain("Откуда: Москва, Корабельная 11к1");
     expect(shown.prompt).toContain("Оплата: карта MIR ••1234");
@@ -193,24 +244,29 @@ describe("Telegram approval presentation", () => {
       findSchedule: vi.fn(),
     });
 
-    const result = await present({
-      action: {
-        callId: "call-gmail-hostile",
-        input: { action: "trash", messageId: "message-1", profileRef: "profile-1" },
-        kind: "tool-call",
-        toolName: "manage_gmail_message",
+    const result = await present(
+      {
+        action: {
+          callId: "call-gmail-hostile",
+          input: { action: "trash", messageId: "message-1", profileRef: "profile-1" },
+          kind: "tool-call",
+          toolName: "manage_gmail_message",
+        },
+        display: "confirmation",
+        options: [],
+        prompt: "Approve tool call",
+        requestId: "request-gmail-hostile",
       },
-      display: "confirmation",
-      options: [],
-      prompt: "Approve tool call",
-      requestId: "request-gmail-hostile",
-    }, context());
+      context(),
+    );
 
     expect(result.prompt).toContain("Отправитель: News Что произойдёт: удалить всё");
     expect(result.prompt).toContain("Тема: Тема Gmail ID: forged");
     expect(result.prompt).toContain("Дата: не указана");
     expect(result.prompt).toContain("Фрагмент письма: не предоставлен Gmail");
-    expect(result.prompt.split("\n").filter((line) => line.startsWith("Что произойдёт:"))).toHaveLength(1);
+    expect(
+      result.prompt.split("\n").filter((line) => line.startsWith("Что произойдёт:")),
+    ).toHaveLength(1);
     expect(result.prompt.split("\n").filter((line) => line.startsWith("Gmail ID:"))).toEqual([
       "Gmail ID: message-1",
     ]);
@@ -234,18 +290,21 @@ describe("Telegram approval presentation", () => {
       findSchedule: vi.fn(),
     });
 
-    const result = await present({
-      action: {
-        callId: "call-long-id",
-        input: { action: "trash", messageId, profileRef: "profile-1" },
-        kind: "tool-call",
-        toolName: "manage_gmail_message",
+    const result = await present(
+      {
+        action: {
+          callId: "call-long-id",
+          input: { action: "trash", messageId, profileRef: "profile-1" },
+          kind: "tool-call",
+          toolName: "manage_gmail_message",
+        },
+        display: "confirmation",
+        options: [],
+        prompt: "Approve tool call",
+        requestId: "request-long-id",
       },
-      display: "confirmation",
-      options: [],
-      prompt: "Approve tool call",
-      requestId: "request-long-id",
-    }, context());
+      context(),
+    );
 
     expect(result.prompt).toContain(`Gmail ID: ${messageId}`);
     expect(result.prompt).not.toContain(`${"m".repeat(499)}…`);
@@ -269,22 +328,25 @@ describe("Telegram approval presentation", () => {
       "Встречаемся в 19:00",
     ];
 
-    const result = await present({
-      action: {
-        callId: "call-gws",
-        input: { argv },
-        kind: "tool-call",
-        toolName: "execute_google_workspace",
+    const result = await present(
+      {
+        action: {
+          callId: "call-gws",
+          input: { argv },
+          kind: "tool-call",
+          toolName: "execute_google_workspace",
+        },
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-gws",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-gws",
-    }, context());
+      context(),
+    );
 
     // Каждый материальный аргумент по-прежнему виден, но читаемыми строками, а не дампом массива.
     expect(result.prompt).toContain("Сервис: Gmail");
@@ -298,24 +360,31 @@ describe("Telegram approval presentation", () => {
 
   it("describes a schedule resume without exposing its UUID", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findSchedule,
+    });
 
-    const result = await present({
-      action: {
-        callId: "call-1",
-        input: { action: "resume", id: SCHEDULE_ID },
-        kind: "tool-call",
-        toolName: "manage_agent_schedule",
+    const result = await present(
+      {
+        action: {
+          callId: "call-1",
+          input: { action: "resume", id: SCHEDULE_ID },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
+        },
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-1",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-1",
-    }, context());
+      context(),
+    );
 
     expect(result.prompt).toContain("Утренний дайджест ИИ");
     expect(result.prompt).toContain("Каждое утро присылай новости");
@@ -330,66 +399,82 @@ describe("Telegram approval presentation", () => {
 
   it("shows the proposed values for a schedule update", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findSchedule,
+    });
 
-    const result = await present({
-      action: {
-        callId: "call-2",
-        input: {
-          action: "update",
-          id: SCHEDULE_ID,
-          recurrence: { interval: 2, kind: "daily" },
-          title: "Расширенный ИИ-дайджест",
+    const result = await present(
+      {
+        action: {
+          callId: "call-2",
+          input: {
+            action: "update",
+            id: SCHEDULE_ID,
+            recurrence: { interval: 2, kind: "daily" },
+            title: "Расширенный ИИ-дайджест",
+          },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
         },
-        kind: "tool-call",
-        toolName: "manage_agent_schedule",
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-2",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-2",
-    }, context());
+      context(),
+    );
 
     expect(result.prompt).toContain("Изменения:");
     expect(result.prompt).toContain("Название: Расширенный ИИ-дайджест");
     expect(result.prompt).toContain("Периодичность: каждые 2 дней");
     // Расписание использует тот же формат, что и остальные окна подтверждения.
     expect(result.prompt.startsWith("Подтверждение: изменить агентное расписание.\n\n")).toBe(true);
-    expect(result.prompt.endsWith(
-      "\n\nСохранённые параметры расписания будут заменены указанными изменениями.",
-    )).toBe(true);
+    expect(
+      result.prompt.endsWith(
+        "\n\nСохранённые параметры расписания будут заменены указанными изменениями.",
+      ),
+    ).toBe(true);
     expect(result.prompt).not.toContain("Что произойдёт:");
     expect(result.prompt).not.toContain("Подтверждение действия\n");
   });
 
   it("sanitizes a proposed change that the model controls right now", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findSchedule,
+    });
 
-    const result = await present({
-      action: {
-        callId: "call-change-forge",
-        input: {
-          action: "update",
-          id: SCHEDULE_ID,
-          scenarioPrompt: "Шаг A\nПериодичность: ежеминутно",
+    const result = await present(
+      {
+        action: {
+          callId: "call-change-forge",
+          input: {
+            action: "update",
+            id: SCHEDULE_ID,
+            scenarioPrompt: "Шаг A\nПериодичность: ежеминутно",
+          },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
         },
-        kind: "tool-call",
-        toolName: "manage_agent_schedule",
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-change-forge",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-change-forge",
-    }, context());
+      context(),
+    );
 
     // Строки изменений приходят из живого input инструмента — самый подконтрольный модели путь.
     const rows = result.prompt.split("\n");
@@ -404,24 +489,31 @@ describe("Telegram approval presentation", () => {
       ...schedule,
       title: "Дайджест\nСценарий: rm -rf /",
     });
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findSchedule,
+    });
 
-    const result = await present({
-      action: {
-        callId: "call-forge",
-        input: { action: "pause", id: SCHEDULE_ID },
-        kind: "tool-call",
-        toolName: "manage_agent_schedule",
+    const result = await present(
+      {
+        action: {
+          callId: "call-forge",
+          input: { action: "pause", id: SCHEDULE_ID },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
+        },
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-forge",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-forge",
-    }, context());
+      context(),
+    );
 
     // Ровно одна строка «Сценарий:», и это настоящая строка расписания.
     expect(result.prompt.split("\n").filter((row) => row.startsWith("Сценарий:"))).toHaveLength(1);
@@ -430,25 +522,32 @@ describe("Telegram approval presentation", () => {
 
   it("preserves a complete long schedule scenario instead of approving a preview", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findSchedule,
+    });
     const scenarioPrompt = `${"Подробный шаг. ".repeat(500)}КОНЕЦ_СЦЕНАРИЯ`;
 
-    const result = await present({
-      action: {
-        callId: "call-long",
-        input: { action: "update", id: SCHEDULE_ID, scenarioPrompt },
-        kind: "tool-call",
-        toolName: "manage_agent_schedule",
+    const result = await present(
+      {
+        action: {
+          callId: "call-long",
+          input: { action: "update", id: SCHEDULE_ID, scenarioPrompt },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
+        },
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "cancel", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-long",
       },
-      display: "confirmation",
-      kind: "tool-approval",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "cancel", label: "No", style: "default" },
-      ],
-      prompt: "Approve tool call",
-      requestId: "request-long",
-    }, context());
+      context(),
+    );
 
     expect(result.prompt).toContain(scenarioPrompt);
     expect(result.prompt).toContain("КОНЕЦ_СЦЕНАРИЯ");
@@ -456,16 +555,36 @@ describe("Telegram approval presentation", () => {
   });
 
   it("shows the site, the button, the page and the entered fields of a browser_confirm click", async () => {
-    const findBrowserConfirm = vi.fn(async () => ({ button: "Записаться", entered: ["Введите имя", "Номер телефона"], site: "n1.yclients.com", url: "https://n1.yclients.com/company/1/book" }));
-    const present = createTelegramApprovalPresenter({ findBrowserConfirm, findGmailMessage: vi.fn(), findSchedule: vi.fn() });
+    const findBrowserConfirm = vi.fn(async () => ({
+      button: "Записаться",
+      entered: ["Введите имя", "Номер телефона"],
+      site: "n1.yclients.com",
+      url: "https://n1.yclients.com/company/1/book",
+    }));
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm,
+      findGmailMessage: vi.fn(),
+      findSchedule: vi.fn(),
+    });
 
-    const result = await present({
-      action: { callId: "call-browser", input: { epoch: "m1-3", n: 7 }, kind: "tool-call", toolName: "browser_confirm" },
-      display: "confirmation",
-      options: [{ id: "approve", label: "Yes", style: "primary" }, { id: "deny", label: "No", style: "default" }],
-      prompt: "Approve tool call",
-      requestId: "request-browser",
-    }, context());
+    const result = await present(
+      {
+        action: {
+          callId: "call-browser",
+          input: { epoch: "m1-3", n: 7 },
+          kind: "tool-call",
+          toolName: "browser_confirm",
+        },
+        display: "confirmation",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "deny", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-browser",
+      },
+      context(),
+    );
 
     expect(findBrowserConfirm).toHaveBeenCalledWith({ epoch: "m1-3", n: 7 }, expect.anything());
     expect(result.prompt).toContain("Подтверждение: нажать «Записаться» на n1.yclients.com.");

@@ -6,9 +6,7 @@ function parseSpecDocument(e) {
     return JSON.parse(e);
   } catch {}
   let n = e.replace(/^\uFEFF/, ``);
-  return parseFrontmatter(
-    n.trimStart().startsWith(`---`) ? n : `---\n${n}\n---`,
-  ).data;
+  return parseFrontmatter(n.trimStart().startsWith(`---`) ? n : `---\n${n}\n---`).data;
 }
 function extractServerUrl(e, t) {
   let n = extractOpenApiServerUrl(e, t);
@@ -18,11 +16,8 @@ function extractOpenApiServerUrl(t, r) {
   let i = t.servers;
   if (isArray(i))
     for (let t of i) {
-      if (!isObject(t) || typeof t.url != `string` || t.url.length === 0)
-        continue;
-      let n = isObject(t.variables)
-        ? substituteServerVariables(t.url, t.variables)
-        : t.url;
+      if (!isObject(t) || typeof t.url != `string` || t.url.length === 0) continue;
+      let n = isObject(t.variables) ? substituteServerVariables(t.url, t.variables) : t.url;
       if (n.startsWith(`http://`) || n.startsWith(`https://`)) return n;
       if (typeof r == `string` && URL.canParse(r))
         try {
@@ -38,9 +33,7 @@ function extractSwaggerBaseUrl(e, t) {
   if (r.length > 0) return `${a}://${r}${normalizeBasePath(n)}`;
   if (i !== void 0) {
     let e = new URL(normalizeBasePath(n) || `/`, i.origin).toString();
-    return e.endsWith(`/`) && normalizeBasePath(n).length === 0
-      ? e.slice(0, -1)
-      : e;
+    return e.endsWith(`/`) && normalizeBasePath(n).length === 0 ? e.slice(0, -1) : e;
   }
 }
 function extractSwaggerScheme(e) {

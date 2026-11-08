@@ -12,9 +12,8 @@ import { conversationRepository } from "./conversation-repository.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("conversationRepository", () => {
   beforeEach(async () => {
@@ -109,10 +108,9 @@ describeWithDatabase("conversationRepository", () => {
     const stored = await database().query<{
       actor_id: string;
       sender_display_name: string;
-    }>(
-      "SELECT actor_id, sender_display_name FROM telegram_group_messages WHERE id = $1",
-      [result.entryId],
-    );
+    }>("SELECT actor_id, sender_display_name FROM telegram_group_messages WHERE id = $1", [
+      result.entryId,
+    ]);
 
     expect(stored.rows[0]).toEqual({
       actor_id: "agent:osinara",
@@ -132,7 +130,9 @@ describeWithDatabase("conversationRepository.findParticipantByHandle", () => {
   afterAll(closeDatabase);
 
   it("resolves a handle inside the conversation only, refuses namesakes and treats LIKE characters as text", async () => {
-    const family = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ('Handles') RETURNING id");
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Handles') RETURNING id",
+    );
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
        VALUES ($1, '-100601', 'Группа', 'external', 'addressed_only') RETURNING id`,
@@ -150,15 +150,36 @@ describeWithDatabase("conversationRepository.findParticipantByHandle", () => {
       [group.rows[0]!.id],
     );
     const conversation = await conversationRepository.getByGroupId(group.rows[0]!.id);
-    await conversationRepository.syncTimelineParticipants(conversation.id, entries.rows.map((row) => row.id));
+    await conversationRepository.syncTimelineParticipants(
+      conversation.id,
+      entries.rows.map((row) => row.id),
+    );
 
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "Илья" })).resolves.toBeNull();
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { username: "@Ilya_D" })).resolves.toMatchObject({ telegramUserId: "601" });
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "602" })).resolves.toMatchObject({ usernameSnapshot: "ilya_k" });
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "999" })).resolves.toBeNull();
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "vad" })).resolves.toMatchObject({ telegramUserId: "603" });
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "Vadim 100%" })).resolves.toMatchObject({ telegramUserId: "603" });
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "%" })).resolves.toBeNull();
-    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "_" })).resolves.toBeNull();
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { displayName: "Илья" }),
+    ).resolves.toBeNull();
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { username: "@Ilya_D" }),
+    ).resolves.toMatchObject({ telegramUserId: "601" });
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "602" }),
+    ).resolves.toMatchObject({ usernameSnapshot: "ilya_k" });
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "999" }),
+    ).resolves.toBeNull();
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { displayName: "vad" }),
+    ).resolves.toMatchObject({ telegramUserId: "603" });
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, {
+        displayName: "Vadim 100%",
+      }),
+    ).resolves.toMatchObject({ telegramUserId: "603" });
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { displayName: "%" }),
+    ).resolves.toBeNull();
+    await expect(
+      conversationRepository.findParticipantByHandle(conversation.id, { displayName: "_" }),
+    ).resolves.toBeNull();
   });
 });

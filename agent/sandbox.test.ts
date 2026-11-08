@@ -31,12 +31,16 @@ describe("agent sandbox", () => {
     const removePath = vi.fn().mockResolvedValue(undefined);
     const use = vi.fn().mockResolvedValue({ removePath });
     requireWorkspaceAuthorization.mockReturnValue({});
-    mounts.mockResolvedValue([{
-      mountPoint: "personal",
-      workspaceId: "00000000-0000-4000-8000-000000000071",
-    }]);
+    mounts.mockResolvedValue([
+      {
+        mountPoint: "personal",
+        workspaceId: "00000000-0000-4000-8000-000000000071",
+      },
+    ]);
     if (!sandbox.onSession) {
-      throw new Error("AGENT_TEST_SANDBOX_SESSION_HOOK_MISSING: Sandbox onSession hook is required");
+      throw new Error(
+        "AGENT_TEST_SANDBOX_SESSION_HOOK_MISSING: Sandbox onSession hook is required",
+      );
     }
 
     await sandbox.onSession({
@@ -64,7 +68,9 @@ describe("agent sandbox", () => {
   it("disables workspace access for background memory review sessions", async () => {
     const use = vi.fn().mockResolvedValue(undefined);
     if (!sandbox.onSession) {
-      throw new Error("AGENT_TEST_SANDBOX_SESSION_HOOK_MISSING: Sandbox onSession hook is required");
+      throw new Error(
+        "AGENT_TEST_SANDBOX_SESSION_HOOK_MISSING: Sandbox onSession hook is required",
+      );
     }
 
     await sandbox.onSession({

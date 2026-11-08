@@ -18,10 +18,9 @@ function toDiagnosticMetadataValue(e) {
     let n = JSON.stringify(e, function (e, n) {
       if (typeof n == `bigint`) return `${String(n)}n`;
       if (typeof n == `function` || typeof n == `symbol`) return String(n);
-      if (n instanceof Error)
-        return { name: n.name, message: n.message, stack: n.stack };
+      if (n instanceof Error) return { name: n.name, message: n.message, stack: n.stack };
       if (typeof n == `object` && n) {
-        for (; t.length > 0 && t.at(-1) !== this; ) t.pop();
+        for (; t.length > 0 && t.at(-1) !== this;) t.pop();
         if (t.includes(n)) return `[Circular]`;
         t.push(n);
       }

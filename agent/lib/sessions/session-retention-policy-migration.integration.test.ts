@@ -19,7 +19,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 // Migration tests destroy an isolated schema and must never run against a production database.
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -120,47 +122,60 @@ describeWithDatabase("073 terminal Eve stream retention", () => {
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));
 
-      await expect(client.query(
-        `SELECT conversation_key, retention_hold,
+      await expect(
+        client.query(
+          `SELECT conversation_key, retention_hold,
                 extract(epoch FROM (delete_after - retired_at))::integer AS retention_seconds
            FROM conversation_sessions WHERE id = ANY($1::uuid[]) ORDER BY conversation_key`,
-        [sessions.rows.map((row) => row.id)],
-      )).resolves.toMatchObject({ rows: [
-        { conversation_key: "active-canonical", retention_hold: false, retention_seconds: null },
-        { conversation_key: "active-task", retention_hold: false, retention_seconds: null },
-        { conversation_key: "retired-completed", retention_hold: false, retention_seconds: 86_400 },
-        { conversation_key: "retired-held", retention_hold: true, retention_seconds: 86_400 },
-      ] });
+          [sessions.rows.map((row) => row.id)],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          { conversation_key: "active-canonical", retention_hold: false, retention_seconds: null },
+          { conversation_key: "active-task", retention_hold: false, retention_seconds: null },
+          {
+            conversation_key: "retired-completed",
+            retention_hold: false,
+            retention_seconds: 86_400,
+          },
+          { conversation_key: "retired-held", retention_hold: true, retention_seconds: 86_400 },
+        ],
+      });
 
       // The rewritten trust-zone trigger must use the same policy for future retirements.
       await client.query("DELETE FROM telegram_groups WHERE id = $1", [group.rows[0]!.id]);
-      await expect(client.query(
-        `SELECT conversation_key, group_timeline_cursor, telegram_forum_topic_id,
+      await expect(
+        client.query(
+          `SELECT conversation_key, group_timeline_cursor, telegram_forum_topic_id,
                 task_state::text,
                 extract(epoch FROM (delete_after - retired_at))::integer AS retention_seconds
            FROM conversation_sessions
           WHERE conversation_key IN ('active-canonical', 'active-task')
           ORDER BY conversation_key`,
-      )).resolves.toMatchObject({ rows: [
-        {
-          conversation_key: "active-canonical",
-          group_timeline_cursor: null,
-          retention_seconds: 86_400,
-          task_state: null,
-          telegram_forum_topic_id: null,
-        },
-        {
-          conversation_key: "active-task",
-          group_timeline_cursor: null,
-          retention_seconds: 86_400,
-          task_state: "failed",
-          telegram_forum_topic_id: null,
-        },
-      ] });
-      await expect(client.query(
-        "SELECT 1 FROM conversation_session_routes WHERE session_id = $1",
-        [activeTask.id],
-      )).resolves.toMatchObject({ rowCount: 0 });
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            conversation_key: "active-canonical",
+            group_timeline_cursor: null,
+            retention_seconds: 86_400,
+            task_state: null,
+            telegram_forum_topic_id: null,
+          },
+          {
+            conversation_key: "active-task",
+            group_timeline_cursor: null,
+            retention_seconds: 86_400,
+            task_state: "failed",
+            telegram_forum_topic_id: null,
+          },
+        ],
+      });
+      await expect(
+        client.query("SELECT 1 FROM conversation_session_routes WHERE session_id = $1", [
+          activeTask.id,
+        ]),
+      ).resolves.toMatchObject({ rowCount: 0 });
     } finally {
       await client.query("SET search_path TO public");
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);

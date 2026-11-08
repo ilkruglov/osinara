@@ -37,9 +37,7 @@ describe("handleTelegramEnrollmentBoundary", () => {
       telegramUserId: "telegram-101",
       username: "anna",
     });
-    expect(sendMessage).toHaveBeenCalledWith(
-      "Владелец создан. Семейный агент готов к настройке.",
-    );
+    expect(sendMessage).toHaveBeenCalledWith("Владелец создан. Семейный агент готов к настройке.");
   });
 
   it("does not spend bootstrap attempts on ordinary private text", async () => {

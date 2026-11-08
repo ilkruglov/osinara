@@ -46,10 +46,7 @@ async function compileAgentConfig(e, t, n = {}) {
   o.description !== void 0 && (u.description = o.description);
   let d;
   if (s !== void 0) {
-    if (r === void 0)
-      throw Error(
-        `Expected dynamic model definitions to be authored in agent.ts.`,
-      );
+    if (r === void 0) throw Error(`Expected dynamic model definitions to be authored in agent.ts.`);
     d = {
       eventNames: Object.keys(s.events),
       exportName: r.exportName,
@@ -64,12 +61,9 @@ async function compileAgentConfig(e, t, n = {}) {
     o.build !== void 0 &&
       (u.build = {
         externalDependencies:
-          o.build.externalDependencies === void 0
-            ? void 0
-            : [...o.build.externalDependencies],
+          o.build.externalDependencies === void 0 ? void 0 : [...o.build.externalDependencies],
       }),
-    o.outputSchema !== void 0 &&
-      (u.outputSchema = serializeOutputSchema(o.outputSchema)),
+    o.outputSchema !== void 0 && (u.outputSchema = serializeOutputSchema(o.outputSchema)),
     o.reasoning !== void 0 && (u.reasoning = o.reasoning),
     o.limits !== void 0 &&
       (u.limits = {
@@ -100,9 +94,7 @@ async function compileAgentConfig(e, t, n = {}) {
   )
     return { ...u, dynamicModel: d };
   if (c === void 0)
-    throw Error(
-      `Expected a static agent model to compile to a concrete model reference.`,
-    );
+    throw Error(`Expected a static agent model to compile to a concrete model reference.`);
   return { ...u, model: c };
 }
 function normalizeExperimentalDefinition(e) {
@@ -130,9 +122,7 @@ async function normalizeAuthoredModelReference(e) {
     );
   let t = e.source;
   if (t === void 0)
-    throw Error(
-      `Expected ${e.purpose} to provide a valid AI SDK language model reference.`,
-    );
+    throw Error(`Expected ${e.purpose} to provide a valid AI SDK language model reference.`);
   let n = e.value,
     r = n.specificationVersion;
   if (
@@ -157,8 +147,7 @@ async function normalizeAuthoredModelReference(e) {
     routing: classifyModelRouting(n, e.providerOptions),
   };
   if (e.contextWindowTokens === void 0) {
-    if (isChatGptModelRouting(i.routing))
-      return { ...i, contextWindowTokens: 2e5 };
+    if (isChatGptModelRouting(i.routing)) return { ...i, contextWindowTokens: 2e5 };
     try {
       let t = await e.modelCatalog.getByProviderModelId(n.provider, n.modelId);
       if (t)
@@ -186,8 +175,7 @@ function isPathInsideOrEqual(t, r) {
   return i === `` || (!i.startsWith(`..`) && !isAbsolute(i));
 }
 async function withCompiledRuntimeModelLimits(e, t) {
-  if (t.contextWindowTokens !== void 0)
-    return { ...e, contextWindowTokens: t.contextWindowTokens };
+  if (t.contextWindowTokens !== void 0) return { ...e, contextWindowTokens: t.contextWindowTokens };
   let n;
   try {
     n = await t.modelCatalog.getModelLimits(e.id);

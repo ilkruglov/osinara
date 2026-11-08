@@ -20,9 +20,11 @@ import { googleIntegrationRepository } from "../google-workspace/google-integrat
 import { startGoogleWorkspaceAuthorization } from "../google-workspace/google-oauth-service.js";
 import { googleWorkspaceProfileStore } from "../google-workspace/google-workspace-profile-store.js";
 
-const connectionSchema = z.object({
-  action: z.enum(["connect", "disconnect", "status"]),
-}).strict();
+const connectionSchema = z
+  .object({
+    action: z.enum(["connect", "disconnect", "status"]),
+  })
+  .strict();
 
 interface GoogleWorkspaceConnectionStatusAccount {
   displayName: string;
@@ -143,7 +145,7 @@ export function createGoogleWorkspaceConnectionManager(
 
     // Repository-level transaction locking deduplicates pending states without nested DB locks.
     return {
-      ...await dependencies.startAuthorization(auth),
+      ...(await dependencies.startAuthorization(auth)),
       ready: false,
     };
   };
@@ -163,7 +165,7 @@ export default defineTool({
   approval: ({ toolInput }) =>
     toolInput?.action === "disconnect" ? "user-approval" : "not-applicable",
   description:
-    "Управлять OAuth-профилем Google Workspace текущей personal/family области. Используй {\"action\":\"status\"} для connected/ready/missingScopes, {\"action\":\"connect\"} для защищённой OAuth-ссылки и {\"action\":\"disconnect\"} только по явной просьбе с Eve HITL. connect не означает ready до завершения OAuth. Команды Google выполняются только через execute_google_workspace; COMMAND_FORBIDDEN не означает read-only OAuth.",
+    'Управлять OAuth-профилем Google Workspace текущей personal/family области. Используй {"action":"status"} для connected/ready/missingScopes, {"action":"connect"} для защищённой OAuth-ссылки и {"action":"disconnect"} только по явной просьбе с Eve HITL. connect не означает ready до завершения OAuth. Команды Google выполняются только через execute_google_workspace; COMMAND_FORBIDDEN не означает read-only OAuth.',
   inputSchema: connectionSchema,
   async execute(input, ctx) {
     const auth = await resolveGoogleWorkspaceAuthorization(ctx);

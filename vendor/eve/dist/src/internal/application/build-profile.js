@@ -27,14 +27,10 @@ var ApplicationBuildProfiler = class {
   #n;
   #r = !1;
   constructor(e = {}) {
-    ((this.#e = e.now ?? performance.now.bind(performance)),
-      (this.#n = this.#e()));
+    ((this.#e = e.now ?? performance.now.bind(performance)), (this.#n = this.#e()));
   }
   async measure(e, t) {
-    if (this.#r)
-      throw Error(
-        `Cannot record a phase after the build profile has finished.`,
-      );
+    if (this.#r) throw Error(`Cannot record a phase after the build profile has finished.`);
     let n = this.#e();
     try {
       return await t();

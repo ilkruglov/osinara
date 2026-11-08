@@ -57,9 +57,7 @@ async function resolveWebSearchProviderTool(e) {
       return attachWebSearchOutputSchema(t.tools.webSearch({}), e);
     }
     case `anthropic`: {
-      let { anthropic: t } = await import(
-        `#compiled/@ai-sdk/anthropic/index.js`
-      );
+      let { anthropic: t } = await import(`#compiled/@ai-sdk/anthropic/index.js`);
       return attachWebSearchOutputSchema(t.tools.webSearch_20250305(), e);
     }
     case `google`: {

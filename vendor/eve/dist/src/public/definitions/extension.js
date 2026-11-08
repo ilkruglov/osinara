@@ -20,9 +20,7 @@ function validateConfig(e, t) {
   if (n.issues !== void 0) {
     let e = n.issues
       .map((e) => {
-        let t = e.path
-          ?.map((e) => String(typeof e == `object` ? e.key : e))
-          .join(`.`);
+        let t = e.path?.map((e) => String(typeof e == `object` ? e.key : e)).join(`.`);
         return t !== void 0 && t.length > 0 ? `${t}: ${e.message}` : e.message;
       })
       .join(`; `);
@@ -45,10 +43,7 @@ function defineExtension(t, n) {
     Object.defineProperty(handle, "config", {
       enumerable: !0,
       get() {
-        return (
-          (i === void 0 ? void 0 : configRegistry().get(i)) ??
-          validateConfig(r, {})
-        );
+        return (i === void 0 ? void 0 : configRegistry().get(i)) ?? validateConfig(r, {});
       },
     }),
     handle

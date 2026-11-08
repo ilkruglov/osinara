@@ -1,9 +1,5 @@
 import { visibleLine } from "./line-editor.js";
-import {
-  clipVisible,
-  renderInputWithBlockCursor,
-  wrapVisibleLine,
-} from "#cli/ui/terminal-text.js";
+import { clipVisible, renderInputWithBlockCursor, wrapVisibleLine } from "#cli/ui/terminal-text.js";
 function selectedRow(e, t) {
   let n = t.colors;
   return `${n.inverse(n.blue(` ${t.glyph.selectedPointer} ${e} `))} ${n.dim(`↵`)}`;
@@ -13,11 +9,9 @@ function renderQuestionPanel(e, n, i) {
     o = n.glyph,
     s = [a.dim(o.hrule.repeat(Math.max(1, i)))];
   for (let t of e.prompt.split(/\r?\n/u))
-    for (let e of wrapVisibleLine(t, Math.max(8, i - 2)))
-      s.push(`  ${a.bold(e)}`);
+    for (let e of wrapVisibleLine(t, Math.max(8, i - 2))) s.push(`  ${a.bold(e)}`);
   s.push(``);
-  for (let [t, r] of e.options.entries())
-    s.push(...optionRows(r.label, r.description, t, e, n));
+  for (let [t, r] of e.options.entries()) s.push(...optionRows(r.label, r.description, t, e, n));
   if (e.allowFreeform) {
     let t = e.options.length,
       r = e.cursor === t;
@@ -25,19 +19,12 @@ function renderQuestionPanel(e, n, i) {
       (r || e.editor.text.length > 0) &&
         s.push(`        ${a.dim(o.elbow)} ${freeformEditorBody(e, r, n, i)}`));
   }
-  return (
-    s.push(``, `  ${a.dim(`Esc to dismiss`)}`),
-    s.map((e) => clipVisible(e, i))
-  );
+  return (s.push(``, `  ${a.dim(`Esc to dismiss`)}`), s.map((e) => clipVisible(e, i)));
 }
 function optionRows(e, t, n, r, i) {
   let a = i.colors,
     o = `${n + 1}. ${e}`,
-    s = [
-      r.cursor === n
-        ? `  ${selectedRow(o, i)}`
-        : `     ${a.dim(`${n + 1}.`)} ${e}`,
-    ];
+    s = [r.cursor === n ? `  ${selectedRow(o, i)}` : `     ${a.dim(`${n + 1}.`)} ${e}`];
   return (t !== void 0 && t.length > 0 && s.push(`        ${a.dim(t)}`), s);
 }
 function freeformEditorBody(t, r, i, a) {

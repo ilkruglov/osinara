@@ -24,13 +24,11 @@ describe("createGoogleWorkspaceCommandRunner", () => {
     const dependencyRun = vi.fn();
     const run = createGoogleWorkspaceCommandRunner({ run: dependencyRun });
 
-    await expect(run(
-      ["calendar", "events", "list"],
-      "read",
-      auth,
-      "",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toMatchObject({
+    await expect(
+      run(["calendar", "events", "list"], "read", auth, "", {
+        abortSignal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_GOOGLE_WORKSPACE_ACCESS_TOKEN_INVALID",
         sideEffectStatus: "not_started",
@@ -44,13 +42,15 @@ describe("createGoogleWorkspaceCommandRunner", () => {
       run: vi.fn().mockRejectedValue(new Error("socket closed")),
     });
 
-    await expect(run(
-      ["gmail", "users", "messages", "trash", "--params", "{}"],
-      "mutation",
-      auth,
-      "access-token",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toMatchObject({
+    await expect(
+      run(
+        ["gmail", "users", "messages", "trash", "--params", "{}"],
+        "mutation",
+        auth,
+        "access-token",
+        { abortSignal: new AbortController().signal },
+      ),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_AMBIGUOUS",
         retryable: false,
@@ -64,13 +64,11 @@ describe("createGoogleWorkspaceCommandRunner", () => {
       run: vi.fn().mockRejectedValue(new Error("socket closed")),
     });
 
-    await expect(run(
-      ["gmail", "users", "messages", "list", "--params", "{}"],
-      "read",
-      auth,
-      "access-token",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toMatchObject({
+    await expect(
+      run(["gmail", "users", "messages", "list", "--params", "{}"], "read", auth, "access-token", {
+        abortSignal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_FAILED",
         retryable: true,
@@ -89,52 +87,61 @@ describe("createGoogleWorkspaceCommandRunner", () => {
       }),
     });
 
-    await expect(run(
-      ["gmail", "users", "messages", "trash", "--params", "{}"],
-      "mutation",
-      auth,
-      "access-token",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toMatchObject({
+    await expect(
+      run(
+        ["gmail", "users", "messages", "trash", "--params", "{}"],
+        "mutation",
+        auth,
+        "access-token",
+        { abortSignal: new AbortController().signal },
+      ),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_GOOGLE_WORKSPACE_COMMAND_FAILED",
         retryable: false,
         sideEffectStatus: "unknown",
       },
     });
-    await expect(run(
-      ["gmail", "users", "messages", "trash", "--params", "{}"],
-      "mutation",
-      auth,
-      "access-token",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toThrow(/Missing required field message\.id/u);
+    await expect(
+      run(
+        ["gmail", "users", "messages", "trash", "--params", "{}"],
+        "mutation",
+        auth,
+        "access-token",
+        { abortSignal: new AbortController().signal },
+      ),
+    ).rejects.toThrow(/Missing required field message\.id/u);
   });
 
   it.each([
     ["read", "not_started"],
     ["mutation", "unknown"],
-  ] as const)("marks cancelled %s execution without permitting a retry", async (kind, sideEffectStatus) => {
-    const controller = new AbortController();
-    controller.abort();
-    const run = createGoogleWorkspaceCommandRunner({
-      run: vi.fn().mockRejectedValue(new Error("request aborted")),
-    });
+  ] as const)(
+    "marks cancelled %s execution without permitting a retry",
+    async (kind, sideEffectStatus) => {
+      const controller = new AbortController();
+      controller.abort();
+      const run = createGoogleWorkspaceCommandRunner({
+        run: vi.fn().mockRejectedValue(new Error("request aborted")),
+      });
 
-    await expect(run(
-      ["calendar", "events", kind === "read" ? "list" : "insert"],
-      kind,
-      auth,
-      "access-token",
-      { abortSignal: controller.signal },
-    )).rejects.toMatchObject({
-      contract: {
-        code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_CANCELLED",
-        retryable: false,
-        sideEffectStatus,
-      },
-    });
-  });
+      await expect(
+        run(
+          ["calendar", "events", kind === "read" ? "list" : "insert"],
+          kind,
+          auth,
+          "access-token",
+          { abortSignal: controller.signal },
+        ),
+      ).rejects.toMatchObject({
+        contract: {
+          code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_CANCELLED",
+          retryable: false,
+          sideEffectStatus,
+        },
+      });
+    },
+  );
 
   it.each([
     ["read", true, "not_started"],
@@ -149,13 +156,11 @@ describe("createGoogleWorkspaceCommandRunner", () => {
       }),
     });
 
-    await expect(run(
-      ["calendar", "events", kind === "read" ? "list" : "insert"],
-      kind,
-      auth,
-      "access-token",
-      { abortSignal: new AbortController().signal },
-    )).rejects.toMatchObject({
+    await expect(
+      run(["calendar", "events", kind === "read" ? "list" : "insert"], kind, auth, "access-token", {
+        abortSignal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_TIMEOUT",
         retryable,
@@ -183,21 +188,17 @@ describe("createGoogleWorkspaceCommandRunner", () => {
       }),
     });
 
-    await expect(successful(
-      ["calendar", "events", "list"],
-      "read",
-      auth,
-      secret,
-      { abortSignal: new AbortController().signal },
-    )).resolves.toMatchObject({
+    await expect(
+      successful(["calendar", "events", "list"], "read", auth, secret, {
+        abortSignal: new AbortController().signal,
+      }),
+    ).resolves.toMatchObject({
       stderr: expect.not.stringContaining(secret),
     });
-    await expect(failed(
-      ["calendar", "events", "list"],
-      "read",
-      auth,
-      secret,
-      { abortSignal: new AbortController().signal },
-    )).rejects.not.toThrow(/production-access-token|client-secret|user:password/u);
+    await expect(
+      failed(["calendar", "events", "list"], "read", auth, secret, {
+        abortSignal: new AbortController().signal,
+      }),
+    ).rejects.not.toThrow(/production-access-token|client-secret|user:password/u);
   });
 });

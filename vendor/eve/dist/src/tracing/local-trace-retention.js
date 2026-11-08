@@ -13,11 +13,7 @@ function resolveLocalTraceRetentionSettings(e = process.env) {
   return {
     enabled: !isDisabled(e.EVE_TRACES),
     maxAgeMs: readBound(e, `EVE_TRACES_MAX_AGE_MS`, LOCAL_TRACE_MAX_AGE_MS),
-    maxTotalBytes: readBound(
-      e,
-      `EVE_TRACES_MAX_TOTAL_BYTES`,
-      LOCAL_TRACE_MAX_TOTAL_BYTES,
-    ),
+    maxTotalBytes: readBound(e, `EVE_TRACES_MAX_TOTAL_BYTES`, LOCAL_TRACE_MAX_TOTAL_BYTES),
     retainCount: readBound(e, `EVE_TRACES_RETAIN_COUNT`, 20),
   };
 }
@@ -37,9 +33,7 @@ async function pruneLocalTraceStore(e) {
   for (let a of s.toReversed()) {
     let o = n - a.modifiedAtMs,
       s =
-        e.activeTraceIds.has(a.traceId) ||
-        c.has(a) ||
-        o <= LOCAL_TRACE_QUIESCENCE_MS
+        e.activeTraceIds.has(a.traceId) || c.has(a) || o <= LOCAL_TRACE_QUIESCENCE_MS
           ? void 0
           : r !== !1 && o > r
             ? `maxAgeMs`
@@ -75,16 +69,14 @@ function requestLocalTraceStorePrune(e) {
 }
 function startPruning() {
   pruneRequest.running = (async () => {
-    for (; pruneRequest.requested; )
-      ((pruneRequest.requested = !1),
-        report(await pruneLocalTraceStore(pruneRequest.input)));
+    for (; pruneRequest.requested;)
+      ((pruneRequest.requested = !1), report(await pruneLocalTraceStore(pruneRequest.input)));
   })()
     .catch((e) => {
       log.warn(`local trace retention failed`, { error: formatError(e) });
     })
     .finally(() => {
-      ((pruneRequest.running = void 0),
-        pruneRequest.requested && startPruning());
+      ((pruneRequest.running = void 0), pruneRequest.requested && startPruning());
     });
 }
 function report(e) {
@@ -160,12 +152,7 @@ async function readDirectoryEntries(t) {
   try {
     return await readdir(t, { withFileTypes: !0 });
   } catch (e) {
-    if (
-      e instanceof Error &&
-      `code` in e &&
-      (e.code === `ENOENT` || e.code === `ENOTDIR`)
-    )
-      return;
+    if (e instanceof Error && `code` in e && (e.code === `ENOENT` || e.code === `ENOTDIR`)) return;
     throw e;
   }
 }
@@ -195,8 +182,4 @@ function clampBound(e) {
 function clampCount(e) {
   return e !== !1 && Math.max(0, Math.trunc(e));
 }
-export {
-  pruneLocalTraceStore,
-  requestLocalTraceStorePrune,
-  resolveLocalTraceRetentionSettings,
-};
+export { pruneLocalTraceStore, requestLocalTraceStorePrune, resolveLocalTraceRetentionSettings };

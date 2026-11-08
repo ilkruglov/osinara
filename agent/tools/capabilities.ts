@@ -37,11 +37,12 @@ import { whisperToolSurface } from "../lib/whisper/whisper-tool-surface.js";
 
 export default defineDynamic({
   events: {
-    "step.started": (_event, ctx) => timed("tools_surface", async () => {
-      // A whisper keeps only the reading tools of its group: nothing it does may show in the chat.
-      const surface = await resolveSurface(ctx);
-      return isTelegramWhisperSession(ctx.session.auth) ? whisperToolSurface(surface) : surface;
-    }),
+    "step.started": (_event, ctx) =>
+      timed("tools_surface", async () => {
+        // A whisper keeps only the reading tools of its group: nothing it does may show in the chat.
+        const surface = await resolveSurface(ctx);
+        return isTelegramWhisperSession(ctx.session.auth) ? whisperToolSurface(surface) : surface;
+      }),
   },
 });
 
@@ -55,32 +56,35 @@ async function resolveSurface(ctx: DynamicResolveContext) {
     if (!identity || !snapshot.restricted) return buildMemoryReviewToolSurface(new Set());
     try {
       const current = await loadCurrentExternalGroupCapabilities(identity);
-      return buildMemoryReviewToolSurface(new Set(
-        [...snapshot.allowed].filter((name) => current.has(name)),
-      ));
+      return buildMemoryReviewToolSurface(
+        new Set([...snapshot.allowed].filter((name) => current.has(name))),
+      );
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_MEMORY_REVIEW_TOOL_POLICY_LOOKUP_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-        groupId: identity.groupId,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_MEMORY_REVIEW_TOOL_POLICY_LOOKUP_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+          groupId: identity.groupId,
+        }),
+      );
       return buildMemoryReviewToolSurface(new Set());
     }
   }
   const auth = ctx.session.auth;
-  const buildSurface = ctx.channel.kind === "subagent"
-    ? buildSubagentToolSurface
-    : buildModeToolSurface;
+  const buildSurface =
+    ctx.channel.kind === "subagent" ? buildSubagentToolSurface : buildModeToolSurface;
   let environment: ReturnType<typeof resolveConversationEnvironment>;
   try {
     environment = resolveConversationEnvironment(auth);
   } catch (error) {
     // Without a proven trust zone there is no surface to expose. The instructions resolver
     // separately tells the model that this turn cannot use tools at all.
-    console.error(JSON.stringify({
-      code: "AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return buildSurface({
       capabilities: new Set(),
       environment: "external",
@@ -118,11 +122,13 @@ async function resolveSurface(ctx: DynamicResolveContext) {
   try {
     current = await loadCurrentExternalGroupCapabilities(identity);
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_GROUP_TOOL_POLICY_LOOKUP_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-      groupId: identity.groupId,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GROUP_TOOL_POLICY_LOOKUP_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+        groupId: identity.groupId,
+      }),
+    );
     // R0-R7 core tools also rely on a current external registration, while independently
     // live-checked skills may still remain available for this turn.
     includeApplicationCore = false;

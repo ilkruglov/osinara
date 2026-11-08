@@ -10,11 +10,7 @@ import {
   resolveRuntimeModelSelection,
   shouldMockAuthoredRuntimeModels,
 } from "#runtime/agent/resolve-model.js";
-const ALLOWED_DYNAMIC_MODEL_EVENTS = new Set([
-    `session.started`,
-    `turn.started`,
-    `step.started`,
-  ]),
+const ALLOWED_DYNAMIC_MODEL_EVENTS = new Set([`session.started`, `turn.started`, `step.started`]),
   DYNAMIC_MODEL_SELECTION_ERROR_CODE = `EVE_DYNAMIC_MODEL_SELECTION_FAILED`;
 var DynamicModelSelectionError = class extends Error {
   code = DYNAMIC_MODEL_SELECTION_ERROR_CODE;
@@ -26,9 +22,7 @@ var DynamicModelSelectionError = class extends Error {
 function isDynamicModelSelectionError(e) {
   return (
     e instanceof DynamicModelSelectionError ||
-    (typeof e == `object` &&
-      !!e &&
-      e.code === DYNAMIC_MODEL_SELECTION_ERROR_CODE)
+    (typeof e == `object` && !!e && e.code === DYNAMIC_MODEL_SELECTION_ERROR_CODE)
   );
 }
 function isDynamicModelEventName(e) {
@@ -67,9 +61,7 @@ async function dispatchDynamicModelEvent(e) {
         })
       ).events[e.event.type];
       if (t === void 0)
-        throw Error(
-          `Dynamic model resolver is missing its compiled "${e.event.type}" handler.`,
-        );
+        throw Error(`Dynamic model resolver is missing its compiled "${e.event.type}" handler.`);
       let n = await t(e.event, buildResolveContext(e.ctx, e.messages)),
         r = await resolveRuntimeModelSelection({
           durability: e.event.type === `step.started` ? `live` : `durable`,
@@ -78,9 +70,7 @@ async function dispatchDynamicModelEvent(e) {
         });
       setSelectionForEvent(e.ctx, e.event.type, r);
     } catch (e) {
-      throw isDynamicModelSelectionError(e)
-        ? e
-        : new DynamicModelSelectionError(e);
+      throw isDynamicModelSelectionError(e) ? e : new DynamicModelSelectionError(e);
     }
   }
 }

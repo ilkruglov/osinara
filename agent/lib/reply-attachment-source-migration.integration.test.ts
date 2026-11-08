@@ -12,9 +12,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_reply_attachment_source_migration";
 
 describeWithDatabase("043 reply attachment source migration", () => {
@@ -37,15 +36,16 @@ describeWithDatabase("043 reply attachment source migration", () => {
           ('00000000-0000-4000-8000-000000000002', 42, NULL);
       `);
 
-      await client.query(await readFile(
-        resolve("migrations/043_reply_attachment_source.sql"),
-        "utf8",
-      ));
+      await client.query(
+        await readFile(resolve("migrations/043_reply_attachment_source.sql"), "utf8"),
+      );
 
-      await expect(client.query(
-        `SELECT id::text, attachment_source_message_id::text
+      await expect(
+        client.query(
+          `SELECT id::text, attachment_source_message_id::text
            FROM telegram_group_messages ORDER BY id`,
-      )).resolves.toMatchObject({
+        ),
+      ).resolves.toMatchObject({
         rows: [
           {
             attachment_source_message_id: "41",
@@ -57,16 +57,20 @@ describeWithDatabase("043 reply attachment source migration", () => {
           },
         ],
       });
-      await expect(client.query(
-        `UPDATE telegram_group_messages
+      await expect(
+        client.query(
+          `UPDATE telegram_group_messages
             SET attachment_file_id = 'bad', attachment_source_message_id = 0
           WHERE id = '00000000-0000-4000-8000-000000000002'`,
-      )).rejects.toThrow();
-      await expect(client.query(
-        `UPDATE telegram_group_messages
+        ),
+      ).rejects.toThrow();
+      await expect(
+        client.query(
+          `UPDATE telegram_group_messages
             SET attachment_source_message_id = 42
           WHERE id = '00000000-0000-4000-8000-000000000002'`,
-      )).rejects.toThrow();
+        ),
+      ).rejects.toThrow();
     } finally {
       try {
         await client.query("RESET search_path");

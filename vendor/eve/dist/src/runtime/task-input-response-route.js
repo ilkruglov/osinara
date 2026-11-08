@@ -21,24 +21,15 @@ function getTaskInputResponseChannelNames() {
 async function handleTaskInputResponseRequest(e, r) {
   let i = r.params.token;
   if (typeof i != `string` || i.length === 0)
-    return Response.json(
-      { error: `Missing task input token.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing task input token.`, ok: !1 }, { status: 400 });
   let a = readTaskInputTargetToken(i);
   if (a === void 0)
-    return Response.json(
-      { error: `Invalid task input token.`, ok: !1 },
-      { status: 403 },
-    );
+    return Response.json({ error: `Invalid task input token.`, ok: !1 }, { status: 403 });
   let o;
   try {
     o = await e.json();
   } catch {
-    return Response.json(
-      { error: `Invalid JSON body.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid JSON body.`, ok: !1 }, { status: 400 });
   }
   let s = readInputResponses(o);
   if (s === void 0 || s.length === 0)
@@ -52,10 +43,7 @@ async function handleTaskInputResponseRequest(e, r) {
       payload: { inputResponses: s },
     });
   } catch {
-    return Response.json(
-      { error: `Task input target is not pending.`, ok: !1 },
-      { status: 404 },
-    );
+    return Response.json({ error: `Task input target is not pending.`, ok: !1 }, { status: 404 });
   }
   return Response.json({ ok: !0 }, { status: 202 });
 }
@@ -76,9 +64,7 @@ function readInputResponses(e) {
     )
       return;
     let a = { requestId: t };
-    (typeof r == `string` && (a.optionId = r),
-      typeof i == `string` && (a.text = i),
-      n.push(a));
+    (typeof r == `string` && (a.optionId = r), typeof i == `string` && (a.text = i), n.push(a));
   }
   return n;
 }

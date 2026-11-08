@@ -1,12 +1,10 @@
-export declare class RetryableError extends Error {
-}
-export declare class FatalError extends Error {
-}
+export declare class RetryableError extends Error {}
+export declare class FatalError extends Error {}
 interface WorkflowHook<T> extends AsyncIterable<T> {
-    readonly token: string;
-    getConflict(): Promise<{
-        readonly runId: string;
-    } | null>;
+  readonly token: string;
+  getConflict(): Promise<{
+    readonly runId: string;
+  } | null>;
 }
 /**
  * Creates a Workflow hook from inside a durable workflow body.
@@ -20,20 +18,22 @@ export declare function getWorkflowMetadata(): Record<string, unknown>;
  * Creates a Workflow writable stream handle from inside a durable workflow body.
  */
 export declare function getWritable<T = unknown>(options?: {
-    namespace?: string;
+  namespace?: string;
 }): WritableStream<T>;
 /**
  * Creates a Workflow webhook from inside a durable workflow body.
  */
-export declare function createWebhook<T = unknown>(options?: unknown): WorkflowHook<T> & {
-    url?: string;
+export declare function createWebhook<T = unknown>(
+  options?: unknown,
+): WorkflowHook<T> & {
+  url?: string;
 };
 /**
  * Defines a Workflow hook factory for workflow-body code.
  */
 export declare function defineHook<T = unknown>(): {
-    readonly create: (options?: unknown) => WorkflowHook<T>;
-    readonly resume: () => never;
+  readonly create: (options?: unknown) => WorkflowHook<T>;
+  readonly resume: () => never;
 };
 /**
  * Sleeps from inside workflow-body code.
@@ -54,12 +54,12 @@ export declare function getStepMetadata(): never;
  * eve workflow-body bundle does not have to pull the real type in.
  */
 export interface SetAttributesOptions {
-    /**
-     * Permit attribute keys that start with the reserved `$` prefix. eve
-     * framework code passes `true` so it can write the `$eve.*` namespace;
-     * authored agent code never calls this shim directly.
-     */
-    allowReservedAttributes?: boolean;
+  /**
+   * Permit attribute keys that start with the reserved `$` prefix. eve
+   * framework code passes `true` so it can write the `$eve.*` namespace;
+   * authored agent code never calls this shim directly.
+   */
+  allowReservedAttributes?: boolean;
 }
 /**
  * Workflow-body implementation of `setAttributes` for the eve
@@ -80,5 +80,8 @@ export interface SetAttributesOptions {
  * validator would require pulling `@workflow/world` into the workflow body
  * bundle.
  */
-export declare function setAttributes(attrs: Record<string, string | undefined>, options?: SetAttributesOptions): Promise<void>;
+export declare function setAttributes(
+  attrs: Record<string, string | undefined>,
+  options?: SetAttributesOptions,
+): Promise<void>;
 export {};

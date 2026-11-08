@@ -1,6 +1,6 @@
 /** Where a box streams progress and command output during {@link SetupBox.perform}. */
 export interface OutputSink {
-    write(line: string): void;
+  write(line: string): void;
 }
 /**
  * Thrown by the interactive prompter when the user cancels (Ctrl-C, or the
@@ -8,7 +8,7 @@ export interface OutputSink {
  * box's gather face does not need its own try/catch to honor a cancel.
  */
 export declare class WizardCancelledError extends Error {
-    constructor();
+  constructor();
 }
 /**
  * A unit of work reusable by programmatic setup and channel-management flows.
@@ -23,27 +23,27 @@ export declare class WizardCancelledError extends Error {
  * did (which may differ from what was requested, e.g. a skipped channel).
  */
 export interface SetupBox<State, Input, Payload> {
-    readonly id: string;
-    /** Skip the box when its work does not apply to the current state. */
-    shouldRun?(state: Readonly<State>): boolean;
-    /** One-line status for a menu-driven runner (unused by the linear wizard). */
-    summary?(state: Readonly<State>): string;
-    /** Mode-agnostic face: resolve the input, asking through the box's asker. */
-    gather(ctx: {
-        state: Readonly<State>;
-        initial?: Input;
-        /** Parent flow cancellation, when this box runs under an interruptible UI. */
-        signal?: AbortSignal;
-    }): Promise<Input>;
-    /** The only side-effecting step. Must be idempotent: detect current files,
-     *  link state, and connectors before mutating, so a rerun converges. */
-    perform(ctx: {
-        state: Readonly<State>;
-        input: Input;
-        sink: OutputSink;
-        /** Parent flow cancellation, when this box runs under an interruptible UI. */
-        signal?: AbortSignal;
-    }): Promise<Payload>;
-    /** The only in-memory state transition. Pure: no I/O. */
-    apply(state: State, payload: Payload): State;
+  readonly id: string;
+  /** Skip the box when its work does not apply to the current state. */
+  shouldRun?(state: Readonly<State>): boolean;
+  /** One-line status for a menu-driven runner (unused by the linear wizard). */
+  summary?(state: Readonly<State>): string;
+  /** Mode-agnostic face: resolve the input, asking through the box's asker. */
+  gather(ctx: {
+    state: Readonly<State>;
+    initial?: Input;
+    /** Parent flow cancellation, when this box runs under an interruptible UI. */
+    signal?: AbortSignal;
+  }): Promise<Input>;
+  /** The only side-effecting step. Must be idempotent: detect current files,
+   *  link state, and connectors before mutating, so a rerun converges. */
+  perform(ctx: {
+    state: Readonly<State>;
+    input: Input;
+    sink: OutputSink;
+    /** Parent flow cancellation, when this box runs under an interruptible UI. */
+    signal?: AbortSignal;
+  }): Promise<Payload>;
+  /** The only in-memory state transition. Pure: no I/O. */
+  apply(state: State, payload: Payload): State;
 }

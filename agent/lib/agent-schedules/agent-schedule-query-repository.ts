@@ -15,13 +15,20 @@ import {
   type AgentScheduleRow,
   rowToAgentSchedule,
 } from "./agent-schedule-record.js";
-import { AGENT_SCHEDULE_COLUMNS, agentScheduleVisibleInChat } from "./agent-schedule-repository-helpers.js";
+import {
+  AGENT_SCHEDULE_COLUMNS,
+  agentScheduleVisibleInChat,
+} from "./agent-schedule-repository-helpers.js";
 
 export async function listAgentSchedules(
   auth: AgentScheduleAuthorization,
   options: { cursor?: string; limit: number },
 ): Promise<{ items: AgentScheduleRecord[]; nextCursor: string | null }> {
-  if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > AGENT_SCHEDULE_LIST_MAX_LIMIT) {
+  if (
+    !Number.isInteger(options.limit) ||
+    options.limit < 1 ||
+    options.limit > AGENT_SCHEDULE_LIST_MAX_LIMIT
+  ) {
     throw new AppError("AGENT_SCHEDULE_LIMIT_INVALID", "Некорректный размер страницы расписаний");
   }
   const cursor = decodeDateUuidCursor(
@@ -44,8 +51,14 @@ export async function listAgentSchedules(
         AND ($3::timestamptz IS NULL OR (schedule.created_at, schedule.id) < ($3, $4::uuid))
       ORDER BY schedule.created_at DESC, schedule.id DESC
       LIMIT $5`,
-    [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1,
-      agentScheduleVisibleInChat(auth, { scope: "personal" })],
+    [
+      auth.familyId,
+      auth.userId,
+      cursor?.timestamp ?? null,
+      cursor?.id ?? null,
+      options.limit + 1,
+      agentScheduleVisibleInChat(auth, { scope: "personal" }),
+    ],
   );
   const hasNext = result.rows.length > options.limit;
   const rows = result.rows.slice(0, options.limit);

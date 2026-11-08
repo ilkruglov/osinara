@@ -25,22 +25,25 @@ export default defineTool({
     "Результат: {items,nextCursor}; для следующей страницы передай nextCursor без изменений.",
     "Для скачивания выбранного файла передай его attachmentId в import_telegram_attachment.",
   ].join(" "),
-  inputSchema: z.object({
-    cursor: z.string().min(1).optional(),
-    fileName: z.string().min(1).max(255).optional(),
-    limit: z.number().int().min(1).max(TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT)
-      .default(TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT),
-  }).strict(),
+  inputSchema: z
+    .object({
+      cursor: z.string().min(1).optional(),
+      fileName: z.string().min(1).max(255).optional(),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT)
+        .default(TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT),
+    })
+    .strict(),
   async execute(input, ctx) {
     const target = requireTelegramDeliveryTarget(ctx);
-    return await telegramGroupAttachmentRepository.list(
-      requireWorkspaceAuthorization(ctx),
-      {
-        cursor: input.cursor,
-        fileName: input.fileName,
-        limit: input.limit,
-        messageThreadId: target.messageThreadId === undefined ? null : String(target.messageThreadId),
-      },
-    );
+    return await telegramGroupAttachmentRepository.list(requireWorkspaceAuthorization(ctx), {
+      cursor: input.cursor,
+      fileName: input.fileName,
+      limit: input.limit,
+      messageThreadId: target.messageThreadId === undefined ? null : String(target.messageThreadId),
+    });
   },
 });

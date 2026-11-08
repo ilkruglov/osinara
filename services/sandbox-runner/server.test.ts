@@ -57,9 +57,16 @@ async function start(engine: SandboxEngine): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) =>
-    new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-  ));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map(
+        (server) =>
+          new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          ),
+      ),
+  );
 });
 
 describe("sandbox runner HTTP server", () => {
@@ -98,10 +105,11 @@ describe("sandbox runner HTTP server", () => {
       method: "POST",
     });
     const processResponse = await fetch(
-      `${baseUrl}/v1/sessions/${encodeURIComponent(SANDBOX_SESSION_ID)}/processes`, {
-      body: JSON.stringify({ command: "uname -s" }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
+      `${baseUrl}/v1/sessions/${encodeURIComponent(SANDBOX_SESSION_ID)}/processes`,
+      {
+        body: JSON.stringify({ command: "uname -s" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
       },
     );
 
@@ -160,7 +168,9 @@ describe("sandbox runner HTTP server", () => {
       method: "POST",
     });
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ code: "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED" });
+    expect(await response.json()).toMatchObject({
+      code: "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED",
+    });
   });
 
   it("checks Docker health and delegates disposable compute and tool deletion", async () => {
@@ -168,11 +178,16 @@ describe("sandbox runner HTTP server", () => {
     const baseUrl = await start(engine);
 
     expect((await fetch(`${baseUrl}/health`)).status).toBe(200);
-    expect((await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/stop`, {
-      method: "POST",
-    })).status).toBe(204);
-    expect((await fetch(`${baseUrl}/v1/tool-environments/${WORKSPACE_ID}`, { method: "DELETE" })).status)
-      .toBe(204);
+    expect(
+      (
+        await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/stop`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await fetch(`${baseUrl}/v1/tool-environments/${WORKSPACE_ID}`, { method: "DELETE" })).status,
+    ).toBe(204);
     expect(engine.health).toHaveBeenCalledOnce();
     expect(engine.stopSession).toHaveBeenCalledWith(SANDBOX_SESSION_ID);
     expect(engine.deleteToolEnvironment).toHaveBeenCalledWith(WORKSPACE_ID);

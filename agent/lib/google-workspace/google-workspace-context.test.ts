@@ -48,24 +48,34 @@ describe("Google Workspace authorization context", () => {
   });
 
   it("derives a separate family profile in a registered family group", () => {
-    expect(requireGoogleWorkspaceConnectionActor(context({
-      chatType: "supergroup",
-      groupType: "family_private",
-      role: "owner",
-    }))).toMatchObject({ role: "owner", scope: "family", telegramUserId: "202" });
+    expect(
+      requireGoogleWorkspaceConnectionActor(
+        context({
+          chatType: "supergroup",
+          groupType: "family_private",
+          role: "owner",
+        }),
+      ),
+    ).toMatchObject({ role: "owner", scope: "family", telegramUserId: "202" });
   });
 
   it("rejects external groups and initiator-only contexts", () => {
-    expect(() => requireGoogleWorkspaceConnectionActor(context({
-      chatType: "supergroup",
-      groupType: "external",
-      role: "owner",
-    }))).toThrowError(/AGENT_GOOGLE_WORKSPACE_CONTEXT_INVALID/);
-    expect(() => requireGoogleWorkspaceConnectionActor(context({
-      chatType: "private",
-      current: false,
-    }))).toThrowError(
-      /AGENT_GOOGLE_WORKSPACE_CONTEXT_INVALID/,
-    );
+    expect(() =>
+      requireGoogleWorkspaceConnectionActor(
+        context({
+          chatType: "supergroup",
+          groupType: "external",
+          role: "owner",
+        }),
+      ),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_CONTEXT_INVALID/);
+    expect(() =>
+      requireGoogleWorkspaceConnectionActor(
+        context({
+          chatType: "private",
+          current: false,
+        }),
+      ),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_CONTEXT_INVALID/);
   });
 });

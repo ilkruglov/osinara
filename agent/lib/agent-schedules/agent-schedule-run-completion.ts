@@ -85,7 +85,12 @@ async function nextOccurrence(
 
 export async function finishActiveAgentScheduleRun(
   client: PoolClient,
-  input: { applicationSessionId: string; completedAt: Date; errorCode: string | null; eveSessionId: string },
+  input: {
+    applicationSessionId: string;
+    completedAt: Date;
+    errorCode: string | null;
+    eveSessionId: string;
+  },
 ): Promise<boolean> {
   const active = await client.query<ActiveRunRow>(
     `SELECT run.id AS run_id, schedule.id AS schedule_id, schedule.family_id,
@@ -107,12 +112,24 @@ export async function finishActiveAgentScheduleRun(
     `UPDATE agent_schedule_runs
         SET status = $2, completed_at = $3, error_code = $4, updated_at = $3
       WHERE id = $1`,
-    [row.run_id, input.errorCode === null ? "completed" : "failed", input.completedAt, input.errorCode],
+    [
+      row.run_id,
+      input.errorCode === null ? "completed" : "failed",
+      input.completedAt,
+      input.errorCode,
+    ],
   );
   // History chunks exist only to serve the active model run and must not become retained copies.
-  await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [row.run_id]);
+  await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [
+    row.run_id,
+  ]);
 
-  const next = await nextOccurrence(client, row.schedule_id, row.recurrence_kind, input.completedAt);
+  const next = await nextOccurrence(
+    client,
+    row.schedule_id,
+    row.recurrence_kind,
+    input.completedAt,
+  );
   if (!next) {
     await client.query(
       `UPDATE agent_schedules

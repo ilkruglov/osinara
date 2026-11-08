@@ -2,8 +2,8 @@ import { type InstrumentationRuntime } from "#harness/instrumentation/runtime.js
 import { type InstrumentationProvider } from "#public/instrumentation/provider.js";
 /** One provider and the `instrumentation/<slot>.ts` file it came from. */
 export interface RegisteredInstrumentationProvider {
-    readonly provider: InstrumentationProvider;
-    readonly slot: string;
+  readonly provider: InstrumentationProvider;
+  readonly slot: string;
 }
 /** Fills reserved slots before authored files may reconfigure or disable them. */
 export declare function seedInstrumentationProviders(): void;
@@ -19,9 +19,9 @@ export declare function seedInstrumentationProviders(): void;
  * @internal — not part of the public API.
  */
 export declare function registerInstrumentationProvider(input: {
-    readonly agentName: string;
-    readonly slot: string;
-    readonly value: unknown;
+  readonly agentName: string;
+  readonly slot: string;
+  readonly value: unknown;
 }): Promise<void>;
 /** Registered providers in slot order. @internal */
 export declare function getInstrumentationProviders(): readonly RegisteredInstrumentationProvider[];
@@ -41,7 +41,7 @@ export declare function getInstrumentationProviders(): readonly RegisteredInstru
  * @internal — not part of the public API.
  */
 export declare function finalizeInstrumentationProviders(input: {
-    readonly serviceName: string;
+  readonly serviceName: string;
 }): InstrumentationRuntime;
 /**
  * Releases every registered provider and OTel processor from Nitro's close

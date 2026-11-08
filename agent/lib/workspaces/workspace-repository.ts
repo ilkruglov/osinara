@@ -15,18 +15,11 @@ import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import {
-  type WorkspaceScope,
-} from "./workspace-file-record.js";
+import { type WorkspaceScope } from "./workspace-file-record.js";
 import { validateWorkspacePath } from "./workspace-path.js";
-import {
-  deleteWorkspaceFile,
-} from "./workspace-storage.js";
+import { deleteWorkspaceFile } from "./workspace-storage.js";
 
-export type {
-  WorkspaceFileRecord,
-  WorkspaceScope,
-} from "./workspace-file-record.js";
+export type { WorkspaceFileRecord, WorkspaceScope } from "./workspace-file-record.js";
 
 export interface WorkspaceAuthorization {
   familyId: string;
@@ -49,11 +42,17 @@ async function assertCurrentAccess(
 ): Promise<void> {
   if (scope === "personal") {
     if (auth.telegramChatType !== "private" || !auth.userId) {
-      throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Личный workspace доступен только в личном чате");
+      throw new AppError(
+        "AGENT_WORKSPACE_ACCESS_DENIED",
+        "Личный workspace доступен только в личном чате",
+      );
     }
   } else if (scope === "family") {
     if (!auth.userId || auth.role === "external") {
-      throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Семейный workspace доступен только участникам семьи");
+      throw new AppError(
+        "AGENT_WORKSPACE_ACCESS_DENIED",
+        "Семейный workspace доступен только участникам семьи",
+      );
     }
     if (auth.groupId) {
       const group = await client.query(
@@ -62,15 +61,21 @@ async function assertCurrentAccess(
         [auth.groupId, auth.familyId],
       );
       if (group.rowCount !== 1) {
-        throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Этот чат не имеет доступа к семейному workspace");
+        throw new AppError(
+          "AGENT_WORKSPACE_ACCESS_DENIED",
+          "Этот чат не имеет доступа к семейному workspace",
+        );
       }
     }
   } else {
     if (!auth.groupId || auth.telegramChatType === "private") {
-      throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Групповой workspace доступен только в своей группе");
+      throw new AppError(
+        "AGENT_WORKSPACE_ACCESS_DENIED",
+        "Групповой workspace доступен только в своей группе",
+      );
     }
     const group = await client.query(
-       `SELECT 1 FROM telegram_groups
+      `SELECT 1 FROM telegram_groups
         WHERE id = $1 AND family_id = $2 AND type = 'external'
         FOR SHARE`,
       [auth.groupId, auth.familyId],
@@ -114,15 +119,19 @@ async function resolveWorkspace(
 }
 
 function workspaceScopes(auth: WorkspaceAuthorization): WorkspaceScope[] {
-  const scopes: WorkspaceScope[] = auth.telegramChatType === "private"
-    ? ["personal", "family"]
-    : auth.groupType === "family_private"
-    ? ["family"]
-    : auth.groupType === "external"
-    ? ["group"]
-    : [];
+  const scopes: WorkspaceScope[] =
+    auth.telegramChatType === "private"
+      ? ["personal", "family"]
+      : auth.groupType === "family_private"
+        ? ["family"]
+        : auth.groupType === "external"
+          ? ["group"]
+          : [];
   if (scopes.length === 0) {
-    throw new AppError("AGENT_WORKSPACE_CONTEXT_INVALID", "Для текущего чата не определён workspace");
+    throw new AppError(
+      "AGENT_WORKSPACE_CONTEXT_INVALID",
+      "Для текущего чата не определён workspace",
+    );
   }
   return scopes;
 }
@@ -154,10 +163,7 @@ export function createWorkspaceRepository(root: string) {
     async externalGroupRoot(auth: WorkspaceAuthorization): Promise<string> {
       // A family member keeps their administrative role inside an external group. Workspace access
       // follows the external trust zone and exact live group registration, not that family role.
-      if (
-        auth.groupType !== "external" ||
-        auth.telegramChatType === "private"
-      ) {
+      if (auth.groupType !== "external" || auth.telegramChatType === "private") {
         throw new AppError(
           "AGENT_WORKSPACE_ACCESS_DENIED",
           "Групповой workspace доступен только в своей внешней группе",
@@ -182,10 +188,12 @@ export function createWorkspaceRepository(root: string) {
       }
     },
 
-    async mounts(auth: WorkspaceAuthorization): Promise<Array<{
-      mountPoint: WorkspaceScope;
-      workspaceId: string;
-    }>> {
+    async mounts(auth: WorkspaceAuthorization): Promise<
+      Array<{
+        mountPoint: WorkspaceScope;
+        workspaceId: string;
+      }>
+    > {
       const scopes = workspaceScopes(auth);
       const client = await database().connect();
       try {
@@ -200,10 +208,12 @@ export function createWorkspaceRepository(root: string) {
       }
     },
 
-    async trustedRoots(auth: WorkspaceAuthorization): Promise<Array<{
-      hostRoot: string;
-      mountPoint: "family" | "personal";
-    }>> {
+    async trustedRoots(auth: WorkspaceAuthorization): Promise<
+      Array<{
+        hostRoot: string;
+        mountPoint: "family" | "personal";
+      }>
+    > {
       const scopes = workspaceScopes(auth);
       if (scopes.includes("group")) {
         throw new AppError(

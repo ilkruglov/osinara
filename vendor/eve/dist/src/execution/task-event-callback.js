@@ -1,8 +1,4 @@
-import {
-  ContinuationTokenKey,
-  SessionCallbackKey,
-  SessionIdKey,
-} from "#context/keys.js";
+import { ContinuationTokenKey, SessionCallbackKey, SessionIdKey } from "#context/keys.js";
 import { fireTaskEventCallbackStep } from "#execution/session-callback-step.js";
 async function forwardTaskEventToSessionCallback(e, t) {
   let n = e.get(SessionCallbackKey);

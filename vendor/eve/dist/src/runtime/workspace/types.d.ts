@@ -14,5 +14,5 @@ export declare const WORKSPACE_ROOT = "/workspace";
  * live workspace cwd. Seed file bytes do not flow through this type.
  */
 export interface WorkspaceRuntimeSpec {
-    readonly rootEntries: readonly string[];
+  readonly rootEntries: readonly string[];
 }

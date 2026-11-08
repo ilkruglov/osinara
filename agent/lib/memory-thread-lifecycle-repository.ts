@@ -44,12 +44,17 @@ interface SourceEntryRow {
 }
 
 // HITL confirms intent to run the tool, but the verified source sentence must still prove completion.
-const COMPLETION_SIGNAL_PATTERN = /(?:^|[\s,.;:!?])(?:заверш(?:ён|ена|ено|ены|ен|ила|или|ил)|закончил(?:а|и)?|выполнен(?:а|о|ы)?|сделан(?:а|о|ы)?|готов(?:а|о|ы)?|completed|done|finished)(?=$|[\s,.;:!?])/iu;
-const NEGATED_COMPLETION_PATTERN = /(?:^|[\s,.;:!?])(?:не|ещ[её]\s+не|not|is\s+not)\s+(?:заверш|закончил|закончен|выполнен|сделан|готов|completed|done|finished)/iu;
+const COMPLETION_SIGNAL_PATTERN =
+  /(?:^|[\s,.;:!?])(?:заверш(?:ён|ена|ено|ены|ен|ила|или|ил)|закончил(?:а|и)?|выполнен(?:а|о|ы)?|сделан(?:а|о|ы)?|готов(?:а|о|ы)?|completed|done|finished)(?=$|[\s,.;:!?])/iu;
+const NEGATED_COMPLETION_PATTERN =
+  /(?:^|[\s,.;:!?])(?:не|ещ[её]\s+не|not|is\s+not)\s+(?:заверш|закончил|закончен|выполнен|сделан|готов|completed|done|finished)/iu;
 
 function requireExplicitCompletionStatement(content: string): void {
-  if (content.includes("?") || NEGATED_COMPLETION_PATTERN.test(content) ||
-    !COMPLETION_SIGNAL_PATTERN.test(content)) {
+  if (
+    content.includes("?") ||
+    NEGATED_COMPLETION_PATTERN.test(content) ||
+    !COMPLETION_SIGNAL_PATTERN.test(content)
+  ) {
     throw new AppError(
       "AGENT_MEMORY_THREAD_COMPLETION_NOT_PROVEN",
       "Текущее сообщение не содержит явного подтверждения завершения этой нити",
@@ -73,14 +78,16 @@ async function requireCurrentAccess(client: PoolClient, auth: MemoryAuthorizatio
       "SELECT 1 FROM telegram_groups WHERE id = $1 AND family_id = $2 FOR SHARE",
       [auth.groupId, auth.familyId],
     );
-    if (!group.rowCount) throw new AppError("AGENT_GROUP_NOT_REGISTERED", "Группа больше не подключена");
+    if (!group.rowCount)
+      throw new AppError("AGENT_GROUP_NOT_REGISTERED", "Группа больше не подключена");
     return;
   }
   const member = await client.query(
     "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2 FOR SHARE",
     [auth.familyId, auth.userId],
   );
-  if (!member.rowCount) throw new AppError("AGENT_ACCESS_DENIED", "Доступ к семейному агенту был отозван");
+  if (!member.rowCount)
+    throw new AppError("AGENT_ACCESS_DENIED", "Доступ к семейному агенту был отозван");
 }
 
 async function lockThread(
@@ -112,7 +119,7 @@ async function verifyCurrentStatement(
   thread: ThreadIdentityRow,
   turn: VerifiedTurnAuthority,
   requireCompletionSignal: boolean,
-): Promise<{ content: string; observedAt: Date } > {
+): Promise<{ content: string; observedAt: Date }> {
   const result = await client.query<{ content_text: string; sent_at: Date }>(
     `SELECT message.content_text, message.sent_at
      FROM telegram_group_messages AS message
@@ -121,8 +128,14 @@ async function verifyCurrentStatement(
        AND conversation.scope = $4 AND conversation.scope_partition_key = $5
        AND message.actor_kind = 'user' AND message.telegram_user_id = $6
        AND message.content_text IS NOT NULL`,
-    [turn.timelineEntryId, turn.conversationId, auth.familyId, thread.scope,
-      thread.scope_partition_key, auth.telegramUserId],
+    [
+      turn.timelineEntryId,
+      turn.conversationId,
+      auth.familyId,
+      thread.scope,
+      thread.scope_partition_key,
+      auth.telegramUserId,
+    ],
   );
   const row = result.rows[0];
   if (!row || !row.content_text.trim()) {
@@ -141,8 +154,11 @@ async function loadSourceEntries(
   entryRefs: readonly string[],
 ): Promise<SourceEntryRow[]> {
   const refs = [...new Set(entryRefs)];
-  if (refs.length === 0 || refs.length !== entryRefs.length ||
-    refs.some((ref) => !THREAD_ENTRY_REF_PATTERN.test(ref))) {
+  if (
+    refs.length === 0 ||
+    refs.length !== entryRefs.length ||
+    refs.some((ref) => !THREAD_ENTRY_REF_PATTERN.test(ref))
+  ) {
     throw new AppError(
       "AGENT_MEMORY_THREAD_COMPLETION_SOURCES_INVALID",
       "Завершение нити требует неповторяющихся source entry refs",
@@ -158,8 +174,10 @@ async function loadSourceEntries(
        AND entry.role IN ('goal', 'method', 'decision', 'episode', 'outcome', 'lesson', 'open_loop')`,
     [threadId, refs],
   );
-  if (result.rows.length !== refs.length ||
-    !result.rows.some((row) => ["goal", "decision", "outcome", "lesson"].includes(row.role))) {
+  if (
+    result.rows.length !== refs.length ||
+    !result.rows.some((row) => ["goal", "decision", "outcome", "lesson"].includes(row.role))
+  ) {
     throw new AppError(
       "AGENT_MEMORY_THREAD_COMPLETION_SOURCES_INVALID",
       "Completion episode требует goal, result, decision или lesson source",
@@ -221,21 +239,29 @@ async function createCompletionOutcome(
          AND outcome.subject_participant_id IS NOT DISTINCT FROM $6::uuid
          AND outcome.memory_project_id IS NOT DISTINCT FROM $7::uuid
          AND outcome.status = 'confirmed' FOR SHARE`,
-      [authority.outcomeRef, thread.family_id, thread.scope, thread.scope_partition_key,
-        thread.subject_user_id, thread.subject_participant_id, thread.memory_project_id],
+      [
+        authority.outcomeRef,
+        thread.family_id,
+        thread.scope,
+        thread.scope_partition_key,
+        thread.subject_user_id,
+        thread.subject_participant_id,
+        thread.memory_project_id,
+      ],
     );
     const existing = outcome.rows[0];
-    if (!existing || (authority.kind === "formal_goal_condition" &&
-      existing.authority !== "formal_goal_condition")) {
+    if (
+      !existing ||
+      (authority.kind === "formal_goal_condition" && existing.authority !== "formal_goal_condition")
+    ) {
       throw new AppError(
         "AGENT_MEMORY_THREAD_AUTHORITY_INVALID",
         "Указанный подтверждённый результат не доказывает завершение этой нити",
       );
     }
     applicationEventId = existing.application_event_id;
-    authorityKind = authority.kind === "formal_goal_condition"
-      ? "formal_goal_condition"
-      : "application_event";
+    authorityKind =
+      authority.kind === "formal_goal_condition" ? "formal_goal_condition" : "application_event";
     sourceSnapshot = { sourceOutcomeRef: authority.outcomeRef };
     summary = existing.summary;
     occurredAt = existing.occurred_at;
@@ -248,10 +274,22 @@ async function createCompletionOutcome(
         source_snapshot, summary, occurred_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, 'completion_episode', $8, $9, $10, $11,
              $12::jsonb, $13, $14) RETURNING id`,
-    [thread.family_id, thread.scope, thread.scope_partition_key, thread.subject_user_id,
-      thread.subject_participant_id, thread.subject_conversation_id, thread.memory_project_id,
-      authorityKind, applicationEventId, sourceConversationId, sourceTimelineEntryId,
-      JSON.stringify(sourceSnapshot), summary, occurredAt],
+    [
+      thread.family_id,
+      thread.scope,
+      thread.scope_partition_key,
+      thread.subject_user_id,
+      thread.subject_participant_id,
+      thread.subject_conversation_id,
+      thread.memory_project_id,
+      authorityKind,
+      applicationEventId,
+      sourceConversationId,
+      sourceTimelineEntryId,
+      JSON.stringify(sourceSnapshot),
+      summary,
+      occurredAt,
+    ],
   );
   const outcomeId = inserted.rows[0]!.id;
   for (const source of sources) {
@@ -259,8 +297,14 @@ async function createCompletionOutcome(
       `INSERT INTO confirmed_outcome_source_claims
          (outcome_id, source_claim_id, family_id, scope, scope_partition_key, source_role)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [outcomeId, source.source_claim_id, thread.family_id, thread.scope,
-        thread.scope_partition_key, outcomeSourceRole(source.role)],
+      [
+        outcomeId,
+        source.source_claim_id,
+        thread.family_id,
+        thread.scope,
+        thread.scope_partition_key,
+        outcomeSourceRole(source.role),
+      ],
     );
   }
   return { id: outcomeId, occurredAt };
@@ -332,8 +376,14 @@ export const memoryThreadLifecycleRepository = {
         `INSERT INTO memory_thread_entries
            (thread_id, family_id, scope, scope_partition_key, source_outcome_id, role, occurred_at)
          VALUES ($1, $2, $3, $4, $5, 'outcome', $6)`,
-        [thread.id, thread.family_id, thread.scope, thread.scope_partition_key,
-          outcome.id, outcome.occurredAt],
+        [
+          thread.id,
+          thread.family_id,
+          thread.scope,
+          thread.scope_partition_key,
+          outcome.id,
+          outcome.occurredAt,
+        ],
       );
       await client.query(
         `UPDATE memory_threads SET status = 'completed', completion_outcome_id = $2,
@@ -347,8 +397,14 @@ export const memoryThreadLifecycleRepository = {
              (thread_id, family_id, scope, scope_partition_key, source_outcome_id, role, occurred_at)
            VALUES ($1, $2, $3, $4, $5, 'episode', $6)
            ON CONFLICT (thread_id, source_claim_id, source_outcome_id) DO NOTHING`,
-          [thread.parent_thread_id, thread.family_id, thread.scope, thread.scope_partition_key,
-            outcome.id, outcome.occurredAt],
+          [
+            thread.parent_thread_id,
+            thread.family_id,
+            thread.scope,
+            thread.scope_partition_key,
+            outcome.id,
+            outcome.occurredAt,
+          ],
         );
       }
       await client.query(

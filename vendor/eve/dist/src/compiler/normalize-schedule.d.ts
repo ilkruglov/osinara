@@ -12,4 +12,8 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * path under `schedules/` minus the extension
  * (`schedules/billing/invoice-sweep.ts` → `"billing/invoice-sweep"`).
  */
-export declare function compileScheduleDefinition(agentRoot: string, source: ScheduleSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledScheduleDefinition>;
+export declare function compileScheduleDefinition(
+  agentRoot: string,
+  source: ScheduleSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledScheduleDefinition>;

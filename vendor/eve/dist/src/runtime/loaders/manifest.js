@@ -6,16 +6,13 @@ const BUNDLED_MANIFEST_SOURCE = `bundled compiled manifest`;
 var LoadCompiledManifestError = class extends Error {
   manifestPath;
   constructor(e, t) {
-    (super(e),
-      (this.name = `LoadCompiledManifestError`),
-      t !== void 0 && (this.manifestPath = t));
+    (super(e), (this.name = `LoadCompiledManifestError`), t !== void 0 && (this.manifestPath = t));
   }
 };
 async function loadCompiledManifest(e) {
   let t =
     e.compiledArtifactsSource.kind === `disk`
-      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot)
-          .compiledManifestPath
+      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot).compiledManifestPath
       : void 0;
   if (t !== void 0) {
     let { readFile: e } = await import(`node:fs/promises`),
@@ -28,8 +25,7 @@ async function loadCompiledManifest(e) {
     return parseCompiledManifest(n, t);
   }
   let a = readBundledCompiledArtifacts();
-  if (a !== null)
-    return parseCompiledManifest(a.manifest, BUNDLED_MANIFEST_SOURCE);
+  if (a !== null) return parseCompiledManifest(a.manifest, BUNDLED_MANIFEST_SOURCE);
   throw new LoadCompiledManifestError(
     `Compiled manifest is unavailable without an app root or bundled compiled artifacts.`,
     BUNDLED_MANIFEST_SOURCE,

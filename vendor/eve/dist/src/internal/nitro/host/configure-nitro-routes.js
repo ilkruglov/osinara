@@ -23,10 +23,7 @@ function registerHandler(e, t) {
   let n = `#eve-route-handler/${t.method ?? `ALL`} ${t.route}`,
     r = stringifyEsmImportSpecifier(t.handlerPath);
   (e.options.handlers.push({ handler: n, method: t.method, route: t.route }),
-    (e.options.virtual[n] = [
-      `import handler from ${r};`,
-      `export default handler;`,
-    ].join(`
+    (e.options.virtual[n] = [`import handler from ${r};`, `export default handler;`].join(`
 `)));
 }
 function resolveNitroWorkflowBuildDirectory(e) {
@@ -37,10 +34,7 @@ function createRelativeImportSpecifier(e, t) {
   return n.startsWith(`.`) ? n : `./${n}`;
 }
 async function addWorkflowFileHandler(i, a) {
-  let o = join(
-      resolveNitroWorkflowBuildDirectory(i),
-      `${a.bundleName}-handler.mjs`,
-    ),
+  let o = join(resolveNitroWorkflowBuildDirectory(i), `${a.bundleName}-handler.mjs`),
     s = dirname(o),
     c = createRelativeImportSpecifier(s, a.bundlePath),
     l = a.directHandlers ?? [],
@@ -82,9 +76,7 @@ function buildWorkflowFileHandlerSource(e) {
       });
     for (let e of r)
       e.isOwnBundle ||
-        t.push(
-          `import { POST as ${e.binding} } from ${JSON.stringify(e.importSpecifier)};`,
-        );
+        t.push(`import { POST as ${e.binding} } from ${JSON.stringify(e.importSpecifier)};`);
     (e.workflowWorldPluginImportSpecifier !== void 0 &&
       t.push(`import ${JSON.stringify(e.workflowWorldPluginImportSpecifier)};`),
       t.push(
@@ -106,13 +98,7 @@ function buildWorkflowFileHandlerSource(e) {
     );
   }
   return (
-    t.push(
-      ``,
-      `export default async ({ req }) => {`,
-      `  return await POST(req);`,
-      `};`,
-      ``,
-    ),
+    t.push(``, `export default async ({ req }) => {`, `  return await POST(req);`, `};`, ``),
     t.join(`
 `)
   );
@@ -148,17 +134,13 @@ function registerApplicationRoutes(e, t, n, r) {
           }),
           handlerExport: `handleHomePageRequest`,
           method: i.method,
-          modulePath: resolvePackageSourceFilePath(
-            `src/internal/nitro/routes/index.ts`,
-          ),
+          modulePath: resolvePackageSourceFilePath(`src/internal/nitro/routes/index.ts`),
           route: i.path,
         });
         break;
       case `health`:
         registerHandler(e, {
-          handlerPath: resolvePackageSourceFilePath(
-            `src/internal/nitro/routes/health.ts`,
-          ),
+          handlerPath: resolvePackageSourceFilePath(`src/internal/nitro/routes/health.ts`),
           method: i.method,
           route: i.path,
         });
@@ -199,9 +181,7 @@ function findWorkflowRoute(e) {
 function createWorkflowDirectHandlerEntry(e, t) {
   return {
     bundlePath: t,
-    queuePrefix: deriveEveWorkflowQueuePrefix(
-      e.compileResult.manifest.config.name,
-    ),
+    queuePrefix: deriveEveWorkflowQueuePrefix(e.compileResult.manifest.config.name),
   };
 }
 async function registerWorkflowRoute(e, t, n, r, i) {
@@ -213,9 +193,7 @@ async function registerWorkflowRoute(e, t, n, r, i) {
     runtimeImportSpecifier:
       r.length === 0
         ? void 0
-        : normalizeEsmImportSpecifier(
-            resolveWorkflowModulePath(`workflow/runtime`),
-          ),
+        : normalizeEsmImportSpecifier(resolveWorkflowModulePath(`workflow/runtime`)),
     workflowWorldPluginPath: t.compiledArtifacts.workflowWorldPluginPath,
   });
 }
@@ -237,8 +215,7 @@ async function configureDevelopmentNitroRoutes(e, t) {
   });
   let o = createDevelopmentNitroArtifactsConfig({
       appRoot: t.appRoot,
-      configuredWorld:
-        t.compileResult.manifest.config.experimental?.workflow?.world,
+      configuredWorld: t.compileResult.manifest.config.experimental?.workflow?.world,
     }),
     s = createApplicationRouteRegistry(t, { development: !0 });
   registerApplicationRoutes(e, t, o, s);
@@ -248,8 +225,7 @@ async function configureDevelopmentNitroRoutes(e, t) {
     t.compileResult.manifest.config.experimental?.workflow?.world,
   ) || l.push(createWorkflowDirectHandlerEntry(t, c));
   let u = findWorkflowRoute(s);
-  (u !== void 0 && (await registerWorkflowRoute(e, t, c, l, u)),
-    e.routing.sync());
+  (u !== void 0 && (await registerWorkflowRoute(e, t, c, l, u)), e.routing.sync());
 }
 async function configureProductionNitroRoutes(e, t) {
   let n = new WorkflowBundleBuilder({
@@ -262,23 +238,15 @@ async function configureProductionNitroRoutes(e, t) {
   });
   await registerWorkflowArtifactBuildHook(e, async () => {
     await n.build({
-      nitroStepOutfile: join(
-        resolveNitroWorkflowBuildDirectory(e),
-        `steps.mjs`,
-      ),
+      nitroStepOutfile: join(resolveNitroWorkflowBuildDirectory(e), `steps.mjs`),
     });
   });
   let i = createApplicationRouteRegistry(t);
   registerApplicationRoutes(e, t, createProductionNitroArtifactsConfig(), i);
   let o = join(t.workflowBuildDir, `workflows.mjs`),
-    s =
-      t.compileResult.manifest.config.experimental?.workflow?.world !== void 0,
-    l =
-      !isVercelBuildEnvironment() && s
-        ? [createWorkflowDirectHandlerEntry(t, o)]
-        : [],
+    s = t.compileResult.manifest.config.experimental?.workflow?.world !== void 0,
+    l = !isVercelBuildEnvironment() && s ? [createWorkflowDirectHandlerEntry(t, o)] : [],
     u = findWorkflowRoute(i);
-  (u !== void 0 && (await registerWorkflowRoute(e, t, o, l, u)),
-    e.routing.sync());
+  (u !== void 0 && (await registerWorkflowRoute(e, t, o, l, u)), e.routing.sync());
 }
 export { configureDevelopmentNitroRoutes, configureProductionNitroRoutes };

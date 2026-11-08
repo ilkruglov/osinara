@@ -11,8 +11,8 @@ import type { WebSocketRouteHandler } from "#channel/routes.js";
  * upgrade into it.
  */
 export interface WebSocketUpgradeServerBridge {
-    readonly route: WebSocketRouteHandler;
-    readonly server: Server;
+  readonly route: WebSocketRouteHandler;
+  readonly server: Server;
 }
 /**
  * Creates an escape-hatch Node HTTP server facade plus a `WS()` route handler

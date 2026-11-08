@@ -10,7 +10,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { memoryContentRejectionCode, memoryWriteRejectionCode, requireAllowedMemoryContent } from "./memory-content-policy.js";
+import {
+  memoryContentRejectionCode,
+  memoryWriteRejectionCode,
+  requireAllowedMemoryContent,
+} from "./memory-content-policy.js";
 
 describe("requireAllowedMemoryContent", () => {
   it.each([
@@ -20,7 +24,9 @@ describe("requireAllowedMemoryContent", () => {
     "Одноразовый код: 123456",
     "Карта 4242 4242 4242 4242",
   ])("rejects prohibited secret content: %s", (content) => {
-    expect(() => requireAllowedMemoryContent(content)).toThrowError(/AGENT_MEMORY_CONTENT_FORBIDDEN/);
+    expect(() => requireAllowedMemoryContent(content)).toThrowError(
+      /AGENT_MEMORY_CONTENT_FORBIDDEN/,
+    );
   });
 
   it.each([

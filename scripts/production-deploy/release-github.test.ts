@@ -18,9 +18,24 @@ const RELEASE_SH = join(import.meta.dirname, "release.sh");
 function run(options: { assetUrl?: string; token?: string }) {
   const dir = mkdtempSync(join(tmpdir(), "osinara-release-github-"));
   const env = join(dir, "server.env");
-  writeFileSync(env, `TELEGRAM_BOT_TOKEN=x\n${options.token ? `OSINARA_GITHUB_TOKEN=${options.token}\n` : ""}`);
+  writeFileSync(
+    env,
+    `TELEGRAM_BOT_TOKEN=x\n${options.token ? `OSINARA_GITHUB_TOKEN=${options.token}\n` : ""}`,
+  );
   const release = join(dir, "release.json");
-  writeFileSync(release, JSON.stringify({ assets: [{ name: "compose.production.yaml", url: options.assetUrl ?? "https://api.github.com/repos/ilkruglov/osinara/releases/assets/123" }] }));
+  writeFileSync(
+    release,
+    JSON.stringify({
+      assets: [
+        {
+          name: "compose.production.yaml",
+          url:
+            options.assetUrl ??
+            "https://api.github.com/repos/ilkruglov/osinara/releases/assets/123",
+        },
+      ],
+    }),
+  );
   const script = `
     set -euo pipefail
     SERVER_ENV=${JSON.stringify(env)}; WORK_DIR=${JSON.stringify(dir)}
@@ -66,7 +81,10 @@ describe("release.sh GitHub access", () => {
   });
 
   it("refuses an asset URL outside this repository's API", () => {
-    for (const assetUrl of ["https://evil.example/releases/assets/1", "https://api.github.com/repos/someone/else/releases/assets/1"]) {
+    for (const assetUrl of [
+      "https://evil.example/releases/assets/1",
+      "https://api.github.com/repos/someone/else/releases/assets/1",
+    ]) {
       const out = run({ assetUrl });
       expect(out).toContain("FAIL DEPLOY_RELEASE_METADATA_INVALID");
       expect(out).not.toContain("DOWNLOADED");

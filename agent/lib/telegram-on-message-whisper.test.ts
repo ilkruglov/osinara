@@ -48,20 +48,26 @@ function familyGroup() {
     toolAllowlist: [],
     type: "family_private",
   });
-  repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "member", userId: "user-1" });
-  repository.journal.listRecent.mockResolvedValue([{
-    actorId: "telegram:102",
-    actorKind: "user",
-    contentText: "Мия, кто прав про отпуск?",
-    entryId: "00000000-0000-4000-8000-000000000020",
-    messageKind: "text",
-    messageThreadId: null,
-    replyToSequenceId: null,
-    senderDisplayName: "Илья",
-    senderUsername: "ilya",
-    sentAt: "2026-11-06T18:00:00.000Z",
-    sequenceId: "40",
-  }]);
+  repository.telegram.findIdentity.mockResolvedValue({
+    familyId: "family-1",
+    role: "member",
+    userId: "user-1",
+  });
+  repository.journal.listRecent.mockResolvedValue([
+    {
+      actorId: "telegram:102",
+      actorKind: "user",
+      contentText: "Мия, кто прав про отпуск?",
+      entryId: "00000000-0000-4000-8000-000000000020",
+      messageKind: "text",
+      messageThreadId: null,
+      replyToSequenceId: null,
+      senderDisplayName: "Илья",
+      senderUsername: "ilya",
+      sentAt: "2026-11-06T18:00:00.000Z",
+      sequenceId: "40",
+    },
+  ]);
   return repository;
 }
 
@@ -75,15 +81,17 @@ describe("createTelegramMessageHandler whisper", () => {
     expect(repository.journal.record).not.toHaveBeenCalled();
     expect(repository.memoryReview.observePassiveMessage).not.toHaveBeenCalled();
     expect(repository.groupContext.prepare).not.toHaveBeenCalled();
-    expect(repository.session.prepareTurn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      baseContinuationToken: "osinara:whisper:group-1:main:101",
-      familyId: "family-1",
-      groupId: "group-1",
-      kind: "whisper",
-      scope: "family",
-      telegramForumTopicId: null,
-      userId: null,
-    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:whisper:group-1:main:101",
+        familyId: "family-1",
+        groupId: "group-1",
+        kind: "whisper",
+        scope: "family",
+        telegramForumTopicId: null,
+        userId: null,
+      }),
+    );
     expect(result).toMatchObject({
       continuationToken: "telegram-101::",
       replyHandling: "message",
@@ -107,11 +115,18 @@ describe("createTelegramMessageHandler whisper", () => {
       telegramWhisperReceiverId: "101",
     });
     for (const absent of [
-      "telegramMessageId", "telegramReplyToMessageId", "telegramTimelineEntryId", "telegramTimelineSequence",
-      "telegramTimelineVisibleEntryIds", "osinaraTelegramUpdateId",
-    ]) expect(attributes).not.toHaveProperty(absent);
+      "telegramMessageId",
+      "telegramReplyToMessageId",
+      "telegramTimelineEntryId",
+      "telegramTimelineSequence",
+      "telegramTimelineVisibleEntryIds",
+      "osinaraTelegramUpdateId",
+    ])
+      expect(attributes).not.toHaveProperty(absent);
     expect(result?.message).toContain("Мия, кто прав про отпуск?");
-    expect(result?.message).toMatch(/<current_telegram_message>\n.*"text":"о чём они спорят\?".*"whisper":true/u);
+    expect(result?.message).toMatch(
+      /<current_telegram_message>\n.*"text":"о чём они спорят\?".*"whisper":true/u,
+    );
     expect(repository.whisper.close).not.toHaveBeenCalled();
   });
 
@@ -127,13 +142,20 @@ describe("createTelegramMessageHandler whisper", () => {
 
     await handler(telegramContext().context, topicMessage);
 
-    expect(repository.journal.listRecent).toHaveBeenCalledWith(expect.objectContaining({
-      anchorEntryId: null, beforeSequence: null, groupId: "group-1", messageThreadId: "12",
-    }));
-    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "osinara:whisper:group-1:topic:12:101",
-      telegramForumTopicId: 12,
-    }));
+    expect(repository.journal.listRecent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchorEntryId: null,
+        beforeSequence: null,
+        groupId: "group-1",
+        messageThreadId: "12",
+      }),
+    );
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "osinara:whisper:group-1:topic:12:101",
+        telegramForumTopicId: 12,
+      }),
+    );
   });
 
   it("removes the placeholder of a whisper the author may no longer send", async () => {
@@ -152,7 +174,9 @@ describe("createTelegramMessageHandler whisper", () => {
     const repository = familyGroup();
     const handler = createTelegramMessageHandler(repository);
 
-    await expect(handler(telegramContext().context, whisper("/whisper привет", null))).resolves.toBeNull();
+    await expect(
+      handler(telegramContext().context, whisper("/whisper привет", null)),
+    ).resolves.toBeNull();
 
     expect(repository.journal.record).not.toHaveBeenCalled();
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();
@@ -185,7 +209,9 @@ describe("createTelegramMessageHandler whisper", () => {
 
     const result = await handler(telegramContext().context, reply);
 
-    expect(result?.message).toContain('"replyTargetSnapshot":{"contentText":"Ну это решается по-логистически","senderDisplayName":"Илья","senderUsername":"ilya"}');
+    expect(result?.message).toContain(
+      '"replyTargetSnapshot":{"contentText":"Ну это решается по-логистически","senderDisplayName":"Илья","senderUsername":"ilya"}',
+    );
     expect(result?.message).toContain('"replyQuotedText":"по-логистически"');
   });
 
@@ -195,9 +221,11 @@ describe("createTelegramMessageHandler whisper", () => {
 
     await handler(telegramContext().context, whisper());
 
-    expect(repository.whisper.memoryContext).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      conversationId: "conversation-group-1",
-      query: "о чём они спорят?",
-    }));
+    expect(repository.whisper.memoryContext).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        conversationId: "conversation-group-1",
+        query: "о чём они спорят?",
+      }),
+    );
   });
 });

@@ -50,28 +50,36 @@ function managerDependencies() {
     profileExists: vi.fn().mockResolvedValue(true),
     removeProfile: vi.fn(),
     startAuthorization: vi.fn(),
-    withProfileAccount: vi.fn(async (
-      _auth,
-      _encryptionKey,
-      _management,
-      operation: (value: typeof account) => Promise<unknown>,
-    ) => await operation(account)),
+    withProfileAccount: vi.fn(
+      async (
+        _auth,
+        _encryptionKey,
+        _management,
+        operation: (value: typeof account) => Promise<unknown>,
+      ) => await operation(account),
+    ),
     writeProfile: vi.fn(),
   };
 }
 
 function approvalFor(input: Record<string, unknown>) {
-  const approval = (manageGoogleWorkspaceConnection as unknown as {
-    approval: (context: { toolInput: Record<string, unknown> }) => unknown;
-  }).approval;
+  const approval = (
+    manageGoogleWorkspaceConnection as unknown as {
+      approval: (context: { toolInput: Record<string, unknown> }) => unknown;
+    }
+  ).approval;
   return approval({ toolInput: input });
 }
 
 describe("manage_google_workspace_connection policy", () => {
   it("publishes connection actions without a generic API command", () => {
-    const schema = z.toJSONSchema((manageGoogleWorkspaceConnection as unknown as {
-      inputSchema: Parameters<typeof z.toJSONSchema>[0];
-    }).inputSchema) as Record<string, unknown>;
+    const schema = z.toJSONSchema(
+      (
+        manageGoogleWorkspaceConnection as unknown as {
+          inputSchema: Parameters<typeof z.toJSONSchema>[0];
+        }
+      ).inputSchema,
+    ) as Record<string, unknown>;
 
     expect(schema.type).toBe("object");
     expect(schema.properties).toMatchObject({
@@ -92,10 +100,14 @@ describe("manage_google_workspace_connection policy", () => {
       "https://www.googleapis.com/auth/contacts.other.readonly",
       "https://www.googleapis.com/auth/directory.readonly",
     ];
-    const status = googleWorkspaceConnectionStatus({
-      displayName: "owner@example.com",
-      scopes: GOOGLE_WORKSPACE_SCOPES.filter((scope) => !peopleApiScopes.includes(scope)),
-    }, "personal", true);
+    const status = googleWorkspaceConnectionStatus(
+      {
+        displayName: "owner@example.com",
+        scopes: GOOGLE_WORKSPACE_SCOPES.filter((scope) => !peopleApiScopes.includes(scope)),
+      },
+      "personal",
+      true,
+    );
 
     expect(status).toMatchObject({
       account: "owner@example.com",
@@ -112,10 +124,16 @@ describe("manage_google_workspace_connection policy", () => {
   });
 
   it("reports complete materialized grants as ready", () => {
-    expect(googleWorkspaceConnectionStatus({
-      displayName: "owner@example.com",
-      scopes: GOOGLE_WORKSPACE_SCOPES,
-    }, "family", true)).toEqual({
+    expect(
+      googleWorkspaceConnectionStatus(
+        {
+          displayName: "owner@example.com",
+          scopes: GOOGLE_WORKSPACE_SCOPES,
+        },
+        "family",
+        true,
+      ),
+    ).toEqual({
       account: "owner@example.com",
       connected: true,
       ready: true,
@@ -124,10 +142,16 @@ describe("manage_google_workspace_connection policy", () => {
   });
 
   it("reports a complete grant without a credential profile as not ready", () => {
-    expect(googleWorkspaceConnectionStatus({
-      displayName: "owner@example.com",
-      scopes: GOOGLE_WORKSPACE_SCOPES,
-    }, "personal", false)).toEqual({
+    expect(
+      googleWorkspaceConnectionStatus(
+        {
+          displayName: "owner@example.com",
+          scopes: GOOGLE_WORKSPACE_SCOPES,
+        },
+        "personal",
+        false,
+      ),
+    ).toEqual({
       account: "owner@example.com",
       connected: false,
       materializationRequired: true,

@@ -19,8 +19,7 @@ import {
 const log = createLogger(`github.dispatch`);
 async function dispatchIssueComment(e) {
   let t = await e.botName();
-  if (isIgnoredInboundComment(e.event.comment.body, e.event.comment.author, t))
-    return;
+  if (isIgnoredInboundComment(e.event.comment.body, e.event.comment.author, t)) return;
   let n = buildInboundContext(e.config, e.event);
   await dispatchCommentTurn({
     body: e.event.comment.body,
@@ -35,8 +34,7 @@ async function dispatchIssueComment(e) {
 }
 async function dispatchPullRequestReviewComment(e) {
   let t = await e.botName();
-  if (isIgnoredInboundComment(e.event.comment.body, e.event.comment.author, t))
-    return;
+  if (isIgnoredInboundComment(e.event.comment.body, e.event.comment.author, t)) return;
   let n = buildInboundContext(e.config, e.event);
   await dispatchCommentTurn({
     body: e.event.comment.body,
@@ -103,10 +101,10 @@ async function dispatchCiEvent(e) {
       event: e.event,
       handlerResult: () => e.handlerResult(n),
     })) != null &&
-      log.warn(
-        `GitHub CI event cannot dispatch without an associated pull request`,
-        { deliveryId: e.event.delivery.id, event: e.event.kind },
-      );
+      log.warn(`GitHub CI event cannot dispatch without an associated pull request`, {
+        deliveryId: e.event.delivery.id,
+        event: e.event.kind,
+      });
     return;
   }
   await dispatchWebhookEventTurn({
@@ -129,11 +127,7 @@ async function dispatchWebhookEventTurn(e) {
       event: e.event,
       message: e.message,
       context: mergeGitHubContext({
-        github: await buildPullRequestContext(
-          e.config,
-          e.state,
-          e.event.delivery.id,
-        ),
+        github: await buildPullRequestContext(e.config, e.state, e.event.delivery.id),
         hook: t.context,
       }),
       from: e.from,
@@ -148,19 +142,14 @@ async function dispatchCommentTurn(e) {
   });
   if (t == null) return;
   let r =
-    extractGitHubCommentTrigger({ body: e.body, botName: e.botName })
-      ?.message ?? e.body.trim();
+    extractGitHubCommentTrigger({ body: e.body, botName: e.botName })?.message ?? e.body.trim();
   await sendGitHubTurn({
     auth: t.auth,
     commentUrl: e.commentUrl,
     event: e.event,
     message: r,
     context: mergeGitHubContext({
-      github: await buildPullRequestContext(
-        e.config,
-        e.state,
-        e.event.delivery.id,
-      ),
+      github: await buildPullRequestContext(e.config, e.state, e.event.delivery.id),
       hook: t.context,
     }),
     from: e.from,
@@ -189,14 +178,12 @@ async function sendGitHubTurn(e) {
     sender: e.event.sender,
   });
   try {
-    await e
-      .from(continuationTokenFromState(e.state))
-      .send(e.message, {
-        auth: e.auth,
-        context: [n, ...(e.context ?? [])],
-        state: e.state,
-        title: e.title,
-      });
+    await e.from(continuationTokenFromState(e.state)).send(e.message, {
+      auth: e.auth,
+      context: [n, ...(e.context ?? [])],
+      state: e.state,
+      title: e.title,
+    });
   } catch (n) {
     logError(log, e.logMessage ?? `GitHub delivery failed`, n, {
       deliveryId: e.event.delivery.id,
@@ -227,9 +214,7 @@ function buildInboundContext(e, t) {
   let n = buildGitHubBinding({
     config: e,
     state:
-      t.kind === `check_suite` ||
-      t.kind === `check_run` ||
-      t.kind === `workflow_run`
+      t.kind === `check_suite` || t.kind === `check_run` || t.kind === `workflow_run`
         ? stateFromCiEvent(t)
         : t.kind === `issue_comment`
           ? stateFromIssueCommentEvent(t)
@@ -271,11 +256,7 @@ function formatCiEventMessage(e, t) {
   return `${e} ${t.action}: ${ciEventId(t)}${n ? ` (${n})` : ``}`;
 }
 function ciEventId(e) {
-  return `checkSuiteId` in e
-    ? e.checkSuiteId
-    : `checkRunId` in e
-      ? e.checkRunId
-      : e.workflowRunId;
+  return `checkSuiteId` in e ? e.checkSuiteId : `checkRunId` in e ? e.checkRunId : e.workflowRunId;
 }
 function isIgnoredInboundComment(e, t, n) {
   if (e.includes(`<!-- eve:github:`) || t?.type === `Bot`) return !0;

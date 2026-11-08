@@ -15,8 +15,7 @@ async function compileToolEntry(e, t, n = {}) {
       .replace(/^tools\//, ``)
       .replaceAll(`/`, `-`);
   if (r.kind === `disabled`) return { kind: `disabled`, name: i };
-  if (r.kind === `workflow-tool`)
-    return { kind: `workflow-tool`, maxSubagents: r.maxSubagents };
+  if (r.kind === `workflow-tool`) return { kind: `workflow-tool`, maxSubagents: r.maxSubagents };
   if (r.kind === `web-search-tool`) {
     if (i !== `web_search`)
       throw Error(

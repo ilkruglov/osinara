@@ -13,7 +13,7 @@ var TurnCancelledError = class extends Error {
 function isSessionLimitDecline(e) {
   let t = e,
     n = new Set();
-  for (; typeof t == `object` && t && !n.has(t); ) {
+  for (; typeof t == `object` && t && !n.has(t);) {
     if ((n.add(t), t.sessionLimitDeclined === !0)) return !0;
     t = t.cause;
   }
@@ -22,15 +22,14 @@ function isSessionLimitDecline(e) {
 function isTurnCancellation(t) {
   let n = t,
     r = new Set();
-  for (; typeof n == `object` && n && !r.has(n); ) {
+  for (; typeof n == `object` && n && !r.has(n);) {
     if ((r.add(n), n.name === TURN_CANCELLED_ERROR_NAME)) return !0;
     n = n.cause;
   }
   return !1;
 }
 function throwIfTurnAborted(e) {
-  if (e?.aborted === !0)
-    throw isTurnCancellation(e.reason) ? e.reason : new TurnCancelledError();
+  if (e?.aborted === !0) throw isTurnCancellation(e.reason) ? e.reason : new TurnCancelledError();
 }
 export {
   SessionLimitDeclinedError,

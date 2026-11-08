@@ -24,14 +24,7 @@ import type {
 } from "./provider-catalog-types.js";
 
 const VOICE_TRANSCRIPTION_MODEL_ID = "whisper-large-v3-turbo";
-const REASONING_EFFORTS = new Set([
-  "max",
-  "xhigh",
-  "high",
-  "medium",
-  "low",
-  "minimal",
-]);
+const REASONING_EFFORTS = new Set(["max", "xhigh", "high", "medium", "low", "minimal"]);
 
 /** Validates and serializes the closed reasoning union into one canonical comparison key. */
 function canonicalReasoning(selection: ReasoningSelection): string {
@@ -43,11 +36,7 @@ function canonicalReasoning(selection: ReasoningSelection): string {
   }
   const keys = Object.keys(selection);
   if (selection.type === "none" && keys.length === 1) return "none";
-  if (
-    selection.type === "effort" &&
-    keys.length === 2 &&
-    REASONING_EFFORTS.has(selection.effort)
-  ) {
+  if (selection.type === "effort" && keys.length === 2 && REASONING_EFFORTS.has(selection.effort)) {
     return `effort:${selection.effort}`;
   }
   if (
@@ -65,18 +54,19 @@ function canonicalReasoning(selection: ReasoningSelection): string {
 
 /** Catalog output is an integration input, so required installer fields are checked at runtime. */
 function validateInstallerReadyModel(model: ProviderCatalogModel): void {
-  const validContext = Number.isInteger(model.contextWindowTokens)
-    && model.contextWindowTokens !== null
-    && model.contextWindowTokens > 0;
-  const validOutput = Number.isInteger(model.maxOutputTokens)
-    && model.maxOutputTokens !== null
-    && model.maxOutputTokens > 0
-    && model.maxOutputTokens <= MODEL_PROVIDER_MAX_OUTPUT_TOKENS;
-  const validId = typeof model.id === "string"
-    && model.id.trim().length > 0
-    && model.id.length <= 200;
-  const validCapabilities = model.supportsTools === true
-    && typeof model.supportsImageInput === "boolean";
+  const validContext =
+    Number.isInteger(model.contextWindowTokens) &&
+    model.contextWindowTokens !== null &&
+    model.contextWindowTokens > 0;
+  const validOutput =
+    Number.isInteger(model.maxOutputTokens) &&
+    model.maxOutputTokens !== null &&
+    model.maxOutputTokens > 0 &&
+    model.maxOutputTokens <= MODEL_PROVIDER_MAX_OUTPUT_TOKENS;
+  const validId =
+    typeof model.id === "string" && model.id.trim().length > 0 && model.id.length <= 200;
+  const validCapabilities =
+    model.supportsTools === true && typeof model.supportsImageInput === "boolean";
   if (!validContext || !validOutput || !validId || !validCapabilities) {
     throw new AppError(
       "AGENT_PROVIDER_CONFIG_MODEL_INVALID",
@@ -131,10 +121,11 @@ function requireReasoningSelection(
 
 function openAiReasoning(
   reasoning: ReasoningSelection | null,
-): Extract<AgentModelTransport, { protocol: "openai-chat-completions" }>['reasoning'] {
+): Extract<AgentModelTransport, { protocol: "openai-chat-completions" }>["reasoning"] {
   if (reasoning === null) return null;
   if (reasoning.type === "none") return { format: "deepseek", type: "none" };
-  if (reasoning.type === "effort") return { effort: reasoning.effort, format: "deepseek", type: "effort" };
+  if (reasoning.type === "effort")
+    return { effort: reasoning.effort, format: "deepseek", type: "effort" };
   throw new AppError(
     "AGENT_PROVIDER_CONFIG_REASONING_UNSUPPORTED",
     "Выбранный вариант рассуждений не поддерживается протоколом OpenAI",

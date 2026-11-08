@@ -33,10 +33,7 @@ function createEvalContext(n) {
       respond: (e, t) => primary().respond(e, t),
       startRespond: (e, t) => primary().startRespond(e, t),
       respondAll: (e) => primary().respondAll(e),
-      send: (e, t) => (
-        (a = typeof e == `string` ? e : ``),
-        primary().send(e, t)
-      ),
+      send: (e, t) => ((a = typeof e == `string` ? e : ``), primary().send(e, t)),
       start: (e, t) => ((a = e), primary().start(e, t)),
       sendFile: (e, t, n) => ((a = e), primary().sendFile(e, t, n)),
       signal: n.signal,
@@ -54,9 +51,7 @@ function createEvalContext(n) {
         throw e.trim().length === 0
           ? Error(`skip() requires a non-empty reason.`)
           : i.hasEntries || n.manager.hasActivity()
-            ? Error(
-                `skip() must be called before sending messages or recording assertions.`,
-              )
+            ? Error(`skip() must be called before sending messages or recording assertions.`)
             : new EvalSkipped(e);
       },
       judge: o,
@@ -85,9 +80,7 @@ function recordCheck(e, t, n) {
   });
 }
 async function evaluateAssertion(e, t) {
-  return e.evaluate === void 0
-    ? { score: await e.score(t) }
-    : await e.evaluate(t);
+  return e.evaluate === void 0 ? { score: await e.score(t) } : await e.evaluate(t);
 }
 function sleep(e = 1e3, t) {
   if (!Number.isFinite(e) || e < 0)

@@ -23,9 +23,11 @@ const telegramGroupIdSchema = z
 
 const commonRegistrationSchema = z.object({
   telegramChatId: telegramGroupIdSchema,
-  title: z.string().min(1).max(GROUP_TITLE_MAX_LENGTH).refine(
-    (title) => !TELEGRAM_GROUP_TITLE_CONTROL_PATTERN.test(title),
-  ),
+  title: z
+    .string()
+    .min(1)
+    .max(GROUP_TITLE_MAX_LENGTH)
+    .refine((title) => !TELEGRAM_GROUP_TITLE_CONTROL_PATTERN.test(title)),
 });
 
 const standardMessageModeSchema = z.enum(["addressed_only", "all"]);

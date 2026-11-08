@@ -12,10 +12,7 @@ import {
   renderLinearInputRequests,
 } from "#public/channels/linear/hitl.js";
 import { LINEAR_CHANNEL_DEFAULT_ROUTE } from "#public/channels/linear/constants.js";
-import {
-  defaultLinearAuth,
-  defaultOnAgentSession,
-} from "#public/channels/linear/defaults.js";
+import { defaultLinearAuth, defaultOnAgentSession } from "#public/channels/linear/defaults.js";
 import {
   formatLinearContextBlock,
   linearContinuationToken,

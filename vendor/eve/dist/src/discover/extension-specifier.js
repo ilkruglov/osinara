@@ -2,20 +2,15 @@ function escapeRegExp(e) {
   return e.replace(/[.*+?^${}()|[\]\\]/g, `\\$&`);
 }
 function parseExtensionMountSpecifier(e) {
-  let t = e.match(
-    /export\s*\{[^}]*\bdefault\b[^}]*\}\s*from\s*['"]([^'"]+)['"]/,
-  );
+  let t = e.match(/export\s*\{[^}]*\bdefault\b[^}]*\}\s*from\s*['"]([^'"]+)['"]/);
   if (t !== null) return t[1] ?? null;
   let n = e.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*[(;\n]/)?.[1];
   if (n === void 0) return null;
   let r = e.match(
-    RegExp(
-      `import\\s+${escapeRegExp(n)}\\s*(?:,\\s*\\{[^}]*\\})?\\s*from\\s*['"]([^'"]+)['"]`,
-    ),
+    RegExp(`import\\s+${escapeRegExp(n)}\\s*(?:,\\s*\\{[^}]*\\})?\\s*from\\s*['"]([^'"]+)['"]`),
   );
   if (r !== null) return r[1] ?? null;
-  let i =
-    /import\s*(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  let i = /import\s*(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
   for (let t = i.exec(e); t !== null; t = i.exec(e)) {
     let e = t[1] ?? ``;
     for (let r of e.split(`,`)) {

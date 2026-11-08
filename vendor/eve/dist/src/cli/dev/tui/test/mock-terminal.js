@@ -63,14 +63,7 @@ var MockUserInput = class extends EventEmitter {
     }
     write(e, t, n) {
       let r = String(e);
-      return (
-        (this.#e += r),
-        this.#s(r),
-        typeof t == `function` && t(),
-        n?.(),
-        this.#o(),
-        !0
-      );
+      return ((this.#e += r), this.#s(r), typeof t == `function` && t(), n?.(), this.#o(), !0);
     }
     resize(e, t) {
       ((this.columns = e), (this.rows = t), this.emit(`resize`));
@@ -83,22 +76,18 @@ var MockUserInput = class extends EventEmitter {
       return this.#e;
     }
     async waitForIdlePrompt(e = 1e3) {
-      let t = Array.from({ length: 11 }, (e, t) =>
-          `Working for`.slice(0, t + 1),
-        ),
+      let t = Array.from({ length: 11 }, (e, t) => `Working for`.slice(0, t + 1)),
         n = RegExp(`^[▪* ] (?:${t.join(`|`)}) \\d`, `mu`),
         idle = () => {
           let e = this.snapshot();
           return /^[›❯]/mu.test(e) && !n.test(e);
         },
         r = Date.now() + e;
-      for (; Date.now() < r; ) {
+      for (; Date.now() < r;) {
         if (idle()) return;
         await new Promise((e) => setTimeout(e, 25));
       }
-      throw Error(
-        `Timed out waiting for an idle prompt.\n\nScreen:\n${this.snapshot()}`,
-      );
+      throw Error(`Timed out waiting for an idle prompt.\n\nScreen:\n${this.snapshot()}`);
     }
     async waitForText(e, t = 1e3, n = () => this.snapshot()) {
       this.snapshot().includes(e) ||
@@ -109,11 +98,7 @@ var MockUserInput = class extends EventEmitter {
             reject: i,
             timeout: setTimeout(() => {
               ((this.#a = this.#a.filter((e) => e !== a)),
-                i(
-                  Error(
-                    `Timed out waiting for screen text: ${e}\n\nScreen:\n${n()}`,
-                  ),
-                ));
+                i(Error(`Timed out waiting for screen text: ${e}\n\nScreen:\n${n()}`)));
             }, t),
           };
           this.#a.push(a);
@@ -123,13 +108,11 @@ var MockUserInput = class extends EventEmitter {
       let e = this.snapshot();
       for (let t of this.#a.slice())
         e.includes(t.text) &&
-          (clearTimeout(t.timeout),
-          (this.#a = this.#a.filter((e) => e !== t)),
-          t.resolve());
+          (clearTimeout(t.timeout), (this.#a = this.#a.filter((e) => e !== t)), t.resolve());
     }
     #s(e) {
       let t = 0;
-      for (; t < e.length; ) {
+      for (; t < e.length;) {
         if (e[t] === `\x1B`) {
           let n = this.#c(e, t);
           if (n > t) {

@@ -86,10 +86,12 @@ describeWithDatabase("Telegram attachment read pagination", () => {
     expect(new Set(ids)).toHaveLength(51);
     expect(exact.items).toHaveLength(1);
     expect(exact.items[0]).toMatchObject({ fileName: "нужный.pdf", telegramMessageId: "1" });
-    await expect(telegramGroupAttachmentRepository.list(auth, {
-      cursor: "invalid",
-      limit: 50,
-      messageThreadId: "77",
-    })).rejects.toMatchObject({ code: "AGENT_TELEGRAM_ATTACHMENT_CURSOR_INVALID" });
+    await expect(
+      telegramGroupAttachmentRepository.list(auth, {
+        cursor: "invalid",
+        limit: 50,
+        messageThreadId: "77",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_ATTACHMENT_CURSOR_INVALID" });
   });
 });

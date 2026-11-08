@@ -112,10 +112,9 @@ describe("external-group file tools", () => {
     await symlink(outside, join(root, "escape"));
 
     try {
-      await expect(tools().read_file!.execute(
-        { filePath: `${GROUP_ROOT}/escape/secret.txt` },
-        context(),
-      )).rejects.toThrowError(/AGENT_GROUP_FILE_PATH_FORBIDDEN/u);
+      await expect(
+        tools().read_file!.execute({ filePath: `${GROUP_ROOT}/escape/secret.txt` }, context()),
+      ).rejects.toThrowError(/AGENT_GROUP_FILE_PATH_FORBIDDEN/u);
       expect(executors.read_file).not.toHaveBeenCalled();
     } finally {
       await rm(outside, { force: true, recursive: true });
@@ -166,10 +165,9 @@ describe("external-group file tools", () => {
   it("normalizes a raw native reader failure without exposing the host path", async () => {
     executors.read_file.mockRejectedValueOnce(new Error(`ENOENT: ${root}/secret.txt`));
 
-    await expect(tools().read_file!.execute(
-      { filePath: `${GROUP_ROOT}/docs/allowed.txt` },
-      context(),
-    )).rejects.toMatchObject({
+    await expect(
+      tools().read_file!.execute({ filePath: `${GROUP_ROOT}/docs/allowed.txt` }, context()),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
         retryable: true,
@@ -197,5 +195,4 @@ describe("external-group file tools", () => {
     expect(authorize).toHaveBeenCalledWith(AUTHORIZATION);
     expect(executors[name]).toHaveBeenCalledWith(expected, context());
   });
-
 });

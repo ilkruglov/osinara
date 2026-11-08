@@ -122,10 +122,7 @@ describe("Eve Telegram failure continuation", () => {
       { failRunByIdentityForNotification: vi.fn() },
     );
 
-    expect(recordSessionFailedByContinuationToken).toHaveBeenCalledWith(
-      "-1001::166",
-      "wrun_group",
-    );
+    expect(recordSessionFailedByContinuationToken).toHaveBeenCalledWith("-1001::166", "wrun_group");
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -144,10 +141,7 @@ describe("Eve Telegram failure continuation", () => {
       { failRunByIdentityForNotification: vi.fn() },
     );
 
-    expect(recordSessionFailedByContinuationToken).toHaveBeenCalledWith(
-      "-1001::166",
-      "wrun_old",
-    );
+    expect(recordSessionFailedByContinuationToken).toHaveBeenCalledWith("-1001::166", "wrun_old");
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -209,15 +203,17 @@ describe("Eve Telegram failure continuation", () => {
     const recordSessionFailedByContinuationToken = vi.fn();
     const request = vi.fn();
 
-    await expect(handleTelegramSessionFailure(
-      { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_failed" },
-      {
-        state: { chatId: "-1001", messageThreadId: null },
-        telegram: { request },
-      } as never,
-      { recordSessionFailedByContinuationToken },
-      { failRunByIdentityForNotification: vi.fn() },
-    )).rejects.toMatchObject({ code: "AGENT_SESSION_CONTINUATION_INVALID" });
+    await expect(
+      handleTelegramSessionFailure(
+        { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_failed" },
+        {
+          state: { chatId: "-1001", messageThreadId: null },
+          telegram: { request },
+        } as never,
+        { recordSessionFailedByContinuationToken },
+        { failRunByIdentityForNotification: vi.fn() },
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SESSION_CONTINUATION_INVALID" });
 
     expect(recordSessionFailedByContinuationToken).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();

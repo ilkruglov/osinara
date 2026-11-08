@@ -8,9 +8,9 @@
  * lightweight plain objects.
  */
 export interface ProjectSourceEntry {
-    readonly name: string;
-    isDirectory(): boolean;
-    isFile(): boolean;
+  readonly name: string;
+  isDirectory(): boolean;
+  isFile(): boolean;
 }
 /**
  * Result of a filesystem-style stat against a {@link ProjectSource}.
@@ -36,28 +36,28 @@ export type ProjectSourceEntryKind = "directory" | "file" | "missing" | "other";
  * entries, read UTF-8 text files, and classify paths by kind. Nothing more.
  */
 export interface ProjectSource {
-    /**
-     * Diagnostic label for this source (e.g. `"disk"` or `"memory"`).
-     * Used only for logs and error messages.
-     */
-    readonly kind: "disk" | "memory";
-    /**
-     * Returns the entries of `directoryPath` without any intrinsic ordering.
-     * Callers that require stable ordering should sort explicitly.
-     *
-     * Throws when the path does not resolve to a directory — callers that
-     * want "missing is OK" should stat first.
-     */
-    readDirectory(directoryPath: string): Promise<readonly ProjectSourceEntry[]>;
-    /**
-     * Returns the UTF-8 text content of `filePath`. Throws when the path is
-     * missing or is not a regular file.
-     */
-    readTextFile(filePath: string): Promise<string>;
-    /**
-     * Returns the kind of `targetPath` without throwing for missing paths.
-     */
-    stat(targetPath: string): Promise<ProjectSourceEntryKind>;
+  /**
+   * Diagnostic label for this source (e.g. `"disk"` or `"memory"`).
+   * Used only for logs and error messages.
+   */
+  readonly kind: "disk" | "memory";
+  /**
+   * Returns the entries of `directoryPath` without any intrinsic ordering.
+   * Callers that require stable ordering should sort explicitly.
+   *
+   * Throws when the path does not resolve to a directory — callers that
+   * want "missing is OK" should stat first.
+   */
+  readDirectory(directoryPath: string): Promise<readonly ProjectSourceEntry[]>;
+  /**
+   * Returns the UTF-8 text content of `filePath`. Throws when the path is
+   * missing or is not a regular file.
+   */
+  readTextFile(filePath: string): Promise<string>;
+  /**
+   * Returns the kind of `targetPath` without throwing for missing paths.
+   */
+  stat(targetPath: string): Promise<ProjectSourceEntryKind>;
 }
 /**
  * Creates a {@link ProjectSource} backed by the real filesystem. This is the
@@ -71,30 +71,36 @@ export declare function createDiskProjectSource(): ProjectSource;
  * Keys are paths; values are UTF-8 text or `{ content }` records.
  */
 export interface MemoryProjectSourceInput {
-    /**
-     * Optional root hint used only for diagnostics. The source itself accepts
-     * reads against any path — unrelated absolute paths simply resolve as
-     * missing.
-     */
-    readonly rootDir?: string;
-    /**
-     * Map of absolute paths to file content.
-     */
-    readonly files: Readonly<Record<string, string | {
-        readonly content: string;
-    }>>;
-    /**
-     * Optional list of absolute paths that should exist as directories even
-     * though no files live underneath them. Discovery treats these exactly
-     * like real empty folders on disk — they appear in `readDirectory`
-     * listings of their parent and return `"directory"` from `stat`.
-     *
-     * Every parent of every file in {@link files} is already registered as
-     * a directory automatically, so this field is only needed for empty
-     * folders (for example, to assert that an empty `connections/` folder
-     * produces no diagnostics).
-     */
-    readonly directories?: readonly string[];
+  /**
+   * Optional root hint used only for diagnostics. The source itself accepts
+   * reads against any path — unrelated absolute paths simply resolve as
+   * missing.
+   */
+  readonly rootDir?: string;
+  /**
+   * Map of absolute paths to file content.
+   */
+  readonly files: Readonly<
+    Record<
+      string,
+      | string
+      | {
+          readonly content: string;
+        }
+    >
+  >;
+  /**
+   * Optional list of absolute paths that should exist as directories even
+   * though no files live underneath them. Discovery treats these exactly
+   * like real empty folders on disk — they appear in `readDirectory`
+   * listings of their parent and return `"directory"` from `stat`.
+   *
+   * Every parent of every file in {@link files} is already registered as
+   * a directory automatically, so this field is only needed for empty
+   * folders (for example, to assert that an empty `connections/` folder
+   * produces no diagnostics).
+   */
+  readonly directories?: readonly string[];
 }
 /**
  * Creates a {@link ProjectSource} backed by an in-memory file tree.

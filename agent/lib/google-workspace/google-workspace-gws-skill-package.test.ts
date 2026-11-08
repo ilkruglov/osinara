@@ -50,8 +50,9 @@ async function readSkill(skillName: string): Promise<string> {
 }
 
 function exampleArgv(command: string): string[] {
-  return (command.match(/(?:[^\s'"]+|'[^']*'|"[^"]*")+/gu) ?? [])
-    .map((argument) => argument.replace(/^(['"])(.*)\1$/u, "$2"));
+  return (command.match(/(?:[^\s'"]+|'[^']*'|"[^"]*")+/gu) ?? []).map((argument) =>
+    argument.replace(/^(['"])(.*)\1$/u, "$2"),
+  );
 }
 
 describe("Google Workspace gws skill packages", () => {
@@ -98,7 +99,9 @@ describe("Google Workspace gws skill packages", () => {
     expect(shared).toContain("`ask_question` as a substitute");
     expect(shared).toContain("automatic Eve HITL");
     expect(shared).toContain("Do not automatically retry failed `gws` mutations");
-    expect(shared).toContain("Do not pass `--upload`, `--output`, `--output-dir`, `--attach`, `-a`, or `-o`");
+    expect(shared).toContain(
+      "Do not pass `--upload`, `--output`, `--output-dir`, `--attach`, `-a`, or `-o`",
+    );
   });
 
   it("documents Google People contact mutation policy", async () => {
@@ -117,9 +120,15 @@ describe("Google Workspace gws skill packages", () => {
     const gmail = await readSkill("gws-gmail");
 
     expect(gmail).toContain("manage_gmail_message");
-    expect(gmail).toContain('{"action":"trash","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
-    expect(gmail).toContain('{"action":"delete","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
-    expect(gmail).toContain('{"action":"mark_read","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
+    expect(gmail).toContain(
+      '{"action":"trash","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}',
+    );
+    expect(gmail).toContain(
+      '{"action":"delete","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}',
+    );
+    expect(gmail).toContain(
+      '{"action":"mark_read","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}',
+    );
     expect(gmail).not.toContain('["gmail", "users", "messages", "trash"');
     expect(gmail).not.toContain('["gmail", "users", "messages", "delete"');
     expect(gmail).not.toContain('["gmail", "users", "messages", "modify"');
@@ -155,15 +164,16 @@ describe("Google Workspace gws skill packages", () => {
   it("keeps every self-contained gws example executable through the argv policy", async () => {
     for (const skillName of serviceSkills) {
       const lines = (await readSkill(skillName)).split("\n");
-      const examples = lines.filter((line) =>
-        line.startsWith("gws ") &&
-        !line.endsWith("\\") &&
-        !line.includes("|") &&
-        !line.startsWith("gws auth ") &&
-        !line.startsWith("gws <") &&
-        !line.startsWith("gws schema <") &&
-        !line.includes("<resource>") &&
-        !line.includes("<method>")
+      const examples = lines.filter(
+        (line) =>
+          line.startsWith("gws ") &&
+          !line.endsWith("\\") &&
+          !line.includes("|") &&
+          !line.startsWith("gws auth ") &&
+          !line.startsWith("gws <") &&
+          !line.startsWith("gws schema <") &&
+          !line.includes("<resource>") &&
+          !line.includes("<method>"),
       );
 
       for (const example of examples) {

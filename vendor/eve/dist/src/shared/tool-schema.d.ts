@@ -1,11 +1,15 @@
-import type { StandardJSONSchemaV1, StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from "#compiled/@standard-schema/spec/index.js";
 import { type JsonObject } from "#shared/json.js";
 /**
  * eve-owned schema contract for tool input and output schemas: a Standard
  * Schema validator that can also emit JSON Schema. Zod implements both
  * constituent protocols without exposing Zod through runtime-owned types.
  */
-export type ToolSchema<Input = unknown, Output = Input> = StandardSchemaV1<Input, Output> & StandardJSONSchemaV1<Input, Output>;
+export type ToolSchema<Input = unknown, Output = Input> = StandardSchemaV1<Input, Output> &
+  StandardJSONSchemaV1<Input, Output>;
 /**
  * Any value accepted at a schema boundary: a live {@link ToolSchema}, a Zod 3
  * Standard Schema, a JSON-Schema-capable Standard Schema, or plain JSON Schema
@@ -22,7 +26,9 @@ type SchemaResult<TSource, TResult> = TSource extends null | undefined ? TSource
  * validation-free schema that still advertises the source JSON Schema. `null`
  * and `undefined` pass through untouched.
  */
-export declare function toInputSchema<T extends ToolSchemaSource | null | undefined>(source: T): SchemaResult<T, ToolSchema>;
+export declare function toInputSchema<T extends ToolSchemaSource | null | undefined>(
+  source: T,
+): SchemaResult<T, ToolSchema>;
 /**
  * Resolves a source into a live output {@link ToolSchema}. Live schemas pass
  * through unchanged; serialized JSON Schemas are rehydrated into vendored Zod
@@ -30,19 +36,25 @@ export declare function toInputSchema<T extends ToolSchemaSource | null | undefi
  * validation-free schema that still advertises the source JSON Schema. `null`
  * and `undefined` pass through untouched.
  */
-export declare function toOutputSchema<T extends ToolSchemaSource | null | undefined>(source: T): SchemaResult<T, ToolSchema>;
+export declare function toOutputSchema<T extends ToolSchemaSource | null | undefined>(
+  source: T,
+): SchemaResult<T, ToolSchema>;
 /**
  * Serializes an input schema source into canonical JSON Schema data (no
  * `$schema` key) for compiled artifacts, durable state, and protocol
  * responses. `null` and `undefined` pass through untouched.
  */
-export declare function serializeInputSchema<T extends ToolSchemaSource | null | undefined>(source: T): SchemaResult<T, JsonObject>;
+export declare function serializeInputSchema<T extends ToolSchemaSource | null | undefined>(
+  source: T,
+): SchemaResult<T, JsonObject>;
 /**
  * Serializes an output schema source into canonical JSON Schema data (no
  * `$schema` key) for compiled artifacts, durable state, and protocol
  * responses. `null` and `undefined` pass through untouched.
  */
-export declare function serializeOutputSchema<T extends ToolSchemaSource | null | undefined>(source: T): SchemaResult<T, JsonObject>;
+export declare function serializeOutputSchema<T extends ToolSchemaSource | null | undefined>(
+  source: T,
+): SchemaResult<T, JsonObject>;
 /**
  * Returns whether a value implements the full {@link ToolSchema} contract:
  * Standard Schema validation plus JSON Schema emission.

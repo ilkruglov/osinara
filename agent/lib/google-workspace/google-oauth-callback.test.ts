@@ -53,9 +53,11 @@ describe("Google Workspace OAuth callback", () => {
   it("persists a state-bound OpenID account identity", async () => {
     const deps = dependencies();
     const handler = createGoogleOAuthCallbackHandler(deps);
-    const response = await handler(new Request(
-      "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
-    ));
+    const response = await handler(
+      new Request(
+        "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
+      ),
+    );
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Google Workspace подключён");
@@ -80,9 +82,13 @@ describe("Google Workspace OAuth callback", () => {
     deps.completeAuthorization.mockRejectedValue(new Error("AGENT_OWNER_REQUIRED: owner revoked"));
     const handler = createGoogleOAuthCallbackHandler(deps);
 
-    await expect(handler(new Request(
-      "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
-    ))).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+    await expect(
+      handler(
+        new Request(
+          "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
+        ),
+      ),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
     expect(deps.completeAuthorization).toHaveBeenCalled();
     expect(deps.writeProfile).not.toHaveBeenCalled();
     expect(deps.failAuthorization).toHaveBeenCalledWith(
@@ -101,9 +107,13 @@ describe("Google Workspace OAuth callback", () => {
     });
     const handler = createGoogleOAuthCallbackHandler(deps);
 
-    await expect(handler(new Request(
-      "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
-    ))).rejects.toThrowError(/AGENT_GOOGLE_SCOPE_INCOMPLETE/);
+    await expect(
+      handler(
+        new Request(
+          "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
+        ),
+      ),
+    ).rejects.toThrowError(/AGENT_GOOGLE_SCOPE_INCOMPLETE/);
     expect(deps.completeAuthorization).not.toHaveBeenCalled();
     expect(deps.writeProfile).not.toHaveBeenCalled();
   });
@@ -111,9 +121,11 @@ describe("Google Workspace OAuth callback", () => {
   it("records an explicit denial without exchanging a code", async () => {
     const deps = dependencies();
     const handler = createGoogleOAuthCallbackHandler(deps);
-    const response = await handler(new Request(
-      "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&error=access_denied",
-    ));
+    const response = await handler(
+      new Request(
+        "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&error=access_denied",
+      ),
+    );
 
     expect(response.status).toBe(400);
     expect(deps.failAuthorization).toHaveBeenCalledWith(claim, "AGENT_GOOGLE_OAUTH_DENIED");
@@ -125,9 +137,13 @@ describe("Google Workspace OAuth callback", () => {
     deps.getAccountIdentity.mockRejectedValue(new Error("provider unavailable"));
     const handler = createGoogleOAuthCallbackHandler(deps);
 
-    await expect(handler(new Request(
-      "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
-    ))).rejects.toThrowError("provider unavailable");
+    await expect(
+      handler(
+        new Request(
+          "https://agent.example/eve/v1/google-oauth/callback?state=state-with-at-least-32-random-bytes&code=auth-code",
+        ),
+      ),
+    ).rejects.toThrowError("provider unavailable");
     expect(deps.failAuthorization).toHaveBeenCalledWith(
       claim,
       "AGENT_GOOGLE_OAUTH_COMPLETION_FAILED",

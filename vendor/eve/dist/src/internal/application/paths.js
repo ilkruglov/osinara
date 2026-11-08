@@ -26,10 +26,7 @@ function resolveApplicationHostArtifactsDirectory(e) {
 }
 function resolveWorkflowBuildDirectory(e) {
   let n = join(resolvePackageRoot(), `.eve`, `workflow-cache`);
-  return (
-    pruneStaleWorkflowCacheSiblings(n),
-    join(n, getWorkflowBuildCacheKey(e))
-  );
+  return (pruneStaleWorkflowCacheSiblings(n), join(n, getWorkflowBuildCacheKey(e)));
 }
 function pruneStaleWorkflowCacheSiblings(e) {
   if (!existsSync(e)) return;
@@ -56,9 +53,7 @@ function resolveSandboxCacheDirectory(e) {
   return join(e, `.eve`, `sandbox-cache`);
 }
 function resolveOutputDirectory(e) {
-  return isVercelBuildEnvironment()
-    ? join(e, `.vercel`, `output`)
-    : join(e, `.output`);
+  return isVercelBuildEnvironment() ? join(e, `.vercel`, `output`) : join(e, `.output`);
 }
 function getApplicationInfo(e) {
   return {

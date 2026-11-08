@@ -11,6 +11,10 @@ import type { OutputSink } from "../step.js";
  * the Slack connector slug falls back to the package.json name, exactly like
  * `eve add channel/slack`.
  */
-export declare function inProjectSetupState(appRoot: string, project: ProjectResolution, seed?: Partial<SetupState>): SetupState;
+export declare function inProjectSetupState(
+  appRoot: string,
+  project: ProjectResolution,
+  seed?: Partial<SetupState>,
+): SetupState;
 /** Routes runner sink output through the prompter's log. */
 export declare function prompterSink(prompter: Prompter): OutputSink;

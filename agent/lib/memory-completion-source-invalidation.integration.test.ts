@@ -12,9 +12,8 @@ import { closeDatabase, database } from "./database.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 interface CompletionFixture {
   auth: MemoryAuthorization;
@@ -92,8 +91,15 @@ async function createCompletionFixture(): Promise<CompletionFixture> {
         timeline_entry_id, timeline_sequence, source_message_id, source_snapshot)
      VALUES ($1, $2, 'family', $2, 'primary', 'firsthand', $3, 'Family', $4, $5, $6,
              now(), 'Работа завершена по исходному плану', $7, 1, 991, '{}'::jsonb)`,
-    [claim.rows[0]!.id, family.rows[0]!.id, conversation.rows[0]!.id, group.rows[0]!.id,
-      participant.rows[0]!.id, user.rows[0]!.id, timeline.rows[0]!.id],
+    [
+      claim.rows[0]!.id,
+      family.rows[0]!.id,
+      conversation.rows[0]!.id,
+      group.rows[0]!.id,
+      participant.rows[0]!.id,
+      user.rows[0]!.id,
+      timeline.rows[0]!.id,
+    ],
   );
   const event = await database().query<{ id: string }>(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type)
@@ -107,8 +113,13 @@ async function createCompletionFixture(): Promise<CompletionFixture> {
         source_snapshot, summary, occurred_at)
      VALUES ($1, 'family', $1, $2, 'completion_episode', 'verified_user_statement',
              $3, $4, $5, '{}'::jsonb, 'Работа завершена', now()) RETURNING id`,
-    [family.rows[0]!.id, project.rows[0]!.id, event.rows[0]!.id,
-      conversation.rows[0]!.id, timeline.rows[0]!.id],
+    [
+      family.rows[0]!.id,
+      project.rows[0]!.id,
+      event.rows[0]!.id,
+      conversation.rows[0]!.id,
+      timeline.rows[0]!.id,
+    ],
   );
   await database().query(
     `INSERT INTO confirmed_outcome_source_claims
@@ -162,24 +173,31 @@ async function createCompletionFixture(): Promise<CompletionFixture> {
 }
 
 async function expectRetractedCompletion(fixture: CompletionFixture): Promise<void> {
-  await expect(database().query(
-    "SELECT status::text, completion_outcome_id FROM memory_threads WHERE id = $1",
-    [fixture.threadId],
-  )).resolves.toMatchObject({ rows: [{ completion_outcome_id: null, status: "active" }] });
-  await expect(database().query(
-    "SELECT status::text FROM confirmed_outcomes WHERE id = $1",
-    [fixture.outcomeId],
-  )).resolves.toMatchObject({ rows: [{ status: "retracted" }] });
-  await expect(database().query(
-    "SELECT count(*)::integer AS count FROM memory_thread_entries WHERE source_outcome_id = $1",
-    [fixture.outcomeId],
-  )).resolves.toMatchObject({ rows: [{ count: 0 }] });
-  await expect(database().query(
-    `SELECT count(*)::integer AS count FROM memory_thread_entries AS entry
+  await expect(
+    database().query(
+      "SELECT status::text, completion_outcome_id FROM memory_threads WHERE id = $1",
+      [fixture.threadId],
+    ),
+  ).resolves.toMatchObject({ rows: [{ completion_outcome_id: null, status: "active" }] });
+  await expect(
+    database().query("SELECT status::text FROM confirmed_outcomes WHERE id = $1", [
+      fixture.outcomeId,
+    ]),
+  ).resolves.toMatchObject({ rows: [{ status: "retracted" }] });
+  await expect(
+    database().query(
+      "SELECT count(*)::integer AS count FROM memory_thread_entries WHERE source_outcome_id = $1",
+      [fixture.outcomeId],
+    ),
+  ).resolves.toMatchObject({ rows: [{ count: 0 }] });
+  await expect(
+    database().query(
+      `SELECT count(*)::integer AS count FROM memory_thread_entries AS entry
      JOIN memory_items AS claim ON claim.id = entry.source_claim_id
      WHERE entry.thread_id = $1 AND claim.claim_status <> 'active'`,
-    [fixture.threadId],
-  )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+      [fixture.threadId],
+    ),
+  ).resolves.toMatchObject({ rows: [{ count: 0 }] });
 }
 
 describeWithDatabase("completion source invalidation", () => {
@@ -199,33 +217,37 @@ describeWithDatabase("completion source invalidation", () => {
     });
 
     await expectRetractedCompletion(fixture);
-    await expect(database().query(
-      `SELECT provenance_state::text, profile_eligible, origin_conversation_id,
+    await expect(
+      database().query(
+        `SELECT provenance_state::text, profile_eligible, origin_conversation_id,
               (SELECT count(*)::integer FROM claim_evidence WHERE claim_id = item.id) AS evidence_count
        FROM memory_items AS item WHERE id = $1`,
-      [corrected.id],
-    )).resolves.toMatchObject({
-      rows: [{
-        evidence_count: 1,
-        origin_conversation_id: fixture.source.conversationId,
-        profile_eligible: false,
-        provenance_state: "evidenced",
-      }],
+        [corrected.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          evidence_count: 1,
+          origin_conversation_id: fixture.source.conversationId,
+          profile_eligible: false,
+          provenance_state: "evidenced",
+        },
+      ],
     });
-    await expect(database().query(
-      "SELECT source_claim_id FROM memory_thread_entries WHERE thread_id = $1 AND role = 'goal'",
-      [fixture.threadId],
-    )).resolves.toMatchObject({ rows: [{ source_claim_id: corrected.id }] });
+    await expect(
+      database().query(
+        "SELECT source_claim_id FROM memory_thread_entries WHERE thread_id = $1 AND role = 'goal'",
+        [fixture.threadId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ source_claim_id: corrected.id }] });
   });
 
   it("physically deletes a completion source and retracts its projections", async () => {
     const fixture = await createCompletionFixture();
 
-    await expect(memoryRepository.deleteByRef(
-      fixture.auth,
-      fixture.memoryRef,
-      "delete-completion-source",
-    )).resolves.toEqual({ deleted: true });
+    await expect(
+      memoryRepository.deleteByRef(fixture.auth, fixture.memoryRef, "delete-completion-source"),
+    ).resolves.toEqual({ deleted: true });
     await expectRetractedCompletion(fixture);
   });
 });

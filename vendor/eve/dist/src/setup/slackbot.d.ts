@@ -2,16 +2,24 @@ import { readProjectLink } from "#setup/project-resolution.js";
 import { type ChannelSetupAwaitChoice, type ChannelSetupLog } from "#setup/cli/index.js";
 import type { SlackConnectorRef } from "./slack-connect.js";
 import { type SlackConnectorCreateDeps } from "./slack-connect-create.js";
-import { type SlackConnectLifecycleDeps, type SlackConnectorLookup } from "./slack-connect-lifecycle.js";
-export { parseCreatedSlackConnector, parseSlackConnectorDetails, pickSlackConnector, type SlackConnectorRef, } from "./slack-connect.js";
+import {
+  type SlackConnectLifecycleDeps,
+  type SlackConnectorLookup,
+} from "./slack-connect-lifecycle.js";
+export {
+  parseCreatedSlackConnector,
+  parseSlackConnectorDetails,
+  pickSlackConnector,
+  type SlackConnectorRef,
+} from "./slack-connect.js";
 /** Injected for tests; defaults to the real Vercel CLI subprocess primitives. */
 export interface SlackbotProvisionDeps extends SlackConnectLifecycleDeps, SlackConnectorCreateDeps {
-    /** Test seam for the linked Vercel project and team lookup. */
-    readProjectLink?: typeof readProjectLink;
-    /** Test seam for the workspace poll's pacing; defaults to a real sleep. */
-    delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
-    /** Monotonic-enough clock for enforcing the workspace lookup deadline. */
-    now?: () => number;
+  /** Test seam for the linked Vercel project and team lookup. */
+  readProjectLink?: typeof readProjectLink;
+  /** Test seam for the workspace poll's pacing; defaults to a real sleep. */
+  delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Monotonic-enough clock for enforcing the workspace lookup deadline. */
+  now?: () => number;
 }
 /**
  * Outcome of the Connect create-and-attach sequence for a Slackbot. The
@@ -24,36 +32,46 @@ export interface SlackbotProvisionDeps extends SlackConnectLifecycleDeps, SlackC
  * reports detach and attach failures separately because attach must not run
  * while an old trigger destination may still exist.
  */
-export type ProvisionSlackbotResult = {
-    state: "connector-lookup-failed";
-} | {
-    state: "create-failed";
-} | {
-    state: "cancelled";
-} | {
-    state: "existing-not-installed";
-    connectorUid: string;
-} | {
-    state: "cleanup-failed";
-    connectorUids: readonly string[];
-} | {
-    state: "detach-failed";
-    connectorUid: string;
-} | {
-    state: "attach-failed";
-    connectorUid: string;
-} | {
-    state: "not-installed";
-} | {
-    state: "installation-check-failed";
-    connectorUid: string;
-} | {
-    state: "attached";
-    connectorUid: string;
-    /** Deep link that opens a DM compose with the bot ("chat with your agent"). */
-    chatUrl?: string;
-    workspaceName?: string;
-};
+export type ProvisionSlackbotResult =
+  | {
+      state: "connector-lookup-failed";
+    }
+  | {
+      state: "create-failed";
+    }
+  | {
+      state: "cancelled";
+    }
+  | {
+      state: "existing-not-installed";
+      connectorUid: string;
+    }
+  | {
+      state: "cleanup-failed";
+      connectorUids: readonly string[];
+    }
+  | {
+      state: "detach-failed";
+      connectorUid: string;
+    }
+  | {
+      state: "attach-failed";
+      connectorUid: string;
+    }
+  | {
+      state: "not-installed";
+    }
+  | {
+      state: "installation-check-failed";
+      connectorUid: string;
+    }
+  | {
+      state: "attached";
+      connectorUid: string;
+      /** Deep link that opens a DM compose with the bot ("chat with your agent"). */
+      chatUrl?: string;
+      workspaceName?: string;
+    };
 /**
  * Creates or reuses a Slack connector and points its event destination at eve.
  * A successful `connect create` is the completion boundary for a new browser
@@ -62,24 +80,48 @@ export type ProvisionSlackbotResult = {
  */
 export type SlackConnectorSelection = SlackConnectorRef | "create";
 /** Read-only connector inventory used to resolve the create/reuse decision before provisioning. */
-export declare function inspectSlackbotConnectors(log: ChannelSetupLog, projectRoot: string, slug: string, signal?: AbortSignal, deps?: SlackbotProvisionDeps): Promise<Extract<SlackConnectorLookup, {
-    state: "found" | "not-found";
-}>>;
+export declare function inspectSlackbotConnectors(
+  log: ChannelSetupLog,
+  projectRoot: string,
+  slug: string,
+  signal?: AbortSignal,
+  deps?: SlackbotProvisionDeps,
+): Promise<
+  Extract<
+    SlackConnectorLookup,
+    {
+      state: "found" | "not-found";
+    }
+  >
+>;
 export interface ProvisionSlackbotOptions {
-    /**
-     * Cancels the caller's whole operation. The promise rejects after attempting
-     * cleanup; only the explicit interactive Cancel action returns `cancelled`.
-     */
-    signal?: AbortSignal;
-    /** Chooses a project-attached connector or requests a new one. */
-    selectConnector?: (connectors: readonly SlackConnectorRef[], preferred: SlackConnectorRef | undefined) => Promise<SlackConnectorSelection>;
-    /** Concurrent retry/cancel controls supplied by an interactive prompter. */
-    awaitChoice?: ChannelSetupAwaitChoice;
+  /**
+   * Cancels the caller's whole operation. The promise rejects after attempting
+   * cleanup; only the explicit interactive Cancel action returns `cancelled`.
+   */
+  signal?: AbortSignal;
+  /** Chooses a project-attached connector or requests a new one. */
+  selectConnector?: (
+    connectors: readonly SlackConnectorRef[],
+    preferred: SlackConnectorRef | undefined,
+  ) => Promise<SlackConnectorSelection>;
+  /** Concurrent retry/cancel controls supplied by an interactive prompter. */
+  awaitChoice?: ChannelSetupAwaitChoice;
 }
-export declare function provisionSlackbot(log: ChannelSetupLog, projectRoot: string, 
-/** Connector short-name passed to `vercel connect create slack --name`. */
-slug: string, deps?: SlackbotProvisionDeps, options?: ProvisionSlackbotOptions): Promise<ProvisionSlackbotResult>;
+export declare function provisionSlackbot(
+  log: ChannelSetupLog,
+  projectRoot: string,
+  /** Connector short-name passed to `vercel connect create slack --name`. */
+  slug: string,
+  deps?: SlackbotProvisionDeps,
+  options?: ProvisionSlackbotOptions,
+): Promise<ProvisionSlackbotResult>;
 /**
  * Patches a connector UID chosen by Connect before the caller deploys the channel definition.
  */
-export declare function reconcileSlackUid(log: ChannelSetupLog, projectRoot: string, slackbot: ProvisionSlackbotResult, expectedUid: string): Promise<boolean>;
+export declare function reconcileSlackUid(
+  log: ChannelSetupLog,
+  projectRoot: string,
+  slackbot: ProvisionSlackbotResult,
+  expectedUid: string,
+): Promise<boolean>;

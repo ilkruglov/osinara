@@ -19,10 +19,7 @@ import {
   deriveModalInputResponses,
   isDiscordFreeformComponent,
 } from "#public/channels/discord/hitl.js";
-import {
-  defaultEvents,
-  defaultOnCommand,
-} from "#public/channels/discord/defaults.js";
+import { defaultEvents, defaultOnCommand } from "#public/channels/discord/defaults.js";
 import {
   DISCORD_INTERACTION_RESPONSE_TYPE,
   DISCORD_INTERACTION_TYPE,
@@ -50,45 +47,41 @@ function discordChannel(e = {}) {
       return rebuildDiscordContext(t, n, e);
     },
     routes: [
-      POST(
-        e.route ?? `/eve/v1/discord`,
-        async (n, { from: i, waitUntil: a }) => {
-          let o = await verifyDiscordInbound(n, e.credentials);
-          if (o === null) return new Response(`unauthorized`, { status: 401 });
-          let s;
-          try {
-            s = parseJsonObject(JSON.parse(o));
-          } catch (e) {
-            return (
-              log.warn(`inbound Discord body is not valid JSON`, { error: e }),
-              discordJson({ content: `invalid request`, ephemeral: !0 })
-            );
-          }
-          if (s.type === DISCORD_INTERACTION_TYPE.PING)
-            return discordJson({
-              type: DISCORD_INTERACTION_RESPONSE_TYPE.PONG,
+      POST(e.route ?? `/eve/v1/discord`, async (n, { from: i, waitUntil: a }) => {
+        let o = await verifyDiscordInbound(n, e.credentials);
+        if (o === null) return new Response(`unauthorized`, { status: 401 });
+        let s;
+        try {
+          s = parseJsonObject(JSON.parse(o));
+        } catch (e) {
+          return (
+            log.warn(`inbound Discord body is not valid JSON`, { error: e }),
+            discordJson({ content: `invalid request`, ephemeral: !0 })
+          );
+        }
+        if (s.type === DISCORD_INTERACTION_TYPE.PING)
+          return discordJson({
+            type: DISCORD_INTERACTION_RESPONSE_TYPE.PONG,
+          });
+        let c = parseDiscordInteraction(s);
+        return c === null
+          ? discordJson({
+              content: `Unsupported Discord interaction.`,
+              ephemeral: !0,
+            })
+          : handleInteraction({
+              config: e,
+              interaction: c,
+              onCommand: t,
+              from: i,
+              waitUntil: a,
             });
-          let c = parseDiscordInteraction(s);
-          return c === null
-            ? discordJson({
-                content: `Unsupported Discord interaction.`,
-                ephemeral: !0,
-              })
-            : handleInteraction({
-                config: e,
-                interaction: c,
-                onCommand: t,
-                from: i,
-                waitUntil: a,
-              });
-        },
-      ),
+      }),
     ],
     async receive(t, { from: r }) {
       let i = t.target,
         a = readNonEmptyString(i.channelId);
-      if (!a)
-        throw Error(`discordChannel().receive requires target.channelId.`);
+      if (!a) throw Error(`discordChannel().receive requires target.channelId.`);
       let o = readNonEmptyString(i.conversationId),
         s = i.initialMessage;
       if (s !== void 0 && o !== void 0)
@@ -135,15 +128,11 @@ function buildDiscordHandle(e) {
       r.hasMessageAnchor ||
       ((r.conversationId = t.id),
       (r.hasMessageAnchor = !0),
-      r.channelId &&
-        e.session?.continuation?.rekey(
-          discordContinuationToken(r.channelId, t.id),
-        ));
+      r.channelId && e.session?.continuation?.rekey(discordContinuationToken(r.channelId, t.id)));
   }
   async function sendViaChannel(e) {
     let t = r.channelId ?? ``;
-    if (!t)
-      throw Error(`discordChannel: missing channel id for outbound message.`);
+    if (!t) throw Error(`discordChannel: missing channel id for outbound message.`);
     let a = await sendDiscordChannelMessage({
       apiBaseUrl: n?.apiBaseUrl,
       body: normalizePostInput(e),
@@ -155,10 +144,7 @@ function buildDiscordHandle(e) {
   }
   async function editOriginal(e) {
     let t = r.interactionToken ?? ``;
-    if (!t)
-      throw Error(
-        `discordChannel: missing interaction token for original response edit.`,
-      );
+    if (!t) throw Error(`discordChannel: missing interaction token for original response edit.`);
     let a = await editDiscordOriginalResponse({
       apiBaseUrl: n?.apiBaseUrl,
       body: normalizePostInput(e),
@@ -170,10 +156,7 @@ function buildDiscordHandle(e) {
   }
   async function followup(e) {
     let t = r.interactionToken ?? ``;
-    if (!t)
-      throw Error(
-        `discordChannel: missing interaction token for followup message.`,
-      );
+    if (!t) throw Error(`discordChannel: missing interaction token for followup message.`);
     let a = await createDiscordFollowupMessage({
       apiBaseUrl: n?.apiBaseUrl,
       body: normalizePostInput(e),
@@ -239,14 +222,11 @@ function buildDiscordHandle(e) {
 async function postOne(e) {
   if (e.state.interactionToken && e.state.applicationId)
     try {
-      return e.state.initialResponseSent
-        ? await e.followup(e.body)
-        : await e.editOriginal(e.body);
+      return e.state.initialResponseSent ? await e.followup(e.body) : await e.editOriginal(e.body);
     } catch (e) {
-      log.warn(
-        `Discord interaction-token delivery failed, falling back to channel message`,
-        { error: e },
-      );
+      log.warn(`Discord interaction-token delivery failed, falling back to channel message`, {
+        error: e,
+      });
     }
   return e.sendViaChannel(e.body);
 }
@@ -355,14 +335,12 @@ async function dispatchCommand(e) {
     }),
     r = e.result.context ?? [];
   try {
-    await e
-      .from(discordContinuationToken(e.interaction.channelId, e.interaction.id))
-      .send(t, {
-        auth: e.result.auth,
-        context: [n, ...r],
-        state: e.state,
-        title: e.result.title,
-      });
+    await e.from(discordContinuationToken(e.interaction.channelId, e.interaction.id)).send(t, {
+      auth: e.result.auth,
+      context: [n, ...r],
+      state: e.state,
+      title: e.result.title,
+    });
   } catch (e) {
     log.error(`command delivery failed`, { error: e });
   }
@@ -412,9 +390,7 @@ function normalizePostInput(e) {
 function expandPostBodies(e) {
   return typeof e.content == `string`
     ? splitDiscordMessageContent(e.content).map((t, n) =>
-        n === 0
-          ? { ...e, content: t }
-          : { allowed_mentions: e.allowed_mentions, content: t },
+        n === 0 ? { ...e, content: t } : { allowed_mentions: e.allowed_mentions, content: t },
       )
     : [e];
 }

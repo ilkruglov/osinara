@@ -1,7 +1,4 @@
-import {
-  ActiveChannelDeliveriesKey,
-  ParentTraceContextKey,
-} from "#context/keys.js";
+import { ActiveChannelDeliveriesKey, ParentTraceContextKey } from "#context/keys.js";
 import { channelDeliveryIdempotencyKey } from "#harness/instrumentation/lifecycle.js";
 async function instrumentChannelDelivery(n) {
   if (!(`delivery` in n)) {
@@ -14,10 +11,7 @@ async function instrumentChannelDelivery(n) {
         delivery: e.delivery,
         error: n.error,
         errorCode: n.errorCode,
-        idempotencyKey: channelDeliveryIdempotencyKey(
-          e.sessionId,
-          e.delivery.deliveryId,
-        ),
+        idempotencyKey: channelDeliveryIdempotencyKey(e.sessionId, e.delivery.deliveryId),
         outcome: n.outcome,
         rootSessionId: e.rootSessionId,
         sequence: n.includeTurn ? e.sequence : void 0,
@@ -39,10 +33,7 @@ async function instrumentChannelDelivery(n) {
         requestId: e.requestId,
         requestTraceContext: e.requestTraceContext,
       },
-      o =
-        !n.hooks.capturesContent || i === void 0
-          ? void 0
-          : projectDeliveryInput(i),
+      o = !n.hooks.capturesContent || i === void 0 ? void 0 : projectDeliveryInput(i),
       s = {
         agentName: n.agentName,
         delivery: a,
@@ -55,10 +46,7 @@ async function instrumentChannelDelivery(n) {
       await n.hooks.publish({
         agentName: s.agentName,
         delivery: a,
-        idempotencyKey: channelDeliveryIdempotencyKey(
-          n.sessionId,
-          a.deliveryId,
-        ),
+        idempotencyKey: channelDeliveryIdempotencyKey(n.sessionId, a.deliveryId),
         input: o,
         parentTraceContext: n.ctx.get(ParentTraceContextKey),
         rootSessionId: n.rootSessionId,

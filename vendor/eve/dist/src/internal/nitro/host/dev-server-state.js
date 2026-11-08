@@ -2,9 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { z } from "#compiled/zod/index.js";
 import { httpServerUrlSchema } from "#shared/network-address.js";
 import { join } from "node:path";
-const developmentServerStateSchema = z
-  .object({ url: httpServerUrlSchema })
-  .strict();
+const developmentServerStateSchema = z.object({ url: httpServerUrlSchema }).strict();
 var DevelopmentServerState = class {
   appRoot;
   #e;

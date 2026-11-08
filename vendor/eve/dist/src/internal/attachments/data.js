@@ -1,7 +1,4 @@
-import {
-  isAttachmentRefUrl,
-  parseAttachmentRef,
-} from "#internal/attachments/refs.js";
+import { isAttachmentRefUrl, parseAttachmentRef } from "#internal/attachments/refs.js";
 async function fileDataToBytes(e) {
   return typeof Buffer < `u` && Buffer.isBuffer(e)
     ? e

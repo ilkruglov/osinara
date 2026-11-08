@@ -1,7 +1,7 @@
 import type { Block, DisplayBlock } from "./blocks.js";
 export interface ToolBlockDisplayGroup {
-    readonly members: readonly Block[];
-    readonly display: DisplayBlock;
+  readonly members: readonly Block[];
+  readonly display: DisplayBlock;
 }
 /**
  * Coalesces presentation only; each member keeps its call id and lifecycle.
@@ -19,19 +19,22 @@ export interface ToolBlockDisplayGroup {
  * length.
  */
 export interface GroupToolBlocksOptions {
-    /**
-     * How captured log writes coalesce. `"window"` (the default, for the live
-     * block window) merges every write of one source across the whole input
-     * into a single section appended after the rest — a process stream is
-     * continuous, so interleaved activity must not fragment it — and the
-     * section commits as one cluster at the turn boundary. `"runs"` (for
-     * committed-transcript rebuilds) merges only contiguous writes, so a
-     * `/loglevel` toggle re-renders history at its committed positions instead
-     * of relocating every past write to the end.
-     */
-    readonly logCoalescing?: "window" | "runs";
+  /**
+   * How captured log writes coalesce. `"window"` (the default, for the live
+   * block window) merges every write of one source across the whole input
+   * into a single section appended after the rest — a process stream is
+   * continuous, so interleaved activity must not fragment it — and the
+   * section commits as one cluster at the turn boundary. `"runs"` (for
+   * committed-transcript rebuilds) merges only contiguous writes, so a
+   * `/loglevel` toggle re-renders history at its committed positions instead
+   * of relocating every past write to the end.
+   */
+  readonly logCoalescing?: "window" | "runs";
 }
-export declare function groupToolBlocksForDisplay(blocks: readonly Block[], options?: GroupToolBlocksOptions): ToolBlockDisplayGroup[];
+export declare function groupToolBlocksForDisplay(
+  blocks: readonly Block[],
+  options?: GroupToolBlocksOptions,
+): ToolBlockDisplayGroup[];
 /**
  * A live subagent section shows only its most recently active child row;
  * everything earlier collapses into a single `… (N more)` line under the

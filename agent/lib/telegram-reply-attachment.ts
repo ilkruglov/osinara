@@ -27,11 +27,13 @@ export function telegramReplyAttachmentTarget(
     target.messageId !== message.replyToMessage.messageId ||
     target.messageThreadId !== message.messageThreadId ||
     target.attachments.length !== 1
-  ) return null;
+  )
+    return null;
 
   if (group.type === "family_private") return target;
   const mediaKind = classifyTelegramInboundMedia(target);
-  return mediaKind === "native_photo" || mediaKind === "image_document_candidate" ||
+  return mediaKind === "native_photo" ||
+    mediaKind === "image_document_candidate" ||
     mediaKind === "text_document_candidate"
     ? target
     : null;

@@ -1,19 +1,10 @@
 import { resolve } from "node:path";
-import {
-  DiscoveryProjectResolutionError,
-  resolveDiscoveryProject,
-} from "#discover/project.js";
+import { DiscoveryProjectResolutionError, resolveDiscoveryProject } from "#discover/project.js";
 const defaultDependencies = { resolveDiscoveryProject };
-async function resolveCliApplicationProject(
-  e = process.cwd(),
-  t = defaultDependencies,
-) {
+async function resolveCliApplicationProject(e = process.cwd(), t = defaultDependencies) {
   return t.resolveDiscoveryProject(e);
 }
-async function findCliApplicationRoot(
-  e = process.cwd(),
-  n = defaultDependencies,
-) {
+async function findCliApplicationRoot(e = process.cwd(), n = defaultDependencies) {
   try {
     return (await n.resolveDiscoveryProject(e)).appRoot;
   } catch (e) {
@@ -21,14 +12,7 @@ async function findCliApplicationRoot(
     throw e;
   }
 }
-async function resolveCliApplicationRoot(
-  t = process.cwd(),
-  n = defaultDependencies,
-) {
+async function resolveCliApplicationRoot(t = process.cwd(), n = defaultDependencies) {
   return (await findCliApplicationRoot(t, n)) ?? resolve(t);
 }
-export {
-  findCliApplicationRoot,
-  resolveCliApplicationProject,
-  resolveCliApplicationRoot,
-};
+export { findCliApplicationRoot, resolveCliApplicationProject, resolveCliApplicationRoot };

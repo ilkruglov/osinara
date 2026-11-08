@@ -22,7 +22,7 @@ export function estimateTelegramRichBlocks(markdown: string): number {
   // provider rejection and affects only unusually large rich responses.
   for (const line of markdown.split("\n")) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('```')) {
+    if (trimmed.startsWith("```")) {
       if (!fencedCode) blocks += 1;
       fencedCode = !fencedCode;
       continue;
@@ -67,8 +67,10 @@ function groupLines(
   let current = [...prefix];
   for (const line of lines) {
     const candidate = [...current, line];
-    if (current.length > prefix.length &&
-      estimateTelegramRichBlocks(candidate.join("\n")) > maxBlocks) {
+    if (
+      current.length > prefix.length &&
+      estimateTelegramRichBlocks(candidate.join("\n")) > maxBlocks
+    ) {
       chunks.push(current.join("\n"));
       current = [...prefix, line];
       continue;
@@ -79,17 +81,17 @@ function groupLines(
   return chunks;
 }
 
-export function splitTelegramRichBlockByCount(
-  block: string,
-  maxBlocks: number,
-): string[] {
+export function splitTelegramRichBlockByCount(block: string, maxBlocks: number): string[] {
   if (estimateTelegramRichBlocks(block) <= maxBlocks) return [block];
   const lines = block.split("\n");
   if (lines.length < 2) return [block];
 
   // Every table continuation repeats its header and delimiter so each provider chunk parses alone.
-  if (lines.length > 2 && TABLE_ROW_PATTERN.test(lines[0]!) &&
-    TABLE_DELIMITER_PATTERN.test(lines[1]!)) {
+  if (
+    lines.length > 2 &&
+    TABLE_ROW_PATTERN.test(lines[0]!) &&
+    TABLE_DELIMITER_PATTERN.test(lines[1]!)
+  ) {
     return groupLines(lines.slice(2), maxBlocks, lines.slice(0, 2));
   }
   return groupLines(lines, maxBlocks);

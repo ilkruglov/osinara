@@ -1,12 +1,6 @@
-import {
-  expectFunction,
-  expectObjectRecord,
-} from "#internal/authored-module.js";
+import { expectFunction, expectObjectRecord } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
 async function resolveDynamicInstructionsDefinition(i, a, o) {
   try {
     let n = expectObjectRecord(
@@ -23,10 +17,7 @@ async function resolveDynamicInstructionsDefinition(i, a, o) {
       ),
       r = {};
     for (let t of i.eventNames)
-      r[t] = expectFunction(
-        n[t],
-        describe(i, `to provide a handler for event "${t}"`),
-      );
+      r[t] = expectFunction(n[t], describe(i, `to provide a handler for event "${t}"`));
     return {
       eventNames: [...i.eventNames],
       events: r,

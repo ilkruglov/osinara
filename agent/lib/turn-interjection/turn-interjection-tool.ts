@@ -31,10 +31,14 @@ interface InterjectedOutput {
 
 // `result` disappears from the stored JSON when the tool returned undefined, so only the key counts.
 function isInterjectedOutput(output: unknown): output is InterjectedOutput {
-  return typeof output === "object" && output !== null && !Array.isArray(output) &&
-    Object.hasOwn(output, OUTPUT_KEY) && typeof (output as Record<string, unknown>)[OUTPUT_KEY] === "string";
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    !Array.isArray(output) &&
+    Object.hasOwn(output, OUTPUT_KEY) &&
+    typeof (output as Record<string, unknown>)[OUTPUT_KEY] === "string"
+  );
 }
-
 
 /**
  * The tool's own output without the messages appended for the running turn. Anything that reads
@@ -50,8 +54,11 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 
 // Eve 0.40 recognizes its control values by `__eve*` brand keys, e.g. `__eveAuthorization`.
 function isEveControlValue(value: unknown): boolean {
-  return typeof value === "object" && value !== null &&
-    Object.keys(value).some((key) => key.startsWith("__eve"));
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.keys(value).some((key) => key.startsWith("__eve"))
+  );
 }
 
 // Mirrors Eve 0.40 for a tool without its own projection: text stays text, everything else is JSON.
@@ -94,15 +101,19 @@ export function withTurnInterjection(
       try {
         block = await interjection.collect(ctx);
       } catch (error) {
-        console.error(JSON.stringify({
-          callId: ctx.callId ?? null,
-          code: "AGENT_TURN_INTERJECTION_FAILED",
-          error: error instanceof Error ? error.message : String(error),
-          toolName: ctx.toolName ?? null,
-        }));
+        console.error(
+          JSON.stringify({
+            callId: ctx.callId ?? null,
+            code: "AGENT_TURN_INTERJECTION_FAILED",
+            error: error instanceof Error ? error.message : String(error),
+            toolName: ctx.toolName ?? null,
+          }),
+        );
         return result;
       }
-      return block === null ? result : { [OUTPUT_KEY]: block, result } satisfies InterjectedOutput;
+      return block === null
+        ? result
+        : ({ [OUTPUT_KEY]: block, result } satisfies InterjectedOutput);
     },
     async toModelOutput(output: unknown) {
       if (!isInterjectedOutput(output)) return await project(output);

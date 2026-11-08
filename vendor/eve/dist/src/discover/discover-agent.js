@@ -6,10 +6,7 @@ import {
 } from "#discover/filesystem.js";
 import { createDiscoverErrorDiagnostic } from "#discover/diagnostics.js";
 import { createDiskProjectSource } from "#discover/project-source.js";
-import {
-  createAgentSourceManifest,
-  createModuleSourceRef,
-} from "#discover/manifest.js";
+import { createAgentSourceManifest, createModuleSourceRef } from "#discover/manifest.js";
 import {
   DISCOVER_EXTENSION_AGENT_CONFIG_UNSUPPORTED,
   DISCOVER_EXTENSION_MOUNT_AMBIGUOUS,
@@ -169,13 +166,7 @@ async function discoverAgent(n) {
       ...detectRootNamespaceCollisions({
         agentRoot: u,
         namespaces: k.mounts.map((e) => e.namespace),
-        sources: [
-          ...w.sources,
-          ...S.connections,
-          ...D.skills,
-          ...x.schedules,
-          ...O.subagents,
-        ],
+        sources: [...w.sources, ...S.connections, ...D.skills, ...x.schedules, ...O.subagents],
       }),
     ));
   let A = [];
@@ -329,9 +320,7 @@ async function collectExtensionMounts(t) {
         f.push({
           namespace: o,
           mountRef: createModuleSourceRef({
-            logicalPath: normalizeLogicalPath(
-              join(`extensions`, o, h.module.logicalPath),
-            ),
+            logicalPath: normalizeLogicalPath(join(`extensions`, o, h.module.logicalPath)),
           }),
           overridesRoot: u,
         }));
@@ -378,9 +367,7 @@ async function tryReadPackageJsonName(t, n) {
   try {
     let r = join(n, `package.json`),
       i = JSON.parse(await t.readTextFile(r)).name;
-    return typeof i != `string` || i.length === 0
-      ? void 0
-      : stripNpmPackageScope(i);
+    return typeof i != `string` || i.length === 0 ? void 0 : stripNpmPackageScope(i);
   } catch {
     return;
   }

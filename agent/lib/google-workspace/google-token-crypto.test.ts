@@ -25,9 +25,14 @@ describe("Google token encryption", () => {
     const encrypted = encryptGoogleToken("refresh-secret", key);
     expect(() => decryptGoogleToken(encrypted, Buffer.alloc(32, 8).toString("base64"))).toThrow();
     const replacement = encrypted.ciphertext.startsWith("A") ? "B" : "A";
-    expect(() => decryptGoogleToken({
-      ...encrypted,
-      ciphertext: `${replacement}${encrypted.ciphertext.slice(1)}`,
-    }, key)).toThrow();
+    expect(() =>
+      decryptGoogleToken(
+        {
+          ...encrypted,
+          ciphertext: `${replacement}${encrypted.ciphertext.slice(1)}`,
+        },
+        key,
+      ),
+    ).toThrow();
   });
 });

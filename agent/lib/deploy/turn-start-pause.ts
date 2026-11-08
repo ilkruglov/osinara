@@ -18,7 +18,8 @@ export const TURN_START_PAUSED_SQL =
   "EXISTS (SELECT 1 FROM deploy_turn_pause WHERE paused_until > now())";
 
 export async function isTurnStartPaused(
-  query: (text: string) => Promise<{ rows: Array<{ paused?: unknown }> }> = (text) => database().query(text),
+  query: (text: string) => Promise<{ rows: Array<{ paused?: unknown }> }> = (text) =>
+    database().query(text),
 ): Promise<boolean> {
   const result = await query(`SELECT ${TURN_START_PAUSED_SQL} AS paused`);
   return result.rows[0]?.paused === true;

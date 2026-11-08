@@ -10,14 +10,20 @@ import { z } from "zod";
 import { providerCatalogError } from "./provider-catalog-errors.js";
 import type { ProviderId } from "./provider-catalog-types.js";
 
-const openAiModelListSchema = z.object({
-  object: z.literal("list"),
-  data: z.array(z.object({
-    id: z.string().trim().min(1),
-    object: z.literal("model"),
-    owned_by: z.string().trim().min(1),
-  }).passthrough()),
-}).passthrough();
+const openAiModelListSchema = z
+  .object({
+    object: z.literal("list"),
+    data: z.array(
+      z
+        .object({
+          id: z.string().trim().min(1),
+          object: z.literal("model"),
+          owned_by: z.string().trim().min(1),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
 
 export interface OpenAiModelListEntry {
   id: string;

@@ -1,20 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 function resolveArtifactDirectory(e) {
-  return join(
-    e,
-    `.eve`,
-    `evals`,
-    new Date().toISOString().replace(/[:.]/g, `-`).slice(0, 19),
-  );
+  return join(e, `.eve`, `evals`, new Date().toISOString().replace(/[:.]/g, `-`).slice(0, 19));
 }
 async function writeArtifacts(t, n) {
   let r = join(t, `evals`);
   (await mkdir(r, { recursive: !0 }),
-    await writeFile(
-      join(t, `summary.json`),
-      JSON.stringify(buildSummaryArtifact(n), null, 2),
-    ));
+    await writeFile(join(t, `summary.json`), JSON.stringify(buildSummaryArtifact(n), null, 2)));
   let i = n.results.map((e) => JSON.stringify(buildResultLine(e))).join(`
 `);
   (await writeFile(join(t, `results.jsonl`), `${i}\n`),
@@ -25,10 +17,7 @@ async function writeArtifacts(t, n) {
           await writeFile(n, JSON.stringify(buildEvalArtifact(t), null, 2)));
         let i = t.result.events.map((e) => JSON.stringify(e)).join(`
 `);
-        await writeFile(
-          join(r, `${sanitizeArtifactPath(t.id)}.events.ndjson`),
-          `${i}\n`,
-        );
+        await writeFile(join(r, `${sanitizeArtifactPath(t.id)}.events.ndjson`), `${i}\n`);
       }),
     ));
 }

@@ -4,15 +4,12 @@ import {
 } from "#execution/sandbox/bindings/vercel-credentials.js";
 async function getNamedVercelSandbox(e) {
   try {
-    return await e.sandboxModule.Sandbox.get(
-      await getVercelSandboxGetOptions(e),
-    );
+    return await e.sandboxModule.Sandbox.get(await getVercelSandboxGetOptions(e));
   } catch (t) {
     if (isSandboxMissingError(t)) return null;
-    throw Error(
-      `Failed to look up Vercel sandbox "${e.sandboxName}": ${errorMessage(t)}`,
-      { cause: t },
-    );
+    throw Error(`Failed to look up Vercel sandbox "${e.sandboxName}": ${errorMessage(t)}`, {
+      cause: t,
+    });
   }
 }
 async function getVercelSandboxGetOptions(n) {
@@ -29,21 +26,13 @@ async function getVercelSandboxGetOptions(n) {
   }
 }
 function isSandboxMissingError(e) {
-  return (
-    e instanceof Error &&
-    (e.response?.status ?? e.cause?.response?.status) === 404
-  );
+  return e instanceof Error && (e.response?.status ?? e.cause?.response?.status) === 404;
 }
 function errorMessage(e) {
   if (e instanceof Error) {
     let t = e.json,
       n = e.text,
-      r =
-        typeof n == `string` && n.length > 0
-          ? n
-          : t === void 0
-            ? void 0
-            : JSON.stringify(t);
+      r = typeof n == `string` && n.length > 0 ? n : t === void 0 ? void 0 : JSON.stringify(t);
     return r === void 0 ? e.message : `${e.message}: ${r}`;
   }
   return String(e);

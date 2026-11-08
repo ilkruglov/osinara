@@ -1,9 +1,6 @@
 import { appendEnv } from "../../append-env.js";
 import { pinnedNodeEngineMajor } from "../../node-engine.js";
-import {
-  getSupportedModuleBaseName,
-  matchesSupportedModuleBaseName,
-} from "./module-files.js";
+import { getSupportedModuleBaseName, matchesSupportedModuleBaseName } from "./module-files.js";
 import { pathExists, writeTextFile } from "../files.js";
 import { resolveVersionToken } from "../version-tokens.js";
 import { patchPackageJson } from "./package-json.js";
@@ -101,14 +98,8 @@ async function patchWebPackageJson(e, n, r, a, c, d = !0, f) {
       eve: formatEveDependencySpecifier(g.version),
       next: resolveVersionToken(`nextPackageVersion`, a.nextPackageVersion),
       react: resolveVersionToken(`reactPackageVersion`, a.reactPackageVersion),
-      "react-dom": resolveVersionToken(
-        `reactDomPackageVersion`,
-        a.reactDomPackageVersion,
-      ),
-      streamdown: resolveVersionToken(
-        `streamdownPackageVersion`,
-        a.streamdownPackageVersion,
-      ),
+      "react-dom": resolveVersionToken(`reactDomPackageVersion`, a.reactDomPackageVersion),
+      streamdown: resolveVersionToken(`streamdownPackageVersion`, a.streamdownPackageVersion),
       zod: resolveVersionToken(`zodPackageVersion`, a.zodPackageVersion),
       ...(f === `sign-in-with-vercel`
         ? {
@@ -122,10 +113,7 @@ async function patchWebPackageJson(e, n, r, a, c, d = !0, f) {
     y = {
       ...WEB_APP_TEMPLATE_PACKAGE_JSON.devDependencies,
       "@types/node": _,
-      "@types/react": resolveVersionToken(
-        `typesReactPackageVersion`,
-        a.typesReactPackageVersion,
-      ),
+      "@types/react": resolveVersionToken(`typesReactPackageVersion`, a.typesReactPackageVersion),
       "@types/react-dom": resolveVersionToken(
         `typesReactDomPackageVersion`,
         a.typesReactDomPackageVersion,
@@ -170,19 +158,16 @@ function normalizeSlackConnectorSlug(e) {
   );
 }
 async function deriveSlackConnectorSlug(e, t) {
-  if (t !== void 0 && t.length > 0 && t !== `.`)
-    return normalizeSlackConnectorSlug(t);
+  if (t !== void 0 && t.length > 0 && t !== `.`) return normalizeSlackConnectorSlug(t);
   try {
     let t = await readFile(join(e, `package.json`), `utf8`),
       n = JSON.parse(t);
-    if (typeof n.name == `string` && n.name.length > 0)
-      return normalizeSlackConnectorSlug(n.name);
+    if (typeof n.name == `string` && n.name.length > 0) return normalizeSlackConnectorSlug(n.name);
   } catch {}
   return normalizeSlackConnectorSlug(basename(resolve(e)) || `my-agent`);
 }
 function buildSlackConnectTemplate(e) {
-  if (!e.startsWith(`slack/`) || e.length === 6)
-    throw Error(`Invalid Slack connector UID "${e}".`);
+  if (!e.startsWith(`slack/`) || e.length === 6) throw Error(`Invalid Slack connector UID "${e}".`);
   return `import { connectSlackCredentials } from "@vercel/connect/eve";
 import { slackChannel } from "eve/channels/slack";
 
@@ -196,9 +181,7 @@ const SLACK_ENV_EXAMPLE_VALUES = {
   SLACK_SIGNING_SECRET: ``,
 };
 function renderWebAppTemplate(e, t) {
-  return e
-    .replaceAll(`__EVE_INIT_APP_NAME__`, t)
-    .replaceAll(`__EVE_INIT_WITH_EVE_OPTIONS__`, ``);
+  return e.replaceAll(`__EVE_INIT_APP_NAME__`, t).replaceAll(`__EVE_INIT_WITH_EVE_OPTIONS__`, ``);
 }
 async function ensureWebVercelJson(e) {
   return (await pathExists(e))
@@ -265,11 +248,7 @@ async function ensureWebChannel(e) {
     workspaceProbeRoot: s,
     onWorkspaceRootMutation: e.onWorkspaceRootMutation,
   });
-  if (
-    (u.push(...v.filesWritten),
-    g.push(...v.filesSkipped),
-    !e.skipDependencyMutation)
-  ) {
+  if ((u.push(...v.filesWritten), g.push(...v.filesSkipped), !e.skipDependencyMutation)) {
     let t = {
       ...WEB_APP_TEMPLATE_FILES,
       ...(e.webAuthentication === `sign-in-with-vercel`
@@ -301,8 +280,7 @@ async function ensureWebChannel(e) {
   return (
     p.length > 0 && (C.filesOverwritten = p),
     m.length > 0 && (C.competingNextConfigFiles = m),
-    l.nodeEngineOverride !== void 0 &&
-      (C.nodeEngineOverride = l.nodeEngineOverride),
+    l.nodeEngineOverride !== void 0 && (C.nodeEngineOverride = l.nodeEngineOverride),
     C
   );
 }
@@ -326,15 +304,8 @@ async function ensureSlackChannel(t) {
     p;
   if (s === `vercel-connect`) {
     if (!t.skipDependencyMutation) {
-      let e = resolveVersionToken(
-        `connectPackageVersion`,
-        t.connectPackageVersion ?? `0.4.3`,
-      );
-      u = await ensurePackageDependency(
-        join(t.projectRoot, `package.json`),
-        `@vercel/connect`,
-        e,
-      );
+      let e = resolveVersionToken(`connectPackageVersion`, t.connectPackageVersion ?? `0.4.3`);
+      u = await ensurePackageDependency(join(t.projectRoot, `package.json`), `@vercel/connect`, e);
     }
     l = buildSlackConnectTemplate(t.slackConnectorUid ?? `slack/${c}`);
   } else {
@@ -347,18 +318,14 @@ export default slackChannel();
       path: n,
       ...((await pathExists(n)) ? { content: await readFile(n, `utf8`) } : {}),
     }),
-      (await appendEnv(n, SLACK_ENV_EXAMPLE_VALUES)).written.length > 0
-        ? d.push(n)
-        : f.push(n));
+      (await appendEnv(n, SLACK_ENV_EXAMPLE_VALUES)).written.length > 0 ? d.push(n) : f.push(n));
   }
   try {
     await writeTextFile(n, l, { force: t.force });
   } catch (e) {
     throw (
       p !== void 0 &&
-        (p.content === void 0
-          ? await unlink(p.path)
-          : await writeFile(p.path, p.content, `utf8`)),
+        (p.content === void 0 ? await unlink(p.path) : await writeFile(p.path, p.content, `utf8`)),
       e
     );
   }

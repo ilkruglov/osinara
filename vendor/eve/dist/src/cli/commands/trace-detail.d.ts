@@ -8,15 +8,15 @@
 import type { LocalTraceSpan } from "#tracing/local-trace-reader.js";
 /** Usage and cost totals aggregated over a trace's `agent.step` spans. */
 export interface LocalTraceSummary {
-    readonly cacheReadTokens: number;
-    readonly cacheWriteTokens: number;
-    /** Total gateway cost in USD; undefined when no span reported cost. */
-    readonly costUsd?: number;
-    readonly errorCount: number;
-    readonly inputTokens: number;
-    /** Distinct model ids seen on any span, first-seen order. */
-    readonly models: readonly string[];
-    readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  /** Total gateway cost in USD; undefined when no span reported cost. */
+  readonly costUsd?: number;
+  readonly errorCount: number;
+  readonly inputTokens: number;
+  /** Distinct model ids seen on any span, first-seen order. */
+  readonly models: readonly string[];
+  readonly outputTokens: number;
 }
 /**
  * Compact metrics for one tree row: token chips (`↑1.4K`/`↓213`), cost
@@ -46,9 +46,12 @@ export declare function formatCostUsd(costUsd: number): string;
  * under its key on a plain margin. `childrenFollow` decides whether the last
  * entry closes the branch — child span rows come after the detail entries.
  */
-export declare function renderSpanDetailTree(span: LocalTraceSpan, options: {
+export declare function renderSpanDetailTree(
+  span: LocalTraceSpan,
+  options: {
     readonly childrenFollow: boolean;
     readonly margin: string;
     readonly mute: (text: string) => string;
     readonly width: number;
-}): string[];
+  },
+): string[];

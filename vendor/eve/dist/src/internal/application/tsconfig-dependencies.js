@@ -19,10 +19,7 @@ async function resolveRootTsConfigPaths(e) {
   let t = new Set([join(e, `tsconfig.json`), join(e, `jsconfig.json`)]);
   try {
     let r = await readdir(e, { withFileTypes: !0 });
-    for (let n of r)
-      n.isFile() &&
-        /^tsconfig\..+\.json$/i.test(n.name) &&
-        t.add(join(e, n.name));
+    for (let n of r) n.isFile() && /^tsconfig\..+\.json$/i.test(n.name) && t.add(join(e, n.name));
   } catch {}
   return [...t];
 }
@@ -59,8 +56,7 @@ async function readTextFileIfExists(e) {
 function parseTsConfigObject(e) {
   let t = [],
     n = parse(e, t, { allowTrailingComma: !0 });
-  if (!(t.length > 0 || typeof n != `object` || !n || Array.isArray(n)))
-    return n;
+  if (!(t.length > 0 || typeof n != `object` || !n || Array.isArray(n))) return n;
 }
 function extractTsConfigExtendsSpecifiers(e) {
   let t = parseTsConfigObject(e);
@@ -91,24 +87,21 @@ function resolveTsConfigExtendsTargetPaths(e) {
   return [...t];
 }
 function resolveFirstExistingTsConfigExtendsTarget(e) {
-  for (let t of resolveTsConfigExtendsTargetPaths(e))
-    if (existsSync(t)) return t;
+  for (let t of resolveTsConfigExtendsTargetPaths(e)) if (existsSync(t)) return t;
 }
 function resolveFileExtendsCandidates(e) {
   let t = resolve(dirname(e.configPath), e.extendsSpecifier),
     n = new Set();
   return (
     n.add(t),
-    t.endsWith(`.json`) ||
-      (n.add(`${t}.json`), n.add(join(t, `tsconfig.json`))),
+    t.endsWith(`.json`) || (n.add(`${t}.json`), n.add(join(t, `tsconfig.json`))),
     [...n]
   );
 }
 function resolvePackageExtendsCandidates(t) {
   let n = new Set([t.extendsSpecifier]);
   t.extendsSpecifier.endsWith(`.json`) ||
-    (n.add(`${t.extendsSpecifier}.json`),
-    n.add(`${t.extendsSpecifier}/tsconfig.json`));
+    (n.add(`${t.extendsSpecifier}.json`), n.add(`${t.extendsSpecifier}/tsconfig.json`));
   let r = new Set(),
     i = createRequire(t.configPath);
   for (let e of n)

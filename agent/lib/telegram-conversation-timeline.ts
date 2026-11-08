@@ -23,7 +23,8 @@ export async function bindTelegramConversationTimeline(input: {
   timeline: Pick<typeof conversationTimelineRepository, "recordInbound">;
 }): Promise<{
   conversation: Awaited<ReturnType<typeof conversationRepository.getByChatId>>;
-  inboundTimeline: TimelineRecordResult | (ConversationTimelineRecordResult & { replyToAgent: false });
+  inboundTimeline:
+    TimelineRecordResult | (ConversationTimelineRecordResult & { replyToAgent: false });
 }> {
   const conversation = input.groupId
     ? await input.conversations.getByGroupId(input.groupId)

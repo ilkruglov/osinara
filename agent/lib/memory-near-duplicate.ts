@@ -87,19 +87,23 @@ export async function embedNearDuplicateCandidate(
     const signal = AbortSignal.timeout(NEAR_DUPLICATE_EMBEDDING_BUDGET_MILLISECONDS);
     const embeddings: number[][] = [];
     for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
-      embeddings.push(...await embedMemoryPassages(
-        chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE),
-        fetch,
-        signal,
-      ));
+      embeddings.push(
+        ...(await embedMemoryPassages(
+          chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE),
+          fetch,
+          signal,
+        )),
+      );
     }
     return embeddings;
   } catch (error) {
     // The gate is advisory: an unavailable embedder must not block a memory write.
-    console.warn(JSON.stringify({
-      code: "AGENT_MEMORY_NEAR_DUPLICATE_SKIPPED",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.warn(
+      JSON.stringify({
+        code: "AGENT_MEMORY_NEAR_DUPLICATE_SKIPPED",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return null;
   }
 }
@@ -136,14 +140,30 @@ export async function findNearDuplicateClaims(
      HAVING MAX(1 - (chunk.embedding <=> candidate.embedding)) >= $10
       ORDER BY similarity DESC, item.created_at DESC, item.id DESC
       LIMIT $11`,
-    [auth.familyId, input.scope, input.scopePartitionKey, [...MEMORY_SEMANTIC_KINDS],
-      input.embeddings.map((embedding) => memoryVectorLiteral(embedding, () => new AppError(
-        "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
-        "Не удалось проверить похожие записи памяти",
-      ))), MEMORY_EMBEDDING_MODEL_VERSION,
-      input.subjectParticipantId, input.subjectUserId, input.subjectLabel,
-      MEMORY_NEAR_DUPLICATE_SIMILARITY, MEMORY_NEAR_DUPLICATE_CANDIDATES,
-      input.memoryProjectId, input.slottedOnly],
+    [
+      auth.familyId,
+      input.scope,
+      input.scopePartitionKey,
+      [...MEMORY_SEMANTIC_KINDS],
+      input.embeddings.map((embedding) =>
+        memoryVectorLiteral(
+          embedding,
+          () =>
+            new AppError(
+              "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+              "Не удалось проверить похожие записи памяти",
+            ),
+        ),
+      ),
+      MEMORY_EMBEDDING_MODEL_VERSION,
+      input.subjectParticipantId,
+      input.subjectUserId,
+      input.subjectLabel,
+      MEMORY_NEAR_DUPLICATE_SIMILARITY,
+      MEMORY_NEAR_DUPLICATE_CANDIDATES,
+      input.memoryProjectId,
+      input.slottedOnly,
+    ],
   );
   return result.rows.map((row) => ({
     attribute: row.attribute,
@@ -179,6 +199,10 @@ export function nearDuplicateRefusalResult(refusal: NearDuplicateRefusal) {
       "(add с её memoryRef или replace после чтения всего слота); у записи без слота исправь её через manage_memory " +
       "edit; если это другой факт, повтори с distinct=true.",
     saved: false as const,
-    similar: refusal.candidates.map(({ attribute, content, memoryRef }) => ({ attribute, content, memoryRef })),
+    similar: refusal.candidates.map(({ attribute, content, memoryRef }) => ({
+      attribute,
+      content,
+      memoryRef,
+    })),
   };
 }

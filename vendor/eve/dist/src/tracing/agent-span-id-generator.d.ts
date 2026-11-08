@@ -5,13 +5,13 @@
  * pre-allocated id its descendants already parented to.
  */
 export declare class AgentSpanIdGenerator {
-    #private;
-    /** Reserves a span id for a span emitted later via {@link withSpanId}. */
-    allocateSpanId(): string;
-    /** Derives one span id for a replay-stable instrumentation event. */
-    deriveSpanId(key: string): string;
-    generateSpanId(): string;
-    generateTraceId(): string;
-    /** Runs `startSpan` so the next span started carries `spanId`. */
-    withSpanId<T>(spanId: string, startSpan: () => T): T;
+  #private;
+  /** Reserves a span id for a span emitted later via {@link withSpanId}. */
+  allocateSpanId(): string;
+  /** Derives one span id for a replay-stable instrumentation event. */
+  deriveSpanId(key: string): string;
+  generateSpanId(): string;
+  generateTraceId(): string;
+  /** Runs `startSpan` so the next span started carries `spanId`. */
+  withSpanId<T>(spanId: string, startSpan: () => T): T;
 }

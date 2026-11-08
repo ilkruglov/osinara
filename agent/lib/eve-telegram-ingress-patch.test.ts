@@ -61,10 +61,14 @@ describe("Eve Telegram verified ingress patch", () => {
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
     expect(codeText(runtime).match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
-    expect(codeText(runtime).match(/i\.acknowledgementText\?\?`Answerreceived\.`/g)).toHaveLength(1);
+    expect(codeText(runtime).match(/i\.acknowledgementText\?\?`Answerreceived\.`/g)).toHaveLength(
+      1,
+    );
     expect(codeText(runtime).match(/n\.send\(r\.message\?\?a/g)).toHaveLength(1);
     // Eve natively defers callback context until after the isolated approval step.
-    expect(codeText(inputRequestsRuntime)).toContain(codeText("deferMessagesWhileApprovalsPending"));
+    expect(codeText(inputRequestsRuntime)).toContain(
+      codeText("deferMessagesWhileApprovalsPending"),
+    );
     expect(codeText(inputRequestsRuntime)).toContain(codeText("queueDeferredStepInput"));
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
@@ -81,16 +85,19 @@ describe("Eve Telegram verified ingress patch", () => {
     });
     const route = channel.routes[0] as unknown as HttpRoute;
 
-    const response = await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({ update_id: 1000 }),
-      headers: { "x-telegram-bot-api-secret-token": "wrong-secret" },
-      method: "POST",
-    }), {
-      from: vi.fn(),
-      params: {},
-      requestIp: null,
-      waitUntil: vi.fn(),
-    });
+    const response = await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({ update_id: 1000 }),
+        headers: { "x-telegram-bot-api-secret-token": "wrong-secret" },
+        method: "POST",
+      }),
+      {
+        from: vi.fn(),
+        params: {},
+        requestIp: null,
+        waitUntil: vi.fn(),
+      },
+    );
 
     expect(response.status).toBe(401);
     expect(onVerifiedUpdate).not.toHaveBeenCalled();
@@ -105,27 +112,30 @@ describe("Eve Telegram verified ingress patch", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        message: {
-          chat: { id: 101, type: "private" },
-          date: 1_700_000_000,
-          from: { first_name: "Анна", id: 101, is_bot: false },
-          message_id: 78,
-          text: "Привет",
-        },
-        update_id: 1007,
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          message: {
+            chat: { id: 101, type: "private" },
+            date: 1_700_000_000,
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            message_id: 78,
+            text: "Привет",
+          },
+          update_id: 1007,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
     expect(source.send.mock.calls[0]?.[0]).toBe("durable context\n\nПривет");
@@ -138,11 +148,13 @@ describe("Eve Telegram verified ingress patch", () => {
       "input.requested": vi.fn().mockRejectedValue(error),
     };
 
-    await expect(callAdapterEventHandler(
-      adapter as never,
-      { data: { requests: [] }, type: "input.requested" } as never,
-      {} as never,
-    )).rejects.toBe(error);
+    await expect(
+      callAdapterEventHandler(
+        adapter as never,
+        { data: { requests: [] }, type: "input.requested" } as never,
+        {} as never,
+      ),
+    ).rejects.toBe(error);
   });
 
   it("acknowledges through the hook and dispatches with the native channel adapter", async () => {
@@ -154,9 +166,11 @@ describe("Eve Telegram verified ingress patch", () => {
     let backgroundTask: Promise<unknown> | undefined;
     let dispatchedSession: unknown;
     const onVerifiedUpdate = vi.fn((context) => {
-      context.waitUntil(context.dispatch(context.update).then((session: unknown) => {
-        dispatchedSession = session;
-      }));
+      context.waitUntil(
+        context.dispatch(context.update).then((session: unknown) => {
+          dispatchedSession = session;
+        }),
+      );
       return new Response("queued", { status: 202 });
     });
     const channel = telegramChannel({
@@ -206,27 +220,30 @@ describe("Eve Telegram verified ingress patch", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        message: {
-          chat: { id: 101, type: "private" },
-          date: 1_700_000_000,
-          from: { first_name: "Анна", id: 101, is_bot: false },
-          message_id: 78,
-          text: "Продолжим",
-        },
-        update_id: 1002,
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          message: {
+            chat: { id: 101, type: "private" },
+            date: 1_700_000_000,
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            message_id: 78,
+            text: "Продолжим",
+          },
+          update_id: 1002,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
     expect(source.from).toHaveBeenCalledWith("101:::osinara:2");
@@ -245,34 +262,37 @@ describe("Eve Telegram verified ingress patch", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        message: {
-          chat: { id: -100, type: "supergroup" },
-          date: 1_700_000_000,
-          from: { first_name: "Анна", id: 101, is_bot: false },
-          message_id: 342,
-          reply_to_message: {
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          message: {
             chat: { id: -100, type: "supergroup" },
-            date: 1_699_999_999,
-            from: { first_name: "Osinara", id: 999, is_bot: true },
-            message_id: 340,
-            text: "Предыдущий ответ",
+            date: 1_700_000_000,
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            message_id: 342,
+            reply_to_message: {
+              chat: { id: -100, type: "supergroup" },
+              date: 1_699_999_999,
+              from: { first_name: "Osinara", id: 999, is_bot: true },
+              message_id: 340,
+              text: "Предыдущий ответ",
+            },
+            text: "Продолжи",
           },
-          text: "Продолжи",
-        },
-        update_id: 1005,
+          update_id: 1005,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
     expect(source.send.mock.calls[0]?.[0]).toEqual(expect.anything());
@@ -295,40 +315,45 @@ describe("Eve Telegram verified ingress patch", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        message: {
-          chat: { id: -100, type: "supergroup" },
-          date: 1_700_000_000,
-          from: { first_name: "Анна", id: 101, is_bot: false },
-          message_id: 343,
-          reply_to_message: {
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          message: {
             chat: { id: -100, type: "supergroup" },
-            date: 1_699_999_999,
-            from: { first_name: "Osinara", id: 999, is_bot: true },
-            message_id: 341,
-            text: "Подтвердите действие",
+            date: 1_700_000_000,
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            message_id: 343,
+            reply_to_message: {
+              chat: { id: -100, type: "supergroup" },
+              date: 1_699_999_999,
+              from: { first_name: "Osinara", id: 999, is_bot: true },
+              message_id: 341,
+              text: "Подтвердите действие",
+            },
+            text: "Да",
           },
-          text: "Да",
-        },
-        update_id: 1006,
+          update_id: 1006,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
-    expect(source.respond.mock.calls[0]?.[0]).toEqual([{
-      requestId: "telegram_reply:341",
-      text: "Да",
-    }]);
+    expect(source.respond.mock.calls[0]?.[0]).toEqual([
+      {
+        requestId: "telegram_reply:341",
+        text: "Да",
+      },
+    ]);
   });
 
   it("exposes a private drain route on the same adapter, opened by the internal token only", async () => {
@@ -356,21 +381,22 @@ describe("Eve Telegram verified ingress patch", () => {
     });
     const route = channel.routes[1] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
-    const drain = (token: string) => route.handler(
-      new Request("http://agent:3000/eve/v1/telegram-drain", {
-        body: "{}",
-        headers: { "x-telegram-bot-api-secret-token": token },
-        method: "POST",
-      }),
-      {
-        params: {},
-        requestIp: null,
-        from: source.from,
-        waitUntil(task: Promise<unknown>) {
-          backgroundTask = task;
+    const drain = (token: string) =>
+      route.handler(
+        new Request("http://agent:3000/eve/v1/telegram-drain", {
+          body: "{}",
+          headers: { "x-telegram-bot-api-secret-token": token },
+          method: "POST",
+        }),
+        {
+          params: {},
+          requestIp: null,
+          from: source.from,
+          waitUntil(task: Promise<unknown>) {
+            backgroundTask = task;
+          },
         },
-      },
-    );
+      );
 
     // Telegram holds the webhook secret; it does not open the internal drain route.
     expect((await drain("webhook-secret")).status).toBe(401);

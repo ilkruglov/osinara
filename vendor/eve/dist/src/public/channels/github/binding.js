@@ -43,10 +43,7 @@ function buildGitHubBinding(n) {
               credentials: r.credentials,
               installationId: o,
               owner: i.owner,
-              pullRequestNumber: requiredStateNumber(
-                i.pullRequestNumber,
-                `pullRequestNumber`,
-              ),
+              pullRequestNumber: requiredStateNumber(i.pullRequestNumber, `pullRequestNumber`),
               repo: i.repo,
             })
           : createGitHubIssueComment({
@@ -54,19 +51,13 @@ function buildGitHubBinding(n) {
               body: e,
               credentials: r.credentials,
               installationId: o,
-              issueNumber: requiredStateNumber(
-                i.issueNumber ?? i.pullRequestNumber,
-                `issueNumber`,
-              ),
+              issueNumber: requiredStateNumber(i.issueNumber ?? i.pullRequestNumber, `issueNumber`),
               owner: i.owner,
               repo: i.repo,
             });
       },
       async react(e) {
-        let t =
-          i.conversationKind === `review_thread`
-            ? i.reviewCommentId
-            : i.triggeringCommentId;
+        let t = i.conversationKind === `review_thread` ? i.reviewCommentId : i.triggeringCommentId;
         t !== null &&
           (await createGitHubReaction({
             api: r.api,

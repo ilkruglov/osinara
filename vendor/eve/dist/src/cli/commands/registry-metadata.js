@@ -22,9 +22,7 @@ const RegistrySetupSchema = z.object({
     items: z.array(
       z.object({
         name: z.string().min(1),
-        meta: z
-          .object({ eve: EveRegistryMetadataSchema.optional() })
-          .optional(),
+        meta: z.object({ eve: EveRegistryMetadataSchema.optional() }).optional(),
       }),
     ),
   }),
@@ -42,8 +40,7 @@ function parseOfficialRegistrySearchMetadata(e) {
     n = new Map();
   for (let e of t) {
     let { docs: t, implementation: r } = e.meta?.eve ?? {};
-    (t !== void 0 || r !== void 0) &&
-      n.set(e.name, { docs: t, implementation: r });
+    (t !== void 0 || r !== void 0) && n.set(e.name, { docs: t, implementation: r });
   }
   return n;
 }

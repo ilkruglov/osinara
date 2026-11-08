@@ -15,9 +15,7 @@ function defaultDiscordAuth(e) {
       attributes: t,
       authenticator: `discord-interaction`,
       issuer: e.guildId ? `discord:${e.guildId}` : `discord`,
-      principalId: e.guildId
-        ? `discord:${e.guildId}:${e.user.id}`
-        : `discord:${e.user.id}`,
+      principalId: e.guildId ? `discord:${e.guildId}:${e.user.id}` : `discord:${e.user.id}`,
       principalType: e.user.isBot ? `service` : `user`,
     }
   );
@@ -45,9 +43,7 @@ const defaultEvents = {
     }
   },
   async "message.completed"(e, t, n) {
-    e.finishReason === `tool-calls` ||
-      !e.message ||
-      (await t.discord.post(e.message));
+    e.finishReason === `tool-calls` || !e.message || (await t.discord.post(e.message));
   },
   async "session.failed"(n, r) {
     let i = formatErrorHint(n),

@@ -6,15 +6,11 @@ function createLoggingSandboxSession(e) {
     async run(e) {
       t?.(`bootstrap run: ${formatCommand(e.command)}`);
       let r = await n.run(e);
-      if (r.exitCode === 1)
-        throw Error(formatBootstrapRunFailure(e.command, r));
+      if (r.exitCode === 1) throw Error(formatBootstrapRunFailure(e.command, r));
       return r;
     },
     async spawn(e) {
-      return (
-        t?.(`bootstrap spawn: ${formatCommand(e.command)}`),
-        await n.spawn(e)
-      );
+      return (t?.(`bootstrap spawn: ${formatCommand(e.command)}`), await n.spawn(e));
     },
     async setNetworkPolicy(e) {
       return (
@@ -27,9 +23,7 @@ function createLoggingSandboxSession(e) {
     },
     async writeBinaryFile(e) {
       return (
-        t?.(
-          `bootstrap write binary file: ${e.path} (${e.content.byteLength} bytes)`,
-        ),
+        t?.(`bootstrap write binary file: ${e.path} (${e.content.byteLength} bytes)`),
         await n.writeBinaryFile(e)
       );
     },
@@ -68,9 +62,7 @@ function formatCommand(e) {
 }
 function formatNetworkPolicy(e) {
   return truncateOneLine(
-    typeof e == `string`
-      ? e
-      : JSON.stringify(e, (e, t) => (e === `transform` ? `[redacted]` : t)),
+    typeof e == `string` ? e : JSON.stringify(e, (e, t) => (e === `transform` ? `[redacted]` : t)),
   );
 }
 function truncateOneLine(e) {

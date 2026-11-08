@@ -1,9 +1,7 @@
 import { registerInstrumentationRuntime } from "#harness/instrumentation/runtime.js";
 import { createInstrumentationHooks } from "#harness/instrumentation/lifecycle.js";
 import { createInstrumentationSetupContext } from "#harness/instrumentation/setup-context.js";
-const INSTRUMENTATION_CONFIG_GLOBAL_KEY = Symbol.for(
-    `eve.harness-instrumentation-config`,
-  ),
+const INSTRUMENTATION_CONFIG_GLOBAL_KEY = Symbol.for(`eve.harness-instrumentation-config`),
   globalContainer = globalThis;
 async function registerInstrumentationConfig(n, r) {
   ((globalContainer[INSTRUMENTATION_CONFIG_GLOBAL_KEY] = n),

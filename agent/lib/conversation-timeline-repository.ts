@@ -135,7 +135,7 @@ async function nextSequence(client: PoolClient, conversationId: string): Promise
 
 async function prune(client: PoolClient, conversationId: string): Promise<void> {
   await client.query(
-     `DELETE FROM telegram_group_messages WHERE id IN (
+    `DELETE FROM telegram_group_messages WHERE id IN (
        SELECT id FROM telegram_group_messages WHERE conversation_id = $1
        ORDER BY sequence_id DESC OFFSET $2
         ) AND NOT EXISTS (
@@ -166,14 +166,19 @@ async function list(input: {
          AND ($4::uuid IS NULL OR message.application_session_id IS DISTINCT FROM $4)
        ORDER BY message.sequence_id DESC LIMIT $5
      ) SELECT * FROM eligible ORDER BY sequence_id::bigint`,
-    [input.conversationId, input.afterSequence, input.beforeSequence,
-      input.applicationSessionId, input.limit],
+    [
+      input.conversationId,
+      input.afterSequence,
+      input.beforeSequence,
+      input.applicationSessionId,
+      input.limit,
+    ],
   );
   const total = Number(result.rows[0]?.total_count ?? 0);
   const entries = result.rows.map(project);
   return {
     entries,
-    omittedBeforeSequence: total > entries.length ? entries[0]?.sequenceId ?? null : null,
+    omittedBeforeSequence: total > entries.length ? (entries[0]?.sequenceId ?? null) : null,
   };
 }
 
@@ -202,7 +207,10 @@ export const conversationTimelineRepository = {
   ): Promise<ConversationTimelineRecordResult> {
     const sender = message.from;
     if (!sender) {
-      throw new AppError("AGENT_TELEGRAM_MESSAGE_INVALID", "Telegram не передал отправителя сообщения");
+      throw new AppError(
+        "AGENT_TELEGRAM_MESSAGE_INVALID",
+        "Telegram не передал отправителя сообщения",
+      );
     }
     const messageId = requireTelegramPositiveBigint(message.messageId, "message_id");
     const client = await database().connect();
@@ -212,7 +220,8 @@ export const conversationTimelineRepository = {
       const conversation = await boundary(client, conversationId);
       if (
         conversation.telegram_chat_id !== message.chat.id ||
-        (conversation.owner_telegram_user_id !== null && conversation.owner_telegram_user_id !== sender.id)
+        (conversation.owner_telegram_user_id !== null &&
+          conversation.owner_telegram_user_id !== sender.id)
       ) {
         throw new AppError(
           "AGENT_CONVERSATION_TIMELINE_BOUNDARY_INVALID",
@@ -238,15 +247,20 @@ export const conversationTimelineRepository = {
       const replyMessageId = message.replyToMessage
         ? requireTelegramPositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
         : null;
-      const reply = replyMessageId === null ? null : (await client.query<{
-        entry_id: string;
-        sequence_id: string;
-      }>(
-        `SELECT alias.entry_id, entry.sequence_id::text FROM telegram_group_message_ids AS alias
+      const reply =
+        replyMessageId === null
+          ? null
+          : ((
+              await client.query<{
+                entry_id: string;
+                sequence_id: string;
+              }>(
+                `SELECT alias.entry_id, entry.sequence_id::text FROM telegram_group_message_ids AS alias
          JOIN telegram_group_messages AS entry ON entry.id = alias.entry_id
          WHERE alias.conversation_id = $1 AND alias.telegram_message_id = $2`,
-        [conversationId, replyMessageId],
-      )).rows[0] ?? null;
+                [conversationId, replyMessageId],
+              )
+            ).rows[0] ?? null);
       const sequenceId = await nextSequence(client, conversationId);
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO telegram_group_messages
@@ -255,10 +269,22 @@ export const conversationTimelineRepository = {
             content_text, reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at)
          VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, false, $9, $10, $11, $12, $13, $14)
          RETURNING id`,
-        [conversationId, conversation.telegram_group_id, sequenceId, `telegram:${sender.id}`,
-          messageId, sender.id, sender.username ?? null, telegramSenderDisplayName(message),
-          telegramMessageKind(message), telegramMessageContent(message), replyMessageId,
-          reply?.entry_id ?? null, reply?.sequence_id ?? null, telegramMessageSentAt(message)],
+        [
+          conversationId,
+          conversation.telegram_group_id,
+          sequenceId,
+          `telegram:${sender.id}`,
+          messageId,
+          sender.id,
+          sender.username ?? null,
+          telegramSenderDisplayName(message),
+          telegramMessageKind(message),
+          telegramMessageContent(message),
+          replyMessageId,
+          reply?.entry_id ?? null,
+          reply?.sequence_id ?? null,
+          telegramMessageSentAt(message),
+        ],
       );
       const entryId = inserted.rows[0]!.id;
       await client.query(
@@ -292,7 +318,9 @@ export const conversationTimelineRepository = {
         "Нет подтверждённого финального ответа для истории",
       );
     }
-    const ids = input.telegramMessageIds.map((id) => requireTelegramPositiveBigint(id, "message_id"));
+    const ids = input.telegramMessageIds.map((id) =>
+      requireTelegramPositiveBigint(id, "message_id"),
+    );
     if (new Set(ids).size !== ids.length) {
       throw new AppError(
         "AGENT_TELEGRAM_TIMELINE_DELIVERY_INVALID",
@@ -312,7 +340,10 @@ export const conversationTimelineRepository = {
       );
       if (existing.rows.length > 0) {
         const first = existing.rows[0]!;
-        if (existing.rows.length !== ids.length || existing.rows.some((row) => row.entry_id !== first.entry_id)) {
+        if (
+          existing.rows.length !== ids.length ||
+          existing.rows.some((row) => row.entry_id !== first.entry_id)
+        ) {
           throw new AppError(
             "AGENT_TELEGRAM_TIMELINE_ALIAS_CONFLICT",
             "Telegram-сообщение уже связано с другой записью истории",
@@ -331,9 +362,19 @@ export const conversationTimelineRepository = {
                  (SELECT id FROM telegram_group_messages WHERE id = $9 AND conversation_id = $1),
                  (SELECT sequence_id FROM telegram_group_messages WHERE id = $9 AND conversation_id = $1),
                  $10, $11) RETURNING id`,
-        [input.conversationId, conversation.telegram_group_id, sequenceId, AGENT_ACTOR_ID, ids[0],
-          input.messageThreadId, AGENT_DISPLAY_NAME, input.contentText, input.replyToEntryId,
-          input.deliveredAt, input.applicationSessionId],
+        [
+          input.conversationId,
+          conversation.telegram_group_id,
+          sequenceId,
+          AGENT_ACTOR_ID,
+          ids[0],
+          input.messageThreadId,
+          AGENT_DISPLAY_NAME,
+          input.contentText,
+          input.replyToEntryId,
+          input.deliveredAt,
+          input.applicationSessionId,
+        ],
       );
       const entryId = inserted.rows[0]!.id;
       await client.query(

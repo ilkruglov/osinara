@@ -6,9 +6,9 @@
 export type GenericScheduleRunHandler<TArgs> = (args: TArgs) => Promise<void> | void;
 /** Constraint shape that bounds the authored keys accepted by {@link defineSchedule}. */
 export interface GenericScheduleDefinitionFields<TArgs> {
-    readonly cron: string;
-    readonly markdown?: string;
-    readonly run?: GenericScheduleRunHandler<TArgs>;
+  readonly cron: string;
+  readonly markdown?: string;
+  readonly run?: GenericScheduleRunHandler<TArgs>;
 }
 /**
  * Public definition for a schedule authored in TypeScript. Provide a required
@@ -23,12 +23,14 @@ export interface GenericScheduleDefinitionFields<TArgs> {
  * Identity is derived from the file path under `agent/schedules/`; authored
  * definitions do not carry a `name` field.
  */
-export type GenericScheduleDefinition<TArgs> = {
-    readonly cron: string;
-    readonly markdown: string;
-    readonly run?: never;
-} | {
-    readonly cron: string;
-    readonly markdown?: never;
-    readonly run: GenericScheduleRunHandler<TArgs>;
-};
+export type GenericScheduleDefinition<TArgs> =
+  | {
+      readonly cron: string;
+      readonly markdown: string;
+      readonly run?: never;
+    }
+  | {
+      readonly cron: string;
+      readonly markdown?: never;
+      readonly run: GenericScheduleRunHandler<TArgs>;
+    };

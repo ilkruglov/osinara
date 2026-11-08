@@ -19,4 +19,8 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * of the connection pipeline (auth context, tool-result narrowing,
  * runtime resolution) stays protocol-agnostic.
  */
-export declare function compileConnectionDefinition(agentRoot: string, source: ConnectionSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledConnectionDefinition>;
+export declare function compileConnectionDefinition(
+  agentRoot: string,
+  source: ConnectionSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledConnectionDefinition>;

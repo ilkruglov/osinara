@@ -40,8 +40,10 @@ import {
   type WhisperPlaceholderDependencies,
 } from "./whisper-placeholder-writer.js";
 
-export const WHISPER_EMPTY_ANSWER_TEXT = "Ответа не получилось. Спросите ещё раз, можно другими словами.";
-export const WHISPER_TRUNCATED_NOTE = "\n\n…Ответ длиннее, чем помещается в шёпот; продолжение спросите в личке.";
+export const WHISPER_EMPTY_ANSWER_TEXT =
+  "Ответа не получилось. Спросите ещё раз, можно другими словами.";
+export const WHISPER_TRUNCATED_NOTE =
+  "\n\n…Ответ длиннее, чем помещается в шёпот; продолжение спросите в личке.";
 
 type WhisperAuth = Pick<SessionAuth, "current">;
 
@@ -51,15 +53,24 @@ export function telegramWhisperTarget(auth: WhisperAuth): WhisperPlaceholderKey 
   const chatId = attributes.telegramChatId;
   const placeholder = Number(attributes[TELEGRAM_WHISPER_PLACEHOLDER_ATTRIBUTE]);
   const receiverUserId = attributes[TELEGRAM_WHISPER_RECEIVER_ATTRIBUTE];
-  if (typeof chatId !== "string" || !Number.isSafeInteger(placeholder) || placeholder <= 0 ||
-    typeof receiverUserId !== "string" || !/^[1-9]\d*$/u.test(receiverUserId)) return null;
+  if (
+    typeof chatId !== "string" ||
+    !Number.isSafeInteger(placeholder) ||
+    placeholder <= 0 ||
+    typeof receiverUserId !== "string" ||
+    !/^[1-9]\d*$/u.test(receiverUserId)
+  )
+    return null;
   return { chatId, placeholderMessageId: placeholder, receiverUserId };
 }
 
 /** The answer as the chat would show it, or null when it does not lay out at all. */
 function presentation(markdown: string): TelegramWhisperContent[] | null {
   try {
-    return formatTelegramFinalPresentation(markdown).map((chunk) => ({ format: chunk.format, text: chunk.text }));
+    return formatTelegramFinalPresentation(markdown).map((chunk) => ({
+      format: chunk.format,
+      text: chunk.text,
+    }));
   } catch {
     return null;
   }
@@ -79,7 +90,9 @@ function placeholderContent(markdown: string): TelegramWhisperContent | null {
   let high = paragraphs.length - 1;
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
-    const fitted = presentation(`${paragraphs.slice(0, middle).join("\n\n")}${WHISPER_TRUNCATED_NOTE}`);
+    const fitted = presentation(
+      `${paragraphs.slice(0, middle).join("\n\n")}${WHISPER_TRUNCATED_NOTE}`,
+    );
     if (fitted !== null && fitted.length === 1) {
       best = fitted[0]!;
       low = middle + 1;
@@ -103,19 +116,29 @@ export async function deliverTelegramWhisperCompletion(
   if (!target) return;
   const output = completedTelegramOutput(data);
   if (!output) {
-    if (data.finishReason === "stop" && typeof data.message === "string" && data.message.includes(TELEGRAM_SILENT_DIRECTIVE)) {
-      await writeWhisperPlaceholder(target, { content: { remove: true }, from: ["open", "progress", "failed"], to: "answered" }, dependencies);
+    if (
+      data.finishReason === "stop" &&
+      typeof data.message === "string" &&
+      data.message.includes(TELEGRAM_SILENT_DIRECTIVE)
+    ) {
+      await writeWhisperPlaceholder(
+        target,
+        { content: { remove: true }, from: ["open", "progress", "failed"], to: "answered" },
+        dependencies,
+      );
     }
     return;
   }
-  const content = output.kind === "reaction"
-    ? { format: "plain" as const, text: output.emoji }
-    : presented(output.message);
+  const content =
+    output.kind === "reaction"
+      ? { format: "plain" as const, text: output.emoji }
+      : presented(output.message);
   if (!content) return;
   // Interim text never replaces the answer, and stops once the turn has been told it failed.
-  const change = output.kind === "progress"
-    ? { content, from: ["open", "progress"] as const, to: "progress" as const }
-    : { content, from: ["open", "progress", "failed"] as const, to: "answered" as const };
+  const change =
+    output.kind === "progress"
+      ? { content, from: ["open", "progress"] as const, to: "progress" as const }
+      : { content, from: ["open", "progress", "failed"] as const, to: "answered" as const };
   await writeWhisperPlaceholder(target, change, dependencies);
 }
 
@@ -126,9 +149,15 @@ export async function finishTelegramWhisperTurn(
 ): Promise<void> {
   const target = telegramWhisperTarget(auth);
   if (!target) return;
-  await writeWhisperPlaceholder(target, {
-    content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT }, from: ["open"], to: "failed",
-  }, dependencies);
+  await writeWhisperPlaceholder(
+    target,
+    {
+      content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT },
+      from: ["open"],
+      to: "failed",
+    },
+    dependencies,
+  );
 }
 
 export async function reportTelegramWhisperFailure(
@@ -138,5 +167,9 @@ export async function reportTelegramWhisperFailure(
 ): Promise<void> {
   const target = telegramWhisperTarget(auth);
   if (!target) return;
-  await writeWhisperPlaceholder(target, { content: { format: "plain", text }, from: ["open", "progress"], to: "failed" }, dependencies);
+  await writeWhisperPlaceholder(
+    target,
+    { content: { format: "plain", text }, from: ["open", "progress"], to: "failed" },
+    dependencies,
+  );
 }

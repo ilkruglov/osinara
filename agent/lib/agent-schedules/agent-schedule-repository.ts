@@ -17,10 +17,7 @@ import {
   agentScheduleOperationHash,
   rowToAgentSchedule,
 } from "./agent-schedule-record.js";
-import {
-  findAgentScheduleById,
-  listAgentSchedules,
-} from "./agent-schedule-query-repository.js";
+import { findAgentScheduleById, listAgentSchedules } from "./agent-schedule-query-repository.js";
 import {
   AGENT_SCHEDULE_COLUMNS,
   findAgentScheduleOperation,
@@ -220,18 +217,18 @@ export const agentScheduleRepository = {
       throw new AppError("AGENT_SCHEDULE_UPDATE_INVALID", "Не указаны изменения расписания");
     }
     const title = input.title === undefined ? undefined : requireAgentScheduleTitle(input.title);
-    const userRequest = input.userRequest === undefined
-      ? undefined
-      : requireAgentScheduleUserRequest(input.userRequest);
-    const scenarioPrompt = input.scenarioPrompt === undefined
-      ? undefined
-      : requireAgentSchedulePrompt(input.scenarioPrompt);
-    const nextRunAt = input.nextRunAt === undefined
-      ? undefined
-      : requireAgentScheduleDate(input.nextRunAt);
-    const recurrence = input.recurrence === undefined
-      ? undefined
-      : requireAgentScheduleRecurrence(input.recurrence);
+    const userRequest =
+      input.userRequest === undefined
+        ? undefined
+        : requireAgentScheduleUserRequest(input.userRequest);
+    const scenarioPrompt =
+      input.scenarioPrompt === undefined
+        ? undefined
+        : requireAgentSchedulePrompt(input.scenarioPrompt);
+    const nextRunAt =
+      input.nextRunAt === undefined ? undefined : requireAgentScheduleDate(input.nextRunAt);
+    const recurrence =
+      input.recurrence === undefined ? undefined : requireAgentScheduleRecurrence(input.recurrence);
     const historyWindowDays = requireExternalScheduleHistoryWindowDays(input.historyWindowDays);
     const inputHash = agentScheduleOperationHash({
       ...input,
@@ -246,7 +243,13 @@ export const agentScheduleRepository = {
     try {
       await client.query("BEGIN");
       await lockAgentScheduleOperation(client, auth, input.operationKey);
-      const replay = await findAgentScheduleOperation(client, auth, input.operationKey, "update", inputHash);
+      const replay = await findAgentScheduleOperation(
+        client,
+        auth,
+        input.operationKey,
+        "update",
+        inputHash,
+      );
       if (replay) {
         const existing = await selectAgentSchedule(client, auth.familyId, replay);
         if (!existing) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Расписание уже удалено");
@@ -254,13 +257,17 @@ export const agentScheduleRepository = {
         return rowToAgentSchedule(existing);
       }
       let schedule = await selectAgentSchedule(client, auth.familyId, id);
-      if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      if (!schedule)
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       if (schedule.scope === "group" && schedule.group_id !== null) {
         // Group administration locks the trust-zone row before cascading schedules; use the same order.
-        await client.query("SELECT 1 FROM telegram_groups WHERE id = $1 FOR SHARE", [schedule.group_id]);
+        await client.query("SELECT 1 FROM telegram_groups WHERE id = $1 FOR SHARE", [
+          schedule.group_id,
+        ]);
       }
       schedule = await selectAgentSchedule(client, auth.familyId, id, true);
-      if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      if (!schedule)
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
       if (input.requiredScope !== undefined && schedule.scope !== input.requiredScope) {
         throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
@@ -277,13 +284,15 @@ export const agentScheduleRepository = {
           "Запланированный сценарий сейчас выполняется. Повторите изменение после завершения",
         );
       }
-      const nextRecurrence = recurrence ?? {
-        ...(schedule.recurrence_kind === "weekly"
-          ? { daysOfWeek: schedule.recurrence_days_of_week ?? [] }
-          : {}),
-        interval: schedule.recurrence_interval,
-        kind: schedule.recurrence_kind,
-      } as AgentScheduleRecurrence;
+      const nextRecurrence =
+        recurrence ??
+        ({
+          ...(schedule.recurrence_kind === "weekly"
+            ? { daysOfWeek: schedule.recurrence_days_of_week ?? [] }
+            : {}),
+          interval: schedule.recurrence_interval,
+          kind: schedule.recurrence_kind,
+        } as AgentScheduleRecurrence);
       const recurrenceValue = recurrenceValues(nextRecurrence);
       const capabilityAllowlist = await requireUpdatedExternalScheduleCapabilities(
         client,
@@ -359,13 +368,20 @@ export const agentScheduleRepository = {
     try {
       await client.query("BEGIN");
       await lockAgentScheduleOperation(client, auth, operationKey);
-      const replay = await findAgentScheduleOperation(client, auth, operationKey, "delete", inputHash);
+      const replay = await findAgentScheduleOperation(
+        client,
+        auth,
+        operationKey,
+        "delete",
+        inputHash,
+      );
       if (replay !== undefined) {
         await client.query("COMMIT");
         return true;
       }
       const schedule = await selectAgentSchedule(client, auth.familyId, id, true);
-      if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      if (!schedule)
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
       if (requiredScope !== undefined && schedule.scope !== requiredScope) {
         throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
@@ -409,7 +425,13 @@ export const agentScheduleRepository = {
     try {
       await client.query("BEGIN");
       await lockAgentScheduleOperation(client, auth, operationKey);
-      const replay = await findAgentScheduleOperation(client, auth, operationKey, "run_now", inputHash);
+      const replay = await findAgentScheduleOperation(
+        client,
+        auth,
+        operationKey,
+        "run_now",
+        inputHash,
+      );
       if (replay) {
         const existing = await selectAgentSchedule(client, auth.familyId, replay);
         if (!existing) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Расписание уже удалено");
@@ -417,7 +439,8 @@ export const agentScheduleRepository = {
         return rowToAgentSchedule(existing);
       }
       const schedule = await selectAgentSchedule(client, auth.familyId, id, true);
-      if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      if (!schedule)
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
       if (requiredScope !== undefined && schedule.scope !== requiredScope) {
         throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");

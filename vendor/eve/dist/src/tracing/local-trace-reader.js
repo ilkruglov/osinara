@@ -16,9 +16,7 @@ async function listLocalTraceIds(e) {
     if (isMissing(e)) return [];
     throw e;
   }
-  return n
-    .filter((e) => e.isDirectory() && TRACE_ID_PATTERN.test(e.name))
-    .map((e) => e.name);
+  return n.filter((e) => e.isDirectory() && TRACE_ID_PATTERN.test(e.name)).map((e) => e.name);
 }
 async function readLocalTraceActivityMs(e, t) {
   try {
@@ -73,8 +71,7 @@ async function readLocalTrace(e, t) {
   if (n === void 0) return;
   let r = new Map();
   for (let i of n)
-    for (let n of await readLocalTraceSegment(e, t, i))
-      r.has(n.spanId) || r.set(n.spanId, n);
+    for (let n of await readLocalTraceSegment(e, t, i)) r.has(n.spanId) || r.set(n.spanId, n);
   if (r.size !== 0) return assembleLocalTrace(t, [...r.values()]);
 }
 function compareLocalTraceSpans(e, t) {
@@ -98,10 +95,7 @@ function assembleLocalTrace(e, t) {
     sessionId: i[0],
     sessionIds: i,
     spans: n,
-    startTimeNs: n.reduce(
-      (e, t) => (t.startTimeNs < e ? t.startTimeNs : e),
-      n[0].startTimeNs,
-    ),
+    startTimeNs: n.reduce((e, t) => (t.startTimeNs < e ? t.startTimeNs : e), n[0].startTimeNs),
     traceId: e,
     window: firstNumberAttribute(r, `agent.session.window`),
   };
@@ -113,19 +107,13 @@ function describeLocalTraceSpan(e) {
     i = valueSpanAttribute(e, `agent.step.attempt`),
     a = stringSpanAttribute(e, `agent.action.kind`),
     o = stringSpanAttribute(e, `agent.action.name`),
-    s =
-      stringSpanAttribute(e, `agent.model.id`) ??
-      stringSpanAttribute(e, `gen_ai.request.model`);
+    s = stringSpanAttribute(e, `agent.model.id`) ?? stringSpanAttribute(e, `gen_ai.request.model`);
   return (
     e.name === `agent.turn` && n !== void 0 && t.push(n),
     e.name === `agent.step` &&
       r !== void 0 &&
-      t.push(
-        `step ${String(r)}${i === void 0 ? `` : `, attempt ${String(i)}`}`,
-      ),
-    e.name === `agent.action` &&
-      o !== void 0 &&
-      t.push(`${a ?? `action`}: ${o}`),
+      t.push(`step ${String(r)}${i === void 0 ? `` : `, attempt ${String(i)}`}`),
+    e.name === `agent.action` && o !== void 0 && t.push(`${a ?? `action`}: ${o}`),
     s !== void 0 && e.name.includes(`do`) && t.push(`model ${s}`),
     t
   );
@@ -139,10 +127,7 @@ function parseLocalTraceSegment(e, t) {
       if (!(!isRecord(e) || !Array.isArray(e.scopeSpans)))
         for (let n of e.scopeSpans) {
           if (!isRecord(n) || !Array.isArray(n.spans)) continue;
-          let e =
-            isRecord(n.scope) && typeof n.scope.name == `string`
-              ? n.scope.name
-              : void 0;
+          let e = isRecord(n.scope) && typeof n.scope.name == `string` ? n.scope.name : void 0;
           for (let i of n.spans) {
             let n = parseLocalTraceSpan(i, t, e);
             n !== void 0 && r.push(n);
@@ -172,8 +157,7 @@ function parseLocalTraceSpan(e, t, n) {
       kind: typeof e.kind == `number` ? e.kind : void 0,
       name: e.name,
       parentSpanId:
-        typeof e.parentSpanId == `string` &&
-        /^[0-9a-f]{16}$/u.test(e.parentSpanId)
+        typeof e.parentSpanId == `string` && /^[0-9a-f]{16}$/u.test(e.parentSpanId)
           ? e.parentSpanId
           : void 0,
       scope: n,
@@ -198,27 +182,21 @@ function parseEvents(e) {
       });
   }
   return t.sort((e, t) =>
-    e.timeNs === t.timeNs
-      ? e.name.localeCompare(t.name)
-      : e.timeNs < t.timeNs
-        ? -1
-        : 1,
+    e.timeNs === t.timeNs ? e.name.localeCompare(t.name) : e.timeNs < t.timeNs ? -1 : 1,
   );
 }
 function parseAttributes(e) {
   if (!Array.isArray(e)) return {};
   let t = {};
   for (let n of e) {
-    if (!isRecord(n) || typeof n.key != `string` || !isRecord(n.value))
-      continue;
+    if (!isRecord(n) || typeof n.key != `string` || !isRecord(n.value)) continue;
     let e = parseAnyValue(n.value);
     e !== void 0 && (t[n.key] = e);
   }
   return t;
 }
 function parseAnyValue(e) {
-  for (let t of [`stringValue`, `boolValue`, `intValue`, `doubleValue`])
-    if (t in e) return e[t];
+  for (let t of [`stringValue`, `boolValue`, `intValue`, `doubleValue`]) if (t in e) return e[t];
   if (isRecord(e.arrayValue) && Array.isArray(e.arrayValue.values))
     return e.arrayValue.values.filter(isRecord).map((e) => parseAnyValue(e));
 }

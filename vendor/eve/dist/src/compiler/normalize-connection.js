@@ -33,8 +33,7 @@ async function compileConnectionDefinition(r, i, a = {}) {
       (d = e.auth));
   } else {
     let e = normalizeMcpClientConnectionDefinition(o, c);
-    ((u = { ...l, description: e.description, protocol: `mcp`, url: e.url }),
-      (d = e.auth));
+    ((u = { ...l, description: e.description, protocol: `mcp`, url: e.url }), (d = e.auth));
   }
   let f = extractVercelConnectMarker(d);
   return (f !== void 0 && (u.vercelConnect = f), u);

@@ -1,7 +1,7 @@
 import type { ProcessOutputHandler } from "../primitives/process-output.js";
 /** Minimum prompt log operation needed to show command output inside a setup flow. */
 export interface PromptCommandLog {
-    commandOutput(text: string): void;
+  commandOutput(text: string): void;
 }
 /**
  * Routes child stdout and stderr through the prompt's transient command detail.

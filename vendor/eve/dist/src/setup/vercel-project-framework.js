@@ -6,10 +6,7 @@ import "../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
 import { readProjectLink } from "./project-resolution.js";
 import { resolveVercelHostFrameworkPreset } from "./scaffold/update/channels.js";
 import "./scaffold/index.js";
-import {
-  isForbiddenApiFailure,
-  normalizeVercelApiResult,
-} from "./vercel-api-failure.js";
+import { isForbiddenApiFailure, normalizeVercelApiResult } from "./vercel-api-failure.js";
 import {
   VERCEL_PROJECT_REQUEST_TIMEOUT_MS,
   parseVercelJson,
@@ -57,8 +54,7 @@ const VercelProjectFrameworkSchema = object({
   ]);
 function parseProjectFramework(e, t) {
   let n = VercelProjectFrameworkSchema.safeParse(parseVercelJson(e, t));
-  if (!n.success)
-    throw Error(`Could not read Vercel project framework from ${t}.`);
+  if (!n.success) throw Error(`Could not read Vercel project framework from ${t}.`);
   return n.data.framework ?? void 0;
 }
 async function fetchProjectFramework(e, t, n, r) {
@@ -100,9 +96,7 @@ async function setProjectFramework(e, t, n, r, s, l) {
   if (!u.ok)
     throw (
       isForbiddenApiFailure(u.failure) && requireVercelTeamAccess(u.failure),
-      Error(
-        `Could not set Vercel project "${n}" framework to ${r}. ${u.failure.message}`,
-      )
+      Error(`Could not set Vercel project "${n}" framework to ${r}. ${u.failure.message}`)
     );
 }
 async function confirmDetectedFramework(e, t, n) {
@@ -141,15 +135,9 @@ async function directoryContainsPackageSpecifier(e, t) {
       if (await directoryContainsPackageSpecifier(n, t)) return !0;
       continue;
     }
-    if (
-      !(
-        !r.isFile() ||
-        !FRAMEWORK_INTEGRATION_SOURCE_EXTENSIONS.has(extname(r.name))
-      )
-    )
+    if (!(!r.isFile() || !FRAMEWORK_INTEGRATION_SOURCE_EXTENSIONS.has(extname(r.name))))
       try {
-        if (sourceMentionsPackageSpecifier(await fs.readFile(n, `utf8`), t))
-          return !0;
+        if (sourceMentionsPackageSpecifier(await fs.readFile(n, `utf8`), t)) return !0;
       } catch {
         continue;
       }
@@ -163,9 +151,10 @@ async function resolveDetectedFrameworkAction(e, t, n, r) {
   let i = EVE_FRAMEWORK_INTEGRATIONS[n];
   return i === void 0
     ? `switch-to-eve`
-    : (await (
-          r.detectFrameworkIntegrationImport ?? detectFrameworkIntegrationImport
-        )(t, i.importSpecifier))
+    : (await (r.detectFrameworkIntegrationImport ?? detectFrameworkIntegrationImport)(
+          t,
+          i.importSpecifier,
+        ))
       ? `keep`
       : r.headless
         ? `switch-to-eve`
@@ -212,9 +201,8 @@ async function syncHostFrameworkPreset(e, t, i, a) {
 async function ensureCreatedProjectFramework(e, t, n, r, i, a) {
   let o = await fetchProjectFramework(t, n, r, a);
   o !== `eve` &&
-    (o === void 0
-      ? `switch-to-eve`
-      : await resolveDetectedFrameworkAction(e, t, o, a)) === `switch-to-eve` &&
+    (o === void 0 ? `switch-to-eve` : await resolveDetectedFrameworkAction(e, t, o, a)) ===
+      `switch-to-eve` &&
     (await setProjectFramework(t, n, r, `eve`, i, a));
 }
 export { ensureCreatedProjectFramework, syncHostFrameworkPreset };

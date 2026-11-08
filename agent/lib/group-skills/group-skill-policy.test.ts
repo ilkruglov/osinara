@@ -36,9 +36,10 @@ function auth(
       familyId: "family-1",
       ...(group ? { groupId: "00000000-0000-4000-8000-000000000041" } : {}),
       ...(group ? { groupType: environment === "external" ? "external" : "family_private" } : {}),
-      memoryScopes: environment === "private"
-        ? ["personal", "family"]
-        : [environment === "external" ? "group" : "family"],
+      memoryScopes:
+        environment === "private"
+          ? ["personal", "family"]
+          : [environment === "external" ? "group" : "family"],
       ...(group ? { toolAllowlist } : {}),
       telegramActorId: "101",
       telegramActorKind: "telegram_user",
@@ -60,53 +61,89 @@ describe("group skill policy", () => {
   });
 
   it("adds authored skills granted to the group and skips them for scheduled runs and children", async () => {
-    const pkg = { description: "Сводка недели", files: {}, markdown: "## Шаги\n1. `web_search`", name: "weekly-digest" };
-    packagesForGroup.mockResolvedValueOnce([pkg]).mockResolvedValueOnce([pkg]).mockResolvedValueOnce([pkg]);
+    const pkg = {
+      description: "Сводка недели",
+      files: {},
+      markdown: "## Шаги\n1. `web_search`",
+      name: "weekly-digest",
+    };
+    packagesForGroup
+      .mockResolvedValueOnce([pkg])
+      .mockResolvedValueOnce([pkg])
+      .mockResolvedValueOnce([pkg]);
     const external = auth("external", ["web_search"]);
 
     await expect(resolveExternalTurnSkills(external)).resolves.toHaveProperty("weekly-digest");
-    expect(packagesForGroup).toHaveBeenCalledWith({ familyId: "family-1", groupId: "00000000-0000-4000-8000-000000000041" });
-    await expect(resolveExternalTurnSkills(external, { scheduledRun: true })).resolves.not.toHaveProperty("weekly-digest");
-    await expect(resolveExternalTurnSkills(external, { subagent: true })).resolves.not.toHaveProperty("weekly-digest");
+    expect(packagesForGroup).toHaveBeenCalledWith({
+      familyId: "family-1",
+      groupId: "00000000-0000-4000-8000-000000000041",
+    });
+    await expect(
+      resolveExternalTurnSkills(external, { scheduledRun: true }),
+    ).resolves.not.toHaveProperty("weekly-digest");
+    await expect(
+      resolveExternalTurnSkills(external, { subagent: true }),
+    ).resolves.not.toHaveProperty("weekly-digest");
   });
 
   it("leaves the group without authored skills when the grant lookup fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     packagesForGroup.mockRejectedValueOnce(new Error("database unavailable"));
-    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]))).resolves.toHaveProperty("imagegen");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["generate_image"])),
+    ).resolves.toHaveProperty("imagegen");
   });
 
   it("keeps trusted skills available in a private session", () => {
     const skills = resolveTrustedSessionSkills(auth("private"));
     expect(skills).toHaveProperty("imagegen");
     expect(skills).not.toHaveProperty("pohuy");
-    expect(resolveTrustedSessionSkills(auth("private"), { subagent: true }))
-      .not.toHaveProperty("imagegen");
-    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true }))
-      .toHaveProperty("imagegen");
+    expect(resolveTrustedSessionSkills(auth("private"), { subagent: true })).not.toHaveProperty(
+      "imagegen",
+    );
+    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true })).toHaveProperty(
+      "imagegen",
+    );
     for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).toHaveProperty(name);
   });
 
   it("gives trusted chats and their scheduled runs the widget skill, a subagent and an external group not", async () => {
     expect(resolveTrustedSessionSkills(auth("private"))).toHaveProperty("telegram-widgets");
     expect(resolveTrustedSessionSkills(auth("family"))).toHaveProperty("telegram-widgets");
-    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true })).toHaveProperty("telegram-widgets");
-    expect(resolveTrustedSessionSkills(auth("private"), { subagent: true })).not.toHaveProperty("telegram-widgets");
-    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]))).resolves.not.toHaveProperty("telegram-widgets");
-    await expect(resolveExternalTurnSkills(auth("external", ["send_widget"]))).resolves.toHaveProperty("telegram-widgets");
-    await expect(resolveExternalTurnSkills(auth("external", ["send_widget"]), { scheduledRun: true })).resolves.not.toHaveProperty("telegram-widgets");
+    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true })).toHaveProperty(
+      "telegram-widgets",
+    );
+    expect(resolveTrustedSessionSkills(auth("private"), { subagent: true })).not.toHaveProperty(
+      "telegram-widgets",
+    );
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["generate_image"])),
+    ).resolves.not.toHaveProperty("telegram-widgets");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["send_widget"])),
+    ).resolves.toHaveProperty("telegram-widgets");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["send_widget"]), { scheduledRun: true }),
+    ).resolves.not.toHaveProperty("telegram-widgets");
   });
 
   it("ties external imagegen instructions to the generate_image capability", async () => {
-    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"])))
-      .resolves.toHaveProperty("imagegen");
-    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]), {
-      scheduledRun: true,
-    })).resolves.not.toHaveProperty("imagegen");
-    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]), {
-      subagent: true,
-    })).resolves.not.toHaveProperty("imagegen");
-    await expect(resolveExternalTurnSkills(auth("external"))).resolves.not.toHaveProperty("imagegen");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["generate_image"])),
+    ).resolves.toHaveProperty("imagegen");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["generate_image"]), {
+        scheduledRun: true,
+      }),
+    ).resolves.not.toHaveProperty("imagegen");
+    await expect(
+      resolveExternalTurnSkills(auth("external", ["generate_image"]), {
+        subagent: true,
+      }),
+    ).resolves.not.toHaveProperty("imagegen");
+    await expect(resolveExternalTurnSkills(auth("external"))).resolves.not.toHaveProperty(
+      "imagegen",
+    );
   });
 
   it("does not advertise trusted-only Google Workspace skills to an external group", async () => {

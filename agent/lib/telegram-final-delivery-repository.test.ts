@@ -57,13 +57,15 @@ describe("Telegram final-delivery failure suppression", () => {
     query.mockImplementation(async (statement: string) => {
       if (statement.includes("SELECT id, output_hash")) {
         return {
-          rows: [{
-            diagnostic_code: null,
-            expected_chunk_count: 1,
-            id: "delivery-1",
-            output_hash: legacyHash,
-            status: "pending",
-          }],
+          rows: [
+            {
+              diagnostic_code: null,
+              expected_chunk_count: 1,
+              id: "delivery-1",
+              output_hash: legacyHash,
+              status: "pending",
+            },
+          ],
         };
       }
       if (statement.includes("SET status = 'started'")) {
@@ -72,15 +74,17 @@ describe("Telegram final-delivery failure suppression", () => {
       return { rowCount: 1, rows: [] };
     });
 
-    await expect(telegramFinalDeliveryRepository.start({
-      applicationSessionId: "00000000-0000-4000-8000-000000000001",
-      chunkCount: 2,
-      eveSessionId: "session-1",
-      eveTurnId: "turn-1",
-      legacyChunkCount: 1,
-      legacyOutputHash: legacyHash,
-      outputHash,
-    })).resolves.toEqual({
+    await expect(
+      telegramFinalDeliveryRepository.start({
+        applicationSessionId: "00000000-0000-4000-8000-000000000001",
+        chunkCount: 2,
+        eveSessionId: "session-1",
+        eveTurnId: "turn-1",
+        legacyChunkCount: 1,
+        legacyOutputHash: legacyHash,
+        outputHash,
+      }),
+    ).resolves.toEqual({
       deliveryId: "delivery-1",
       deliveryToken: "token-1",
       status: "started",

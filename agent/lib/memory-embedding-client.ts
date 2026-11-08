@@ -79,14 +79,17 @@ async function embedMemoryTexts(
       signal,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     throw new ModelFacingError({
       category: "dependency",
       code: "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
-      correction: "Не повторяйте поиск автоматически. Сообщите, что поиск памяти временно недоступен.",
+      correction:
+        "Не повторяйте поиск автоматически. Сообщите, что поиск памяти временно недоступен.",
       reason: "Локальный сервис поиска памяти недоступен.",
       retryable: false,
       sideEffectStatus: "not_started",
@@ -111,14 +114,17 @@ async function embedMemoryTexts(
   try {
     payload = (await response.json()) as EmbeddingResponse;
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     throw new ModelFacingError({
       category: "dependency",
       code: "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
-      correction: "Не повторяйте поиск автоматически. Сообщите, что сервис памяти вернул повреждённый ответ.",
+      correction:
+        "Не повторяйте поиск автоматически. Сообщите, что сервис памяти вернул повреждённый ответ.",
       reason: "Локальный сервис памяти вернул ответ, который невозможно прочитать.",
       retryable: false,
       sideEffectStatus: "not_started",
@@ -140,7 +146,11 @@ async function embedMemoryTexts(
   // TEI may return batch entries out of order; indexes must form one complete zero-based sequence.
   const ordered: Array<number[] | undefined> = Array.from({ length: texts.length });
   for (const item of payload.data) {
-    if (!Number.isInteger(item.index) || Number(item.index) < 0 || Number(item.index) >= texts.length) {
+    if (
+      !Number.isInteger(item.index) ||
+      Number(item.index) < 0 ||
+      Number(item.index) >= texts.length
+    ) {
       throw new AppError(
         "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
         "Локальный сервис памяти вернул некорректный порядок результатов",
@@ -185,19 +195,23 @@ export async function embedMemoryQuery(
   // A chat turn may continue with lexical retrieval; bound the entire query, not each chunk.
   const signal = AbortSignal.timeout(3_000);
   for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
-    embeddings.push(...await embedMemoryTexts(
-      chunks
-        .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
-        .map((chunk) => `${QUERY_PREFIX}${chunk.content}`),
-      fetchImplementation,
-      signal,
-    ));
+    embeddings.push(
+      ...(await embedMemoryTexts(
+        chunks
+          .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
+          .map((chunk) => `${QUERY_PREFIX}${chunk.content}`),
+        fetchImplementation,
+        signal,
+      )),
+    );
   }
   if (embeddings.length === 1) return embeddings[0]!;
 
   // A normalized centroid gives every query fragment influence without dropping long-message content.
-  const centroid = Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, (_, dimension) =>
-    embeddings.reduce((sum, embedding) => sum + embedding[dimension]!, 0) / embeddings.length,
+  const centroid = Array.from(
+    { length: MEMORY_EMBEDDING_DIMENSIONS },
+    (_, dimension) =>
+      embeddings.reduce((sum, embedding) => sum + embedding[dimension]!, 0) / embeddings.length,
   );
   const magnitude = Math.sqrt(centroid.reduce((sum, value) => sum + value * value, 0));
   if (!Number.isFinite(magnitude) || magnitude === 0) {

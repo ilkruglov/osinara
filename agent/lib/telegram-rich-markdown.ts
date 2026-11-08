@@ -22,8 +22,8 @@ import {
 const TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS = 32_768;
 const TELEGRAM_RICH_MESSAGE_MAX_TABLE_COLUMNS = 20;
 const TELEGRAM_RICH_MESSAGE_MAX_NESTING = 16;
-const PLACEHOLDER_START = 0xE000;
-const PLACEHOLDER_END = 0xF8FF;
+const PLACEHOLDER_START = 0xe000;
+const PLACEHOLDER_END = 0xf8ff;
 const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 const ALLOWED_HTML_TAG_NAMES = new Set(["details", "summary", "u", "ins", "sub", "sup"]);
 const DETAILS_TAG_NAME = "details";
@@ -273,7 +273,7 @@ function completeMarkdownBlocks(markdown: string): string[] {
     const trimmed = line.trim();
     if (current.length === 0) {
       if (!trimmed) continue;
-      fencedCode = trimmed.startsWith('```');
+      fencedCode = trimmed.startsWith("```");
       mathBlock = trimmed === "$$";
     } else if (!fencedCode && detailsDepth === 0 && !mathBlock && !trimmed) {
       flush();
@@ -340,10 +340,7 @@ export function sanitizeTelegramRichMarkdown(markdown: string): string {
   try {
     return sanitizeTelegramRichMarkdownInternal(markdown, true);
   } catch (error) {
-    if (
-      !(error instanceof AppError) ||
-      error.code !== "AGENT_TELEGRAM_RICH_HTML_INVALID"
-    ) {
+    if (!(error instanceof AppError) || error.code !== "AGENT_TELEGRAM_RICH_HTML_INVALID") {
       throw error;
     }
 
@@ -375,7 +372,9 @@ function splitBodyBlock(block: string, maxCharacters: number): string[] {
 }
 
 function splitOversizedDetailsBlock(block: string): string[] | null {
-  const match = /^(<details(?: open)?><summary>[^\n]*<\/summary>)\n+([\s\S]*)\n+<\/details>$/u.exec(block);
+  const match = /^(<details(?: open)?><summary>[^\n]*<\/summary>)\n+([\s\S]*)\n+<\/details>$/u.exec(
+    block,
+  );
   if (!match) return null;
   const opening = match[1]!;
   const body = match[2]!;
@@ -393,8 +392,10 @@ function splitOversizedDetailsBlock(block: string): string[] | null {
   let current = "";
   for (const bodyBlock of bodyBlocks) {
     const candidate = current ? `${current}\n\n${bodyBlock}` : bodyBlock;
-    if (characterLength(candidate) <= bodyLimit &&
-      estimateTelegramRichBlocks(candidate) <= bodyBlockLimit) {
+    if (
+      characterLength(candidate) <= bodyLimit &&
+      estimateTelegramRichBlocks(candidate) <= bodyBlockLimit
+    ) {
       current = candidate;
       continue;
     }
@@ -408,33 +409,44 @@ function splitOversizedDetailsBlock(block: string): string[] | null {
 export function formatTelegramRichMessages(markdown: string): string[] {
   const sanitized = sanitizeTelegramRichMarkdown(markdown).trim();
   if (!sanitized) return [];
-  if (characterLength(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
-    estimateTelegramRichBlocks(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) return [sanitized];
+  if (
+    characterLength(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+    estimateTelegramRichBlocks(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS
+  )
+    return [sanitized];
 
   // Split only between complete Markdown blocks so every independently parsed message stays valid.
   const blocks = completeMarkdownBlocks(sanitized).flatMap((block) => {
-    if (characterLength(block) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
-      estimateTelegramRichBlocks(block) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) return [block];
-    return splitOversizedDetailsBlock(block) ?? (
-      estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS &&
-        !hasTelegramRichDetailsBlock(block)
+    if (
+      characterLength(block) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+      estimateTelegramRichBlocks(block) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS
+    )
+      return [block];
+    return (
+      splitOversizedDetailsBlock(block) ??
+      (estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS &&
+      !hasTelegramRichDetailsBlock(block)
         ? splitTelegramRichBlockByCount(block, TELEGRAM_RICH_MESSAGE_MAX_BLOCKS)
-        : [block]
+        : [block])
     );
   });
   const chunks: string[] = [];
   let chunk = "";
   for (const block of blocks) {
-    if (characterLength(block) > TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS ||
-      estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) {
+    if (
+      characterLength(block) > TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS ||
+      estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS
+    ) {
       throw new AppError(
         "AGENT_TELEGRAM_RICH_BLOCK_TOO_LONG",
         "Один блок ответа превышает допустимый размер или число блоков Telegram",
       );
     }
     const candidate = chunk ? `${chunk}\n\n${block}` : block;
-    if (characterLength(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
-      estimateTelegramRichBlocks(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) {
+    if (
+      characterLength(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+      estimateTelegramRichBlocks(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS
+    ) {
       chunk = candidate;
       continue;
     }

@@ -11,10 +11,7 @@ import { compileInstructionsEntry } from "#compiler/normalize-instructions.js";
 import { compileScheduleDefinition } from "#compiler/normalize-schedule.js";
 import { compileSkillSource } from "#compiler/normalize-skill.js";
 import { compileToolEntry } from "#compiler/normalize-tool.js";
-import {
-  mountRefNamespace,
-  packageStateNamespace,
-} from "#discover/extensions.js";
+import { mountRefNamespace, packageStateNamespace } from "#discover/extensions.js";
 import { createCompiledRuntimeModelCatalogLoader } from "#compiler/model-catalog.js";
 import { compileAgentConfig } from "#compiler/normalize-agent-config.js";
 import {
@@ -61,10 +58,7 @@ async function compileAgentNodeManifest(e, t, n = {}) {
       i.build?.externalDependencies,
       e.resolvedExtensions.flatMap((e) => e.externalDependencies),
     ),
-    o =
-      a.length === 0
-        ? i
-        : { ...i, build: { ...i.build, externalDependencies: a } };
+    o = a.length === 0 ? i : { ...i, build: { ...i.build, externalDependencies: a } };
   return createCompiledAgentNodeManifest({
     ...(await compileAgentResources(e, t, { externalDependencies: a })),
     config: o,
@@ -73,9 +67,7 @@ async function compileAgentNodeManifest(e, t, n = {}) {
 async function compileAgentResources(t, n, r = {}) {
   let s = [...(r.externalDependencies ?? [])],
     c = await Promise.all(
-      t.tools.map((e) =>
-        compileToolEntry(t.agentRoot, e, { externalDependencies: s }),
-      ),
+      t.tools.map((e) => compileToolEntry(t.agentRoot, e, { externalDependencies: s })),
     ),
     l = [],
     u = [],
@@ -100,14 +92,11 @@ async function compileAgentResources(t, n, r = {}) {
       )
     ).flat(),
     h = await Promise.all(
-      t.skills.map((e) =>
-        compileSkillSource(t.agentRoot, e, { externalDependencies: s }),
-      ),
+      t.skills.map((e) => compileSkillSource(t.agentRoot, e, { externalDependencies: s })),
     ),
     g = [],
     _ = [];
-  for (let e of h)
-    e.kind === `skill` ? g.push(e.definition) : _.push(e.definition);
+  for (let e of h) e.kind === `skill` ? g.push(e.definition) : _.push(e.definition);
   let v = await Promise.all(
       t.instructions.map((e) =>
         compileInstructionsEntry(t.agentRoot, e, { externalDependencies: s }),
@@ -115,8 +104,7 @@ async function compileAgentResources(t, n, r = {}) {
     ),
     y = [],
     b = [];
-  for (let e of v)
-    e.kind === `instructions` ? y.push(e.definition) : b.push(e.definition);
+  for (let e of v) e.kind === `instructions` ? y.push(e.definition) : b.push(e.definition);
   let x = await Promise.all(
       t.connections.map((e) =>
         compileConnectionDefinition(t.agentRoot, e, {
@@ -135,9 +123,7 @@ async function compileAgentResources(t, n, r = {}) {
     E = new Set(x.map((e) => e.connectionName)),
     D = new Set(g.map((e) => e.name)),
     O = [];
-  for (let e of [...t.resolvedExtensions].sort((e, t) =>
-    e.namespace.localeCompare(t.namespace),
-  )) {
+  for (let e of [...t.resolvedExtensions].sort((e, t) => e.namespace.localeCompare(t.namespace))) {
     let r = await compileExtensionContributions({
       mount: e,
       context: n,
@@ -147,8 +133,7 @@ async function compileAgentResources(t, n, r = {}) {
     m.push(...r.channels);
     for (let e of r.tools) w.has(e.name) || (w.add(e.name), l.push(e));
     for (let e of r.dynamicTools) T.has(e.slug) || (T.add(e.slug), u.push(e));
-    for (let e of r.connections)
-      E.has(e.connectionName) || (E.add(e.connectionName), x.push(e));
+    for (let e of r.connections) E.has(e.connectionName) || (E.add(e.connectionName), x.push(e));
     for (let e of r.skills) D.has(e.name) || (D.add(e.name), g.push(e));
     (C.push(...r.schedules),
       S.push(...r.hooks),
@@ -191,9 +176,7 @@ async function compileAgentResources(t, n, r = {}) {
 }
 function compileExtensionMounts(e) {
   return e.resolvedExtensions.map((t) => {
-    let n = e.extensions.find(
-      (e) => mountRefNamespace(e.logicalPath) === t.namespace,
-    );
+    let n = e.extensions.find((e) => mountRefNamespace(e.logicalPath) === t.namespace);
     return {
       externalDependencies: [...t.externalDependencies],
       namespace: t.namespace,

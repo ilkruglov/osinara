@@ -77,13 +77,19 @@ async function terminalizeApplicationSession(
             END
       WHERE id = $1 AND retired_at IS NULL
         AND (eve_session_id IS NULL OR eve_session_id = $2)`,
-    [input.applicationSessionId, input.eveSessionId, input.completedAt, input.outcome,
-      SESSION_RETENTION_DAYS],
+    [
+      input.applicationSessionId,
+      input.eveSessionId,
+      input.completedAt,
+      input.outcome,
+      SESSION_RETENTION_DAYS,
+    ],
   );
-  if (result.rowCount !== 1) throw new AppError(
-    "AGENT_MEMORY_REVIEW_SESSION_TERMINAL_INVALID",
-    "Не удалось завершить контекст проверки памяти",
-  );
+  if (result.rowCount !== 1)
+    throw new AppError(
+      "AGENT_MEMORY_REVIEW_SESSION_TERMINAL_INVALID",
+      "Не удалось завершить контекст проверки памяти",
+    );
   // Review sessions have no route, but retain the standard noncanonical retirement audit contract.
   await client.query(
     `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
@@ -151,19 +157,18 @@ export async function resolveAbandonedReviewBatch(
 ): Promise<AbandonedReviewOutcome> {
   // A turn writes memory only after `turn.started` bound its id, so a batch without that binding
   // cannot have written anything and needs no provenance lookup at all.
-  const wrote = input.eveSessionId === null || input.eveTurnId === null
-    ? 0
-    : (await client.query(
-      "SELECT 1 FROM memory_items_all WHERE source = $1 LIMIT 1",
-      [`eve:${input.eveSessionId}:${input.eveTurnId}`],
-    )).rowCount;
+  const wrote =
+    input.eveSessionId === null || input.eveTurnId === null
+      ? 0
+      : (
+          await client.query("SELECT 1 FROM memory_items_all WHERE source = $1 LIMIT 1", [
+            `eve:${input.eveSessionId}:${input.eveTurnId}`,
+          ])
+        ).rowCount;
   // The lane is locked before the successor is looked up. `prepareInteractiveTurn` commits a new
   // batch behind a live head under that same lock, so without it a successor could appear between
   // this check and the delete below and end up unreachable from the cursor.
-  await client.query(
-    "SELECT 1 FROM memory_review_lanes WHERE id = $1 FOR UPDATE",
-    [input.laneId],
-  );
+  await client.query("SELECT 1 FROM memory_review_lanes WHERE id = $1 FOR UPDATE", [input.laneId]);
   const successor = await client.query(
     `SELECT 1 FROM memory_review_batches AS successor
       WHERE successor.lane_id = $1 AND successor.predecessor_sequence = (
@@ -173,7 +178,9 @@ export async function resolveAbandonedReviewBatch(
   );
   const outcome: AbandonedReviewOutcome = wrote
     ? "counted"
-    : successor.rowCount ? "skipped" : "released";
+    : successor.rowCount
+      ? "skipped"
+      : "released";
   if (input.applicationSessionId !== null) {
     await retireAbandonedReviewSession(client, input.applicationSessionId, input.now);
   }
@@ -186,14 +193,17 @@ export async function resolveAbandonedReviewBatch(
         SET status = $4::memory_review_batch_status, diagnostic_code = $2,
             completed_at = $3, updated_at = $3, lease_token = NULL, lease_expires_at = NULL
       WHERE id = $1`,
-    [input.batchId, input.diagnosticCode, input.now,
-      outcome === "counted" ? "completed" : "skipped"],
+    [
+      input.batchId,
+      input.diagnosticCode,
+      input.now,
+      outcome === "counted" ? "completed" : "skipped",
+    ],
   );
   await advanceCompletedChain(client, input.laneId);
-  await client.query(
-    "DELETE FROM memory_review_batch_sources WHERE batch_id = $1",
-    [input.batchId],
-  );
+  await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [
+    input.batchId,
+  ]);
   // Skipped sources are lost to review for good, which the owner has to hear about under one
   // stable code. A counted pass did write memory, so it stays an operational record.
   if (outcome === "skipped" && input.notifyOwner) {
@@ -235,8 +245,11 @@ export async function terminalizeAbandonedReviewTurns(
       ORDER BY batch.started_at, batch.id
       FOR UPDATE OF batch SKIP LOCKED
       LIMIT $3`,
-    [now, MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
-      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE],
+    [
+      now,
+      MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE,
+    ],
   );
   for (const batch of abandoned.rows) {
     const outcome = await resolveAbandonedReviewBatch(client, {
@@ -249,17 +262,19 @@ export async function terminalizeAbandonedReviewTurns(
       notifyOwner: true,
       now,
     });
-    console.error(JSON.stringify({
-      batchId: batch.id,
-      code: BATCH_RESOLVED,
-      diagnosticCode: TURN_ABANDONED,
-      eveSessionId: batch.eve_session_id,
-      eveTurnId: batch.eve_turn_id,
-      fromSequence: batch.from_sequence,
-      laneId: batch.lane_id,
-      outcome,
-      throughSequence: batch.through_sequence,
-    }));
+    console.error(
+      JSON.stringify({
+        batchId: batch.id,
+        code: BATCH_RESOLVED,
+        diagnosticCode: TURN_ABANDONED,
+        eveSessionId: batch.eve_session_id,
+        eveTurnId: batch.eve_turn_id,
+        fromSequence: batch.from_sequence,
+        laneId: batch.lane_id,
+        outcome,
+        throughSequence: batch.through_sequence,
+      }),
+    );
   }
 }
 
@@ -270,10 +285,7 @@ export async function terminalizeAbandonedReviewTurns(
  * abandoned turn: counted when it wrote memory, released when nothing stands behind it, skipped
  * otherwise. A missing source binding stays manual: that is a data defect, not lost traffic.
  */
-export async function terminalizeBlockedReviewHeads(
-  client: PoolClient,
-  now: Date,
-): Promise<void> {
+export async function terminalizeBlockedReviewHeads(client: PoolClient, now: Date): Promise<void> {
   const blocked = await client.query<{
     application_session_id: string | null;
     diagnostic_code: string | null;
@@ -297,8 +309,12 @@ export async function terminalizeBlockedReviewHeads(
       ORDER BY batch.completed_at, batch.id
       FOR UPDATE OF batch SKIP LOCKED
       LIMIT $3`,
-    [now, MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
-      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE, SOURCE_BINDING_MISSING],
+    [
+      now,
+      MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE,
+      SOURCE_BINDING_MISSING,
+    ],
   );
   for (const batch of blocked.rows) {
     const outcome = await resolveAbandonedReviewBatch(client, {
@@ -311,17 +327,19 @@ export async function terminalizeBlockedReviewHeads(
       notifyOwner: true,
       now,
     });
-    console.error(JSON.stringify({
-      batchId: batch.id,
-      code: BATCH_RESOLVED,
-      diagnosticCode: HEAD_UNBLOCKED,
-      fromSequence: batch.from_sequence,
-      laneId: batch.lane_id,
-      outcome,
-      previousDiagnosticCode: batch.diagnostic_code,
-      previousStatus: batch.status,
-      throughSequence: batch.through_sequence,
-    }));
+    console.error(
+      JSON.stringify({
+        batchId: batch.id,
+        code: BATCH_RESOLVED,
+        diagnosticCode: HEAD_UNBLOCKED,
+        fromSequence: batch.from_sequence,
+        laneId: batch.lane_id,
+        outcome,
+        previousDiagnosticCode: batch.diagnostic_code,
+        previousStatus: batch.status,
+        throughSequence: batch.through_sequence,
+      }),
+    );
   }
 }
 
@@ -336,9 +354,15 @@ export const memoryReviewTerminalRepository = {
     try {
       await client.query("BEGIN");
       const batch = await client.query<{
-        application_session_id: string; batch_kind: string; diagnostic_code: string | null;
-        eve_session_id: string | null; eve_turn_id: string | null; lane_id: string;
-        source_count: number; started_at: Date | null; status: string;
+        application_session_id: string;
+        batch_kind: string;
+        diagnostic_code: string | null;
+        eve_session_id: string | null;
+        eve_turn_id: string | null;
+        lane_id: string;
+        source_count: number;
+        started_at: Date | null;
+        status: string;
       }>(
         `SELECT lane_id, application_session_id, eve_session_id, eve_turn_id,
                 status::text, diagnostic_code, batch_kind::text, source_count, started_at
@@ -351,8 +375,8 @@ export const memoryReviewTerminalRepository = {
         await client.query("COMMIT");
         return "replayed";
       }
-      const exactTurn = recorded.eve_session_id === input.eveSessionId &&
-        recorded.eve_turn_id === input.eveTurnId;
+      const exactTurn =
+        recorded.eve_session_id === input.eveSessionId && recorded.eve_turn_id === input.eveTurnId;
       if (recorded.status === "skipped") {
         // Four paths now produce `skipped`, and its binding may be absent, so the exact-turn check
         // cannot apply. The pass is already terminal: a late completion event changes nothing.
@@ -364,8 +388,11 @@ export const memoryReviewTerminalRepository = {
         await client.query("COMMIT");
         return "replayed";
       }
-      if (recorded.status === "failed" && exactTurn &&
-        recorded.diagnostic_code === SOURCE_BINDING_MISSING) {
+      if (
+        recorded.status === "failed" &&
+        exactTurn &&
+        recorded.diagnostic_code === SOURCE_BINDING_MISSING
+      ) {
         await client.query("COMMIT");
         return "failed";
       }
@@ -414,10 +441,9 @@ export const memoryReviewTerminalRepository = {
         outcome: "completed",
       });
       await advanceCompletedChain(client, recorded.lane_id);
-      await client.query(
-        "DELETE FROM memory_review_batch_sources WHERE batch_id = $1",
-        [input.batchId],
-      );
+      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [
+        input.batchId,
+      ]);
       // Capture rate per batch is the one number that tells whether review earns its model call.
       const written = await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM memory_mutation_operations
@@ -425,18 +451,21 @@ export const memoryReviewTerminalRepository = {
         [input.eveSessionId, input.eveTurnId],
       );
       await client.query("COMMIT");
-      console.info(JSON.stringify({
-        code: "AGENT_MEMORY_REVIEW_RESULT",
-        batchId: input.batchId,
-        batchKind: recorded.batch_kind,
-        claimsWritten: Number(written.rows[0]?.count ?? 0),
-        durationMs: recorded.started_at === null
-          ? null
-          : input.completedAt.getTime() - recorded.started_at.getTime(),
-        eveSessionId: input.eveSessionId,
-        eveTurnId: input.eveTurnId,
-        sourceCount: recorded.source_count,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_MEMORY_REVIEW_RESULT",
+          batchId: input.batchId,
+          batchKind: recorded.batch_kind,
+          claimsWritten: Number(written.rows[0]?.count ?? 0),
+          durationMs:
+            recorded.started_at === null
+              ? null
+              : input.completedAt.getTime() - recorded.started_at.getTime(),
+          eveSessionId: input.eveSessionId,
+          eveTurnId: input.eveTurnId,
+          sourceCount: recorded.source_count,
+        }),
+      );
       return "recorded";
     } catch (error) {
       await client.query("ROLLBACK");
@@ -484,10 +513,11 @@ export const memoryReviewTerminalRepository = {
         return "replayed";
       }
       if (batch.status !== "running") {
-        if (batch.diagnostic_code !== input.diagnosticCode) throw new AppError(
-          "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
-          "Проверка памяти завершена с другим результатом или недоступна",
-        );
+        if (batch.diagnostic_code !== input.diagnosticCode)
+          throw new AppError(
+            "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
+            "Проверка памяти завершена с другим результатом или недоступна",
+          );
         await client.query("COMMIT");
         return "replayed";
       }
@@ -495,8 +525,10 @@ export const memoryReviewTerminalRepository = {
       // at all and provably wrote nothing. A binding that belongs to another turn is a real
       // disagreement about this batch and fails closed. Provenance is read from the row, never
       // from the channel context, so a mismatch cannot silently release written memory.
-      if (batch.eve_session_id !== null && (batch.eve_session_id !== input.eveSessionId ||
-        batch.eve_turn_id !== input.eveTurnId)) {
+      if (
+        batch.eve_session_id !== null &&
+        (batch.eve_session_id !== input.eveSessionId || batch.eve_turn_id !== input.eveTurnId)
+      ) {
         throw new AppError(
           "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
           "Проверка памяти завершена с другим результатом или недоступна",
@@ -521,14 +553,16 @@ export const memoryReviewTerminalRepository = {
           outcome: "failed",
         });
       }
-      console.error(JSON.stringify({
-        batchId: input.batchId,
-        code: BATCH_RESOLVED,
-        diagnosticCode: input.diagnosticCode,
-        eveSessionId: batch.eve_session_id,
-        eveTurnId: batch.eve_turn_id,
-        outcome,
-      }));
+      console.error(
+        JSON.stringify({
+          batchId: input.batchId,
+          code: BATCH_RESOLVED,
+          diagnosticCode: input.diagnosticCode,
+          eveSessionId: batch.eve_session_id,
+          eveTurnId: batch.eve_turn_id,
+          outcome,
+        }),
+      );
       await client.query("COMMIT");
       return outcome === "counted" ? "recorded" : outcome;
     } catch (error) {

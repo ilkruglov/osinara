@@ -32,8 +32,7 @@ function createToolExecuteWithAuth(e) {
       return handleToolError(e);
     }
     async function handleToolError(e) {
-      if (isToolAuthorizationRequiredError(e))
-        return await handleAuthorizationRequests(e.requests);
+      if (isToolAuthorizationRequiredError(e)) return await handleAuthorizationRequests(e.requests);
       throw e;
     }
     async function* handleToolIterableErrors(e) {
@@ -69,9 +68,7 @@ function buildApprovalResponseAuth(e) {
         provider: r,
         toolScope: e.scope,
       });
-      throw new ToolAuthorizationRequiredError([
-        { justAuthorized: n.has(a.scope), scoped: a },
-      ]);
+      throw new ToolAuthorizationRequiredError([{ justAuthorized: n.has(a.scope), scoped: a }]);
     },
   };
 }
@@ -104,9 +101,7 @@ function buildToolContext(t) {
         provider: e,
         toolScope: n,
       });
-      throw new ToolAuthorizationRequiredError([
-        { justAuthorized: r.has(a.scope), scoped: a },
-      ]);
+      throw new ToolAuthorizationRequiredError([{ justAuthorized: r.has(a.scope), scoped: a }]);
     },
   };
 }
@@ -147,10 +142,7 @@ async function handleAuthorizationRequests(e) {
         reason: `authorization_callback_unavailable`,
         retryable: !1,
       });
-    o ??=
-      i.cause instanceof Error
-        ? i.cause
-        : new ConnectionAuthorizationRequiredError(e.scope);
+    o ??= i.cause instanceof Error ? i.cause : new ConnectionAuthorizationRequiredError(e.scope);
   }
   if (r.length > 0) return requestAuthorization(r);
   throw o ?? Error(`Tool authorization is required.`);
@@ -176,9 +168,7 @@ function normalizeInlineProvider(e, t) {
   let n = normalizeAuthorizationSpec(e, `ctx.getToken:`, `provider`);
   if (t?.displayName === void 0) return n;
   if (t.displayName.length === 0)
-    throw Error(
-      `ctx.getToken: The "options.displayName" field must be a non-empty string.`,
-    );
+    throw Error(`ctx.getToken: The "options.displayName" field must be a non-empty string.`);
   return { ...n, displayName: t.displayName };
 }
 function deriveInlineScope(e) {
@@ -215,12 +205,6 @@ function isToolAuthorizationRequiredError(e) {
   return e instanceof Error && e.name === `ToolAuthorizationRequiredError`;
 }
 function missingProviderError(e) {
-  return Error(
-    `${e}: Pass an auth provider, for example ${e}(connect("github/myagent")).`,
-  );
+  return Error(`${e}: Pass an auth provider, for example ${e}(connect("github/myagent")).`);
 }
-export {
-  buildApprovalResponseAuth,
-  createToolExecuteWithAuth,
-  handleApprovalResponsePolicyError,
-};
+export { buildApprovalResponseAuth, createToolExecuteWithAuth, handleApprovalResponsePolicyError };

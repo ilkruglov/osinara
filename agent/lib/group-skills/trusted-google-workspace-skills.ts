@@ -37,8 +37,7 @@ export const TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES = [
   "gws-sheets-read",
 ] as const;
 
-export type TrustedGoogleWorkspaceSkillName =
-  (typeof TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES)[number];
+export type TrustedGoogleWorkspaceSkillName = (typeof TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES)[number];
 
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u;
 const NAME_PATTERN = /^name:\s*([^\s]+)\s*$/mu;
@@ -48,9 +47,8 @@ function loadDefinition(name: TrustedGoogleWorkspaceSkillName): SkillDefinition 
   const source = readFileSync(resolve(`config/trusted-skills/${name}/SKILL.md`), "utf8");
   const frontmatter = FRONTMATTER_PATTERN.exec(source);
   const sourceName = frontmatter === null ? undefined : NAME_PATTERN.exec(frontmatter[1])?.[1];
-  const description = frontmatter === null
-    ? undefined
-    : DESCRIPTION_PATTERN.exec(frontmatter[1])?.[1];
+  const description =
+    frontmatter === null ? undefined : DESCRIPTION_PATTERN.exec(frontmatter[1])?.[1];
   if (frontmatter === null || sourceName !== name || description === undefined) {
     throw new AppError(
       "AGENT_TRUSTED_GWS_SKILL_INVALID",

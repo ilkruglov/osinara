@@ -36,8 +36,7 @@ async function emitTerminalSessionFailureStep(e) {
   try {
     let t = await deserializeContext(e.serializedContext),
       n = t.get(ChannelKey);
-    n !== void 0 &&
-      (await callAdapterEventHandler(n, l, buildAdapterContext(n, t)));
+    n !== void 0 && (await callAdapterEventHandler(n, l, buildAdapterContext(n, t)));
   } catch (e) {
     log.error(`adapter failed to handle terminal session.failed event`, {
       errorId: typeof a.errorId == `string` ? a.errorId : void 0,
@@ -53,14 +52,11 @@ async function emitTerminalSessionFailureStep(e) {
       t.releaseLock();
     }
   } catch (e) {
-    log.error(
-      `failed to write terminal session.failed event to durable stream`,
-      {
-        errorId: typeof a.errorId == `string` ? a.errorId : void 0,
-        sessionId: c,
-        error: e,
-      },
-    );
+    log.error(`failed to write terminal session.failed event to durable stream`, {
+      errorId: typeof a.errorId == `string` ? a.errorId : void 0,
+      sessionId: c,
+      error: e,
+    });
   }
 }
 export { emitTerminalSessionFailureStep };

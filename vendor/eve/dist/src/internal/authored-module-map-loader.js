@@ -1,9 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  collectModuleRefsForManifest,
-  compiledModuleMapSchema,
-} from "#compiler/module-map.js";
+import { collectModuleRefsForManifest, compiledModuleMapSchema } from "#compiler/module-map.js";
 import { ROOT_COMPILED_AGENT_NODE_ID } from "#compiler/manifest.js";
 import { formatValidationError } from "#runtime/validation.js";
 import { loadAuthoredModuleNamespace } from "#internal/authored-module-loader.js";
@@ -54,18 +51,14 @@ async function hydrateCompiledModuleMapFromManifest(e, t) {
       if (t !== void 0) return t;
       let n = s.get(e),
         r = new Map(n === void 0 ? [] : extensionNamespacesForNode(n));
-      for (let t of o.get(e)?.extensionMounts ?? [])
-        r.set(t.namespace, t.packageNamespace);
+      for (let t of o.get(e)?.extensionMounts ?? []) r.set(t.namespace, t.packageNamespace);
       return (l.set(e, r), r);
     };
   for (let e of a) {
     let t = {
       byMountNamespace: extensionNamespacesForNode(e.nodeId),
       byMountSourceId: new Map(
-        e.manifest.extensionMounts.map((e) => [
-          e.mountSourceId,
-          e.packageNamespace,
-        ]),
+        e.manifest.extensionMounts.map((e) => [e.mountSourceId, e.packageNamespace]),
       ),
     };
     r[e.nodeId] = {
@@ -82,9 +75,7 @@ async function hydrateCompiledModuleMapFromManifest(e, t) {
 }
 async function loadMaterializedCompiledModuleMap(n) {
   let i = join(n.runtimeAppRoot, `.eve`, `compile`, n.moduleMapPath),
-    o = await import(
-      `${pathToFileURL(i).href}?generation=${encodeURIComponent(n.moduleMapPath)}`
-    ),
+    o = await import(`${pathToFileURL(i).href}?generation=${encodeURIComponent(n.moduleMapPath)}`),
     s = compiledModuleMapSchema.safeParse(o.moduleMap ?? o.default);
   if (!s.success)
     throw Error(

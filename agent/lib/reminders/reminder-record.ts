@@ -10,7 +10,14 @@ import { sha256Json } from "../json-hash.js";
 
 export type ReminderScope = "family" | "personal";
 export type ReminderStatus = "active" | "completed" | "failed" | "leased" | "paused";
-export const REMINDER_RECURRENCE_UNITS = ["daily", "weekly", "monthly", "minutely", "hourly", "yearly"] as const;
+export const REMINDER_RECURRENCE_UNITS = [
+  "daily",
+  "weekly",
+  "monthly",
+  "minutely",
+  "hourly",
+  "yearly",
+] as const;
 export type ReminderRecurrenceUnit = (typeof REMINDER_RECURRENCE_UNITS)[number];
 
 export interface ReminderRecurrence {
@@ -56,9 +63,10 @@ export function rowToReminder(row: ReminderRow): ReminderRecord {
     lastErrorCode: row.last_error_code,
     messageThreadId: row.message_thread_id,
     nextRunAt: row.due_at.toISOString(),
-    recurrence: row.recurrence_unit && row.recurrence_interval
-      ? { interval: row.recurrence_interval, unit: row.recurrence_unit }
-      : null,
+    recurrence:
+      row.recurrence_unit && row.recurrence_interval
+        ? { interval: row.recurrence_interval, unit: row.recurrence_unit }
+        : null,
     scope: row.scope,
     status: row.status,
     timezone: row.timezone,

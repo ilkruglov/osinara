@@ -5,8 +5,7 @@ function resolveWebPackageVersions(e, t) {
     aiPackageVersion: e?.aiPackageVersion ?? `^7.0.58`,
     betterAuthPackageVersion: e?.betterAuthPackageVersion ?? `1.6.26`,
     nextPackageVersion:
-      e?.nextPackageVersion ??
-      (t === `sign-in-with-vercel` ? `16.3.0` : `16.3.0-preview.6`),
+      e?.nextPackageVersion ?? (t === `sign-in-with-vercel` ? `16.3.0` : `16.3.0-preview.6`),
     reactPackageVersion: e?.reactPackageVersion ?? `19.2.6`,
     reactDomPackageVersion: e?.reactDomPackageVersion ?? `19.2.6`,
     streamdownPackageVersion: e?.streamdownPackageVersion ?? `2.5.0`,

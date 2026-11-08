@@ -48,7 +48,12 @@ export const browserHoldRepository = {
   },
 
   /** Takes the browser for a background check only when no turn uses it and the chat is idle. */
-  async tryHold(input: { holder: string; idleChatId: string; sandboxSessionId: string; ttlMs: number }): Promise<boolean> {
+  async tryHold(input: {
+    holder: string;
+    idleChatId: string;
+    sandboxSessionId: string;
+    ttlMs: number;
+  }): Promise<boolean> {
     const result = await database().query(
       `INSERT INTO sandbox_browser_holds (sandbox_session_id, holder, kind, expires_at)
        SELECT $1, $2::uuid, 'background', now() + ($3 * interval '1 millisecond')

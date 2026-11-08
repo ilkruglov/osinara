@@ -44,20 +44,15 @@ async function executeTaskControlAction(e) {
       session: n,
     };
   let i = lookupTaskEntries(n, r);
-  if (i.kind === `unknown`)
-    return { result: createUnknownTasksError(t, i.unknown), session: n };
+  if (i.kind === `unknown`) return { result: createUnknownTasksError(t, i.unknown), session: n };
   let o = i.entries;
   if (t.toolName !== TASK_CANCEL_TOOL_NAME)
     return {
-      result: createTaskControlError(
-        t,
-        `Unsupported task control "${t.toolName}".`,
-      ),
+      result: createTaskControlError(t, `Unsupported task control "${t.toolName}".`),
       session: n,
     };
   let c = [];
-  for (let t of o)
-    c.push(await cancelOwnedTask({ bundle: e.bundle, entry: t, session: n }));
+  for (let t of o) c.push(await cancelOwnedTask({ bundle: e.bundle, entry: t, session: n }));
   return { result: createTaskViewsResult(t, c), session: n };
 }
 async function cancelOwnedTask(e) {
@@ -70,9 +65,7 @@ async function cancelOwnedTask(e) {
   for (let e = 0; e < 10 && !isTerminalTaskStatus(r.status); e += 1)
     (await new Promise((e) => setTimeout(e, 250)), (r = await readTaskView(t)));
   if (!isTerminalTaskStatus(r.status))
-    throw Error(
-      `Task "${t.taskId}" did not commit cancellation before timeout.`,
-    );
+    throw Error(`Task "${t.taskId}" did not commit cancellation before timeout.`);
   let i = r;
   return (
     i.status === `cancelled` &&
@@ -90,12 +83,7 @@ async function propagateTaskCancel(e) {
   if (a === void 0) return;
   let o = a.address.sessionId,
     s = e.view.executor?.childTurnId;
-  if (
-    !(
-      e.view.executor?.childSessionId !== void 0 &&
-      e.view.executor.childSessionId !== o
-    )
-  )
+  if (!(e.view.executor?.childSessionId !== void 0 && e.view.executor.childSessionId !== o))
     try {
       if (a.address.kind === `agent/remote`) {
         let t = resolveRemoteAgentForAction({
@@ -119,24 +107,20 @@ async function propagateTaskCancel(e) {
       }
       let t = { sessionId: o, taskId: e.view.taskId };
       (s !== void 0 && (t.turnId = s),
-        (await requestWorkflowTurnCancellation(t)).status ===
-          `no_active_turn` &&
+        (await requestWorkflowTurnCancellation(t)).status === `no_active_turn` &&
           (await requestWorkflowTurnCancellation({
             sessionId: o,
             taskId: e.view.taskId,
           })));
     } catch (n) {
-      logError(
-        log,
-        `task cancel propagation failed; the child may run to completion`,
-        n,
-        { childSessionId: o, taskId: e.view.taskId },
-      );
+      logError(log, `task cancel propagation failed; the child may run to completion`, n, {
+        childSessionId: o,
+        taskId: e.view.taskId,
+      });
     }
 }
 function readTaskIds(e) {
   let t = e.taskIds;
-  if (Array.isArray(t))
-    return t.filter((e) => typeof e == `string` && e.trim() !== ``);
+  if (Array.isArray(t)) return t.filter((e) => typeof e == `string` && e.trim() !== ``);
 }
 export { cancelOwnedTask, executeTaskControlAction, isTaskControlAction };

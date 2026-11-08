@@ -10,9 +10,9 @@ import type { ModelMessage } from "ai";
  * remains before it; text after a result remains after it.
  */
 export declare function normalizeProviderToolHistory(input: {
-    readonly messages: readonly ModelMessage[];
-    readonly providerExecutedOutcomeIds: ReadonlySet<string>;
+  readonly messages: readonly ModelMessage[];
+  readonly providerExecutedOutcomeIds: ReadonlySet<string>;
 }): {
-    readonly messages: ModelMessage[];
-    readonly outcomeEndsResponse: boolean;
+  readonly messages: ModelMessage[];
+  readonly outcomeEndsResponse: boolean;
 };

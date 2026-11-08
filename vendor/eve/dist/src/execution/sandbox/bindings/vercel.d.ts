@@ -1,12 +1,22 @@
 import type { SandboxBackend } from "#public/definitions/sandbox-backend.js";
-import type { VercelSandboxBootstrapUseOptions, VercelSandboxSessionCreateContext, VercelSandboxSessionCreateOptions, VercelSandboxSessionUseOptions } from "#public/sandbox/vercel-sandbox.js";
+import type {
+  VercelSandboxBootstrapUseOptions,
+  VercelSandboxSessionCreateContext,
+  VercelSandboxSessionCreateOptions,
+  VercelSandboxSessionUseOptions,
+} from "#public/sandbox/vercel-sandbox.js";
 import { type CreateVercelSandbox } from "#execution/sandbox/bindings/vercel-create-sdk.js";
-import type { VercelCreateOptions, VercelModule } from "#execution/sandbox/bindings/vercel-sdk-types.js";
+import type {
+  VercelCreateOptions,
+  VercelModule,
+} from "#execution/sandbox/bindings/vercel-sdk-types.js";
 export interface CreateVercelSandboxInput {
-    readonly createSandbox?: CreateVercelSandbox;
-    readonly createOptions?: VercelCreateOptions;
-    readonly loadSandboxModule?: () => Promise<VercelModule>;
-    readonly resolveSessionCreateOptions?: (context: VercelSandboxSessionCreateContext) => Promise<VercelSandboxSessionCreateOptions> | VercelSandboxSessionCreateOptions;
+  readonly createSandbox?: CreateVercelSandbox;
+  readonly createOptions?: VercelCreateOptions;
+  readonly loadSandboxModule?: () => Promise<VercelModule>;
+  readonly resolveSessionCreateOptions?: (
+    context: VercelSandboxSessionCreateContext,
+  ) => Promise<VercelSandboxSessionCreateOptions> | VercelSandboxSessionCreateOptions;
 }
 /**
  * Creates the Vercel-backed sandbox backend.
@@ -16,4 +26,6 @@ export interface CreateVercelSandboxInput {
  * prewarm time, session at first-time session-create). On resume
  * (`Sandbox.get`) no create happens, so they are not re-applied.
  */
-export declare function createVercelSandbox(input?: CreateVercelSandboxInput): SandboxBackend<VercelSandboxBootstrapUseOptions, VercelSandboxSessionUseOptions>;
+export declare function createVercelSandbox(
+  input?: CreateVercelSandboxInput,
+): SandboxBackend<VercelSandboxBootstrapUseOptions, VercelSandboxSessionUseOptions>;

@@ -9,13 +9,8 @@ import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import {
-  AGENT_SCHEDULE_DISPATCH_MAX_SAFE_ATTEMPTS,
-} from "./agent-schedule-config.js";
-import type {
-  AgentScheduleRecurrenceKind,
-  AgentScheduleScope,
-} from "./agent-schedule-record.js";
+import { AGENT_SCHEDULE_DISPATCH_MAX_SAFE_ATTEMPTS } from "./agent-schedule-config.js";
+import type { AgentScheduleRecurrenceKind, AgentScheduleScope } from "./agent-schedule-record.js";
 import {
   completeDeliveredAgentScheduleRun,
   type CompleteDeliveredAgentScheduleRunInput,
@@ -416,8 +411,14 @@ export const agentScheduleDispatchRepository = {
         [job.runId, job.id, job.leaseToken, errorCode],
       );
       // A terminal run cannot call the run-bound reader, so discard its transient history copy.
-      await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [job.runId]);
-      await recordFailures(client, [{ family_id: failed.rows[0].family_id, id: job.id }], errorCode);
+      await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [
+        job.runId,
+      ]);
+      await recordFailures(
+        client,
+        [{ family_id: failed.rows[0].family_id, id: job.id }],
+        errorCode,
+      );
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

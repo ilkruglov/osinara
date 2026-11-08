@@ -10,7 +10,7 @@ export type JsonArray = readonly JsonValue[];
  * JSON-serializable object values that can safely cross workflow and step boundaries.
  */
 export interface JsonObject {
-    readonly [key: string]: JsonValue;
+  readonly [key: string]: JsonValue;
 }
 /**
  * JSON-serializable values that can safely cross workflow and step boundaries.

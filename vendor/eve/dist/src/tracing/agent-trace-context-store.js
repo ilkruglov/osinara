@@ -53,9 +53,9 @@ var ContextAgentTraceStateStore = class {
     });
   }
   findAction(t, n) {
-    return Object.values(
-      contextStorage.getStore()?.get(AgentTraceContextKey)?.actions ?? {},
-    ).find((e) => e.sessionId === t && e.callId === n);
+    return Object.values(contextStorage.getStore()?.get(AgentTraceContextKey)?.actions ?? {}).find(
+      (e) => e.sessionId === t && e.callId === n,
+    );
   }
   getAction(t) {
     return contextStorage.getStore()?.get(AgentTraceContextKey)?.actions[t];
@@ -64,9 +64,7 @@ var ContextAgentTraceStateStore = class {
     return contextStorage.getStore()?.get(AgentTraceContextKey)?.sessions[t];
   }
   getTurn(t, n) {
-    return contextStorage.getStore()?.get(AgentTraceContextKey)?.turns[
-      turnKey(t, n)
-    ];
+    return contextStorage.getStore()?.get(AgentTraceContextKey)?.turns[turnKey(t, n)];
   }
   setAction(e, t) {
     updateState((n) => ({ ...n, actions: { ...n.actions, [e]: t } }));
@@ -79,9 +77,7 @@ var ContextAgentTraceStateStore = class {
   }
 };
 function updateState(e) {
-  loadContext().set(AgentTraceContextKey, (t) =>
-    e(t ?? { actions: {}, sessions: {}, turns: {} }),
-  );
+  loadContext().set(AgentTraceContextKey, (t) => e(t ?? { actions: {}, sessions: {}, turns: {} }));
 }
 function turnKey(e, t) {
   return `${e}\0${t}`;
@@ -123,34 +119,24 @@ function deserializeState(e) {
           if (!(!isRecord(e) || !isSpanContext(e.context)))
             return {
               agentName: typeof e.agentName == `string` ? e.agentName : void 0,
-              channelKind:
-                typeof e.channelKind == `string` ? e.channelKind : void 0,
+              channelKind: typeof e.channelKind == `string` ? e.channelKind : void 0,
               context: e.context,
-              rootSessionId:
-                typeof e.rootSessionId == `string` ? e.rootSessionId : ``,
-              turnsInWindow:
-                typeof e.turnsInWindow == `number` ? e.turnsInWindow : 0,
+              rootSessionId: typeof e.rootSessionId == `string` ? e.rootSessionId : ``,
+              turnsInWindow: typeof e.turnsInWindow == `number` ? e.turnsInWindow : 0,
               window: typeof e.window == `number` ? e.window : 0,
             };
         }),
         turns: deserializeRecord(e.turns, (e) => {
           if (
             !(!isRecord(e) || !isSpanContext(e.context)) &&
-            !(
-              typeof e.parentSpanId != `string` ||
-              typeof e.startTimeMs != `number`
-            )
+            !(typeof e.parentSpanId != `string` || typeof e.startTimeMs != `number`)
           )
             return {
               context: e.context,
               lineage: deserializeLineage(e.lineage),
-              parentIsRemote:
-                typeof e.parentIsRemote == `boolean`
-                  ? e.parentIsRemote
-                  : void 0,
+              parentIsRemote: typeof e.parentIsRemote == `boolean` ? e.parentIsRemote : void 0,
               parentSpanId: e.parentSpanId,
-              rootSessionId:
-                typeof e.rootSessionId == `string` ? e.rootSessionId : ``,
+              rootSessionId: typeof e.rootSessionId == `string` ? e.rootSessionId : ``,
               sequence: typeof e.sequence == `number` ? e.sequence : 0,
               startTimeMs: e.startTimeMs,
               terminal: deserializeTerminal(e.terminal),
@@ -160,27 +146,24 @@ function deserializeState(e) {
     : { actions: {}, sessions: {}, turns: {} };
 }
 function deserializeAction(e) {
-  if (
-    !(
-      !isRecord(e) ||
-      typeof e.attemptIndex != `number` ||
-      typeof e.callId != `string` ||
-      !isActionKind(e.kind) ||
-      typeof e.name != `string` ||
-      !isSpanContext(e.parent) ||
-      typeof e.rootSessionId != `string` ||
-      typeof e.sessionId != `string` ||
-      typeof e.spanId != `string` ||
-      typeof e.startTimeMs != `number` ||
-      typeof e.stepIndex != `number` ||
-      typeof e.turnId != `string`
-    )
-  )
+  if (!(
+    !isRecord(e) ||
+    typeof e.attemptIndex != `number` ||
+    typeof e.callId != `string` ||
+    !isActionKind(e.kind) ||
+    typeof e.name != `string` ||
+    !isSpanContext(e.parent) ||
+    typeof e.rootSessionId != `string` ||
+    typeof e.sessionId != `string` ||
+    typeof e.spanId != `string` ||
+    typeof e.startTimeMs != `number` ||
+    typeof e.stepIndex != `number` ||
+    typeof e.turnId != `string`
+  ))
     return {
       attemptIndex: e.attemptIndex,
       callId: e.callId,
-      inputAttribute:
-        typeof e.inputAttribute == `string` ? e.inputAttribute : void 0,
+      inputAttribute: typeof e.inputAttribute == `string` ? e.inputAttribute : void 0,
       kind: e.kind,
       name: e.name,
       parent: e.parent,
@@ -194,10 +177,7 @@ function deserializeAction(e) {
 }
 function isActionKind(e) {
   return (
-    e === `load-skill` ||
-    e === `remote-agent-call` ||
-    e === `subagent-call` ||
-    e === `tool-call`
+    e === `load-skill` || e === `remote-agent-call` || e === `subagent-call` || e === `tool-call`
   );
 }
 function deserializeRecord(e, t) {
@@ -210,14 +190,12 @@ function deserializeRecord(e, t) {
   return n;
 }
 function deserializeLineage(e) {
-  if (
-    !(
-      !isRecord(e) ||
-      typeof e.callId != `string` ||
-      typeof e.sessionId != `string` ||
-      typeof e.turnId != `string`
-    )
-  )
+  if (!(
+    !isRecord(e) ||
+    typeof e.callId != `string` ||
+    typeof e.sessionId != `string` ||
+    typeof e.turnId != `string`
+  ))
     return {
       callId: e.callId,
       sessionId: e.sessionId,
@@ -229,9 +207,7 @@ function deserializeTerminal(e) {
   if (!isRecord(e) || typeof e.type != `string`) return;
   let t = e.type;
   if (isTurnTerminalType(t))
-    return t === `turn.failed`
-      ? { error: deserializeError(e.error), type: t }
-      : { type: t };
+    return t === `turn.failed` ? { error: deserializeError(e.error), type: t } : { type: t };
 }
 function serializeSpanContext(e) {
   return {
@@ -250,9 +226,7 @@ function isSpanContext(e) {
   );
 }
 function serializeError(e) {
-  return e instanceof Error
-    ? { message: e.message, name: e.name, stack: e.stack }
-    : void 0;
+  return e instanceof Error ? { message: e.message, name: e.name, stack: e.stack } : void 0;
 }
 function deserializeError(e) {
   if (!isRecord(e) || typeof e.message != `string`) return;
@@ -264,9 +238,7 @@ function deserializeError(e) {
   );
 }
 function isTurnTerminalType(e) {
-  return (
-    e === `turn.cancelled` || e === `turn.completed` || e === `turn.failed`
-  );
+  return e === `turn.cancelled` || e === `turn.completed` || e === `turn.failed`;
 }
 function isRecord(e) {
   return typeof e == `object` && !!e && !Array.isArray(e);

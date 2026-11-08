@@ -7,8 +7,8 @@
 const TELEGRAM_MESSAGE_MAX_CHARACTERS = 4_096;
 const TELEGRAM_LINK_MAX_CHARACTERS = 2_048;
 const REPEATED_EMOJI_MINIMUM = 8;
-const INLINE_PLACEHOLDER_START = 0xE000;
-const INLINE_PLACEHOLDER_END = 0xF8FF;
+const INLINE_PLACEHOLDER_START = 0xe000;
+const INLINE_PLACEHOLDER_END = 0xf8ff;
 const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tg:"]);
 
 function escapeHtml(value: string): string {
@@ -21,11 +21,17 @@ function escapeHtml(value: string): string {
 }
 
 function placeholderMarker(value: string): string {
-  for (let codePoint = INLINE_PLACEHOLDER_START; codePoint <= INLINE_PLACEHOLDER_END; codePoint += 1) {
+  for (
+    let codePoint = INLINE_PLACEHOLDER_START;
+    codePoint <= INLINE_PLACEHOLDER_END;
+    codePoint += 1
+  ) {
     const marker = String.fromCodePoint(codePoint);
     if (!value.includes(marker)) return marker;
   }
-  throw new Error("AGENT_TELEGRAM_MARKDOWN_PLACEHOLDER_UNAVAILABLE: Input exhausts reserved markers");
+  throw new Error(
+    "AGENT_TELEGRAM_MARKDOWN_PLACEHOLDER_UNAVAILABLE: Input exhausts reserved markers",
+  );
 }
 
 function safeLink(rawUrl: string): string | null {
@@ -74,7 +80,7 @@ function renderInline(markdown: string): string {
 
   // Protect code and validated links before escaping and interpreting emphasis markers.
   let source = markdown.replace(/`([^`\n]+)`/gu, (_match, code: string) =>
-    reserve(`<code>${escapeHtml(code)}</code>`)
+    reserve(`<code>${escapeHtml(code)}</code>`),
   );
   source = source.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/gu, (match, label: string, url: string) => {
     const href = safeLink(url);
@@ -86,14 +92,8 @@ function renderInline(markdown: string): string {
   html = html.replace(/\*\*([^*\n]+)\*\*/gu, "<b>$1</b>");
   html = html.replace(/__([^_\n]+)__/gu, "<b>$1</b>");
   html = html.replace(/~~([^~\n]+)~~/gu, "<s>$1</s>");
-  html = html.replace(
-    /(^|[^\p{L}\p{N}])\*([^*\n]+)\*(?=$|[^\p{L}\p{N}])/gu,
-    "$1<i>$2</i>",
-  );
-  html = html.replace(
-    /(^|[^\p{L}\p{N}])_([^_\n]+)_(?=$|[^\p{L}\p{N}])/gu,
-    "$1<i>$2</i>",
-  );
+  html = html.replace(/(^|[^\p{L}\p{N}])\*([^*\n]+)\*(?=$|[^\p{L}\p{N}])/gu, "$1<i>$2</i>");
+  html = html.replace(/(^|[^\p{L}\p{N}])_([^_\n]+)_(?=$|[^\p{L}\p{N}])/gu, "$1<i>$2</i>");
 
   // Restore only placeholders created by this invocation; raw model HTML remains escaped.
   for (const [index, replacement] of replacements.entries()) {
@@ -103,8 +103,12 @@ function renderInline(markdown: string): string {
 }
 
 function isSpecialBlockStart(line: string): boolean {
-  return line.startsWith('```') || /^#{1,6}\s+/u.test(line) || /^>\s?/u.test(line) ||
-    /^(?:[-+*]|\d+\.)\s+/u.test(line);
+  return (
+    line.startsWith("```") ||
+    /^#{1,6}\s+/u.test(line) ||
+    /^>\s?/u.test(line) ||
+    /^(?:[-+*]|\d+\.)\s+/u.test(line)
+  );
 }
 
 export function renderTelegramMarkdownHtml(markdown: string): string {
@@ -118,7 +122,7 @@ export function renderTelegramMarkdownHtml(markdown: string): string {
       index += 1;
       continue;
     }
-    if (line.startsWith('```')) {
+    if (line.startsWith("```")) {
       const codeLines: string[] = [];
       index += 1;
       while (index < lines.length && !/^```\s*$/u.test(lines[index]!)) {
@@ -139,9 +143,7 @@ export function renderTelegramMarkdownHtml(markdown: string): string {
         rows.push(cells);
         index += 1;
       }
-      const table = rows
-        .map((cells) => cells.map(collapseRepeatedEmoji).join(" | "))
-        .join("\n");
+      const table = rows.map((cells) => cells.map(collapseRepeatedEmoji).join(" | ")).join("\n");
       blocks.push(`<pre>${escapeHtml(table)}</pre>`);
       continue;
     }

@@ -21,22 +21,26 @@ import { createTelegramMessageHandler } from "./telegram-on-message.js";
 function externalPhoto(text: string): TelegramMessage {
   return {
     ...groupMessage(text),
-    attachments: [{
-      fileId: "telegram-photo-1",
-      fileUniqueId: "telegram-photo-unique-1",
-      kind: "photo",
-      mediaType: "image/jpeg",
-      size: 1_024,
-    }],
+    attachments: [
+      {
+        fileId: "telegram-photo-1",
+        fileUniqueId: "telegram-photo-unique-1",
+        kind: "photo",
+        mediaType: "image/jpeg",
+        size: 1_024,
+      },
+    ],
     messageId: "42",
     raw: {
       date: 1_700_000_000,
-      photo: [{
-        file_id: "telegram-photo-1",
-        file_unique_id: "telegram-photo-unique-1",
-        height: 640,
-        width: 640,
-      }],
+      photo: [
+        {
+          file_id: "telegram-photo-1",
+          file_unique_id: "telegram-photo-unique-1",
+          height: 640,
+          width: 640,
+        },
+      ],
     },
   };
 }
@@ -72,7 +76,9 @@ describe("external Telegram native photos", () => {
           date: 1_700_000_000,
           from: { id: "telegram-202", is_bot: false },
           message_id: 41,
-          photo: [{ file_id: "reply-photo", file_unique_id: "reply-photo-unique", height: 10, width: 10 }],
+          photo: [
+            { file_id: "reply-photo", file_unique_id: "reply-photo-unique", height: 10, width: 10 },
+          ],
         },
       },
       replyToMessage: {
@@ -82,7 +88,10 @@ describe("external Telegram native photos", () => {
       },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.attachmentReferences.captureReplyTarget).toHaveBeenCalledWith(
       "group-1",
@@ -152,9 +161,11 @@ describe("external Telegram native photos", () => {
     await createTelegramMessageHandler(repository)(telegramContext().context, message);
 
     expect(repository.attachmentReferences.captureReplyTarget).not.toHaveBeenCalled();
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      attachmentReferenceAccess: { images: false, readableText: false },
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentReferenceAccess: { images: false, readableText: false },
+      }),
+    );
   });
 
   it("records an addressed photo as a lazy reference without workspace persistence", async () => {
@@ -169,7 +180,10 @@ describe("external Telegram native photos", () => {
     });
     const message = externalPhoto(`@${BOT_USERNAME} что изображено?`);
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
     expect(repository.attachments.persist).not.toHaveBeenCalled();
@@ -240,10 +254,12 @@ describe("external Telegram native photos", () => {
       type: "external",
     });
 
-    await expect(createTelegramMessageHandler(repository)(
-      telegramContext().context,
-      externalPhoto(`@${BOT_USERNAME} что изображено?`),
-    )).resolves.toBeNull();
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegramContext().context,
+        externalPhoto(`@${BOT_USERNAME} что изображено?`),
+      ),
+    ).resolves.toBeNull();
 
     expect(repository.journal.record).not.toHaveBeenCalled();
     expect(repository.attachments.persist).not.toHaveBeenCalled();
@@ -261,10 +277,12 @@ describe("external Telegram native photos", () => {
       type: "external",
     });
 
-    await expect(createTelegramMessageHandler(repository)(
-      telegramContext().context,
-      externalPhoto(`@${BOT_USERNAME} что изображено?`),
-    )).resolves.toBeNull();
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegramContext().context,
+        externalPhoto(`@${BOT_USERNAME} что изображено?`),
+      ),
+    ).resolves.toBeNull();
 
     expect(repository.journal.record).not.toHaveBeenCalled();
     expect(repository.attachments.persist).not.toHaveBeenCalled();
@@ -275,13 +293,18 @@ describe("external Telegram native photos", () => {
     allowExternalPhoto(repository);
     const imageDocument: TelegramMessage = {
       ...groupMessage(`@${BOT_USERNAME} что изображено?`),
-      attachments: [{
-        fileId: "image-document",
-        fileName: "photo.jpg",
-        kind: "document",
-        mediaType: "image/jpeg",
-      }],
-      raw: { date: 1_700_000_000, document: { file_id: "image-document", mime_type: "image/jpeg" } },
+      attachments: [
+        {
+          fileId: "image-document",
+          fileName: "photo.jpg",
+          kind: "document",
+          mediaType: "image/jpeg",
+        },
+      ],
+      raw: {
+        date: 1_700_000_000,
+        document: { file_id: "image-document", mime_type: "image/jpeg" },
+      },
     };
     const mixed = {
       ...externalPhoto(`@${BOT_USERNAME} что изображено?`),

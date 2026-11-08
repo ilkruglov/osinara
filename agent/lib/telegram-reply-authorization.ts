@@ -41,14 +41,17 @@ export async function authorizeTelegramReply(input: {
 
   // A channel or another bot can continue an ordinary group conversation, but neither can ever
   // approve a human action: only a verified person answers a confirmation prompt.
-  if ((input.actor.kind === "telegram_channel" || input.actor.kind === "telegram_bot") &&
-    (replyTarget?.from?.isBot === true || input.replyToAgent)) {
+  if (
+    (input.actor.kind === "telegram_channel" || input.actor.kind === "telegram_bot") &&
+    (replyTarget?.from?.isBot === true || input.replyToAgent)
+  ) {
     if (input.replyToAgent || isReplyToBot(input.message, input.botUsername)) {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;
       replyHandling = "message";
     }
   } else if (
-    replyTarget?.from?.isBot === true && !input.replyToAgent &&
+    replyTarget?.from?.isBot === true &&
+    !input.replyToAgent &&
     input.message.chat.type !== "private" &&
     typeof replyTarget.from.username === "string" &&
     replyTarget.from.username.toLowerCase() !== input.botUsername.toLowerCase()
@@ -73,15 +76,18 @@ export async function authorizeTelegramReply(input: {
       telegramUserId: input.actor.id,
     });
     if (authorization === "forbidden" || authorization === "expired") {
-      const error = authorization === "forbidden"
-        ? "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил."
-        : "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.";
+      const error =
+        authorization === "forbidden"
+          ? "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил."
+          : "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.";
       if (input.message.chat.type === "private") await input.sendMessage(error);
       return { accepted: false, replyHandling, resumesPendingTask, verifiedReplyRoute };
     }
 
     // DB authorization decides synthetic HITL. A verified ordinary reply keeps its conversation route.
-    const ordinaryAgentReply = input.replyToAgent || input.message.chat.type === "private" ||
+    const ordinaryAgentReply =
+      input.replyToAgent ||
+      input.message.chat.type === "private" ||
       isReplyToBot(input.message, input.botUsername);
     if (authorization === "not_applicable" && ordinaryAgentReply) {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;

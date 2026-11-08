@@ -1,10 +1,6 @@
 import { bunPackageManager } from "./bun.js";
 import { npmPackageManager } from "./npm.js";
-import {
-  PNPM_WORKSPACE_CONTENT,
-  PNPM_WORKSPACE_PATH,
-  pnpmPackageManager,
-} from "./pnpm.js";
+import { PNPM_WORKSPACE_CONTENT, PNPM_WORKSPACE_PATH, pnpmPackageManager } from "./pnpm.js";
 import { yarnPackageManager } from "./yarn.js";
 function getPackageManagerStrategy(e) {
   switch (e) {

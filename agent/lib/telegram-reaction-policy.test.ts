@@ -12,8 +12,10 @@ import { telegramReactionPolicyEmoji } from "./telegram-reaction-policy.js";
 
 describe("telegramReactionPolicyEmoji", () => {
   it("treats an omitted field as every emoji reaction allowed", () => {
-    expect(telegramReactionPolicyEmoji({ id: -1001, type: "supergroup" }))
-      .toEqual({ allowsAll: true, emoji: [] });
+    expect(telegramReactionPolicyEmoji({ id: -1001, type: "supergroup" })).toEqual({
+      allowsAll: true,
+      emoji: [],
+    });
   });
 
   it("keeps the explicit emoji list of the chat", () => {
@@ -24,8 +26,7 @@ describe("telegramReactionPolicyEmoji", () => {
       ],
     };
 
-    expect(telegramReactionPolicyEmoji(result))
-      .toEqual({ allowsAll: false, emoji: ["👍", "❤️"] });
+    expect(telegramReactionPolicyEmoji(result)).toEqual({ allowsAll: false, emoji: ["👍", "❤️"] });
   });
 
   it("drops reaction kinds a bot cannot send", () => {
@@ -41,12 +42,15 @@ describe("telegramReactionPolicyEmoji", () => {
   });
 
   it("reports a chat with reactions turned off", () => {
-    expect(telegramReactionPolicyEmoji({ available_reactions: [] }))
-      .toEqual({ allowsAll: false, emoji: [] });
+    expect(telegramReactionPolicyEmoji({ available_reactions: [] })).toEqual({
+      allowsAll: false,
+      emoji: [],
+    });
   });
 
   it("refuses a malformed provider answer instead of assuming a policy", () => {
-    expect(() => telegramReactionPolicyEmoji({ available_reactions: "👍" }))
-      .toThrow("AGENT_TELEGRAM_REACTION_POLICY_INVALID");
+    expect(() => telegramReactionPolicyEmoji({ available_reactions: "👍" })).toThrow(
+      "AGENT_TELEGRAM_REACTION_POLICY_INVALID",
+    );
   });
 });

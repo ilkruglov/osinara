@@ -34,15 +34,7 @@ async function startDockerContainer(n) {
 }
 async function runDockerBaseSetup(e, t) {
   expectDockerSuccess(
-    await e.run([
-      `exec`,
-      `--user`,
-      `root`,
-      t,
-      `/bin/sh`,
-      `-c`,
-      buildDockerBaseSetupScript(),
-    ]),
+    await e.run([`exec`, `--user`, `root`, t, `/bin/sh`, `-c`, buildDockerBaseSetupScript()]),
     `prepare base runtime in sandbox container "${t}"`,
   );
 }

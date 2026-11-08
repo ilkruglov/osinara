@@ -36,9 +36,9 @@ try {
     child.once("exit", resolveExit);
   });
 } finally {
-  await Promise.all(generatedPaths.map((path) =>
-    rm(resolve(fixtureRoot, path), { force: true, recursive: true })
-  ));
+  await Promise.all(
+    generatedPaths.map((path) => rm(resolve(fixtureRoot, path), { force: true, recursive: true })),
+  );
 }
 if (exitCode !== 0) {
   throw new Error(

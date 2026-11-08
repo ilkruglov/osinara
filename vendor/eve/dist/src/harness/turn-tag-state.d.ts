@@ -23,16 +23,19 @@
  * session total crosses into it.
  */
 import type { HarnessSession, SessionStateMap } from "#harness/types.js";
-import { type SessionRuntimeTokenLimits, type SessionTokenLimitViolation } from "#harness/session-token-limits.js";
+import {
+  type SessionRuntimeTokenLimits,
+  type SessionTokenLimitViolation,
+} from "#harness/session-token-limits.js";
 import type { TokenUsage } from "#shared/token-usage.js";
 export type { SessionRuntimeTokenLimits, SessionTokenLimitViolation };
 export interface TokenUsageTotals {
-    readonly cacheReadTokens: number;
-    readonly cacheWriteTokens: number;
-    readonly costUsd: number;
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-    readonly sawCost: boolean;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly costUsd: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly sawCost: boolean;
 }
 export type TokenUsageDelta = Partial<TokenUsageTotals>;
 /**
@@ -43,12 +46,16 @@ export type TokenUsageDelta = Partial<TokenUsageTotals>;
  * `session` totals do not reset.
  */
 export interface TurnUsageState extends TokenUsageTotals {
-    readonly session: TokenUsageTotals;
-    readonly turnId: string;
+  readonly session: TokenUsageTotals;
+  readonly turnId: string;
 }
 /** Reads the stored per-turn token state, or `undefined` when absent. */
-export declare function getTurnUsageState(state: SessionStateMap | undefined): TurnUsageState | undefined;
-export declare function getSessionTokenUsage(session: Pick<HarnessSession, "state">): TokenUsageTotals;
+export declare function getTurnUsageState(
+  state: SessionStateMap | undefined,
+): TurnUsageState | undefined;
+export declare function getSessionTokenUsage(
+  session: Pick<HarnessSession, "state">,
+): TokenUsageTotals;
 /** Projects a {@link TokenUsageTotals} down to the cross-cutting {@link TokenUsage} shape. */
 export declare function toUsage(totals: TokenUsageTotals): TokenUsage;
 /**
@@ -58,7 +65,9 @@ export declare function toUsage(totals: TokenUsageTotals): TokenUsage;
  * re-anchors it to `usage + configured limit` via
  * {@link bumpSessionRuntimeTokenLimits}.
  */
-export declare function getSessionRuntimeTokenLimits(session: Pick<HarnessSession, "limits" | "state">): SessionRuntimeTokenLimits;
+export declare function getSessionRuntimeTokenLimits(
+  session: Pick<HarnessSession, "limits" | "state">,
+): SessionRuntimeTokenLimits;
 /**
  * Bumps the runtime token limits after the user grants a continuation:
  * each capped axis is re-anchored to `current usage + configured limit`, so
@@ -73,11 +82,15 @@ export declare function bumpSessionRuntimeTokenLimits(session: HarnessSession): 
  * `false` marks an uncapped axis. This is the pool a delegated child's
  * budget is granted from.
  */
-export declare function getSessionRemainingTokenQuota(session: Pick<HarnessSession, "limits" | "state">): {
-    inputTokens: number | false;
-    outputTokens: number | false;
+export declare function getSessionRemainingTokenQuota(
+  session: Pick<HarnessSession, "limits" | "state">,
+): {
+  inputTokens: number | false;
+  outputTokens: number | false;
 };
-export declare function getSessionTokenLimitViolation(session: Pick<HarnessSession, "limits" | "state">): SessionTokenLimitViolation | null;
+export declare function getSessionTokenLimitViolation(
+  session: Pick<HarnessSession, "limits" | "state">,
+): SessionTokenLimitViolation | null;
 /**
  * Takes the session-usage delta accumulated since the previous take and
  * marks it reported.
@@ -91,11 +104,14 @@ export declare function getSessionTokenLimitViolation(session: Pick<HarnessSessi
  * multi-turn persistent child sum exactly to its session totals.
  */
 export declare function takeSessionUsageDelta(session: HarnessSession): {
-    readonly delta: TokenUsage;
-    readonly session: HarnessSession;
+  readonly delta: TokenUsage;
+  readonly session: HarnessSession;
 };
 /** Writes per-turn token state onto a new copy of the session. */
-export declare function setTurnUsageState(session: HarnessSession, next: TurnUsageState): HarnessSession;
+export declare function setTurnUsageState(
+  session: HarnessSession,
+  next: TurnUsageState,
+): HarnessSession;
 /**
  * Folds one step's `usage` into the running per-turn totals. When
  * `turnId` differs from the stored state (e.g. a new turn just
@@ -103,9 +119,9 @@ export declare function setTurnUsageState(session: HarnessSession, next: TurnUsa
  * zero without an explicit reset path.
  */
 export declare function accumulateTurnUsage(input: {
-    readonly previous: TurnUsageState | undefined;
-    readonly turnId: string;
-    readonly usage: TokenUsageDelta | undefined;
+  readonly previous: TurnUsageState | undefined;
+  readonly turnId: string;
+  readonly usage: TokenUsageDelta | undefined;
 }): TurnUsageState;
 /**
  * Folds a delegated child session's reported totals into the parent's
@@ -115,6 +131,6 @@ export declare function accumulateTurnUsage(input: {
  * token limits and the remaining-quota budget granted to later delegations.
  */
 export declare function accumulateSessionUsage(input: {
-    readonly previous: TurnUsageState | undefined;
-    readonly usage: TokenUsageDelta;
+  readonly previous: TurnUsageState | undefined;
+  readonly usage: TokenUsageDelta;
 }): TurnUsageState;

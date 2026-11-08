@@ -65,7 +65,10 @@ export async function authorizeCurrentExternalGroupCapability(
       [input.groupId, input.familyId],
     );
     const allowed = parseExternalGroupToolAllowlist(result.rows[0]?.tool_allowlist);
-    if (!acceptable.some((name) => allowed?.has(name)) || !alsoRequired.every((name) => allowed?.has(name))) {
+    if (
+      !acceptable.some((name) => allowed?.has(name)) ||
+      !alsoRequired.every((name) => allowed?.has(name))
+    ) {
       throw new AppError(
         "AGENT_GROUP_TOOL_FORBIDDEN",
         "Этот инструмент не разрешён в текущей внешней группе. Обратитесь к владельцу агента",

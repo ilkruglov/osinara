@@ -1,14 +1,7 @@
 import { createLogger } from "#internal/logging.js";
-import {
-  Command,
-  CommanderError,
-  InvalidArgumentError,
-} from "#compiled/commander/index.js";
+import { Command, CommanderError, InvalidArgumentError } from "#compiled/commander/index.js";
 import { applicationCommand } from "#cli/application-command.js";
-import {
-  parseDevelopmentHeaderOption,
-  resolveDevelopmentUrlTarget,
-} from "#cli/dev/url-target.js";
+import { parseDevelopmentHeaderOption, resolveDevelopmentUrlTarget } from "#cli/dev/url-target.js";
 import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
 import {
   FORCED_EXIT_BACKSTOP_MS,
@@ -23,22 +16,13 @@ import { startCliLiveRow } from "#cli/ui/live-row.js";
 import { devBootPhase } from "#internal/dev-boot-progress.js";
 import { registerBuildCommand } from "#cli/commands/build.js";
 import { resolveApplicationRoot } from "#internal/application/paths.js";
-import {
-  findCliApplicationRoot,
-  resolveCliApplicationProject,
-} from "#cli/application-root.js";
+import { findCliApplicationRoot, resolveCliApplicationProject } from "#cli/application-root.js";
 import { registerIntegrationCommands } from "#cli/commands/register-integration-commands.js";
 import { registerProjectCommands } from "#cli/commands/register-project-commands.js";
 import { registerRegistryCommands } from "#cli/commands/register-registry-commands.js";
-import {
-  resolveDevUiMode,
-  resolveTuiDisplayOptions,
-} from "#cli/dev/ui-options.js";
+import { resolveDevUiMode, resolveTuiDisplayOptions } from "#cli/dev/ui-options.js";
 import { registerAcpCommand } from "#cli/acp/command.js";
-import {
-  waitForServerOrStop,
-  waitForUiOrServer,
-} from "#cli/dev/wait-for-ui.js";
+import { waitForServerOrStop, waitForUiOrServer } from "#cli/dev/wait-for-ui.js";
 import { registerRuntimeInvokeCommand } from "#cli/invoke/command.js";
 import {
   parseContextSizeOption,
@@ -81,8 +65,7 @@ async function loadRunEvalCommand() {
   return (await import(`#evals/cli/eval.js`)).runEvalCommand;
 }
 async function loadStartHost() {
-  return (await import(`#cli/dev/local-server-process.js`))
-    .createDevelopmentServer;
+  return (await import(`#cli/dev/local-server-process.js`)).createDevelopmentServer;
 }
 const loadIsActiveDevelopmentServerForApp = async () =>
   (await import(`#internal/nitro/host.js`)).isActiveDevelopmentServerForApp;
@@ -122,9 +105,7 @@ function createCliProgram(e, n, p) {
       .description(`List user-authored channels in the current project.`)
       .option(`--json`, `Output as JSON`)
       .action(async (t) => {
-        let { runChannelsListCommand: n } = await import(
-          `#cli/commands/channels.js`
-        );
+        let { runChannelsListCommand: n } = await import(`#cli/commands/channels.js`);
         await n(e, p.project, t);
       }),
     registerIntegrationCommands({
@@ -132,38 +113,28 @@ function createCliProgram(e, n, p) {
       logger: e,
       applicationContext: p,
     }));
-  let b = _.command(`extension`).description(
-    `Create and build reusable eve extension packages.`,
-  );
+  let b = _.command(`extension`).description(`Create and build reusable eve extension packages.`);
   (b
     .command(`init [target]`)
     .description(`Create a new eve extension package.`)
     .option(`-y, --yes`, `Accepted for compatibility; has no effect`)
     .action(async (t, n) => {
       n.yes && e.error(`warning: --yes has no effect for eve extension init.`);
-      let { runExtensionInitCommand: r } = await import(
-        `#cli/commands/extension-init.js`
-      );
+      let { runExtensionInitCommand: r } = await import(`#cli/commands/extension-init.js`);
       await r(e, p.root, t);
     }),
     b
       .command(`build`)
       .description(`Build the current package as an eve extension.`)
       .action(async () => {
-        let { loadDevelopmentEnvironmentFiles: t } = await import(
-          `#cli/dev/environment.js`
-        );
+        let { loadDevelopmentEnvironmentFiles: t } = await import(`#cli/dev/environment.js`);
         t(p.root);
-        let { runExtensionBuildCommand: n } = await import(
-          `#cli/commands/extension-build.js`
-        );
+        let { runExtensionBuildCommand: n } = await import(`#cli/commands/extension-build.js`);
         await n(e, p.root);
       }),
     registerRegistryCommands({ program: _, logger: e, applicationContext: p }),
     _.command(`init [target]`)
-      .description(
-        `Create a new eve agent, or add one to an existing project directory.`,
-      )
+      .description(`Create a new eve agent, or add one to an existing project directory.`)
       .option(`--channel-web-nextjs`, `Add the Web Chat application (Next.js)`)
       .option(`--model <model>`, `Set the agent model (provider/model-id)`)
       .option(
@@ -203,19 +174,14 @@ function createCliProgram(e, n, p) {
     applicationCommand(_.command(`start`), p)
       .description(`Start a built eve application.`)
       .option(`--host <host>`, `Host interface to bind`)
-      .option(
-        `--port <port>`,
-        `Port to listen on (defaults to $PORT, then 3000)`,
-        parsePortOption,
-      )
+      .option(`--port <port>`, `Port to listen on (defaults to $PORT, then 3000)`, parsePortOption)
       .action(async (t) => {
-        let { loadDevelopmentEnvironmentFiles: r } = await import(
-          `#cli/dev/environment.js`
-        );
+        let { loadDevelopmentEnvironmentFiles: r } = await import(`#cli/dev/environment.js`);
         r(p.root);
-        let i = await (
-          n.startProductionHost ?? (await loadStartProductionHost())
-        )(p.root, { host: t.host, port: t.port });
+        let i = await (n.startProductionHost ?? (await loadStartProductionHost()))(p.root, {
+          host: t.host,
+          port: t.port,
+        });
         (e.log(
           renderCliTaggedLine(v, {
             message: `server listening at ${i.url}`,
@@ -238,50 +204,28 @@ function createCliProgram(e, n, p) {
       applicationContext: p,
       eveVersion: g,
       program: _,
-      resolveVerifiedRemoteDevelopmentClient:
-        n.resolveVerifiedRemoteDevelopmentClient,
+      resolveVerifiedRemoteDevelopmentClient: n.resolveVerifiedRemoteDevelopmentClient,
       runAcpServer: n.runAcpServer,
       startHost: n.startHost,
     }),
     applicationCommand(
       _.command(`dev`),
       p,
-      (e) =>
-        resolveDevelopmentUrlTarget(e.opts(), e.processedArgs[0]) === void 0,
+      (e) => resolveDevelopmentUrlTarget(e.opts(), e.processedArgs[0]) === void 0,
     )
-      .description(
-        `Start the eve development server or connect to an existing URL.`,
-      )
-      .argument(
-        `[url]`,
-        `Connect to an existing server URL`,
-        parseDevelopmentServerUrl,
-      )
+      .description(`Start the eve development server or connect to an existing URL.`)
+      .argument(`[url]`, `Connect to an existing server URL`, parseDevelopmentServerUrl)
       .option(`--host <host>`, `Host interface to bind`)
-      .option(
-        `--port <port>`,
-        `Port to listen on (defaults to $PORT, then 2000)`,
-        parsePortOption,
-      )
-      .option(
-        `-u, --url <url>`,
-        `Connect to an existing server URL`,
-        parseDevelopmentServerUrl,
-      )
+      .option(`--port <port>`, `Port to listen on (defaults to $PORT, then 2000)`, parsePortOption)
+      .option(`-u, --url <url>`, `Connect to an existing server URL`, parseDevelopmentServerUrl)
       .option(
         `-H, --header <header>`,
         `Request header for a URL target, in "Name: value" form (repeatable)`,
         parseDevelopmentHeaderOption,
       )
       .option(`--no-ui`, `Start the server without an interactive UI`)
-      .option(
-        `--name <name>`,
-        `Title shown in the terminal UI (defaults to the app folder name)`,
-      )
-      .option(
-        `--input <text>`,
-        `Pre-fill the prompt input, or start onboarding with /model`,
-      )
+      .option(`--name <name>`, `Title shown in the terminal UI (defaults to the app folder name)`)
+      .option(`--input <text>`, `Pre-fill the prompt input, or start onboarding with /model`)
       .option(
         `--tools <mode>`,
         `How tool calls render: full | collapsed | auto-collapsed | hidden`,
@@ -329,20 +273,16 @@ You can also pass a bare URL, for example: eve dev https://example.com
           u = hasInteractiveTerminal(),
           d = resolveDevUiMode({ options: i, interactive: u });
         if (i.input !== void 0 && d === `headless`)
-          throw new InvalidArgumentError(
-            `--input requires the interactive UI.`,
-          );
+          throw new InvalidArgumentError(`--input requires the interactive UI.`);
         let f = !1;
         s !== void 0 &&
           (f = await (
-            n.isActiveDevelopmentServerForApp ??
-            (await loadIsActiveDevelopmentServerForApp())
+            n.isActiveDevelopmentServerForApp ?? (await loadIsActiveDevelopmentServerForApp())
           )({ appRoot: p.root, serverUrl: s }));
         let runInteractiveUi = async (e, t, r) => {
           let o = await devBootPhase(
               `loading interactive UI`,
-              async () =>
-                n.runDevelopmentTui ?? (await loadRunDevelopmentTui()),
+              async () => n.runDevelopmentTui ?? (await loadRunDevelopmentTui()),
               t,
             ),
             c = resolveTuiDisplayOptions(i),
@@ -375,9 +315,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
                     serverUrl: e.serverUrl,
                   }))
                 )
-                  throw Error(
-                    `Could not pause the development server for integration setup.`,
-                  );
+                  throw Error(`Could not pause the development server for integration setup.`);
                 try {
                   return await t();
                 } finally {
@@ -387,19 +325,13 @@ You can also pass a bare URL, for example: eve dev https://example.com
                   });
                 }
               })()),
-            a?.headers === void 0
-              ? await o(d)
-              : await o({ ...d, headers: a.headers }));
+            a?.headers === void 0 ? await o(d) : await o({ ...d, headers: a.headers }));
         };
         if (s) {
-          let { loadDevelopmentEnvironmentFiles: t } = await import(
-            `#cli/dev/environment.js`
-          );
+          let { loadDevelopmentEnvironmentFiles: t } = await import(`#cli/dev/environment.js`);
           if (
             (t(p.root),
-            e.log(
-              `↗ ${f ? `local` : `remote`} mode targeting ${v.info(new URL(s).host)}`,
-            ),
+            e.log(`↗ ${f ? `local` : `remote`} mode targeting ${v.info(new URL(s).host)}`),
             d === `headless`)
           ) {
             e.log(
@@ -429,9 +361,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
         let g,
           _,
           closeServer = () =>
-            g === void 0
-              ? Promise.resolve()
-              : ((_ ??= g.close()), _.catch(() => void 0), _),
+            g === void 0 ? Promise.resolve() : ((_ ??= g.close()), _.catch(() => void 0), _),
           y = installShutdownSignal({
             exitAfterMs: FORCED_EXIT_BACKSTOP_MS,
             onStop: () => {
@@ -480,29 +410,18 @@ You can also pass a bare URL, for example: eve dev https://example.com
             lifecycle: y,
             server: g,
             runUi: async () =>
-              await runInteractiveUi(
-                { appRoot: t.appRoot, serverUrl: t.url },
-                h,
-                y,
-              ),
+              await runInteractiveUi({ appRoot: t.appRoot, serverUrl: t.url }, h, y),
           });
         } finally {
           (m?.stop(), await closeServer(), y.dispose());
         }
       }));
-  let x = _.command(`logs`).description(
-    "Inspect local `eve dev` diagnostic logs (.eve/logs).",
-  );
+  let x = _.command(`logs`).description("Inspect local `eve dev` diagnostic logs (.eve/logs).");
   return (
     applicationCommand(x.command(`show [logid]`, { isDefault: !0 }), p)
-      .description(
-        `Print a diagnostic log (the most recent when logid is omitted).`,
-      )
+      .description(`Print a diagnostic log (the most recent when logid is omitted).`)
       .option(`--dump`, `Prepend the log's environment dump (.dump sibling)`)
-      .option(
-        `--events`,
-        `Interleave session events from the local workflow store`,
-      )
+      .option(`--events`, `Interleave session events from the local workflow store`)
       .action(async (t, n) => {
         let { runLogsShowCommand: r } = await import(`#cli/commands/logs.js`);
         await r(e, p.root, t, n);
@@ -519,9 +438,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
         `[options] [trace]
        eve traces ls [options]`,
       )
-      .description(
-        "Show a local `eve dev` trace (the most recent when trace is omitted).",
-      )
+      .description("Show a local `eve dev` trace (the most recent when trace is omitted).")
       .option(`--verbose`, `Expand every span with all attributes and events`)
       .option(`--json`, `Output as JSON`)
       .action(async (t, n) => {
@@ -539,11 +456,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
       .description(`Print resolved application information.`)
       .option(`--json`, `Output as JSON`)
       .action(async (t) => {
-        await (n.printApplicationInfo ?? (await loadPrintApplicationInfo()))(
-          e,
-          p.root,
-          t,
-        );
+        await (n.printApplicationInfo ?? (await loadPrintApplicationInfo()))(e, p.root, t);
       }),
     applicationCommand(_.command(`eval`), p)
       .description(`Run evals against an eve agent.`)
@@ -558,10 +471,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
       )
       .option(`--tag <tag...>`, `Run only evals carrying a tag`)
       .option(`--exclude-tag <tag...>`, `Skip evals carrying a tag`)
-      .option(
-        `--strict`,
-        `Fail the exit code when any score falls below its threshold`,
-      )
+      .option(`--strict`, `Fail the exit code when any score falls below its threshold`)
       .option(`--list`, `Print discovered evals without running them`)
       .option(`--timeout <ms>`, `Per-eval timeout in milliseconds`)
       .option(`--max-concurrency <n>`, `Max concurrent eval executions`)
@@ -570,12 +480,7 @@ You can also pass a bare URL, for example: eve dev https://example.com
       .option(`--skip-report`, `Skip eval-defined reporters (e.g. Braintrust)`)
       .option(`--verbose`, `Stream per-eval t.log lines to stdout`)
       .action(async (t, r) => {
-        await (n.runEvalCommand ?? (await loadRunEvalCommand()))(
-          t,
-          r,
-          e,
-          p.root,
-        );
+        await (n.runEvalCommand ?? (await loadRunEvalCommand()))(t, r, e, p.root);
       }),
     _
   );
@@ -584,9 +489,7 @@ async function runCli(e = process.argv.slice(2), t = console, r = {}) {
   let i = {
       root: resolveApplicationRoot(),
       async resolve() {
-        let e = await (
-          r.resolveApplicationProject ?? resolveCliApplicationProject
-        )(i.root);
+        let e = await (r.resolveApplicationProject ?? resolveCliApplicationProject)(i.root);
         ((i.project = e), (i.root = e.appRoot));
       },
     },
@@ -603,9 +506,7 @@ async function runCli(e = process.argv.slice(2), t = console, r = {}) {
       if (e.exitCode === 0) return;
       let n = await (r.isCodingAgentLaunch ?? isCodingAgentLaunch)();
       if (o[0] === `init` && n) {
-        let { initAgentInstructions: e } = await import(
-          `#cli/commands/agent-instructions.js`
-        );
+        let { initAgentInstructions: e } = await import(`#cli/commands/agent-instructions.js`);
         t.log(e());
       }
       throw Error(e.message);

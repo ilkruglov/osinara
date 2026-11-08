@@ -8,8 +8,7 @@ function extractLinearUploadImageReferences(e) {
       t = r.index;
     if (e === void 0 || t === void 0) continue;
     let i = parseLinearUploadUrl(e);
-    i !== null &&
-      n.push({ altText: r[1] ?? ``, end: t + r[0].length, start: t, url: i });
+    i !== null && n.push({ altText: r[1] ?? ``, end: t + r[0].length, start: t, url: i });
   }
   return n;
 }
@@ -25,9 +24,7 @@ async function attachLinearInboundImages(t) {
   }
   let i = t.fetch ?? fetch,
     a = await Promise.all(n.map((e) => fetchLinearUploadImage(e.url, r, i)));
-  return a.every((e) => e === null)
-    ? t.content
-    : buildLinearImageContent(t.content, n, a);
+  return a.every((e) => e === null) ? t.content : buildLinearImageContent(t.content, n, a);
 }
 function parseLinearUploadUrl(e) {
   let t;
@@ -36,9 +33,7 @@ function parseLinearUploadUrl(e) {
   } catch {
     return null;
   }
-  return t.origin !== `https://uploads.linear.app` ||
-    t.username !== `` ||
-    t.password !== ``
+  return t.origin !== `https://uploads.linear.app` || t.username !== `` || t.password !== ``
     ? null
     : t;
 }
@@ -73,12 +68,8 @@ function buildLinearImageContent(e, t, n) {
     a = [];
   for (let [o, s] of t.entries()) {
     let t = n[o];
-    t != null &&
-      ((i += e.slice(r, s.start)), (i += s.altText), (r = s.end), a.push(t));
+    t != null && ((i += e.slice(r, s.start)), (i += s.altText), (r = s.end), a.push(t));
   }
-  return (
-    (i += e.slice(r)),
-    i.trim().length === 0 ? a : [{ text: i, type: `text` }, ...a]
-  );
+  return ((i += e.slice(r)), i.trim().length === 0 ? a : [{ text: i, type: `text` }, ...a]);
 }
 export { attachLinearInboundImages, extractLinearUploadImageReferences };

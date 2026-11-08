@@ -1,13 +1,15 @@
 import type { ModelMessage, UserContent } from "ai";
 import type { StepInput } from "#harness/types.js";
-type StaleResponseConversion = {
-    readonly kind: "unchanged";
-    readonly stepInput?: StepInput;
-} | {
-    readonly displayMessage: string | UserContent;
-    readonly kind: "converted";
-    readonly stepInput: StepInput;
-};
+type StaleResponseConversion =
+  | {
+      readonly kind: "unchanged";
+      readonly stepInput?: StepInput;
+    }
+  | {
+      readonly displayMessage: string | UserContent;
+      readonly kind: "converted";
+      readonly stepInput: StepInput;
+    };
 /**
  * Filter pass: removes stale answers to session-limit continuation prompts
  * from the step input before any stale handling runs.
@@ -20,8 +22,8 @@ type StaleResponseConversion = {
  * pending continuation prompt pass through untouched.
  */
 export declare function dropStaleSessionLimitContinuationResponses(input: {
-    readonly pendingRequestIds: ReadonlySet<string>;
-    readonly stepInput?: StepInput;
+  readonly pendingRequestIds: ReadonlySet<string>;
+  readonly stepInput?: StepInput;
 }): StepInput | undefined;
 /**
  * Transformation pass: a response is stale when its request ID is not in
@@ -37,8 +39,8 @@ export declare function dropStaleSessionLimitContinuationResponses(input: {
  * stale continuation answers must never reach this conversion.
  */
 export declare function convertStaleResponsesToUserMessage(input: {
-    readonly history: readonly ModelMessage[];
-    readonly pendingRequestIds: ReadonlySet<string>;
-    readonly stepInput?: StepInput;
+  readonly history: readonly ModelMessage[];
+  readonly pendingRequestIds: ReadonlySet<string>;
+  readonly stepInput?: StepInput;
 }): StaleResponseConversion;
 export {};

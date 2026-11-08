@@ -48,9 +48,7 @@ export function resolveExternalGroupPolicyIdentity(auth: SessionAuth): {
   const caller = externalPolicyCaller(auth);
   const familyId = caller?.attributes.familyId;
   const groupId = caller?.attributes.groupId;
-  return typeof familyId === "string" && typeof groupId === "string"
-    ? { familyId, groupId }
-    : null;
+  return typeof familyId === "string" && typeof groupId === "string" ? { familyId, groupId } : null;
 }
 
 export function resolveExternalGroupToolPolicy(auth: SessionAuth): GroupToolPolicy {

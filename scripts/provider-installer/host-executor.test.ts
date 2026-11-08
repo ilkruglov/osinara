@@ -60,10 +60,11 @@ function input(overrides: Partial<InstallationExecutionInput> = {}): Installatio
 }
 
 function operations(events: string[]): HostInstallationOperations {
-  const event = <T>(name: string, result?: T) => vi.fn(async () => {
-    events.push(name);
-    return result as T;
-  });
+  const event = <T>(name: string, result?: T) =>
+    vi.fn(async () => {
+      events.push(name);
+      return result as T;
+    });
   return {
     acquireLock: event("lock", event("unlock")),
     assertCleanState: event("clean"),
@@ -98,8 +99,21 @@ describe("createHostInstallationExecutor", () => {
     });
 
     expect(events).toEqual([
-      "bundle", "prerequisites", "lock", "clean", "stage", "preflight", "pull",
-      "migration-marker", "application", "tls", "https", "bootstrap", "webhook", "commit", "unlock",
+      "bundle",
+      "prerequisites",
+      "lock",
+      "clean",
+      "stage",
+      "preflight",
+      "pull",
+      "migration-marker",
+      "application",
+      "tls",
+      "https",
+      "bootstrap",
+      "webhook",
+      "commit",
+      "unlock",
     ]);
     const staged = vi.mocked(ops.stage).mock.calls[0]?.[0];
     expect(Buffer.from(staged!.archive).equals(archive)).toBe(true);
@@ -117,9 +131,13 @@ describe("createHostInstallationExecutor", () => {
     expect(environment).toContain(
       "APP_DATABASE_URL='postgresql://osinara_app:app_database_secret_abcdefghijklmnopqrstuvwxyz@postgres:5432/osinara'\n",
     );
-    expect(environment).toContain("AGENT_INTERNAL_TOKEN='internal_token_abcdefghijklmnopqrstuvwxyz'\n");
+    expect(environment).toContain(
+      "AGENT_INTERNAL_TOKEN='internal_token_abcdefghijklmnopqrstuvwxyz'\n",
+    );
     expect(environment).not.toContain("TELEGRAM_WEBHOOK_IP_ADDRESS");
-    expect(ops.configureWebhook).toHaveBeenCalledWith(expect.objectContaining({ hostname: "8-8-8-8.sslip.io", ipAddress: null }));
+    expect(ops.configureWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ hostname: "8-8-8-8.sslip.io", ipAddress: null }),
+    );
     expect(environment).not.toContain("CLI_PROXY_API_KEY");
     expect(environment).not.toContain("MODEL_UPSTREAM_API_KEY");
     expect(JSON.parse(staged!.modelConfigBytes.toString("utf8"))).toMatchObject({
@@ -133,9 +151,12 @@ describe("createHostInstallationExecutor", () => {
     const ops = operations([]);
     await createHostInstallationExecutor(ops)({ ...input(), telegramWebhookIpAddress: "8.8.8.8" });
 
-    expect(vi.mocked(ops.stage).mock.calls[0]?.[0]?.environmentBytes.toString("utf8"))
-      .toContain("TELEGRAM_WEBHOOK_IP_ADDRESS='8.8.8.8'\n");
-    expect(ops.configureWebhook).toHaveBeenCalledWith(expect.objectContaining({ ipAddress: "8.8.8.8" }));
+    expect(vi.mocked(ops.stage).mock.calls[0]?.[0]?.environmentBytes.toString("utf8")).toContain(
+      "TELEGRAM_WEBHOOK_IP_ADDRESS='8.8.8.8'\n",
+    );
+    expect(ops.configureWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ ipAddress: "8.8.8.8" }),
+    );
   });
 
   it("removes attempt-created state when preflight fails before migration", async () => {
@@ -156,7 +177,9 @@ describe("createHostInstallationExecutor", () => {
     const ops = operations(events);
     vi.mocked(ops.assertCleanState).mockRejectedValue(new Error("existing installation"));
 
-    await expect(createHostInstallationExecutor(ops)(input())).rejects.toThrow("existing installation");
+    await expect(createHostInstallationExecutor(ops)(input())).rejects.toThrow(
+      "existing installation",
+    );
     expect(ops.stage).not.toHaveBeenCalled();
     expect(ops.rollbackPreparedState).not.toHaveBeenCalled();
   });

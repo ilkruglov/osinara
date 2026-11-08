@@ -16,11 +16,14 @@ describe("telegramIngressMaxConcurrentDrains", () => {
   });
 
   it("uses a configured positive integer", () => {
-    expect(telegramIngressMaxConcurrentDrains({ TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "10" })).toBe(10);
+    expect(
+      telegramIngressMaxConcurrentDrains({ TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "10" }),
+    ).toBe(10);
   });
 
   it.each(["0", "-1", "2.5", "ten", "", "101"])("rejects %j", (value) => {
-    expect(() => telegramIngressMaxConcurrentDrains({ TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: value }))
-      .toThrow(expect.objectContaining({ code: "AGENT_TELEGRAM_INGRESS_CONCURRENCY_INVALID" }));
+    expect(() =>
+      telegramIngressMaxConcurrentDrains({ TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: value }),
+    ).toThrow(expect.objectContaining({ code: "AGENT_TELEGRAM_INGRESS_CONCURRENCY_INVALID" }));
   });
 });

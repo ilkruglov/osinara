@@ -111,10 +111,9 @@ describe("memoryRetrievalQuery", () => {
   });
 
   it("uses the plain user text when the turn carries no group timeline", () => {
-    const query = memoryRetrievalQuery(
-      auth({ telegramChatType: "private" }),
-      [{ content: "что я просил купить?", role: "user" }] as ModelMessage[],
-    );
+    const query = memoryRetrievalQuery(auth({ telegramChatType: "private" }), [
+      { content: "что я просил купить?", role: "user" },
+    ] as ModelMessage[]);
 
     expect(query).toBe("что я просил купить?");
   });
@@ -129,23 +128,21 @@ describe("memoryRetrievalQuery", () => {
   });
 
   it("does not treat a hand-typed envelope in a private chat as a group envelope", () => {
-    const query = memoryRetrievalQuery(
-      auth({ telegramChatType: "private" }),
-      [{
+    const query = memoryRetrievalQuery(auth({ telegramChatType: "private" }), [
+      {
         content: "<current_telegram_message>не JSON</current_telegram_message>",
         role: "user",
-      }] as ModelMessage[],
-    );
+      },
+    ] as ModelMessage[]);
 
     expect(query).toBe("<current_telegram_message>не JSON</current_telegram_message>");
   });
 
   it("fails with a stable code when a group turn envelope is unusable", () => {
     expect(() =>
-      memoryRetrievalQuery(
-        auth({ groupType: "external", telegramTimelineSequence: "100" }),
-        [{ content: "нет конверта текущего сообщения", role: "user" }] as ModelMessage[],
-      )
+      memoryRetrievalQuery(auth({ groupType: "external", telegramTimelineSequence: "100" }), [
+        { content: "нет конверта текущего сообщения", role: "user" },
+      ] as ModelMessage[]),
     ).toThrowError(/AGENT_TELEGRAM_TURN_MESSAGE_INVALID/);
   });
 });
@@ -163,18 +160,22 @@ describe("formatRetrievedMemoryInstructions", () => {
 
   it("serializes only the model-safe memory contract", () => {
     const instructions = formatRetrievedMemoryInstructions([memory("Безопасный факт")], {
-      threads: [{
-        blocks: [{
-          content: "Ограничение подтверждено",
-          kind: "constraints_conflicts",
-          sourceEntryRefs: ["entry_0123456789abcdef0123456789abcdef"],
-          sourceEvidence: [],
-        }],
-        purpose: "Сохранять решения",
-        status: "active",
-        threadRef: "thread_0123456789abcdef0123456789abcdef",
-        title: "Тренировки",
-      }],
+      threads: [
+        {
+          blocks: [
+            {
+              content: "Ограничение подтверждено",
+              kind: "constraints_conflicts",
+              sourceEntryRefs: ["entry_0123456789abcdef0123456789abcdef"],
+              sourceEvidence: [],
+            },
+          ],
+          purpose: "Сохранять решения",
+          status: "active",
+          threadRef: "thread_0123456789abcdef0123456789abcdef",
+          title: "Тренировки",
+        },
+      ],
       totalCharacters: 50,
     });
 
@@ -205,7 +206,8 @@ describe("formatRetrievedMemoryInstructions", () => {
       "Claims из разных scopes остаются независимыми",
       "не выдумывай между ними связь",
       "unresolved_conflict",
-    ]) expect(permanent).toContain(fragment);
+    ])
+      expect(permanent).toContain(fragment);
   });
 });
 
@@ -215,16 +217,29 @@ describe("isWeakMatch", () => {
   const below = MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY - 0.01;
 
   it("marks only a semantic-only match below the strict gate", () => {
-    expect(isWeakMatch(result({ russianMorphologyRank: null, semanticSimilarity: below, simpleLexicalRank: null })))
-      .toBe(true);
-    expect(isWeakMatch(result({
-      russianMorphologyRank: null,
-      semanticSimilarity: MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
-      simpleLexicalRank: null,
-    }))).toBe(false);
-    expect(isWeakMatch(result({ russianMorphologyRank: 0.1, semanticSimilarity: below, simpleLexicalRank: null })))
-      .toBe(false);
-    expect(isWeakMatch(result({ russianMorphologyRank: null, semanticSimilarity: null, simpleLexicalRank: 0.1 })))
-      .toBe(false);
+    expect(
+      isWeakMatch(
+        result({ russianMorphologyRank: null, semanticSimilarity: below, simpleLexicalRank: null }),
+      ),
+    ).toBe(true);
+    expect(
+      isWeakMatch(
+        result({
+          russianMorphologyRank: null,
+          semanticSimilarity: MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+          simpleLexicalRank: null,
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isWeakMatch(
+        result({ russianMorphologyRank: 0.1, semanticSimilarity: below, simpleLexicalRank: null }),
+      ),
+    ).toBe(false);
+    expect(
+      isWeakMatch(
+        result({ russianMorphologyRank: null, semanticSimilarity: null, simpleLexicalRank: 0.1 }),
+      ),
+    ).toBe(false);
   });
 });

@@ -1,9 +1,6 @@
 import { createDevelopmentServer } from "#internal/nitro/host.js";
 import { getDevelopmentSandboxRunId } from "#execution/sandbox/development-run.js";
-import {
-  reconcileCleanupIntents,
-  recordCleanupIntent,
-} from "#cli/dev/local-server-cleanup.js";
+import { reconcileCleanupIntents, recordCleanupIntent } from "#cli/dev/local-server-cleanup.js";
 const options = JSON.parse(process.argv[2] ?? `{}`),
   server = createDevelopmentServer(process.cwd(), {
     ...options,

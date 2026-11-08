@@ -51,10 +51,15 @@ export interface TelegramWebhookCallOptions {
 }
 
 export function boundedTelegramFetch(options: TelegramWebhookCallOptions): typeof fetch {
-  return withRequestTimeout(options.fetch ?? fetch, options.timeoutMilliseconds ?? TELEGRAM_API_REQUEST_TIMEOUT_MS);
+  return withRequestTimeout(
+    options.fetch ?? fetch,
+    options.timeoutMilliseconds ?? TELEGRAM_API_REQUEST_TIMEOUT_MS,
+  );
 }
 
-export async function readTelegramWebhookInfo(options: TelegramWebhookCallOptions): Promise<TelegramWebhookInfo> {
+export async function readTelegramWebhookInfo(
+  options: TelegramWebhookCallOptions,
+): Promise<TelegramWebhookInfo> {
   let response;
   try {
     response = await callTelegramApi({
@@ -63,7 +68,10 @@ export async function readTelegramWebhookInfo(options: TelegramWebhookCallOption
       method: "getWebhookInfo",
     });
   } catch {
-    throw new AppError("AGENT_TELEGRAM_WEBHOOK_INFO_UNAVAILABLE", "Не удалось связаться с Telegram для проверки вебхука");
+    throw new AppError(
+      "AGENT_TELEGRAM_WEBHOOK_INFO_UNAVAILABLE",
+      "Не удалось связаться с Telegram для проверки вебхука",
+    );
   }
   if (!response.ok) {
     throw new AppError(
@@ -73,7 +81,10 @@ export async function readTelegramWebhookInfo(options: TelegramWebhookCallOption
   }
   const answer = webhookInfoAnswerSchema.safeParse(response.body);
   if (!answer.success) {
-    throw new AppError("AGENT_TELEGRAM_WEBHOOK_INFO_INVALID", "Telegram вернул некорректные сведения о вебхуке");
+    throw new AppError(
+      "AGENT_TELEGRAM_WEBHOOK_INFO_INVALID",
+      "Telegram вернул некорректные сведения о вебхуке",
+    );
   }
   const info = answer.data.result;
   return {

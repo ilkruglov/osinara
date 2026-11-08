@@ -74,9 +74,16 @@ async function runnerUrl(engine: SandboxEngine): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) =>
-    new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-  ));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map(
+        (server) =>
+          new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          ),
+      ),
+  );
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
@@ -165,10 +172,12 @@ describe("scopedWorkspaceRunner", () => {
       mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
       seedDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
-      seedFiles: [{
-        contentBase64: Buffer.from("skill").toString("base64"),
-        path: "/tools/personal/home/.agents/skills/example/SKILL.md",
-      }],
+      seedFiles: [
+        {
+          contentBase64: Buffer.from("skill").toString("base64"),
+          path: "/tools/personal/home/.agents/skills/example/SKILL.md",
+        },
+      ],
     });
     expect(handle.session.id).toBe(SANDBOX_SESSION_ID);
     await handle.stop();
@@ -197,7 +206,9 @@ describe("scopedWorkspaceRunner", () => {
     });
 
     await handle.session.run({ command: "true" });
-    expect(engine.createSession).toHaveBeenCalledWith(expect.objectContaining({ access: "restricted" }));
+    expect(engine.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ access: "restricted" }),
+    );
     await expect(handle.session.setNetworkPolicy("allow-all")).rejects.toThrowError(
       /AGENT_SANDBOX_RUNNER_NETWORK_POLICY_FORBIDDEN/,
     );
@@ -273,7 +284,14 @@ describe("scopedWorkspaceRunner", () => {
     // The file is immutable (its key carries the content hash); a second session must be served
     // from the process-wide copy rather than parse the multi-megabyte JSON again.
     await writeFile(
-      join(appRoot, ".eve", "sandbox-cache", "osinara-scoped-runner", "templates", `${templateKey}.json`),
+      join(
+        appRoot,
+        ".eve",
+        "sandbox-cache",
+        "osinara-scoped-runner",
+        "templates",
+        `${templateKey}.json`,
+      ),
       "not json",
     );
     vi.mocked(engine.createSession).mockClear();
@@ -288,12 +306,16 @@ describe("scopedWorkspaceRunner", () => {
       sandboxSessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     });
     await second.session.run({ command: "printf second" });
-    expect(engine.createSession).toHaveBeenLastCalledWith(expect.objectContaining({
-      seedFiles: [{
-        contentBase64: Buffer.from("skill").toString("base64"),
-        path: "/tools/personal/home/.agents/skills/example/SKILL.md",
-      }],
-    }));
+    expect(engine.createSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        seedFiles: [
+          {
+            contentBase64: Buffer.from("skill").toString("base64"),
+            path: "/tools/personal/home/.agents/skills/example/SKILL.md",
+          },
+        ],
+      }),
+    );
   });
 
   it("shares one template read between sessions created at the same time", async () => {
@@ -307,25 +329,40 @@ describe("scopedWorkspaceRunner", () => {
       seedFiles: [{ content: "skill", path: "$HOME/.agents/skills/example/SKILL.md" }],
       templateKey,
     });
-    const path = join(appRoot, ".eve", "sandbox-cache", "osinara-scoped-runner", "templates", `${templateKey}.json`);
+    const path = join(
+      appRoot,
+      ".eve",
+      "sandbox-cache",
+      "osinara-scoped-runner",
+      "templates",
+      `${templateKey}.json`,
+    );
     vi.mocked(readFile).mockClear();
-    const handles = await Promise.all(Array.from({ length: 20 }, (_, index) => backend.create({
-      runtimeContext: { appRoot },
-      sessionKey: `${BACKEND_SESSION_ID}-${index}`,
-      templateKey,
-      tags: { sessionId: SESSION_ID },
-    })));
+    const handles = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        backend.create({
+          runtimeContext: { appRoot },
+          sessionKey: `${BACKEND_SESSION_ID}-${index}`,
+          templateKey,
+          tags: { sessionId: SESSION_ID },
+        }),
+      ),
+    );
     // Twenty creates after a start used to read the file twenty times and keep twenty copies.
     expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === path)).toHaveLength(1);
-    await Promise.all(handles.map(async (handle, index) => {
-      await handle.useSessionFn({
-        mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
-        sandboxSessionId: `cccccccc-cccc-4ccc-8ccc-${String(index).padStart(12, "0")}`,
-      });
-      await handle.session.run({ command: "printf shared" });
-    }));
-    const seeds = vi.mocked(engine.createSession).mock.calls
-      .map(([request]) => request.seedFiles).filter((files) => files !== undefined);
+    await Promise.all(
+      handles.map(async (handle, index) => {
+        await handle.useSessionFn({
+          mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
+          sandboxSessionId: `cccccccc-cccc-4ccc-8ccc-${String(index).padStart(12, "0")}`,
+        });
+        await handle.session.run({ command: "printf shared" });
+      }),
+    );
+    const seeds = vi
+      .mocked(engine.createSession)
+      .mock.calls.map(([request]) => request.seedFiles)
+      .filter((files) => files !== undefined);
     expect(seeds).toHaveLength(20);
     expect(new Set(seeds.map((files) => files?.[0]?.contentBase64))).toEqual(
       new Set([Buffer.from("skill").toString("base64")]),

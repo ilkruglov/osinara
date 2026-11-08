@@ -97,16 +97,20 @@ export async function verifyGroupTrustZoneRecreation(f: SessionOwnerFixture): Pr
       retired_at: expect.any(Date),
     },
   ]);
-  await expect(database().query(
-    `SELECT 1 FROM conversation_session_routes
+  await expect(
+    database().query(
+      `SELECT 1 FROM conversation_session_routes
       WHERE session_id = ANY($1::uuid[])`,
-    [[old.id, active.id]],
-  )).resolves.toMatchObject({ rowCount: 0 });
-  await expect(database().query(
-    `SELECT 1 FROM conversation_sessions
+      [[old.id, active.id]],
+    ),
+  ).resolves.toMatchObject({ rowCount: 0 });
+  await expect(
+    database().query(
+      `SELECT 1 FROM conversation_sessions
       WHERE id = $1 AND retired_at IS NOT NULL AND task_state = 'failed'`,
-    [scheduled.rows[0]!.id],
-  )).resolves.toMatchObject({ rowCount: 1 });
+      [scheduled.rows[0]!.id],
+    ),
+  ).resolves.toMatchObject({ rowCount: 1 });
 
   // Re-registering the Telegram chat creates a new trust zone and sandbox generation.
   const replacementGroup = await database().query<{ id: string }>(
@@ -159,7 +163,7 @@ export async function verifyMonotonicGroupTimelineCursor(f: SessionOwnerFixture)
   ).resolves.toBeNull();
   await groupTimelineCursorRepository.advance(session.id, "wrun_cursor", "10");
   await groupTimelineCursorRepository.advance(session.id, "wrun_cursor", "8");
-  await expect(
-    groupTimelineCursorRepository.currentGroupTimelineCursor(session.id),
-  ).resolves.toBe("10");
+  await expect(groupTimelineCursorRepository.currentGroupTimelineCursor(session.id)).resolves.toBe(
+    "10",
+  );
 }

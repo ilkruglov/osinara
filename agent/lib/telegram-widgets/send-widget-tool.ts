@@ -27,23 +27,35 @@ import { AppError } from "../app-error.js";
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import { turnKey } from "../model-facing-tool.js";
-import { applicationSessionId, registerTelegramMessageRoutes } from "../sessions/session-context.js";
+import {
+  applicationSessionId,
+  registerTelegramMessageRoutes,
+} from "../sessions/session-context.js";
 import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
 import { TELEGRAM_SILENT_DIRECTIVE } from "../telegram-progress.js";
-import { requireTelegramDeliveryTarget, requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
+import {
+  requireTelegramDeliveryTarget,
+  requireWorkspaceAuthorization,
+} from "../workspaces/workspace-context.js";
 import { workspaceFileDeliveryRepository } from "../workspaces/workspace-file-delivery-repository.js";
 import { requireTelegramWidgetSize } from "./telegram-widget-limits.js";
 import { lintTelegramWidget } from "./telegram-widget-lint.js";
 import { sendTelegramWidget } from "./telegram-widget-send.js";
 
-const CAPTION_SENT_NOTE =
-  `Подпись уже в чате вместе с виджетом. В следующем сообщении пиши только то, чего нет ни в карточке, ни в подписи, без «Готово» и без пересказа карточки; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
+const CAPTION_SENT_NOTE = `Подпись уже в чате вместе с виджетом. В следующем сообщении пиши только то, чего нет ни в карточке, ни в подписи, без «Готово» и без пересказа карточки; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
 // A scheduled run is completed only by its final text (`channels/telegram.ts`): no silence there.
 const SCHEDULED_CAPTION_SENT_NOTE =
   "Подпись уже в чате вместе с виджетом. Итоговое сообщение расписания обязательно: напиши коротко то, чего нет ни в карточке, ни в подписи, без «Готово» и без пересказа карточки.";
 
 function refused(code: string, reason: string, correction: string): ModelFacingError {
-  return new ModelFacingError({ category: "input", code, correction, reason, retryable: true, sideEffectStatus: "not_started" });
+  return new ModelFacingError({
+    category: "input",
+    code,
+    correction,
+    reason,
+    retryable: true,
+    sideEffectStatus: "not_started",
+  });
 }
 
 function telegramDescription(body: unknown): string {
@@ -60,20 +72,39 @@ export const sendWidgetTool = defineTool({
     "Результат: delivered=true, telegramMessageId, size, links (все адреса, которые открывает карточка) и warnings (что Telegram выбросит); alreadySent=true значит, что эти байты уже ушли на этом ходе.",
     "Ошибка AGENT_TELEGRAM_WIDGET_TOO_LARGE или AGENT_TELEGRAM_WIDGET_INVALID: исправь файл и отправь заново. При sideEffectStatus completed или unknown повторно не отправляй.",
   ].join(" "),
-  inputSchema: z.object({
-    caption: z.string().trim().min(1).max(1_024).describe("Короткий итог карточки одной строкой"),
-    path: z.string().min(1).max(512).describe("Относительный путь к .html внутри scope, например widgets/day.html"),
-    scope: z.enum(["personal", "family", "group"]).describe("Workspace, относительно которого задан path"),
-  }).strict(),
+  inputSchema: z
+    .object({
+      caption: z.string().trim().min(1).max(1_024).describe("Короткий итог карточки одной строкой"),
+      path: z
+        .string()
+        .min(1)
+        .max(512)
+        .describe("Относительный путь к .html внутри scope, например widgets/day.html"),
+      scope: z
+        .enum(["personal", "family", "group"])
+        .describe("Workspace, относительно которого задан path"),
+    })
+    .strict(),
   async execute(input, ctx) {
     const auth = requireWorkspaceAuthorization(ctx);
     const target = requireTelegramDeliveryTarget(ctx);
     const forumTopicId = ctx.session.auth.current?.attributes.telegramForumTopicId;
-    if (forumTopicId !== undefined && (typeof forumTopicId !== "string" || !/^[1-9][0-9]*$/u.test(forumTopicId))) {
-      throw new AppError("AGENT_TELEGRAM_FORUM_TOPIC_INVALID", "Не удалось определить тему для истории отправленного виджета");
+    if (
+      forumTopicId !== undefined &&
+      (typeof forumTopicId !== "string" || !/^[1-9][0-9]*$/u.test(forumTopicId))
+    ) {
+      throw new AppError(
+        "AGENT_TELEGRAM_FORUM_TOPIC_INVALID",
+        "Не удалось определить тему для истории отправленного виджета",
+      );
     }
     const reservation = await workspaceFileDeliveryRepository.begin(auth, {
-      ...target, operationKey: ctx.callId, path: input.path, presentation: "widget", scope: input.scope, turnId: turnKey(ctx),
+      ...target,
+      operationKey: ctx.callId,
+      path: input.path,
+      presentation: "widget",
+      scope: input.scope,
+      turnId: turnKey(ctx),
     });
 
     /** The card as the group's message: in the journal and bound for replies. Never throws. */
@@ -87,18 +118,29 @@ export const sendWidgetTool = defineTool({
           deliveredAt: new Date(),
           groupId: auth.groupId,
           messageThreadId: forumTopicId ?? null,
-          replyToEntryId: typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId === "string"
-            ? ctx.session.auth.current.attributes.telegramTimelineEntryId
-            : null,
+          replyToEntryId:
+            typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId === "string"
+              ? ctx.session.auth.current.attributes.telegramTimelineEntryId
+              : null,
           telegramMessageIds: [messageId],
         });
         await registerTelegramMessageRoutes({
-          applicationSessionId: sessionId, chatId: target.chatId, messageIds: [messageId],
-          ...(target.messageThreadId === undefined ? {} : { messageThreadId: target.messageThreadId }),
+          applicationSessionId: sessionId,
+          chatId: target.chatId,
+          messageIds: [messageId],
+          ...(target.messageThreadId === undefined
+            ? {}
+            : { messageThreadId: target.messageThreadId }),
         });
         return true;
       } catch (error) {
-        console.error(JSON.stringify({ code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED", error: error instanceof Error ? error.message : String(error), telegramMessageId: messageId }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED",
+            error: error instanceof Error ? error.message : String(error),
+            telegramMessageId: messageId,
+          }),
+        );
         return false;
       }
     };
@@ -136,62 +178,102 @@ export const sendWidgetTool = defineTool({
     let lint: ReturnType<typeof lintTelegramWidget>;
     try {
       if (!/html/iu.test(reservation.file.mediaType) && !/\.html?$/iu.test(reservation.file.path)) {
-        throw refused("AGENT_TELEGRAM_WIDGET_NOT_HTML", `Файл ${reservation.file.path} не HTML (${reservation.file.mediaType})`,
-          "Сохрани карточку в файл .html и передай его path.");
+        throw refused(
+          "AGENT_TELEGRAM_WIDGET_NOT_HTML",
+          `Файл ${reservation.file.path} не HTML (${reservation.file.mediaType})`,
+          "Сохрани карточку в файл .html и передай его path.",
+        );
       }
       try {
         size = requireTelegramWidgetSize(html);
       } catch (error) {
-        throw refused("AGENT_TELEGRAM_WIDGET_TOO_LARGE", error instanceof Error ? error.message.replace(/^AGENT_TELEGRAM_WIDGET_TOO_LARGE:\s*/u, "") : String(error),
-          "Ужми карточку: убери вшитые картинки, повторяющиеся инлайн-стили замени классами, сократи строки и данные; затем отправь заново.");
+        throw refused(
+          "AGENT_TELEGRAM_WIDGET_TOO_LARGE",
+          error instanceof Error
+            ? error.message.replace(/^AGENT_TELEGRAM_WIDGET_TOO_LARGE:\s*/u, "")
+            : String(error),
+          "Ужми карточку: убери вшитые картинки, повторяющиеся инлайн-стили замени классами, сократи строки и данные; затем отправь заново.",
+        );
       }
       lint = lintTelegramWidget(html, { allowLinks: auth.groupType !== "external" });
       if (lint.errors.length > 0) {
-        throw refused("AGENT_TELEGRAM_WIDGET_INVALID", lint.errors.join("; "), "Исправь перечисленное в файле и отправь заново.");
+        throw refused(
+          "AGENT_TELEGRAM_WIDGET_INVALID",
+          lint.errors.join("; "),
+          "Исправь перечисленное в файле и отправь заново.",
+        );
       }
     } catch (error) {
-      await workspaceFileDeliveryRepository.fail(ctx.callId, error instanceof ModelFacingError ? error.code : "AGENT_TELEGRAM_WIDGET_INVALID");
+      await workspaceFileDeliveryRepository.fail(
+        ctx.callId,
+        error instanceof ModelFacingError ? error.code : "AGENT_TELEGRAM_WIDGET_INVALID",
+      );
       throw error;
     }
 
     const unknownOutcome = (detail: string): AppError => {
       // The request may have reached Telegram: the row stays started, so a retry reports ambiguity.
-      console.error(JSON.stringify({ code: "AGENT_TELEGRAM_WIDGET_SEND_UNKNOWN", error: detail.slice(0, 200) }));
-      return new AppError("AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
-        "Отправка виджета начата, но её результат не подтверждён. Проверьте чат перед новым запросом");
+      console.error(
+        JSON.stringify({ code: "AGENT_TELEGRAM_WIDGET_SEND_UNKNOWN", error: detail.slice(0, 200) }),
+      );
+      return new AppError(
+        "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
+        "Отправка виджета начата, но её результат не подтверждён. Проверьте чат перед новым запросом",
+      );
     };
     let sent: Awaited<ReturnType<typeof sendTelegramWidget>>;
     try {
       sent = await sendTelegramWidget({
-        caption: input.caption, chatId: target.chatId, html,
-        messageThreadId: target.messageThreadId === undefined ? null : String(target.messageThreadId),
+        caption: input.caption,
+        chatId: target.chatId,
+        html,
+        messageThreadId:
+          target.messageThreadId === undefined ? null : String(target.messageThreadId),
       });
     } catch (error) {
       throw unknownOutcome(error instanceof Error ? error.message : String(error));
     }
-    if (!sent.ok && sent.ambiguous) throw unknownOutcome(`HTTP ${sent.status} ${telegramDescription(sent.body)}`);
+    if (!sent.ok && sent.ambiguous)
+      throw unknownOutcome(`HTTP ${sent.status} ${telegramDescription(sent.body)}`);
     if (!sent.ok) {
       await workspaceFileDeliveryRepository.fail(ctx.callId, "AGENT_TELEGRAM_WIDGET_REJECTED");
       throw new ModelFacingError({
-        category: "dependency", code: "AGENT_TELEGRAM_WIDGET_REJECTED",
-        correction: "Если Telegram назвал ошибку разметки, исправь файл; иначе не повторяй и скажи, что карточка не отправилась.",
+        category: "dependency",
+        code: "AGENT_TELEGRAM_WIDGET_REJECTED",
+        correction:
+          "Если Telegram назвал ошибку разметки, исправь файл; иначе не повторяй и скажи, что карточка не отправилась.",
         reason: `Telegram отклонил виджет: HTTP ${sent.status}, ${telegramDescription(sent.body)}`,
-        retryable: false, sideEffectStatus: "not_started",
+        retryable: false,
+        sideEffectStatus: "not_started",
       });
     }
     try {
       await workspaceFileDeliveryRepository.complete(ctx.callId, sent.messageId);
     } catch (error) {
-      console.error(JSON.stringify({ code: "AGENT_WORKSPACE_FILE_COMPLETION_FAILED", error: error instanceof Error ? error.message : String(error), telegramMessageId: sent.messageId }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_WORKSPACE_FILE_COMPLETION_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+          telegramMessageId: sent.messageId,
+        }),
+      );
     }
     const projectionCompleted = await project(sent.messageId);
-    console.info(JSON.stringify({
-      bytes: size.bytes, code: "AGENT_TELEGRAM_WIDGET_SENT", compressedBytes: size.compressedBytes,
-      links: lint.links.length, telegramMessageId: sent.messageId, warnings: lint.warnings.length,
-    }));
+    console.info(
+      JSON.stringify({
+        bytes: size.bytes,
+        code: "AGENT_TELEGRAM_WIDGET_SENT",
+        compressedBytes: size.compressedBytes,
+        links: lint.links.length,
+        telegramMessageId: sent.messageId,
+        warnings: lint.warnings.length,
+      }),
+    );
     return {
       alreadySent: false,
-      caption_already_sent: isScheduledSession(ctx) ? SCHEDULED_CAPTION_SENT_NOTE : CAPTION_SENT_NOTE,
+      caption_already_sent: isScheduledSession(ctx)
+        ? SCHEDULED_CAPTION_SENT_NOTE
+        : CAPTION_SENT_NOTE,
       delivered: true,
       links: lint.links,
       path: reservation.file.path,
@@ -215,9 +297,15 @@ export const EXTERNAL_SEND_WIDGET_PRESENTATION = {
     "Перед первым виджетом загрузи навык telegram-widgets. Карточка без ссылок: здесь любой адрес в ней считается ошибкой.",
     "Вход: path относительно group scope, например widgets/top.html, и caption, то есть итог карточки одной строкой. Результат delivered=true подтверждает отправку.",
   ].join(" "),
-  inputSchema: z.object({
-    caption: z.string().trim().min(1).max(1_024).describe("Короткий итог карточки одной строкой"),
-    path: z.string().min(1).max(512).describe("Относительный путь к .html внутри group workspace"),
-    scope: z.literal("group").describe("Workspace текущей внешней группы"),
-  }).strict(),
+  inputSchema: z
+    .object({
+      caption: z.string().trim().min(1).max(1_024).describe("Короткий итог карточки одной строкой"),
+      path: z
+        .string()
+        .min(1)
+        .max(512)
+        .describe("Относительный путь к .html внутри group workspace"),
+      scope: z.literal("group").describe("Workspace текущей внешней группы"),
+    })
+    .strict(),
 };

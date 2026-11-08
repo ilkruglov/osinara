@@ -17,27 +17,22 @@ export type MemoryConfirmation = "model_high" | "user_confirmed";
 export type MemorySensitivity = "normal" | "sensitive";
 export type MemoryEmbeddingStatus = "failed" | "indexed" | "pending";
 export type MemoryThreadEntryRole =
-  | "constraint"
-  | "decision"
-  | "episode"
-  | "goal"
-  | "lesson"
-  | "method"
-  | "open_loop"
-  | "outcome";
+  "constraint" | "decision" | "episode" | "goal" | "lesson" | "method" | "open_loop" | "outcome";
 
-export type CreateMemoryThreadInput = {
-  action: "attach";
-  role: MemoryThreadEntryRole;
-  threadRef: string;
-} | {
-  action: "create";
-  identity?: "project" | "subject";
-  parentThreadRef?: string;
-  purpose: string;
-  role: MemoryThreadEntryRole;
-  title: string;
-};
+export type CreateMemoryThreadInput =
+  | {
+      action: "attach";
+      role: MemoryThreadEntryRole;
+      threadRef: string;
+    }
+  | {
+      action: "create";
+      identity?: "project" | "subject";
+      parentThreadRef?: string;
+      purpose: string;
+      role: MemoryThreadEntryRole;
+      title: string;
+    };
 
 export interface MemoryThreadWriteResult {
   action: "attached" | "created";
@@ -168,14 +163,16 @@ export function memoryOperationHash(value: unknown): string {
 }
 
 export function normalizeMemoryClaimContent(content: string): string {
-  return content
-    .normalize("NFKC")
-    .toLocaleLowerCase("ru-RU")
-    // A sign before a number and a percent are meaning, not punctuation: "-18 °C" is not "18 °C".
-    .replace(/[-−–](?=\s*\d)/gu, " минус ")
-    .replace(/\+(?=\s*\d)/gu, " плюс ")
-    .replace(/%/gu, " процентов ")
-    .replace(/[\p{P}\p{S}]+/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
+  return (
+    content
+      .normalize("NFKC")
+      .toLocaleLowerCase("ru-RU")
+      // A sign before a number and a percent are meaning, not punctuation: "-18 °C" is not "18 °C".
+      .replace(/[-−–](?=\s*\d)/gu, " минус ")
+      .replace(/\+(?=\s*\d)/gu, " плюс ")
+      .replace(/%/gu, " процентов ")
+      .replace(/[\p{P}\p{S}]+/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim()
+  );
 }

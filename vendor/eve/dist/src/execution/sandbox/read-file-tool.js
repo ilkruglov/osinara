@@ -5,10 +5,7 @@ import {
   normalizeModelPath,
   setReadFileStamp,
 } from "#runtime/framework-tools/file-state.js";
-import {
-  MAX_OUTPUT_BYTES,
-  capLineLength,
-} from "#execution/sandbox/truncate-output.js";
+import { MAX_OUTPUT_BYTES, capLineLength } from "#execution/sandbox/truncate-output.js";
 import { resolveAbsoluteFilePath } from "#execution/sandbox/require-sandbox.js";
 async function executeReadFileOnSandbox(r, i) {
   let { filePath: a, offset: o, limit: s } = i,
@@ -19,9 +16,7 @@ async function executeReadFileOnSandbox(r, i) {
   if (u < 1) throw Error(`offset must be >= 1. Received: ${u}.`);
   let f = await r.readTextFile({ path: c });
   if (f === null)
-    throw Error(
-      `File not found: ${a}. Verify the path exists and is accessible in the sandbox.`,
-    );
+    throw Error(`File not found: ${a}. Verify the path exists and is accessible in the sandbox.`);
   if (f.includes(`\0`))
     throw Error(
       `File "${a}" contains NUL bytes and appears to be a binary file. read_file only supports text files.`,
@@ -34,8 +29,7 @@ async function executeReadFileOnSandbox(r, i) {
       throw Error(
         `offset ${u} is past the end of the file (0 lines). Use the default offset to read an empty file.`,
       );
-  } else if (u > m)
-    throw Error(`offset ${u} is past the end of the file (${m} lines).`);
+  } else if (u > m) throw Error(`offset ${u} is past the end of the file (${m} lines).`);
   let h = createReadFileStamp({ content: f, filePath: l }),
     g = buildReadFileTargetKey(l);
   if ((setReadFileStamp(loadContext(), g, h), m === 0))

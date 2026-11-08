@@ -88,8 +88,9 @@ describe("boundSettledPrompt", () => {
       const bounded = boundSettledPrompt(emoji, limit);
       expect(bounded.length).toBeLessThanOrEqual(limit);
       // Одиночный суррогат Telegram отвергнет, и решённое окно останется со старыми кнопками.
-      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u
-        .test(bounded)).toBe(false);
+      expect(
+        /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(bounded),
+      ).toBe(false);
     }
   });
 });

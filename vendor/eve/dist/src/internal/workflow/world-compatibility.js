@@ -1,8 +1,6 @@
 const WORKFLOW_COMPATIBILITY_PACKAGES = [`@workflow/core`, `@workflow/world`];
 function parseVersionLine(e) {
-  let t = /(\d+)\.(?:\d+|x|\*)(?:\.(?:\d+|x|\*))?(?:-([0-9A-Za-z.-]+))?/.exec(
-    e.trim(),
-  );
+  let t = /(\d+)\.(?:\d+|x|\*)(?:\.(?:\d+|x|\*))?(?:-([0-9A-Za-z.-]+))?/.exec(e.trim());
   if (t === null) return;
   let n = Number(t[1]);
   if (!Number.isInteger(n)) return;
@@ -12,8 +10,7 @@ function parseVersionLine(e) {
 function readDeclaredWorkflowDependency(t) {
   for (let n of WORKFLOW_COMPATIBILITY_PACKAGES) {
     let e = t.dependencies?.[n] ?? t.peerDependencies?.[n];
-    if (typeof e == `string` && e.trim().length > 0)
-      return { packageName: n, range: e };
+    if (typeof e == `string` && e.trim().length > 0) return { packageName: n, range: e };
   }
 }
 function isDefiniteLineMismatch(e, t) {

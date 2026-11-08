@@ -18,8 +18,7 @@ import { prepareDevelopmentWorkspaceExtensions } from "#internal/nitro/host/dev-
 async function prepareDevelopmentApplicationHost(a, o = {}) {
   let s = { appRoot: a };
   (o.changedPaths !== void 0 && (s.changedPaths = o.changedPaths),
-    o.previousExtensions !== void 0 &&
-      (s.previousExtensions = o.previousExtensions));
+    o.previousExtensions !== void 0 && (s.previousExtensions = o.previousExtensions));
   let c = await prepareDevelopmentWorkspaceExtensions(s),
     l = await createDevelopmentHostWorkspace(a),
     u;
@@ -57,11 +56,9 @@ async function prepareDevelopmentApplicationHost(a, o = {}) {
       e.status === `rejected` ? [e.reason] : [],
     );
     throw i.length > 0
-      ? AggregateError(
-          [e, ...i],
-          `Failed to prepare and discard a development host candidate.`,
-          { cause: e },
-        )
+      ? AggregateError([e, ...i], `Failed to prepare and discard a development host candidate.`, {
+          cause: e,
+        })
       : e;
   }
 }

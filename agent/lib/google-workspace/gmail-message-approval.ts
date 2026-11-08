@@ -8,7 +8,10 @@ import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 import { clipText, flattenDisplayText } from "../display-text.js";
-import type { GoogleIntegrationAuthorization, GoogleIntegrationScope } from "./google-integration-contract.js";
+import type {
+  GoogleIntegrationAuthorization,
+  GoogleIntegrationScope,
+} from "./google-integration-contract.js";
 import { runGoogleWorkspaceCommand } from "./google-workspace-command-runner.js";
 import { resolveGoogleWorkspaceAuthorization } from "./google-workspace-context.js";
 import { withAuthorizedGoogleWorkspaceExecution } from "./google-workspace-executor.js";
@@ -18,12 +21,18 @@ const GMAIL_SNIPPET_MAX_CHARACTERS = 240;
 
 const gmailMessageResponseSchema = z.looseObject({
   id: z.string().min(1),
-  payload: z.looseObject({
-    headers: z.array(z.looseObject({
-      name: z.string(),
-      value: z.string(),
-    })).optional(),
-  }).optional(),
+  payload: z
+    .looseObject({
+      headers: z
+        .array(
+          z.looseObject({
+            name: z.string(),
+            value: z.string(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   snippet: z.string().optional(),
 });
 
@@ -51,10 +60,7 @@ interface GmailMessageApprovalDependencies {
   ): ReturnType<typeof runGoogleWorkspaceCommand>;
   withAuthorizedExecution<T>(
     auth: GoogleIntegrationAuthorization,
-    operation: (
-      accessToken: string,
-      profile: GoogleWorkspaceExecutionProfile,
-    ) => Promise<T>,
+    operation: (accessToken: string, profile: GoogleWorkspaceExecutionProfile) => Promise<T>,
   ): Promise<T>;
 }
 
@@ -99,9 +105,8 @@ function responseSubject(
     );
   }
   const headers = parsed.data.payload?.headers ?? [];
-  const header = (name: string) => readable(
-    headers.find((item) => item.name.toLowerCase() === name)?.value,
-  );
+  const header = (name: string) =>
+    readable(headers.find((item) => item.name.toLowerCase() === name)?.value);
   return {
     date: header("date"),
     from: header("from"),
@@ -114,9 +119,7 @@ function responseSubject(
   };
 }
 
-export function createGmailMessageApprovalLoader(
-  dependencies: GmailMessageApprovalDependencies,
-) {
+export function createGmailMessageApprovalLoader(dependencies: GmailMessageApprovalDependencies) {
   return async function loadGmailMessageApproval(
     messageId: string,
     expectedProfileRef: string,
@@ -130,19 +133,25 @@ export function createGmailMessageApprovalLoader(
           "Подключённый Google-профиль изменился после выбора письма. Повторите запрос",
         );
       }
-      const result = await dependencies.run([
-        "gmail",
-        "users",
-        "messages",
-        "get",
-        "--params",
-        JSON.stringify({
-          format: "metadata",
-          id: messageId,
-          metadataHeaders: ["From", "Subject", "Date"],
-          userId: "me",
-        }),
-      ], "read", auth, accessToken, { abortSignal: new AbortController().signal });
+      const result = await dependencies.run(
+        [
+          "gmail",
+          "users",
+          "messages",
+          "get",
+          "--params",
+          JSON.stringify({
+            format: "metadata",
+            id: messageId,
+            metadataHeaders: ["From", "Subject", "Date"],
+            userId: "me",
+          }),
+        ],
+        "read",
+        auth,
+        accessToken,
+        { abortSignal: new AbortController().signal },
+      );
       return responseSubject(messageId, profile, auth.scope, result.stdout);
     });
   };

@@ -1,11 +1,7 @@
 import { isObject } from "#shared/guards.js";
 import { deref, isArray } from "#runtime/connections/openapi-schema.js";
 function resolveSecurity(r, i) {
-  let a = isArray(i.security)
-    ? i.security
-    : isArray(r.security)
-      ? r.security
-      : void 0;
+  let a = isArray(i.security) ? i.security : isArray(r.security) ? r.security : void 0;
   if (a === void 0 || a.length === 0) return;
   let o = getSecuritySchemes(r);
   if (o !== void 0)
@@ -38,13 +34,11 @@ function mapSecurityScheme(e) {
       : void 0;
   }
   if (e.type === `http`)
-    return (typeof e.scheme == `string` ? e.scheme.toLowerCase() : ``) ===
-      `basic`
+    return (typeof e.scheme == `string` ? e.scheme.toLowerCase() : ``) === `basic`
       ? { kind: `basic` }
       : { kind: `bearer` };
   if (e.type === `basic`) return { kind: `basic` };
-  if (e.type === `oauth2` || e.type === `openIdConnect`)
-    return { kind: `bearer` };
+  if (e.type === `oauth2` || e.type === `openIdConnect`) return { kind: `bearer` };
 }
 function applySecurity(e, t, n, r, i) {
   if (e === void 0 || t.authorization === void 0) return;

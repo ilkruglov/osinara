@@ -5,6 +5,7 @@ export default defineSandbox({
   backend: justbash({ autoInstall: false }),
   async onSession({ use }) {
     const sandbox = await use();
-    for (const [path, content] of Object.entries(job().testCase.files)) await sandbox.writeTextFile({ path, content });
+    for (const [path, content] of Object.entries(job().testCase.files))
+      await sandbox.writeTextFile({ path, content });
   },
 });

@@ -188,7 +188,9 @@ describe("turn-bound memory source selection", () => {
       userId: "user-1",
     };
 
-    await expect(resolveMemoryTurnSource(context, personal, "42")).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
+    await expect(resolveMemoryTurnSource(context, personal, "42")).rejects.toMatchObject({
+      code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
+    });
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
@@ -233,6 +235,8 @@ describe("turn-bound memory source selection", () => {
       timelineEntryId: "entry-42",
     });
 
-    await expect(resolveMemoryTurnSource(context, groupAuthorization, "42")).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
+    await expect(resolveMemoryTurnSource(context, groupAuthorization, "42")).rejects.toMatchObject({
+      code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
+    });
   });
 });

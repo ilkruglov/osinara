@@ -18,12 +18,22 @@ const FULL = {
 
 describe("image generation availability", () => {
   it("keeps the free Cloudflare quota as the last resort", () => {
-    expect(resolveImageProviders(FULL).map((client) => client.name)).toEqual(["plusvibe", "neuraldeep", "cloudflare"]);
+    expect(resolveImageProviders(FULL).map((client) => client.name)).toEqual([
+      "plusvibe",
+      "neuraldeep",
+      "cloudflare",
+    ]);
   });
 
   it("keeps only configured providers and enables the tool from any one of them", () => {
-    expect(resolveImageProviders({ PLUSVIBE_API_KEY: " pv " }).map((client) => client.name)).toEqual(["plusvibe"]);
-    expect(resolveImageProviders({ CLOUDFLARE_ACCOUNT_ID: FULL.CLOUDFLARE_ACCOUNT_ID }).map((client) => client.name)).toEqual([]);
+    expect(
+      resolveImageProviders({ PLUSVIBE_API_KEY: " pv " }).map((client) => client.name),
+    ).toEqual(["plusvibe"]);
+    expect(
+      resolveImageProviders({ CLOUDFLARE_ACCOUNT_ID: FULL.CLOUDFLARE_ACCOUNT_ID }).map(
+        (client) => client.name,
+      ),
+    ).toEqual([]);
     expect(supportsImageGeneration({ PLUSVIBE_API_KEY: "pv" })).toBe(true);
     expect(supportsImageGeneration({})).toBe(false);
   });

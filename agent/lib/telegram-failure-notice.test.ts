@@ -13,21 +13,39 @@ import { memoryPlaceholders, placeholderApi } from "./whisper/whisper-placeholde
 
 describe("telegram failure notice", () => {
   it("shows the person-facing sentence only", () => {
-    expect(failureNoticeText({
-      code: "AGENT_TELEGRAM_INGRESS_FAILED",
-      message: "AGENT_TELEGRAM_INGRESS_FAILED: Не удалось обработать сообщение Telegram",
-    })).toBe("Не удалось обработать сообщение Telegram");
-    expect(failureNoticeText({ code: "AGENT_VOICE_FILE_TOO_LARGE", message: "Отправьте более короткую запись" }))
-      .toBe("Отправьте более короткую запись");
-    expect(failureNoticeText({ code: "X", message: "AGENT_X: " })).toBe("Не удалось обработать это сообщение. Отправьте его ещё раз");
+    expect(
+      failureNoticeText({
+        code: "AGENT_TELEGRAM_INGRESS_FAILED",
+        message: "AGENT_TELEGRAM_INGRESS_FAILED: Не удалось обработать сообщение Telegram",
+      }),
+    ).toBe("Не удалось обработать сообщение Telegram");
+    expect(
+      failureNoticeText({
+        code: "AGENT_VOICE_FILE_TOO_LARGE",
+        message: "Отправьте более короткую запись",
+      }),
+    ).toBe("Отправьте более короткую запись");
+    expect(failureNoticeText({ code: "X", message: "AGENT_X: " })).toBe(
+      "Не удалось обработать это сообщение. Отправьте его ещё раз",
+    );
   });
 
   it("stays silent outside a private chat", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    await sendTelegramFailureNotice({
-      kind: "message",
-      message: { attachments: [], caption: "", chat: { id: "-100", type: "group" }, messageId: "7", raw: {}, text: "привет" },
-    } as never, { code: "AGENT_TELEGRAM_INGRESS_FAILED", message: "Не удалось" });
+    await sendTelegramFailureNotice(
+      {
+        kind: "message",
+        message: {
+          attachments: [],
+          caption: "",
+          chat: { id: "-100", type: "group" },
+          messageId: "7",
+          raw: {},
+          text: "привет",
+        },
+      } as never,
+      { code: "AGENT_TELEGRAM_INGRESS_FAILED", message: "Не удалось" },
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -39,16 +57,32 @@ describe("telegram failure notice", () => {
     const update = {
       kind: "message",
       message: {
-        attachments: [], caption: "", chat: { id: "-100", type: "supergroup" }, messageId: "0",
-        raw: { ephemeral_message_id: 7, osinara_whisper: { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "101" } },
+        attachments: [],
+        caption: "",
+        chat: { id: "-100", type: "supergroup" },
+        messageId: "0",
+        raw: {
+          ephemeral_message_id: 7,
+          osinara_whisper: {
+            ephemeralMessageId: 7,
+            placeholderMessageId: 31,
+            receiverUserId: "101",
+          },
+        },
         text: "/whisper привет",
       },
     } as never;
-    const failure = { code: "AGENT_TELEGRAM_INGRESS_FAILED", message: "AGENT_TELEGRAM_INGRESS_FAILED: Не удалось обработать сообщение Telegram" };
+    const failure = {
+      code: "AGENT_TELEGRAM_INGRESS_FAILED",
+      message: "AGENT_TELEGRAM_INGRESS_FAILED: Не удалось обработать сообщение Telegram",
+    };
 
     await sendTelegramFailureNotice(update, failure, { api, placeholders: store.repository });
     expect(api.edit).toHaveBeenCalledExactlyOnceWith({
-      chatId: "-100", content: { format: "plain", text: "Не удалось обработать сообщение Telegram" }, placeholderMessageId: 31, receiverUserId: "101",
+      chatId: "-100",
+      content: { format: "plain", text: "Не удалось обработать сообщение Telegram" },
+      placeholderMessageId: 31,
+      receiverUserId: "101",
     });
 
     // After a restart the drain may refuse the update of a whisper that was already answered.

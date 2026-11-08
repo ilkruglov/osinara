@@ -28,8 +28,15 @@ import {
   type TelegramWhisperSendResult,
 } from "./telegram-whisper-api.js";
 import { parseTelegramWhisperCommand, type TelegramWhisperMarker } from "./telegram-whisper.js";
-import { whisperPlaceholderRepository, type WhisperPlaceholderKey, type WhisperPlaceholderRepository } from "./whisper-placeholder-repository.js";
-import { writeWhisperPlaceholder, type WhisperPlaceholderApi } from "./whisper-placeholder-writer.js";
+import {
+  whisperPlaceholderRepository,
+  type WhisperPlaceholderKey,
+  type WhisperPlaceholderRepository,
+} from "./whisper-placeholder-repository.js";
+import {
+  writeWhisperPlaceholder,
+  type WhisperPlaceholderApi,
+} from "./whisper-placeholder-writer.js";
 
 export const WHISPER_PLACEHOLDER_TEXT = "Думаю… Вопрос и ответ видите только вы.";
 export const WHISPER_USAGE_HINT =
@@ -62,23 +69,31 @@ export function createTelegramWhisperGate(dependencies: {
     try {
       const removed = await dependencies.api.delete(key);
       if (!removed.ok) {
-        console.warn(JSON.stringify({
-          code: "AGENT_TELEGRAM_WHISPER_CLOSE_FAILED",
-          providerDescription: telegramProviderDescription(removed.body),
-          providerStatus: removed.status,
-        }));
+        console.warn(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_WHISPER_CLOSE_FAILED",
+            providerDescription: telegramProviderDescription(removed.body),
+            providerStatus: removed.status,
+          }),
+        );
       }
     } catch (error) {
-      console.warn(JSON.stringify({
-        code: "AGENT_TELEGRAM_WHISPER_CLOSE_FAILED",
-        error: error instanceof Error ? error.name : "UnknownError",
-      }));
+      console.warn(
+        JSON.stringify({
+          code: "AGENT_TELEGRAM_WHISPER_CLOSE_FAILED",
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
     }
   }
 
   return {
     async close(chatId, marker) {
-      const key = { chatId, placeholderMessageId: marker.placeholderMessageId, receiverUserId: marker.receiverUserId };
+      const key = {
+        chatId,
+        placeholderMessageId: marker.placeholderMessageId,
+        receiverUserId: marker.receiverUserId,
+      };
       const written = await writeWhisperPlaceholder(
         key,
         { content: { remove: true }, from: ["open", "progress"], to: "closed" },
@@ -90,7 +105,8 @@ export function createTelegramWhisperGate(dependencies: {
     async open(message, updateId) {
       const command = parseTelegramWhisperCommand(message, dependencies.botUsername);
       if (!command) return null;
-      if (!await authorizeTelegramWhisper(dependencies.telegram, message, command.receiverUserId)) return null;
+      if (!(await authorizeTelegramWhisper(dependencies.telegram, message, command.receiverUserId)))
+        return null;
       const target = {
         chatId: message.chat.id,
         ephemeralMessageId: command.ephemeralMessageId,
@@ -101,17 +117,26 @@ export function createTelegramWhisperGate(dependencies: {
         await dependencies.api.reply({ ...target, text: WHISPER_USAGE_HINT });
         return null;
       }
-      const placeholder = await dependencies.api.reply({ ...target, text: WHISPER_PLACEHOLDER_TEXT });
+      const placeholder = await dependencies.api.reply({
+        ...target,
+        text: WHISPER_PLACEHOLDER_TEXT,
+      });
       if (!placeholder.ok) {
         // Past the window there is no way to answer this whisper; nothing is queued for it.
-        console.warn(JSON.stringify({
-          code: "AGENT_TELEGRAM_WHISPER_PLACEHOLDER_FAILED",
-          providerDescription: telegramProviderDescription(placeholder.body),
-          providerStatus: placeholder.status,
-        }));
+        console.warn(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_WHISPER_PLACEHOLDER_FAILED",
+            providerDescription: telegramProviderDescription(placeholder.body),
+            providerStatus: placeholder.status,
+          }),
+        );
         return null;
       }
-      const key = { chatId: message.chat.id, placeholderMessageId: placeholder.placeholderMessageId, receiverUserId: command.receiverUserId };
+      const key = {
+        chatId: message.chat.id,
+        placeholderMessageId: placeholder.placeholderMessageId,
+        receiverUserId: command.receiverUserId,
+      };
       try {
         await dependencies.placeholders.record({ ...key, updateId });
       } catch (error) {
@@ -128,7 +153,11 @@ export function createTelegramWhisperGate(dependencies: {
 }
 
 export const telegramWhisperGate = createTelegramWhisperGate({
-  api: { delete: deleteTelegramWhisperMessage, edit: editTelegramWhisperMessage, reply: sendTelegramWhisperReply },
+  api: {
+    delete: deleteTelegramWhisperMessage,
+    edit: editTelegramWhisperMessage,
+    reply: sendTelegramWhisperReply,
+  },
   botUsername: process.env.TELEGRAM_BOT_USERNAME ?? "",
   placeholders: whisperPlaceholderRepository,
   telegram: telegramRepository,

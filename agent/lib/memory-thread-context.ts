@@ -53,8 +53,10 @@ export interface MemoryThreadContext {
 }
 
 function relevanceOrder(left: ActivatedMemoryThread, right: ActivatedMemoryThread): number {
-  if (left.relevance.skillHint !== right.relevance.skillHint) return left.relevance.skillHint ? -1 : 1;
-  if (left.relevance.titleMatch !== right.relevance.titleMatch) return left.relevance.titleMatch ? -1 : 1;
+  if (left.relevance.skillHint !== right.relevance.skillHint)
+    return left.relevance.skillHint ? -1 : 1;
+  if (left.relevance.titleMatch !== right.relevance.titleMatch)
+    return left.relevance.titleMatch ? -1 : 1;
   if (left.relevance.retrievalHits !== right.relevance.retrievalHits) {
     return right.relevance.retrievalHits - left.relevance.retrievalHits;
   }
@@ -62,9 +64,11 @@ function relevanceOrder(left: ActivatedMemoryThread, right: ActivatedMemoryThrea
 }
 
 function blockCharacters(block: MemoryThreadBriefBlock): number {
-  return block.content.length +
+  return (
+    block.content.length +
     (block.conflictingEntryRefs ?? []).reduce((total, ref) => total + ref.length, 0) +
-    (block.unresolvedConflictRefs ?? []).reduce((total, ref) => total + ref.length, 0);
+    (block.unresolvedConflictRefs ?? []).reduce((total, ref) => total + ref.length, 0)
+  );
 }
 
 function sourceEvidenceFor(
@@ -76,8 +80,15 @@ function sourceEvidenceFor(
 }
 
 function sourceEvidenceCharacters(evidence: readonly MemoryThreadSourceEvidence[]): number {
-  return evidence.reduce((total, item) => total + item.sourceEntryRef.length +
-    item.authorLabel.length + item.kind.length + item.observedAt.length, 0);
+  return evidence.reduce(
+    (total, item) =>
+      total +
+      item.sourceEntryRef.length +
+      item.authorLabel.length +
+      item.kind.length +
+      item.observedAt.length,
+    0,
+  );
 }
 
 export function assembleMemoryThreadContext(
@@ -109,10 +120,13 @@ export function assembleMemoryThreadContext(
       const completionCharacters = completion
         ? completion.content.length + sourceEvidenceCharacters(completionEvidence)
         : 0;
-      if (!completion || completion.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
+      if (
+        !completion ||
+        completion.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
         completion.sourceEntryRefs.some((ref) => seenEntryRefs.has(ref)) ||
         completion.sourceRecordRefs?.some((ref) => seenSourceRecords.has(ref)) ||
-        totalCharacters + threadCharacters + completionCharacters > THREAD_CONTEXT_MAX_CHARACTERS) {
+        totalCharacters + threadCharacters + completionCharacters > THREAD_CONTEXT_MAX_CHARACTERS
+      ) {
         continue;
       }
       const { sourceRecordRefs: _sourceRecordRefs, ...modelCompletion } = completion;
@@ -131,12 +145,18 @@ export function assembleMemoryThreadContext(
     const blocks: ModelThreadBlock[] = [];
     let briefCharacters = 0;
     for (const block of thread.blocks.slice(0, THREAD_BRIEF_MAX_ITEMS)) {
-      if (block.sourceEntryRefs.some((ref) => seenEntryRefs.has(ref)) ||
-        block.sourceRecordRefs?.some((ref) => seenSourceRecords.has(ref))) continue;
+      if (
+        block.sourceEntryRefs.some((ref) => seenEntryRefs.has(ref)) ||
+        block.sourceRecordRefs?.some((ref) => seenSourceRecords.has(ref))
+      )
+        continue;
       const blockEvidence = sourceEvidenceFor(block.sourceEntryRefs, thread.sourceEvidence);
       const characters = blockCharacters(block) + sourceEvidenceCharacters(blockEvidence);
-      if (briefCharacters + characters > THREAD_BRIEF_MAX_CHARACTERS ||
-        totalCharacters + threadCharacters + characters > THREAD_CONTEXT_MAX_CHARACTERS) continue;
+      if (
+        briefCharacters + characters > THREAD_BRIEF_MAX_CHARACTERS ||
+        totalCharacters + threadCharacters + characters > THREAD_CONTEXT_MAX_CHARACTERS
+      )
+        continue;
       const { sourceRecordRefs: _sourceRecordRefs, ...modelBlock } = block;
       blocks.push({
         ...modelBlock,
@@ -153,10 +173,13 @@ export function assembleMemoryThreadContext(
     for (const episode of thread.episodes.slice(0, THREAD_CONTEXT_EPISODES_PER_THREAD)) {
       const episodeEvidence = sourceEvidenceFor(episode.sourceEntryRefs, thread.sourceEvidence);
       const episodeCharacters = episode.content.length + sourceEvidenceCharacters(episodeEvidence);
-      if (episode.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
+      if (
+        episode.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
         episode.sourceEntryRefs.some((ref) => seenEntryRefs.has(ref)) ||
         episode.sourceRecordRefs?.some((ref) => seenSourceRecords.has(ref)) ||
-        totalCharacters + threadCharacters + episodeCharacters > THREAD_CONTEXT_MAX_CHARACTERS) continue;
+        totalCharacters + threadCharacters + episodeCharacters > THREAD_CONTEXT_MAX_CHARACTERS
+      )
+        continue;
       const { sourceRecordRefs: _sourceRecordRefs, ...modelEpisode } = episode;
       episodes.push({
         ...modelEpisode,

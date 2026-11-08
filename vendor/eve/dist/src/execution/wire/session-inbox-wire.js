@@ -18,9 +18,7 @@ function decode(t) {
       value: t,
     });
   } catch (e) {
-    throw new SessionInboxWireError$1(
-      e instanceof Error ? e.message : String(e),
-    );
+    throw new SessionInboxWireError$1(e instanceof Error ? e.message : String(e));
   }
   let r = n;
   if (r.version !== SESSION_INBOX_WIRE_VERSION)

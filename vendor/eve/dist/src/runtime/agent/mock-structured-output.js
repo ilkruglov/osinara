@@ -28,9 +28,7 @@ function createJsonSchemaSample(e) {
 }
 function createJsonSchemaObjectSample(e) {
   let t = isRecord(e.properties) ? e.properties : {},
-    n = Array.isArray(e.required)
-      ? e.required.filter((e) => typeof e == `string`)
-      : [],
+    n = Array.isArray(e.required) ? e.required.filter((e) => typeof e == `string`) : [],
     r = new Set([...n, ...Object.keys(t)]),
     i = {};
   for (let e of r) i[e] = createJsonSchemaSample(t[e]);
@@ -52,8 +50,7 @@ function createJsonSchemaStringSample(e) {
 }
 function getJsonSchemaType(e) {
   if (typeof e.type == `string`) return e.type;
-  if (Array.isArray(e.type))
-    return e.type.find((e) => typeof e == `string` && e !== `null`);
+  if (Array.isArray(e.type)) return e.type.find((e) => typeof e == `string` && e !== `null`);
 }
 function getFirstSchema(e) {
   return Array.isArray(e) ? e[0] : e;

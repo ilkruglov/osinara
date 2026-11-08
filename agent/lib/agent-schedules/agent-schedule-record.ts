@@ -10,8 +10,15 @@ import { sha256Json } from "../json-hash.js";
 
 export type AgentScheduleScope = "family" | "group" | "personal";
 export type AgentScheduleStatus = "active" | "completed" | "failed" | "leased" | "paused";
-export const AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS = ["daily", "minutely", "hourly", "monthly", "yearly"] as const;
-export type AgentScheduleSimpleRecurrenceKind = (typeof AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS)[number];
+export const AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS = [
+  "daily",
+  "minutely",
+  "hourly",
+  "monthly",
+  "yearly",
+] as const;
+export type AgentScheduleSimpleRecurrenceKind =
+  (typeof AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS)[number];
 export type AgentScheduleRecurrenceKind = AgentScheduleSimpleRecurrenceKind | "once" | "weekly";
 
 export type AgentScheduleRecurrence =

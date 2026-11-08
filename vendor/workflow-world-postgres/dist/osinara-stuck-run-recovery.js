@@ -69,12 +69,20 @@ export async function findStuckRuns(
               AND (r.name = $4 OR NOT EXISTS (SELECT 1 FROM workflow.workflow_hooks h WHERE h.run_id = r.id))))
       ORDER BY last.created_at
       LIMIT 50`,
-    [limits.retryAfterMs / 1000, limits.stepStartedAfterMs / 1000, STUCK_STEP_COMPLETED_AFTER_MS / 1000, TURN_WORKFLOW_NAME],
+    [
+      limits.retryAfterMs / 1000,
+      limits.stepStartedAfterMs / 1000,
+      STUCK_STEP_COMPLETED_AFTER_MS / 1000,
+      TURN_WORKFLOW_NAME,
+    ],
   );
   return result.rows.flatMap((row) =>
-    typeof row.run_id === "string" && typeof row.workflow_name === "string" && typeof row.last_event === "string"
+    typeof row.run_id === "string" &&
+    typeof row.workflow_name === "string" &&
+    typeof row.last_event === "string"
       ? [{ lastEvent: row.last_event, runId: row.run_id, workflowName: row.workflow_name }]
-      : []);
+      : [],
+  );
 }
 
 /** Last events of a run that ends on another event: a parked session's hook, a sleep's timer. */
@@ -115,10 +123,21 @@ export async function findInFlightRuns(pool               , pageSize = 500)     
                OR NOT EXISTS (SELECT 1 FROM workflow.workflow_hooks h WHERE h.run_id = r.id))
         ORDER BY r.id
         LIMIT $3`,
-      [after, PARKED_LAST_EVENTS, pageSize, INFLIGHT_COMPLETED_STEP_WITHIN_MS / 1000, TURN_WORKFLOW_NAME],
+      [
+        after,
+        PARKED_LAST_EVENTS,
+        pageSize,
+        INFLIGHT_COMPLETED_STEP_WITHIN_MS / 1000,
+        TURN_WORKFLOW_NAME,
+      ],
     );
     for (const row of result.rows) {
-      if (typeof row.run_id !== "string" || typeof row.workflow_name !== "string" || typeof row.last_event !== "string") continue;
+      if (
+        typeof row.run_id !== "string" ||
+        typeof row.workflow_name !== "string" ||
+        typeof row.last_event !== "string"
+      )
+        continue;
       found.push({ lastEvent: row.last_event, runId: row.run_id, workflowName: row.workflow_name });
       after = row.run_id;
     }
@@ -141,7 +160,9 @@ export async function requeueInFlightRuns(input
     await input.enqueue(`${input.queuePrefix}${run.workflowName}`, { runId: run.runId });
   }
   if (runs.length > 0) {
-    console.info(JSON.stringify({ code: "AGENT_WORKFLOW_INFLIGHT_RUNS_REQUEUED", count: runs.length }));
+    console.info(
+      JSON.stringify({ code: "AGENT_WORKFLOW_INFLIGHT_RUNS_REQUEUED", count: runs.length }),
+    );
   }
   return runs.length;
 }
@@ -156,7 +177,10 @@ export async function requeueInFlightRuns(input
  * this process belongs to a dead one. With several replicas this would steal live jobs; it must
  * then become a heartbeat check.
  */
-export async function releaseDeadWorkerLocks(pool               , startedAt      )                  {
+export async function releaseDeadWorkerLocks(
+  pool               ,
+  startedAt      ,
+)                  {
   const result = await pool.query(
     `WITH dead AS (
        SELECT DISTINCT locked_by FROM graphile_worker._private_jobs
@@ -190,13 +214,21 @@ export function startStuckRunRecovery(input
     try {
       for (const run of await findStuckRuns(input.pool)) {
         await input.enqueue(`${input.queuePrefix}${run.workflowName}`, { runId: run.runId });
-        console.warn(JSON.stringify({ code: "AGENT_WORKFLOW_STUCK_RUN_REQUEUED", lastEvent: run.lastEvent, runId: run.runId }));
+        console.warn(
+          JSON.stringify({
+            code: "AGENT_WORKFLOW_STUCK_RUN_REQUEUED",
+            lastEvent: run.lastEvent,
+            runId: run.runId,
+          }),
+        );
       }
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_WORKFLOW_STUCK_RUN_SCAN_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_WORKFLOW_STUCK_RUN_SCAN_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     } finally {
       running = false;
     }

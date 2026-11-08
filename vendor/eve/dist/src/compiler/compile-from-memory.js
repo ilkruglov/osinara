@@ -1,8 +1,5 @@
 import { classifyModelRouting } from "#internal/classify-model-routing.js";
-import {
-  ROOT_COMPILED_AGENT_NODE_ID,
-  createCompiledAgentManifest,
-} from "#compiler/manifest.js";
+import { ROOT_COMPILED_AGENT_NODE_ID, createCompiledAgentManifest } from "#compiler/manifest.js";
 function compileFromMemory(t) {
   let n = t.appRoot ?? `/virtual/eve-memory-app`,
     r = t.agentRoot ?? `${n}/agent`,
@@ -40,9 +37,7 @@ function compileFromMemory(t) {
     moduleMap: {
       nodes: {
         [ROOT_COMPILED_AGENT_NODE_ID]: {
-          modules: Object.fromEntries(
-            o.map((e) => [e.sourceId, Object.freeze({})]),
-          ),
+          modules: Object.fromEntries(o.map((e) => [e.sourceId, Object.freeze({})])),
         },
       },
     },

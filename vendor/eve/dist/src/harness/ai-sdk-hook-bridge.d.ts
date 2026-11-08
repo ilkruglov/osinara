@@ -1,4 +1,13 @@
 import type { Telemetry } from "ai";
-import type { InstrumentationAttemptScope, InstrumentationContextRunner, InstrumentationHooks } from "#harness/instrumentation/lifecycle.js";
+import type {
+  InstrumentationAttemptScope,
+  InstrumentationContextRunner,
+  InstrumentationHooks,
+} from "#harness/instrumentation/lifecycle.js";
 /** Creates one provider-neutral AI SDK bridge for one actual model attempt. */
-export declare function createAiSdkHookBridge(scope: InstrumentationAttemptScope, hooks: InstrumentationHooks, runInContext?: InstrumentationContextRunner, runtimeContext?: Readonly<Record<string, unknown>>): Telemetry;
+export declare function createAiSdkHookBridge(
+  scope: InstrumentationAttemptScope,
+  hooks: InstrumentationHooks,
+  runInContext?: InstrumentationContextRunner,
+  runtimeContext?: Readonly<Record<string, unknown>>,
+): Telemetry;

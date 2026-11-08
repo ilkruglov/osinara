@@ -7,11 +7,7 @@ import {
   isRetryableRemoteAgentContinueError,
   resolveRemoteAgentForAction,
 } from "#execution/remote-agent-dispatch.js";
-import {
-  AGENT_BUSY,
-  AGENT_MISMATCH,
-  AGENT_UNREACHABLE,
-} from "#harness/agent-handle-errors.js";
+import { AGENT_BUSY, AGENT_MISMATCH, AGENT_UNREACHABLE } from "#harness/agent-handle-errors.js";
 import { deriveAgentOperationId } from "#harness/handles/operation-id.js";
 import { getAgentHandleStore } from "#harness/handles/store.js";
 import {
@@ -178,9 +174,7 @@ async function dispatchToTaskAgentAddress(e) {
             ? `Agent "${a.identity.name}" with id "${r}" is no longer reachable.`
             : `Agent "${a.identity.name}" with id "${r}" is temporarily unreachable. Try again.`,
         }),
-        session: s
-          ? removeTaskAgentAddress(e.currentSession, r)
-          : e.currentSession,
+        session: s ? removeTaskAgentAddress(e.currentSession, r) : e.currentSession,
       }
     );
   }
@@ -250,9 +244,7 @@ async function deliverToAgentAddress(e) {
             kind: `send`,
             payload: {
               message: readSubagentMessage(t),
-              outputSchema: normalizeRequestedOutputSchema(
-                t.input.outputSchema,
-              ),
+              outputSchema: normalizeRequestedOutputSchema(t.input.outputSchema),
             },
           },
           sessionId: c.sessionId,
@@ -278,9 +270,7 @@ function createAgentErrorResult(e) {
     origin: `dispatch`,
     output: { code: e.code, message: e.message },
     subagentName:
-      e.action.kind === `remote-agent-call`
-        ? e.action.remoteAgentName
-        : e.action.subagentName,
+      e.action.kind === `remote-agent-call` ? e.action.remoteAgentName : e.action.subagentName,
   };
 }
 function readSubagentMessage(e) {

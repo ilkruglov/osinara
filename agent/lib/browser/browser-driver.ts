@@ -66,7 +66,7 @@ const RECOVERY_RUNNER_TIMEOUT_MS = 20_000;
 const BROWSER_RESET_COMMAND = [
   "pkill -KILL -f '[a]gent-browser'",
   "pkill -KILL -f '[c]hrome'",
-  "rm -f \"$HOME\"/.agent?browser/*.sock \"$HOME\"/.agent?browser/*.pid",
+  'rm -f "$HOME"/.agent?browser/*.sock "$HOME"/.agent?browser/*.pid',
   "exit 0",
 ].join("; ");
 
@@ -77,7 +77,8 @@ export function browserRestartedError(name: string): ModelFacingError {
   return new ModelFacingError({
     category: "operation",
     code: "AGENT_BROWSER_RESTARTED",
-    correction: "Откройте нужную страницу заново (browser_open) и посмотрите на неё; действие на странице вслепую не повторяйте.",
+    correction:
+      "Откройте нужную страницу заново (browser_open) и посмотрите на неё; действие на странице вслепую не повторяйте.",
     reason: `Браузер завис на команде ${name} и перезапущен: входы в сайты сохранены, открытая страница закрылась`,
     retryable: false,
     sideEffectStatus: "unknown",
@@ -98,17 +99,33 @@ export function createSandboxBrowserDriver(input: {
 
   // The browser companion of the session, never the container of the model's Bash: there the
   // logged-in browser could be driven past the confirmation gate (security review, 5 October 2026).
-  const run = (command: string, timeoutMs: number) => input.runner.run(input.sandboxSessionId, { command, target: "browser", timeoutMs }, input.signal);
+  const run = (command: string, timeoutMs: number) =>
+    input.runner.run(
+      input.sandboxSessionId,
+      { command, target: "browser", timeoutMs },
+      input.signal,
+    );
   const ranPastBound = (result: { exitCode: number; stderr: string; stdout: string }) =>
-    result.exitCode === TIMEOUT_EXIT_CODE || result.exitCode === KILLED_EXIT_CODE || RUNNER_BOUND.test(`${result.stderr}\n${result.stdout}`);
+    result.exitCode === TIMEOUT_EXIT_CODE ||
+    result.exitCode === KILLED_EXIT_CODE ||
+    RUNNER_BOUND.test(`${result.stderr}\n${result.stdout}`);
 
   /** After a command ran past its bound: true when the daemon was hung and has been killed. */
   async function restartIfHung(name: string): Promise<boolean> {
     try {
-      const probe = await run(`timeout --signal=KILL ${PROBE_TIMEOUT_SECONDS}s agent-browser get url`, RECOVERY_RUNNER_TIMEOUT_MS);
+      const probe = await run(
+        `timeout --signal=KILL ${PROBE_TIMEOUT_SECONDS}s agent-browser get url`,
+        RECOVERY_RUNNER_TIMEOUT_MS,
+      );
       if (!ranPastBound(probe)) return false;
       const reset = await run(BROWSER_RESET_COMMAND, RECOVERY_RUNNER_TIMEOUT_MS);
-      console.error(JSON.stringify({ code: "AGENT_BROWSER_DAEMON_RESET", command: name, exitCode: reset.exitCode }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_BROWSER_DAEMON_RESET",
+          command: name,
+          exitCode: reset.exitCode,
+        }),
+      );
       if (reset.exitCode !== 0) return false;
       noteBrowserRestart(input.sandboxSessionId);
       // Readers already ignore looks older than this restart; a failed cleanup is only logged.
@@ -126,10 +143,13 @@ export function createSandboxBrowserDriver(input: {
     const result = await run(command, COMMAND_TIMEOUT_MS);
     if (result.exitCode === 0) return result.stdout;
     // Query strings carry tokens and booking ids; the model needs the error, not the URL.
-    const detail = `${result.stderr}\n${result.stdout}`.replace(/\?[^\s'"]*/gu, "").replace(/\s+/gu, " ").trim()
+    const detail = `${result.stderr}\n${result.stdout}`
+      .replace(/\?[^\s'"]*/gu, "")
+      .replace(/\s+/gu, " ")
+      .trim()
       .slice(0, DIAGNOSTIC_MAX_CHARACTERS);
     const timedOut = result.exitCode === TIMEOUT_EXIT_CODE || RUNNER_TIMED_OUT.test(detail);
-    if (ranPastBound(result) && await restartIfHung(name)) throw browserRestartedError(name);
+    if (ranPastBound(result) && (await restartIfHung(name))) throw browserRestartedError(name);
     throw new ModelFacingError({
       category: "operation",
       code: timedOut ? "AGENT_BROWSER_TIMEOUT" : "AGENT_BROWSER_FAILED",
@@ -149,23 +169,36 @@ export function createSandboxBrowserDriver(input: {
   /** `eval` prints the value JSON-encoded; a string comes back quoted. */
   const unquote = (raw: string): string => {
     const text = raw.trim();
-    if (text.startsWith("\"")) { try { return JSON.parse(text) as string; } catch { return text; } }
+    if (text.startsWith('"')) {
+      try {
+        return JSON.parse(text) as string;
+      } catch {
+        return text;
+      }
+    }
     return text;
   };
 
   return {
-    back: async () => { await ab("back"); },
+    back: async () => {
+      await ab("back");
+    },
     // `agent-browser eval` runs the script inside the page, not in this process; the scripts are
     // the fixed ones from som-script.ts, never model text.
     eval: async (script) => unquote(await ab("eval", script)),
     open: async (url) => {
       // A slow page runs out the load wait; the page is usually there anyway. Any other failure
       // (no daemon, no runner) is reported: the old tab must not pass for the new address.
-      try { await ab("open", url); } catch (error) {
-        if (!(error instanceof ModelFacingError && error.code === "AGENT_BROWSER_TIMEOUT")) throw error;
+      try {
+        await ab("open", url);
+      } catch (error) {
+        if (!(error instanceof ModelFacingError && error.code === "AGENT_BROWSER_TIMEOUT"))
+          throw error;
       }
     },
-    press: async (key) => { await ab("press", key); },
+    press: async (key) => {
+      await ab("press", key);
+    },
     // The companion has no workspace: it shoots into its own /tmp and prints the image, and the
     // bytes reach the workspace through the session's own container (which creates the shots
     // folder). A link planted in that folder by Bash then leads nowhere but Bash's own files;
@@ -182,7 +215,8 @@ export function createSandboxBrowserDriver(input: {
         throw new ModelFacingError({
           category: "operation",
           code: "AGENT_BROWSER_FAILED",
-          correction: "Не повторяйте команду автоматически. Посмотрите на страницу заново или сообщите человеку.",
+          correction:
+            "Не повторяйте команду автоматически. Посмотрите на страницу заново или сообщите человеку.",
           reason: "Браузер не вернул снимок экрана",
           retryable: false,
           sideEffectStatus: "unknown",
@@ -190,9 +224,13 @@ export function createSandboxBrowserDriver(input: {
       }
       await input.runner.writeFile(input.sandboxSessionId, path, bytes, input.signal);
     },
-    scroll: async (direction) => { await ab("scroll", direction); },
+    scroll: async (direction) => {
+      await ab("scroll", direction);
+    },
     settle: async () => {
-      try { await ab("wait", "--load", "domcontentloaded"); } catch (error) {
+      try {
+        await ab("wait", "--load", "domcontentloaded");
+      } catch (error) {
         // Bounded by the CLI timeout; a restarted browser lost the page, which the caller must hear.
         if (isBrowserRestarted(error)) throw error;
       }

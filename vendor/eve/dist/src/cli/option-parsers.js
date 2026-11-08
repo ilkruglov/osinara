@@ -1,25 +1,15 @@
 import { InvalidArgumentError } from "#compiled/commander/index.js";
 import { ALL_REASONING_LEVELS } from "#setup/boxes/model-capabilities.js";
-import {
-  LOG_DISPLAY_MODES,
-  parseLogDisplayMode,
-} from "#cli/dev/tui/log-display-mode.js";
+import { LOG_DISPLAY_MODES, parseLogDisplayMode } from "#cli/dev/tui/log-display-mode.js";
 function parsePortOption(t) {
   if (!/^-?\d+$/.test(t))
     throw new InvalidArgumentError(`Expected a numeric port, received "${t}".`);
   let n = Number(t);
   if (n < 0 || n > 65535)
-    throw new InvalidArgumentError(
-      `Expected a port between 0 and 65535, received "${t}".`,
-    );
+    throw new InvalidArgumentError(`Expected a port between 0 and 65535, received "${t}".`);
   return n;
 }
-const DISPLAY_MODES = new Set([
-    `full`,
-    `collapsed`,
-    `auto-collapsed`,
-    `hidden`,
-  ]),
+const DISPLAY_MODES = new Set([`full`, `collapsed`, `auto-collapsed`, `hidden`]),
   STATS_MODES = new Set([`tokens`, `tokensPerSecond`]);
 function parseDisplayMode(t) {
   if (!DISPLAY_MODES.has(t))
@@ -46,9 +36,7 @@ function parseLogsMode(t) {
 function parseContextSizeOption(t) {
   let n = Number(t);
   if (!Number.isFinite(n) || n <= 0)
-    throw new InvalidArgumentError(
-      `Expected a positive number, received "${t}".`,
-    );
+    throw new InvalidArgumentError(`Expected a positive number, received "${t}".`);
   return n;
 }
 const REASONING_VALUES = [`provider-default`, ...ALL_REASONING_LEVELS];

@@ -1,8 +1,8 @@
 import type { HarnessEmitFn } from "#harness/types.js";
 interface OrderedStreamEmitter {
-    closeAndDrain(): Promise<void>;
-    emit: HarnessEmitFn;
-    readonly failureSignal: AbortSignal;
+  closeAndDrain(): Promise<void>;
+  emit: HarnessEmitFn;
+  readonly failureSignal: AbortSignal;
 }
 /**
  * Decouples model-stream consumption from the durable event sink while
@@ -12,7 +12,10 @@ interface OrderedStreamEmitter {
  * Coalescing before the durable writer keeps one Workflow chunk per emitted
  * event, so event-count reconnect cursors remain aligned with chunk indexes.
  */
-export declare function createOrderedStreamEmitter(emitFn: HarnessEmitFn, options?: {
+export declare function createOrderedStreamEmitter(
+  emitFn: HarnessEmitFn,
+  options?: {
     readonly maxPendingEvents?: number;
-}): OrderedStreamEmitter;
+  },
+): OrderedStreamEmitter;
 export {};

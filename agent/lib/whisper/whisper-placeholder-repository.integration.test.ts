@@ -16,25 +16,40 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "../database.js";
 import { whisperPlaceholderRepository as repository } from "./whisper-placeholder-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 let next = (Date.now() % 1_000_000) * 1000;
 const fresh = () => {
   next += 1;
-  return { chatId: `-100${next}`, placeholderMessageId: 31, receiverUserId: "101", updateId: String(9_000_000_000 + next) };
+  return {
+    chatId: `-100${next}`,
+    placeholderMessageId: 31,
+    receiverUserId: "101",
+    updateId: String(9_000_000_000 + next),
+  };
 };
 const keyOf = (record: ReturnType<typeof fresh>) => ({
-  chatId: record.chatId, placeholderMessageId: record.placeholderMessageId, receiverUserId: record.receiverUserId,
+  chatId: record.chatId,
+  placeholderMessageId: record.placeholderMessageId,
+  receiverUserId: record.receiverUserId,
 });
 const ANSWER = { format: "plain" as const, text: "Да." };
 
 async function row(record: ReturnType<typeof fresh>) {
-  return (await database().query<{ attempt_count: number; pending_content: unknown; status: string; waits_seconds: number | null }>(
-    `SELECT status, pending_content, attempt_count,
+  return (
+    await database().query<{
+      attempt_count: number;
+      pending_content: unknown;
+      status: string;
+      waits_seconds: number | null;
+    }>(
+      `SELECT status, pending_content, attempt_count,
             round(extract(epoch FROM next_attempt_at - now()))::integer AS waits_seconds
        FROM telegram_whisper_placeholders WHERE telegram_chat_id = $1 AND placeholder_message_id = $2`,
-    [record.chatId, record.placeholderMessageId],
-  )).rows[0];
+      [record.chatId, record.placeholderMessageId],
+    )
+  ).rows[0];
 }
 
 async function age(record: ReturnType<typeof fresh>, seconds: number) {
@@ -48,7 +63,12 @@ async function age(record: ReturnType<typeof fresh>, seconds: number) {
 // Stored updates are removed afterwards: a pending one would be claimed by other ingress tests.
 const storedUpdates: string[] = [];
 
-async function storeUpdate(record: ReturnType<typeof fresh>, status: "completed" | "pending", placeholderMessageId: number, endedSecondsAgo = 0) {
+async function storeUpdate(
+  record: ReturnType<typeof fresh>,
+  status: "completed" | "pending",
+  placeholderMessageId: number,
+  endedSecondsAgo = 0,
+) {
   const queue = await database().query<{ id: string }>(
     `INSERT INTO telegram_ingress_queues (current_continuation_key) VALUES ($1) RETURNING id`,
     [`telegram:whisper:${record.chatId}:${record.receiverUserId}`],
@@ -61,7 +81,16 @@ async function storeUpdate(record: ReturnType<typeof fresh>, status: "completed"
       record.updateId,
       queue.rows[0]!.id,
       `telegram:whisper:${record.chatId}:${record.receiverUserId}`,
-      JSON.stringify({ message: { osinara_whisper: { ephemeralMessageId: 7, placeholderMessageId, receiverUserId: record.receiverUserId } }, update_id: Number(record.updateId) }),
+      JSON.stringify({
+        message: {
+          osinara_whisper: {
+            ephemeralMessageId: 7,
+            placeholderMessageId,
+            receiverUserId: record.receiverUserId,
+          },
+        },
+        update_id: Number(record.updateId),
+      }),
       status,
       endedSecondsAgo,
     ],
@@ -74,7 +103,9 @@ describeWithDatabase("whisperPlaceholderRepository", () => {
       "DELETE FROM telegram_ingress_updates WHERE update_id = ANY($1::bigint[]) RETURNING queue_id",
       [storedUpdates],
     );
-    await database().query("DELETE FROM telegram_ingress_queues WHERE id = ANY($1::uuid[])", [queues.rows.map((queue) => queue.queue_id)]);
+    await database().query("DELETE FROM telegram_ingress_queues WHERE id = ANY($1::uuid[])", [
+      queues.rows.map((queue) => queue.queue_id),
+    ]);
     await closeDatabase();
   });
 
@@ -83,43 +114,101 @@ describeWithDatabase("whisperPlaceholderRepository", () => {
     await repository.record(record);
     await repository.record(record);
 
-    await expect(repository.transition(keyOf(record), { content: ANSWER, from: ["open", "progress", "failed"], to: "answered" })).resolves.toBe("applied");
-    expect(await row(record)).toMatchObject({ attempt_count: 0, pending_content: ANSWER, status: "answered" });
-    await expect(repository.transition(keyOf(record), { content: { format: "plain", text: "Сбой" }, from: ["open", "progress"], to: "failed" }))
-      .resolves.toBe("refused");
-    await expect(repository.transition({ ...keyOf(record), placeholderMessageId: 99 }, { content: ANSWER, from: ["open"], to: "answered" }))
-      .resolves.toBe("missing");
+    await expect(
+      repository.transition(keyOf(record), {
+        content: ANSWER,
+        from: ["open", "progress", "failed"],
+        to: "answered",
+      }),
+    ).resolves.toBe("applied");
+    expect(await row(record)).toMatchObject({
+      attempt_count: 0,
+      pending_content: ANSWER,
+      status: "answered",
+    });
+    await expect(
+      repository.transition(keyOf(record), {
+        content: { format: "plain", text: "Сбой" },
+        from: ["open", "progress"],
+        to: "failed",
+      }),
+    ).resolves.toBe("refused");
+    await expect(
+      repository.transition(
+        { ...keyOf(record), placeholderMessageId: 99 },
+        { content: ANSWER, from: ["open"], to: "answered" },
+      ),
+    ).resolves.toBe("missing");
     // A different receiver never matches the record.
-    await expect(repository.transition({ ...keyOf(record), receiverUserId: "202" }, { content: ANSWER, from: ["answered"], to: "answered" }))
-      .resolves.toBe("missing");
+    await expect(
+      repository.transition(
+        { ...keyOf(record), receiverUserId: "202" },
+        { content: ANSWER, from: ["answered"], to: "answered" },
+      ),
+    ).resolves.toBe("missing");
   });
 
   it("settles only the content it was made for", async () => {
     const record = fresh();
     await repository.record(record);
-    const progress = { content: { format: "plain" as const, text: "Смотрю." }, to: "progress" as const };
+    const progress = {
+      content: { format: "plain" as const, text: "Смотрю." },
+      to: "progress" as const,
+    };
     await repository.transition(keyOf(record), { ...progress, from: ["open"] });
-    await repository.transition(keyOf(record), { content: ANSWER, from: ["progress"], to: "answered" });
+    await repository.transition(keyOf(record), {
+      content: ANSWER,
+      from: ["progress"],
+      to: "answered",
+    });
 
-    await expect(repository.settle(keyOf(record), progress, { outcome: "delivered" })).resolves.toBe("superseded");
+    await expect(
+      repository.settle(keyOf(record), progress, { outcome: "delivered" }),
+    ).resolves.toBe("superseded");
     expect((await row(record))?.pending_content).toEqual(ANSWER);
-    await expect(repository.settle(keyOf(record), { content: ANSWER, to: "answered" }, { outcome: "delivered" })).resolves.toBe("final");
-    expect(await row(record)).toMatchObject({ pending_content: null, status: "answered", waits_seconds: null });
+    await expect(
+      repository.settle(
+        keyOf(record),
+        { content: ANSWER, to: "answered" },
+        { outcome: "delivered" },
+      ),
+    ).resolves.toBe("final");
+    expect(await row(record)).toMatchObject({
+      pending_content: null,
+      status: "answered",
+      waits_seconds: null,
+    });
   });
 
   it("waits longer after each unconfirmed attempt and drops the edit after the fifth", async () => {
     const record = fresh();
     await repository.record(record);
-    await repository.transition(keyOf(record), { content: { remove: true }, from: ["open"], to: "answered" });
+    await repository.transition(keyOf(record), {
+      content: { remove: true },
+      from: ["open"],
+      to: "answered",
+    });
     const change = { content: { remove: true as const }, to: "answered" as const };
 
-    await expect(repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" })).resolves.toBe("waiting");
+    await expect(
+      repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" }),
+    ).resolves.toBe("waiting");
     expect(await row(record)).toMatchObject({ attempt_count: 1, waits_seconds: 60 });
     await repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" });
     expect(await row(record)).toMatchObject({ attempt_count: 2, waits_seconds: 120 });
-    for (let attempt = 3; attempt < 5; attempt += 1) await repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" });
-    await expect(repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" })).resolves.toBe("final");
-    expect(await row(record)).toMatchObject({ attempt_count: 5, pending_content: null, waits_seconds: null });
+    for (let attempt = 3; attempt < 5; attempt += 1)
+      await repository.settle(keyOf(record), change, {
+        errorCode: "TELEGRAM_502",
+        outcome: "retry",
+      });
+    await expect(
+      repository.settle(keyOf(record), change, { errorCode: "TELEGRAM_502", outcome: "retry" }),
+    ).resolves.toBe("final");
+    expect(await row(record)).toMatchObject({
+      attempt_count: 5,
+      pending_content: null,
+      waits_seconds: null,
+    });
   });
 
   it("leases a due edit so the next claim does not return it at once", async () => {
@@ -148,24 +237,39 @@ describeWithDatabase("whisperPlaceholderRepository", () => {
     const queued = fresh();
     const answered = fresh();
     const young = fresh();
-    for (const record of [neverStored, redelivered, unanswered, justEnded, queued, answered, young]) await repository.record(record);
-    for (const record of [neverStored, redelivered, unanswered, justEnded, queued, answered]) await age(record, 600);
+    for (const record of [neverStored, redelivered, unanswered, justEnded, queued, answered, young])
+      await repository.record(record);
+    for (const record of [neverStored, redelivered, unanswered, justEnded, queued, answered])
+      await age(record, 600);
     await storeUpdate(redelivered, "pending", 77);
     await storeUpdate(unanswered, "completed", 31, 300);
     await storeUpdate(justEnded, "completed", 31, 10);
     await storeUpdate(queued, "pending", 31);
     await storeUpdate(answered, "completed", 31, 300);
-    await repository.transition(keyOf(answered), { content: ANSWER, from: ["open"], to: "answered" });
-    await repository.settle(keyOf(answered), { content: ANSWER, to: "answered" }, { outcome: "delivered" });
+    await repository.transition(keyOf(answered), {
+      content: ANSWER,
+      from: ["open"],
+      to: "answered",
+    });
+    await repository.settle(
+      keyOf(answered),
+      { content: ANSWER, to: "answered" },
+      { outcome: "delivered" },
+    );
 
     const stale = (await repository.listStale(1000)).filter((placeholder) =>
-      [neverStored, redelivered, unanswered, justEnded, queued, answered, young].some((record) => record.chatId === placeholder.chatId));
+      [neverStored, redelivered, unanswered, justEnded, queued, answered, young].some(
+        (record) => record.chatId === placeholder.chatId,
+      ),
+    );
 
-    expect(stale).toEqual(expect.arrayContaining([
-      { ...keyOf(neverStored), reason: "orphan" },
-      { ...keyOf(redelivered), reason: "orphan" },
-      { ...keyOf(unanswered), reason: "unanswered" },
-    ]));
+    expect(stale).toEqual(
+      expect.arrayContaining([
+        { ...keyOf(neverStored), reason: "orphan" },
+        { ...keyOf(redelivered), reason: "orphan" },
+        { ...keyOf(unanswered), reason: "unanswered" },
+      ]),
+    );
     expect(stale).toHaveLength(3);
   });
 });

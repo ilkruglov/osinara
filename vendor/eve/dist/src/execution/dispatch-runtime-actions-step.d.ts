@@ -14,5 +14,10 @@
  * workflow selects `dispatchTaskStep`, the task-mode sibling that wraps
  * each dispatch in the delegated-task lifecycle.
  */
-import { type RuntimeActionDispatchInput, type RuntimeActionDispatchResult } from "#execution/dispatch-runtime-actions-shared.js";
-export declare function dispatchRuntimeActionsStep(input: RuntimeActionDispatchInput): Promise<RuntimeActionDispatchResult>;
+import {
+  type RuntimeActionDispatchInput,
+  type RuntimeActionDispatchResult,
+} from "#execution/dispatch-runtime-actions-shared.js";
+export declare function dispatchRuntimeActionsStep(
+  input: RuntimeActionDispatchInput,
+): Promise<RuntimeActionDispatchResult>;

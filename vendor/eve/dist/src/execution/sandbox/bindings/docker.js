@@ -50,17 +50,13 @@ function createDockerSandboxBackend(c = {}) {
       let i = { optionsHash: d, templateKey: r.templateKey },
         a = dockerTemplateImageReference(i),
         o = resolveDockerTemplateMarkerPath(r.runtimeContext.appRoot, i);
-      if (
-        (r.log?.(`checking cached template image "${a}"`),
-        await dockerImageExists(l, a))
-      )
+      if ((r.log?.(`checking cached template image "${a}"`), await dockerImageExists(l, a)))
         return (
           r.log?.(`reusing cached template image`),
           await touchDockerTemplateMarker(o, a),
           { reused: !0 }
         );
-      (r.log?.(`checking base image "${u.image}"`),
-        await ensureDockerBaseImage(l, u));
+      (r.log?.(`checking base image "${u.image}"`), await ensureDockerBaseImage(l, u));
       let s = `${r.templateKey}-build-${randomUUID().slice(0, 8)}`;
       (r.log?.(`starting template build container`),
         await startDockerContainer({
@@ -85,14 +81,12 @@ function createDockerSandboxBackend(c = {}) {
           }),
           (e) => setDockerNetworkPolicy(l, s, e),
         );
-        (r.seedFiles.length > 0 &&
-          r.log?.(`writing ${r.seedFiles.length} seed file(s)`),
+        (r.seedFiles.length > 0 && r.log?.(`writing ${r.seedFiles.length} seed file(s)`),
           await writeSandboxSeedFiles(e, r.seedFiles),
           r.bootstrap !== void 0 &&
             (r.log?.(`running sandbox bootstrap`),
             await r.bootstrap({
-              use: async () =>
-                createLoggingSandboxSession({ log: r.log, session: e }),
+              use: async () => createLoggingSandboxSession({ log: r.log, session: e }),
             })),
           r.log?.(`stopping template build container`),
           expectDockerSuccess(
@@ -123,13 +117,7 @@ function createDockerSandboxBackend(c = {}) {
     async create(e) {
       await ensureDaemon();
       let n = getDockerContainerName(e.existingMetadata) ?? e.sessionKey,
-        r = await l.run([
-          `container`,
-          `inspect`,
-          `--format`,
-          `{{.State.Running}}`,
-          n,
-        ]);
+        r = await l.run([`container`, `inspect`, `--format`, `{{.State.Running}}`, n]);
       if (r.exitCode === 0)
         r.stdout.trim() !== `true` &&
           expectDockerSuccess(
@@ -138,14 +126,10 @@ function createDockerSandboxBackend(c = {}) {
           );
       else {
         let t;
-        if (e.templateKey === null)
-          (await ensureDockerBaseImage(l, u), (t = u.image));
+        if (e.templateKey === null) (await ensureDockerBaseImage(l, u), (t = u.image));
         else {
           let n = { optionsHash: d, templateKey: e.templateKey };
-          if (
-            ((t = dockerTemplateImageReference(n)),
-            !(await dockerImageExists(l, t)))
-          )
+          if (((t = dockerTemplateImageReference(n)), !(await dockerImageExists(l, t))))
             throw new SandboxTemplateNotProvisionedError({
               backendName: DOCKER_BACKEND_NAME,
               templateKey: e.templateKey,
@@ -160,8 +144,7 @@ function createDockerSandboxBackend(c = {}) {
             cli: l,
             containerName: n,
             image: t,
-            initialNetworkPolicy:
-              e.templateKey === null ? `allow-all` : u.networkPolicy,
+            initialNetworkPolicy: e.templateKey === null ? `allow-all` : u.networkPolicy,
             options: u,
             role: `session`,
             tags: e.tags,
@@ -176,8 +159,7 @@ function createDockerSandboxBackend(c = {}) {
         }
         e.templateKey === null &&
           (await runDockerBaseSetup(l, n),
-          u.networkPolicy !== `allow-all` &&
-            (await setDockerNetworkPolicy(l, n, u.networkPolicy)));
+          u.networkPolicy !== `allow-all` && (await setDockerNetworkPolicy(l, n, u.networkPolicy)));
       }
       let i = buildSandboxSession(
         createDockerInternalSession({

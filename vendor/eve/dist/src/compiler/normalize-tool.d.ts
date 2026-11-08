@@ -8,22 +8,27 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * named framework default during graph resolution, or a dynamic tool
  * resolver that produces tools at runtime.
  */
-export type CompiledToolEntry = {
-    readonly kind: "tool";
-    readonly definition: CompiledToolDefinition;
-} | {
-    readonly kind: "disabled";
-    readonly name: string;
-} | {
-    readonly kind: "workflow-tool";
-    readonly maxSubagents?: number;
-} | {
-    readonly kind: "web-search-tool";
-    readonly provider: "exa" | "parallel";
-} | {
-    readonly kind: "dynamic-tool";
-    readonly definition: CompiledDynamicToolDefinition;
-};
+export type CompiledToolEntry =
+  | {
+      readonly kind: "tool";
+      readonly definition: CompiledToolDefinition;
+    }
+  | {
+      readonly kind: "disabled";
+      readonly name: string;
+    }
+  | {
+      readonly kind: "workflow-tool";
+      readonly maxSubagents?: number;
+    }
+  | {
+      readonly kind: "web-search-tool";
+      readonly provider: "exa" | "parallel";
+    }
+  | {
+      readonly kind: "dynamic-tool";
+      readonly definition: CompiledDynamicToolDefinition;
+    };
 /**
  * Compiles one authored tool module into the normalized tool entry
  * stored on the compiled agent manifest.
@@ -36,4 +41,8 @@ export type CompiledToolEntry = {
  * directories into a slug-safe single segment. Authored `name` fields
  * are rejected by the normalizer.
  */
-export declare function compileToolEntry(agentRoot: string, source: ToolSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledToolEntry>;
+export declare function compileToolEntry(
+  agentRoot: string,
+  source: ToolSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledToolEntry>;

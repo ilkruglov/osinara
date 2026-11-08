@@ -1,10 +1,7 @@
 import { join } from "node:path";
 import { resolveDiscoveryProject } from "#discover/project.js";
 import { discoverAgent } from "#discover/discover-agent.js";
-import {
-  hasDiscoverErrors,
-  summarizeDiscoverDiagnostics,
-} from "#discover/diagnostics.js";
+import { hasDiscoverErrors, summarizeDiscoverDiagnostics } from "#discover/diagnostics.js";
 import { createDiskProjectSource } from "#discover/project-source.js";
 import { writeCompilerArtifacts } from "#compiler/artifacts.js";
 var CompileAgentError = class CompileAgentError extends Error {
@@ -73,16 +70,11 @@ function finishAgentCompilation(e, t) {
 function reportDiscoverWarnings(e) {
   let t = e.filter((e) => e.severity === `warning`);
   if (t.length !== 0)
-    for (let e of t)
-      console.warn(
-        `Warning [${e.code}]: ${e.message}\n  source: ${e.sourcePath}`,
-      );
+    for (let e of t) console.warn(`Warning [${e.code}]: ${e.message}\n  source: ${e.sourcePath}`);
 }
 function formatCompileAgentErrorLines(e) {
   let t = summarizeDiscoverDiagnostics(e),
-    n = [
-      `Discovery failed with ${t.errors} error(s) and ${t.warnings} warning(s).`,
-    ];
+    n = [`Discovery failed with ${t.errors} error(s) and ${t.warnings} warning(s).`];
   if (e.length === 0) return n;
   n.push(`Discovery diagnostics:`);
   for (let t of e)

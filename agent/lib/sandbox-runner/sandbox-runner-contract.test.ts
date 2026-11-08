@@ -8,10 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  parseCreateSandboxRequest,
-  sandboxSeedDigest,
-} from "./sandbox-runner-contract.js";
+import { parseCreateSandboxRequest, sandboxSeedDigest } from "./sandbox-runner-contract.js";
 
 const PERSONAL_WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const FAMILY_WORKSPACE_ID = "22222222-2222-4222-8222-222222222222";
@@ -22,16 +19,18 @@ const EMPTY_SEED_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4959
 
 describe("parseCreateSandboxRequest", () => {
   it("accepts trusted personal and family mounts with persistent tools", () => {
-    expect(parseCreateSandboxRequest({
-      access: "trusted",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [
-        { mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID },
-        { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
-      ],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    })).toEqual({
+    expect(
+      parseCreateSandboxRequest({
+        access: "trusted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [
+          { mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID },
+          { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
+        ],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: EMPTY_SEED_DIGEST,
+      }),
+    ).toEqual({
       access: "trusted",
       eveSessionId: EVE_SESSION_ID,
       mounts: [
@@ -44,13 +43,15 @@ describe("parseCreateSandboxRequest", () => {
   });
 
   it("accepts only a group mount for a restricted session", () => {
-    expect(parseCreateSandboxRequest({
-      access: "restricted",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    })).toMatchObject({ access: "restricted" });
+    expect(
+      parseCreateSandboxRequest({
+        access: "restricted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: EMPTY_SEED_DIGEST,
+      }),
+    ).toMatchObject({ access: "restricted" });
   });
 
   it.each([
@@ -88,25 +89,29 @@ describe("parseCreateSandboxRequest", () => {
     const seedFiles = [
       { contentBase64: "c2VjcmV0", path: "/credentials/google-workspace/credentials.json" },
     ];
-    expect(() => parseCreateSandboxRequest({
-      access: "restricted",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: sandboxSeedDigest(seedFiles),
-      seedFiles,
-    })).toThrowError(/AGENT_SANDBOX_RUNNER_SCOPE_INVALID/);
+    expect(() =>
+      parseCreateSandboxRequest({
+        access: "restricted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: sandboxSeedDigest(seedFiles),
+        seedFiles,
+      }),
+    ).toThrowError(/AGENT_SANDBOX_RUNNER_SCOPE_INVALID/);
   });
 
   it("rejects a mismatched digest and trusted tool paths in a restricted sandbox", () => {
     const seedFiles = [{ contentBase64: "c2tpbGw=", path: "/tools/personal/skill.md" }];
-    expect(() => parseCreateSandboxRequest({
-      access: "restricted",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-      seedFiles,
-    })).toThrowError(/AGENT_SANDBOX_RUNNER_SCOPE_INVALID/);
+    expect(() =>
+      parseCreateSandboxRequest({
+        access: "restricted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: EMPTY_SEED_DIGEST,
+        seedFiles,
+      }),
+    ).toThrowError(/AGENT_SANDBOX_RUNNER_SCOPE_INVALID/);
   });
 });

@@ -34,23 +34,29 @@ describe("family Telegram attachment tools", () => {
     });
 
     await expect(
-      listTelegramAttachments.execute({
-        cursor: "cursor-0",
-        fileName: "отчёт.pdf",
-        limit: 12,
-      }, { callId: "call-1" } as ToolContext),
+      listTelegramAttachments.execute(
+        {
+          cursor: "cursor-0",
+          fileName: "отчёт.pdf",
+          limit: 12,
+        },
+        { callId: "call-1" } as ToolContext,
+      ),
     ).resolves.toEqual({
       items: [{ attachmentId: "attachment-1" }],
       nextCursor: "cursor-1",
     });
-    expect(calls.list).toHaveBeenCalledWith(expect.objectContaining({
-      familyId: "family-1",
-      groupId: "group-1",
-    }), {
-      cursor: "cursor-0",
-      fileName: "отчёт.pdf",
-      limit: 12,
-      messageThreadId: "42",
-    });
+    expect(calls.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        familyId: "family-1",
+        groupId: "group-1",
+      }),
+      {
+        cursor: "cursor-0",
+        fileName: "отчёт.pdf",
+        limit: 12,
+        messageThreadId: "42",
+      },
+    );
   });
 });

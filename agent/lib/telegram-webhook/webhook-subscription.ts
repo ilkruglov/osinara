@@ -31,7 +31,11 @@ import {
   type TelegramWebhookCallOptions,
   type TelegramWebhookInfo,
 } from "./webhook-info.js";
-import { expectedTelegramWebhookUrl, sameTelegramWebhookUrl, telegramWebhookIpAddress } from "./webhook-target.js";
+import {
+  expectedTelegramWebhookUrl,
+  sameTelegramWebhookUrl,
+  telegramWebhookIpAddress,
+} from "./webhook-target.js";
 
 export type TelegramWebhookSubscriptionOutcome =
   | "custom_certificate"
@@ -49,7 +53,10 @@ function sameUpdates(current: readonly string[] | null): boolean {
   return current.every((type) => wanted.has(type)) && new Set(current).size === wanted.size;
 }
 
-function ownWebhook(info: TelegramWebhookInfo, expectedUrl: string): TelegramWebhookSubscriptionOutcome | null {
+function ownWebhook(
+  info: TelegramWebhookInfo,
+  expectedUrl: string,
+): TelegramWebhookSubscriptionOutcome | null {
   if (info.url === "") return "no_webhook";
   if (!sameTelegramWebhookUrl(info.url, expectedUrl)) return "foreign_url";
   if (info.hasCustomCertificate) return "custom_certificate";
@@ -66,7 +73,10 @@ export async function ensureTelegramWebhookSubscription(
   },
 ): Promise<TelegramWebhookSubscriptionOutcome> {
   if (!SECRET_PATTERN.test(options.secretToken)) {
-    throw new AppError("AGENT_TELEGRAM_CONFIG_MISSING", "Не задан корректный секрет вебхука Telegram");
+    throw new AppError(
+      "AGENT_TELEGRAM_CONFIG_MISSING",
+      "Не задан корректный секрет вебхука Telegram",
+    );
   }
   const ipAddress = telegramWebhookIpAddress(options.ipAddress);
   const expectedUrl = expectedTelegramWebhookUrl(options.publicBaseUrl);
@@ -91,7 +101,10 @@ export async function ensureTelegramWebhookSubscription(
       method: "setWebhook",
     });
   } catch {
-    throw new AppError("AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_FAILED", "Не удалось связаться с Telegram для обновления вебхука");
+    throw new AppError(
+      "AGENT_TELEGRAM_WEBHOOK_SUBSCRIPTION_FAILED",
+      "Не удалось связаться с Telegram для обновления вебхука",
+    );
   }
   if (!response.ok || (response.body as { result?: unknown } | null)?.result !== true) {
     throw new AppError(

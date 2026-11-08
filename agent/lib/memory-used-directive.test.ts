@@ -15,21 +15,28 @@ const B = "mem_fedcba9876543210fedcba9876543210";
 
 describe("extractMemoryUsedDirective", () => {
   it("strips the trailing directive and returns unique valid refs", () => {
-    expect(extractMemoryUsedDirective(`Гоша живёт дома.\n<memory-used>${A}, ${A},${B}</memory-used>`))
-      .toEqual({ declared: true, memoryRefs: [A, B], message: "Гоша живёт дома." });
+    expect(
+      extractMemoryUsedDirective(`Гоша живёт дома.\n<memory-used>${A}, ${A},${B}</memory-used>`),
+    ).toEqual({ declared: true, memoryRefs: [A, B], message: "Гоша живёт дома." });
   });
 
   it("drops a directive placed mid-text and ignores malformed refs", () => {
-    expect(extractMemoryUsedDirective("Да.<memory-used>x, mem_short</memory-used> Точно."))
-      .toEqual({ declared: true, memoryRefs: [], message: "Да. Точно." });
+    expect(extractMemoryUsedDirective("Да.<memory-used>x, mem_short</memory-used> Точно.")).toEqual(
+      { declared: true, memoryRefs: [], message: "Да. Точно." },
+    );
   });
 
   it("leaves text without a directive untouched", () => {
-    expect(extractMemoryUsedDirective("Просто ответ")).toEqual({ declared: false, memoryRefs: [], message: "Просто ответ" });
+    expect(extractMemoryUsedDirective("Просто ответ")).toEqual({
+      declared: false,
+      memoryRefs: [],
+      message: "Просто ответ",
+    });
   });
 
   it("reports an empty directive as declared with no refs", () => {
-    expect(extractMemoryUsedDirective("Ничего не пригодилось.\n<memory-used></memory-used>"))
-      .toEqual({ declared: true, memoryRefs: [], message: "Ничего не пригодилось." });
+    expect(
+      extractMemoryUsedDirective("Ничего не пригодилось.\n<memory-used></memory-used>"),
+    ).toEqual({ declared: true, memoryRefs: [], message: "Ничего не пригодилось." });
   });
 });

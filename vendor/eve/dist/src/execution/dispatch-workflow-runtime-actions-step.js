@@ -1,17 +1,11 @@
 import { createLogger } from "#internal/logging.js";
 import { BundleKey } from "#runtime/sessions/runtime-context-keys.js";
 import { deserializeContext } from "#context/serialize.js";
-import {
-  createDurableSessionState,
-  readDurableSession,
-} from "#execution/durable-session-store.js";
+import { createDurableSessionState, readDurableSession } from "#execution/durable-session-store.js";
 import { hydrateDurableSession } from "#execution/session.js";
 import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
 import { setPendingRuntimeActionBatch } from "#harness/runtime-actions.js";
-import {
-  getSubagentDelegationName,
-  isSubagentDelegationAction,
-} from "#harness/subagent-depth.js";
+import { getSubagentDelegationName, isSubagentDelegationAction } from "#harness/subagent-depth.js";
 import { dispatchRuntimeActionsStep } from "#execution/dispatch-runtime-actions-step.js";
 import { dispatchTaskStep } from "#execution/tasks/parent/dispatch-task-step.js";
 import { getPendingWorkflowInterrupt } from "#harness/workflow-interrupt-state.js";
@@ -22,11 +16,9 @@ async function dispatchWorkflowRuntimeActionsStep(e) {
   "use step";
   let n = await readDurableSession(e.sessionState),
     r = getPendingWorkflowInterrupt(n.state);
-  if (r === void 0)
-    return { results: [], sessionState: e.sessionState, pendingTasks: [] };
+  if (r === void 0) return { results: [], sessionState: e.sessionState, pendingTasks: [] };
   let i = buildRuntimeActionsFromWorkflowInterrupt(r.interrupt);
-  if (i.length === 0)
-    return { results: [], sessionState: e.sessionState, pendingTasks: [] };
+  if (i.length === 0) return { results: [], sessionState: e.sessionState, pendingTasks: [] };
   let a = await deserializeContext(e.serializedContext),
     o = a.require(BundleKey),
     s = resolveEffectiveAgentRuntime(o, a),
@@ -40,16 +32,13 @@ async function dispatchWorkflowRuntimeActionsStep(e) {
         log.warn(`workflow subagent limit reached; blocking delegated call`, {
           callId: e.callId,
           maxSubagents: c.maxSubagents,
-          subagentName: isSubagentDelegationAction(e)
-            ? getSubagentDelegationName(e)
-            : e.kind,
+          subagentName: isSubagentDelegationAction(e) ? getSubagentDelegationName(e) : e.kind,
           usedCalls: c.usedCalls,
         }),
         createWorkflowSubagentLimitResult({ action: e, plan: c })
       ),
     );
-  if (c.allowed.length === 0)
-    return { results: l, sessionState: e.sessionState, pendingTasks: [] };
+  if (c.allowed.length === 0) return { results: l, sessionState: e.sessionState, pendingTasks: [] };
   let u = hydrateDurableSession({
       compactionOverrides: { thresholdPercent: s.thresholdPercent },
       durable: n,

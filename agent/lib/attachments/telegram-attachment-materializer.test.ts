@@ -32,12 +32,14 @@ describe("createTelegramAttachmentMaterializer", () => {
       messageId: "42",
     };
     const findAttachment = vi.fn().mockResolvedValue(reference);
-    const persist = vi.fn().mockResolvedValue([{
-      mediaType: "application/pdf",
-      path: "inbox/groups/00000000-0000-4000-8000-000000000002/42/договор.pdf",
-      scope: "family",
-      telegramMessageId: "42",
-    }]);
+    const persist = vi.fn().mockResolvedValue([
+      {
+        mediaType: "application/pdf",
+        path: "inbox/groups/00000000-0000-4000-8000-000000000002/42/договор.pdf",
+        scope: "family",
+        telegramMessageId: "42",
+      },
+    ]);
     const materialize = createTelegramAttachmentMaterializer({ findAttachment, persist });
 
     await expect(materialize(auth, "00000000-0000-4000-8000-000000000099")).resolves.toEqual({
@@ -77,21 +79,24 @@ describe("createTelegramAttachmentMaterializer", () => {
       messageId: "43",
     };
     const findAttachment = vi.fn().mockResolvedValue(reference);
-    const persist = vi.fn().mockResolvedValue([{
-      mediaType: "text/markdown",
-      path: "inbox/43/notes.md",
-      scope: "group",
-      telegramMessageId: "43",
-    }]);
+    const persist = vi.fn().mockResolvedValue([
+      {
+        mediaType: "text/markdown",
+        path: "inbox/43/notes.md",
+        scope: "group",
+        telegramMessageId: "43",
+      },
+    ]);
     const materialize = createTelegramAttachmentMaterializer({ findAttachment, persist });
 
-    await expect(materialize(
-      externalAuth,
-      "00000000-0000-4000-8000-000000000098",
-    )).resolves.toMatchObject({ path: "inbox/43/notes.md", scope: "group" });
-    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
-      auth: externalAuth,
-      scope: "group",
-    }));
+    await expect(
+      materialize(externalAuth, "00000000-0000-4000-8000-000000000098"),
+    ).resolves.toMatchObject({ path: "inbox/43/notes.md", scope: "group" });
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auth: externalAuth,
+        scope: "group",
+      }),
+    );
   });
 });

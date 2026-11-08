@@ -36,7 +36,10 @@ let orphanJobCursor = "0";
 const PRUNABLE_RUN_NAMES = ["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"];
 
 interface WorkflowQueryClient {
-  query(text: string, values?: readonly unknown[]): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
+  query(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
 }
 
 export async function pruneTerminalWorkflowRuns(
@@ -115,7 +118,9 @@ export async function pruneTerminalWorkflowRuns(
         AND NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs AS ref WHERE ref.hash = blob.hash)`,
   );
   if ((blobs.rowCount ?? 0) > 0) {
-    console.info(JSON.stringify({ code: "AGENT_WORKFLOW_PAYLOAD_BLOBS_PRUNED", deleted: blobs.rowCount }));
+    console.info(
+      JSON.stringify({ code: "AGENT_WORKFLOW_PAYLOAD_BLOBS_PRUNED", deleted: blobs.rowCount }),
+    );
   }
   return deleted;
 }
@@ -143,7 +148,10 @@ export async function pruneTerminalWorkflowRunsWithin(
 export async function pruneConfiguredTerminalWorkflowRuns(): Promise<number> {
   const connectionString = process.env.WORKFLOW_POSTGRES_URL;
   if (!connectionString) {
-    throw new AppError("AGENT_WORKFLOW_DATABASE_CONFIG_MISSING", "Не задано подключение к базе Workflow");
+    throw new AppError(
+      "AGENT_WORKFLOW_DATABASE_CONFIG_MISSING",
+      "Не задано подключение к базе Workflow",
+    );
   }
   const client = new Client({ connectionString });
   await client.connect();
@@ -151,10 +159,16 @@ export async function pruneConfiguredTerminalWorkflowRuns(): Promise<number> {
     const deleted = await pruneTerminalWorkflowRunsWithin(client);
     // Session deletion follows in the same sweep: a failed job release must not stop it.
     try {
-      orphanJobCursor = (await releaseOrphanWorkflowJobs(client, { afterId: orphanJobCursor })).nextAfterId;
+      orphanJobCursor = (await releaseOrphanWorkflowJobs(client, { afterId: orphanJobCursor }))
+        .nextAfterId;
     } catch (error) {
       orphanJobCursor = "0";
-      console.error(JSON.stringify({ code: "AGENT_WORKFLOW_ORPHAN_JOBS_FAILED", message: error instanceof Error ? error.message : String(error) }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_WORKFLOW_ORPHAN_JOBS_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
     return deleted;
   } finally {

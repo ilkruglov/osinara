@@ -7,10 +7,7 @@ import {
   omitProvidedArgumentsFromSchema,
   resolveProvidedArguments,
 } from "#runtime/connections/provided-arguments.js";
-import {
-  passesToolFilter,
-  resolveHeaders,
-} from "#runtime/connections/mcp-client.js";
+import { passesToolFilter, resolveHeaders } from "#runtime/connections/mcp-client.js";
 import {
   HTTP_METHODS,
   operationDescription,
@@ -23,14 +20,8 @@ import {
   derefSchema,
   isArray,
 } from "#runtime/connections/openapi-schema.js";
-import {
-  applySecurity,
-  resolveSecurity,
-} from "#runtime/connections/openapi-security.js";
-import {
-  extractServerUrl,
-  parseSpecDocument,
-} from "#runtime/connections/openapi-spec.js";
+import { applySecurity, resolveSecurity } from "#runtime/connections/openapi-security.js";
+import { extractServerUrl, parseSpecDocument } from "#runtime/connections/openapi-spec.js";
 const log = createLogger(`runtime.connections.openapi-client`),
   SWAGGER_PARAMETER_SCHEMA_KEYS = [
     `default`,
@@ -70,9 +61,7 @@ var OpenApiConnectionClient = class {
     let i = await this.#r(),
       a = i.operations.get(e);
     if (a === void 0)
-      throw Error(
-        `Tool "${e}" not found in connection "${this.#n.connectionName}".`,
-      );
+      throw Error(`Tool "${e}" not found in connection "${this.#n.connectionName}".`);
     return this.#f(a, i.baseUrl, isObject(t) ? t : {}, {
       abortSignal: r?.abortSignal,
     });
@@ -132,10 +121,7 @@ var OpenApiConnectionClient = class {
   }
   #a(e) {
     let t = this.#n.url,
-      n =
-        typeof t == `string` && t.trim().length > 0
-          ? t
-          : extractServerUrl(e, this.#n.spec);
+      n = typeof t == `string` && t.trim().length > 0 ? t : extractServerUrl(e, this.#n.spec);
     if (n === void 0)
       throw Error(
         `OpenAPI connection "${this.#n.connectionName}" has no base URL: set "baseUrl" or ensure the document declares an absolute "servers" entry or Swagger "host".`,
@@ -145,9 +131,7 @@ var OpenApiConnectionClient = class {
   async #o() {
     let e = this.#n.spec;
     if (e === void 0)
-      throw Error(
-        `OpenAPI connection "${this.#n.connectionName}" is missing its "spec" source.`,
-      );
+      throw Error(`OpenAPI connection "${this.#n.connectionName}" is missing its "spec" source.`);
     if (typeof e != `string`) return e;
     assertSecureUrl(e, this.#n.connectionName, `spec`);
     let t;
@@ -162,10 +146,7 @@ var OpenApiConnectionClient = class {
         `OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": ${String(t)}`,
       );
     }
-    if (
-      (t.redirected && assertSecureUrl(t.url, this.#n.connectionName, `spec`),
-      !t.ok)
-    )
+    if ((t.redirected && assertSecureUrl(t.url, this.#n.connectionName, `spec`), !t.ok))
       throw Error(
         `OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": HTTP ${t.status}.`,
       );
@@ -244,8 +225,7 @@ var OpenApiConnectionClient = class {
           i = `application/json` in t ? `application/json` : Object.keys(t)[0];
         if (i !== void 0) {
           let a = t[i],
-            o =
-              isObject(a) && isObject(a.schema) ? derefSchema(e, a.schema) : {};
+            o = isObject(a) && isObject(a.schema) ? derefSchema(e, a.schema) : {};
           return { required: r.required === !0, contentType: i, schema: o };
         }
       }
@@ -255,8 +235,7 @@ var OpenApiConnectionClient = class {
   #u(e, t) {
     if (isObject(t.schema)) return derefSchema(e, t.schema);
     let r = {};
-    for (let e of SWAGGER_PARAMETER_SCHEMA_KEYS)
-      t[e] !== void 0 && (r[e] = t[e]);
+    for (let e of SWAGGER_PARAMETER_SCHEMA_KEYS) t[e] !== void 0 && (r[e] = t[e]);
     return derefSchema(e, r);
   }
   #d(e, t) {
@@ -301,8 +280,7 @@ var OpenApiConnectionClient = class {
     let f;
     e.requestBody !== void 0 &&
       i.body !== void 0 &&
-      ((f = JSON.stringify(i.body)),
-      (a[`content-type`] = e.requestBody.contentType));
+      ((f = JSON.stringify(i.body)), (a[`content-type`] = e.requestBody.contentType));
     let p = await fetch(d, {
       method: e.method.toUpperCase(),
       headers: a,
@@ -333,10 +311,7 @@ function assertSecureUrl(e, n, r) {
   } catch {
     throw Error(`OpenAPI connection "${n}" has an invalid ${r} URL "${e}".`);
   }
-  if (
-    i.protocol !== `https:` &&
-    !(i.protocol === `http:` && isLoopbackHostname(i.hostname))
-  )
+  if (i.protocol !== `https:` && !(i.protocol === `http:` && isLoopbackHostname(i.hostname)))
     throw Error(
       `OpenAPI connection "${n}" must use https for its ${r} (got "${i.protocol}//${i.host}").`,
     );

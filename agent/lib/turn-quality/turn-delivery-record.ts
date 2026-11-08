@@ -20,16 +20,25 @@ export async function recordTurnDelivery(
   const identity = turnIdentity(ctx);
   if (!identity) return;
   try {
-    await record({
-      chatKind: identity.chatKind, eveSessionId: ctx.session.id, eveTurnId: ctx.session.turn.id,
-      familyId: identity.familyId, telegramChatId: identity.telegramChatId, triggeringEntryId: identity.triggeringEntryId,
-    }, { deliveredAt, replyMessageIds, versions: runtimeVersions() });
+    await record(
+      {
+        chatKind: identity.chatKind,
+        eveSessionId: ctx.session.id,
+        eveTurnId: ctx.session.turn.id,
+        familyId: identity.familyId,
+        telegramChatId: identity.telegramChatId,
+        triggeringEntryId: identity.triggeringEntryId,
+      },
+      { deliveredAt, replyMessageIds, versions: runtimeVersions() },
+    );
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_TURN_EVALUATION_DELIVERY_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-      eveSessionId: ctx.session.id,
-      eveTurnId: ctx.session.turn.id,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TURN_EVALUATION_DELIVERY_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+        eveSessionId: ctx.session.id,
+        eveTurnId: ctx.session.turn.id,
+      }),
+    );
   }
 }

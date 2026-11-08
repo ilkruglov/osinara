@@ -12,10 +12,7 @@ import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { ReferencedMemoryItem, ReferencedMemoryRow } from "./memory-record.js";
 import { rowToReferencedMemory } from "./memory-record.js";
-import {
-  MEMORY_REF_PATTERN,
-  type ModelMemoryEvidence,
-} from "./model-memory.js";
+import { MEMORY_REF_PATTERN, type ModelMemoryEvidence } from "./model-memory.js";
 
 interface MemoryListRow extends ReferencedMemoryRow {
   source_author_label: string;
@@ -47,15 +44,26 @@ export const memoryListRepository = {
     auth: MemoryAuthorization,
     options: { cursor?: string; limit: number; scope?: MemoryScope; memoryRefs?: string[] },
   ): Promise<{ items: ReferencedMemoryItem[]; nextCursor: string | null }> {
-    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > MEMORY_LIST_MAX_LIMIT) {
+    if (
+      !Number.isInteger(options.limit) ||
+      options.limit < 1 ||
+      options.limit > MEMORY_LIST_MAX_LIMIT
+    ) {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный размер страницы памяти");
     }
     if (options.scope && !auth.scopes.includes(options.scope)) {
       throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
     }
-    if (options.memoryRefs && (options.memoryRefs.length === 0 || options.memoryRefs.length > MEMORY_LIST_MAX_LIMIT ||
-      !options.memoryRefs.every((ref) => MEMORY_REF_PATTERN.test(ref)))) {
-      throw new AppError("AGENT_MEMORY_REF_INVALID", "Нужны точные ссылки из текущих результатов памяти");
+    if (
+      options.memoryRefs &&
+      (options.memoryRefs.length === 0 ||
+        options.memoryRefs.length > MEMORY_LIST_MAX_LIMIT ||
+        !options.memoryRefs.every((ref) => MEMORY_REF_PATTERN.test(ref)))
+    ) {
+      throw new AppError(
+        "AGENT_MEMORY_REF_INVALID",
+        "Нужны точные ссылки из текущих результатов памяти",
+      );
     }
     // Bind the opaque cursor to its authorization and filters so it cannot cross result sets.
     const cursorBinding = paginationFilterDigest([
@@ -118,9 +126,10 @@ export const memoryListRepository = {
           observedAt: row.source_observed_at.toISOString(),
         },
       })),
-      nextCursor: hasNext && last
-        ? `${last.updated_at.toISOString()}|${last.memory_ref}|${cursorBinding}`
-        : null,
+      nextCursor:
+        hasNext && last
+          ? `${last.updated_at.toISOString()}|${last.memory_ref}|${cursorBinding}`
+          : null,
     };
   },
 };

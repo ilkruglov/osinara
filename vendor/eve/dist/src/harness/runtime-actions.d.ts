@@ -1,7 +1,13 @@
 import type { ModelMessage, ToolSet, TypedToolCall } from "ai";
 import type { RuntimeActionRequest } from "#runtime/actions/types.js";
 import { type JsonObject } from "#shared/json.js";
-import type { HarnessEmitFn, HarnessSession, HarnessToolMap, SessionStateMap, StepInput } from "#harness/types.js";
+import type {
+  HarnessEmitFn,
+  HarnessSession,
+  HarnessToolMap,
+  SessionStateMap,
+  StepInput,
+} from "#harness/types.js";
 /**
  * Serializable event coordinates for one pending runtime-action batch.
  *
@@ -9,9 +15,9 @@ import type { HarnessEmitFn, HarnessSession, HarnessToolMap, SessionStateMap, St
  * same turn and step identity as the originating `actions.requested` batch.
  */
 interface PendingRuntimeActionEventMetadata {
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }
 /**
  * Serializable pending runtime-action batch stored on `session.state`.
@@ -21,20 +27,22 @@ interface PendingRuntimeActionEventMetadata {
  * authority for continuing, settling, and cancelling children.
  */
 export interface PendingRuntimeActionBatch {
-    readonly actions: readonly RuntimeActionRequest[];
-    readonly event: PendingRuntimeActionEventMetadata;
-    readonly responseMessages: readonly ModelMessage[];
+  readonly actions: readonly RuntimeActionRequest[];
+  readonly event: PendingRuntimeActionEventMetadata;
+  readonly responseMessages: readonly ModelMessage[];
 }
 /**
  * Outcome of resolving a pending runtime-action batch.
  */
 interface ResolvePendingRuntimeActionsResult {
-    readonly messages: ModelMessage[];
-    readonly outcome: "continue" | "resolved" | "unresolved";
-    readonly session: HarnessSession;
+  readonly messages: ModelMessage[];
+  readonly outcome: "continue" | "resolved" | "unresolved";
+  readonly session: HarnessSession;
 }
 /** Returns the pending runtime-action batch stored on the session, if any. */
-export declare function getPendingRuntimeActionBatch(state: SessionStateMap | undefined): PendingRuntimeActionBatch | undefined;
+export declare function getPendingRuntimeActionBatch(
+  state: SessionStateMap | undefined,
+): PendingRuntimeActionBatch | undefined;
 /**
  * Returns true when the session is parked on a pending runtime-action batch.
  */
@@ -44,13 +52,15 @@ export declare function clearPendingRuntimeActionBatch(session: HarnessSession):
  * Stores one pending runtime-action batch on the session.
  */
 export declare function setPendingRuntimeActionBatch(input: {
-    readonly actions: readonly RuntimeActionRequest[];
-    readonly event: PendingRuntimeActionEventMetadata;
-    readonly responseMessages: readonly ModelMessage[];
-    readonly session: HarnessSession;
+  readonly actions: readonly RuntimeActionRequest[];
+  readonly event: PendingRuntimeActionEventMetadata;
+  readonly responseMessages: readonly ModelMessage[];
+  readonly session: HarnessSession;
 }): HarnessSession;
 /** Rejects an ambiguous action batch before any result or side effect can bind by call id. */
-export declare function assertUniqueRuntimeActionCallIds(actions: readonly RuntimeActionRequest[]): void;
+export declare function assertUniqueRuntimeActionCallIds(
+  actions: readonly RuntimeActionRequest[],
+): void;
 /**
  * Resolves one pending runtime-action batch back into model history.
  *
@@ -60,16 +70,16 @@ export declare function assertUniqueRuntimeActionCallIds(actions: readonly Runti
  * `action.result` events back onto the parent stream.
  */
 export declare function resolvePendingRuntimeActions(input: {
-    readonly emit?: HarnessEmitFn;
-    readonly session: HarnessSession;
-    readonly stepInput?: StepInput;
+  readonly emit?: HarnessEmitFn;
+  readonly session: HarnessSession;
+  readonly stepInput?: StepInput;
 }): Promise<ResolvePendingRuntimeActionsResult>;
 /**
  * Projects one AI SDK tool call into the eve runtime-action contract.
  */
 export declare function createRuntimeActionRequestFromToolCall(input: {
-    readonly toolCall: TypedToolCall<ToolSet>;
-    readonly tools: HarnessToolMap;
+  readonly toolCall: TypedToolCall<ToolSet>;
+  readonly tools: HarnessToolMap;
 }): RuntimeActionRequest;
 /**
  * Coerces an AI SDK tool-call `input` into the runtime-action `JsonObject`
@@ -80,8 +90,11 @@ export declare function createRuntimeActionRequestFromToolCall(input: {
  * arguments as text, and provider-executed tool calls can surface that raw
  * string — or an empty string when the model sends no arguments.
  */
-export declare function resolveToolCallInputObject(value: unknown, context: {
+export declare function resolveToolCallInputObject(
+  value: unknown,
+  context: {
     readonly callId: string;
     readonly toolName: string;
-}): JsonObject;
+  },
+): JsonObject;
 export {};

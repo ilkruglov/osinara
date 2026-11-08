@@ -89,7 +89,8 @@ async function requireConversationAccess(
     throw new AppError("AGENT_PROFILE_VIEW_SCOPE_DENIED", "Профиль недоступен в текущем чате");
   }
   if (
-    (conversation.scope === "personal" && (!auth.userId || conversation.owner_user_id !== auth.userId)) ||
+    (conversation.scope === "personal" &&
+      (!auth.userId || conversation.owner_user_id !== auth.userId)) ||
     (conversation.scope !== "personal" && conversation.telegram_group_id !== auth.groupId)
   ) {
     throw new AppError("AGENT_PROFILE_VIEW_SCOPE_DENIED", "Профиль относится к другому чату");
@@ -131,24 +132,26 @@ async function loadSubjects(
   input: CreateProfileViewInput,
   conversation: ConversationBoundary,
 ): Promise<Array<SubjectRow & { priority: ProfileSubjectPriority }>> {
-  const timelineReply = input.replyTelegramUserId === null && input.replyTimelineSequence
-    ? await client.query<{ telegram_user_id: string }>(
-        `SELECT telegram_user_id FROM telegram_group_messages
+  const timelineReply =
+    input.replyTelegramUserId === null && input.replyTimelineSequence
+      ? await client.query<{ telegram_user_id: string }>(
+          `SELECT telegram_user_id FROM telegram_group_messages
          WHERE conversation_id = $1 AND sequence_id = $2 AND actor_kind = 'user'
            AND telegram_user_id IS NOT NULL`,
-        [input.conversationId, input.replyTimelineSequence],
-      )
-    : null;
+          [input.conversationId, input.replyTimelineSequence],
+        )
+      : null;
   const signals = signalPriority(
     input,
     input.replyTelegramUserId ?? timelineReply?.rows[0]?.telegram_user_id ?? null,
   );
   // A suppressed current author is out of the view entirely: not by the direct pick, and not
   // through a retrieval-related claim about them, or the card returned on the very next turn.
-  const suppressedTelegramUserId = input.suppressCurrentAuthor === true ? input.currentTelegramUserId : null;
-  const telegramUserIds = (conversation.scope === "personal"
-    ? [auth.telegramUserId]
-    : [...signals.keys()]).filter((telegramUserId) => telegramUserId !== suppressedTelegramUserId);
+  const suppressedTelegramUserId =
+    input.suppressCurrentAuthor === true ? input.currentTelegramUserId : null;
+  const telegramUserIds = (
+    conversation.scope === "personal" ? [auth.telegramUserId] : [...signals.keys()]
+  ).filter((telegramUserId) => telegramUserId !== suppressedTelegramUserId);
   const dormantBefore = new Date(input.now.getTime() - PROFILE_SELECTION_DORMANCY_MILLISECONDS);
   await client.query(
     `UPDATE profile_subjects SET dormant_at = $2, updated_at = now()
@@ -192,8 +195,14 @@ async function loadSubjects(
                  THEN app_user.telegram_user_id ELSE participant.telegram_user_id END)
            IS DISTINCT FROM $6::text
      ORDER BY subject.subject_ref`,
-    [input.conversationId, telegramUserIds, input.retrievalClaimIds, conversation.scope, auth.familyId,
-      suppressedTelegramUserId],
+    [
+      input.conversationId,
+      telegramUserIds,
+      input.retrievalClaimIds,
+      conversation.scope,
+      auth.familyId,
+      suppressedTelegramUserId,
+    ],
   );
   return result.rows.map((row) => ({
     ...row,
@@ -208,10 +217,10 @@ async function loadClaims(
   subjects: readonly SubjectRow[],
 ): Promise<ClaimRow[]> {
   const subjectUserIds = subjects.flatMap((subject) =>
-    subject.subject_user_id ? [subject.subject_user_id] : []
+    subject.subject_user_id ? [subject.subject_user_id] : [],
   );
   const subjectParticipantIds = subjects.flatMap((subject) =>
-    subject.subject_participant_id ? [subject.subject_participant_id] : []
+    subject.subject_participant_id ? [subject.subject_participant_id] : [],
   );
   const result = await client.query<ClaimRow>(
     `SELECT claim.id, ref.memory_ref, claim.content, claim.kind, claim.attribute, claim.confirmation,
@@ -256,8 +265,14 @@ async function loadClaims(
            AND claim.subject_participant_id = ANY($6::uuid[]))
        )
      ORDER BY claim.id`,
-    [auth.familyId, conversation.scope, auth.userId, subjectUserIds, auth.groupId,
-      subjectParticipantIds],
+    [
+      auth.familyId,
+      conversation.scope,
+      auth.userId,
+      subjectUserIds,
+      auth.groupId,
+      subjectParticipantIds,
+    ],
   );
   return result.rows;
 }
@@ -270,61 +285,91 @@ export const profileViewRepository = {
       const conversation = await requireConversationAccess(client, auth, input.conversationId);
       const subjects = await loadSubjects(client, auth, input, conversation);
       const claims = await loadClaims(client, auth, conversation, subjects);
-      const subjectByUser = new Map(subjects.flatMap((subject) =>
-        subject.subject_user_id ? [[subject.subject_user_id, subject] as const] : []
-      ));
-      const subjectByParticipant = new Map(subjects.flatMap((subject) =>
-        subject.subject_participant_id ? [[subject.subject_participant_id, subject] as const] : []
-      ));
+      const subjectByUser = new Map(
+        subjects.flatMap((subject) =>
+          subject.subject_user_id ? [[subject.subject_user_id, subject] as const] : [],
+        ),
+      );
+      const subjectByParticipant = new Map(
+        subjects.flatMap((subject) =>
+          subject.subject_participant_id
+            ? [[subject.subject_participant_id, subject] as const]
+            : [],
+        ),
+      );
       const candidates = claims.flatMap((claim): ProfileClaimCandidate[] => {
-        const subject = conversation.scope === "group" && claim.subject_participant_id
-          ? subjectByParticipant.get(claim.subject_participant_id)
-          : subjectByUser.get(claim.subject_user_id ?? claim.linked_subject_user_id ?? "");
+        const subject =
+          conversation.scope === "group" && claim.subject_participant_id
+            ? subjectByParticipant.get(claim.subject_participant_id)
+            : subjectByUser.get(claim.subject_user_id ?? claim.linked_subject_user_id ?? "");
         if (!subject) return [];
-        return [{
-          attribute: claim.attribute,
-          claimStatus: claim.claim_status,
-          confirmation: claim.confirmation,
-          content: claim.content,
-          evidenceKind: claim.evidence_kind,
-          kind: claim.kind,
-          lastVerifiedAt: subject.last_verified_at.toISOString(),
-          memoryRef: claim.memory_ref,
-          originLabel: claim.origin_label,
-          originScope: claim.origin_scope,
-          observedAt: claim.observed_at.toISOString(),
-          priority: subject.priority,
-          profileEligible: claim.profile_eligible,
-          sensitivity: claim.sensitivity,
-          sourceAuthorLabel: claim.source_author_label,
-          subjectLabel: participantLabel(subject.display_label_snapshot, subject.username_snapshot)
-            ?? subject.display_label_snapshot,
-          subjectRef: subject.subject_ref,
-          updatedAt: claim.updated_at.toISOString(),
-        }];
+        return [
+          {
+            attribute: claim.attribute,
+            claimStatus: claim.claim_status,
+            confirmation: claim.confirmation,
+            content: claim.content,
+            evidenceKind: claim.evidence_kind,
+            kind: claim.kind,
+            lastVerifiedAt: subject.last_verified_at.toISOString(),
+            memoryRef: claim.memory_ref,
+            originLabel: claim.origin_label,
+            originScope: claim.origin_scope,
+            observedAt: claim.observed_at.toISOString(),
+            priority: subject.priority,
+            profileEligible: claim.profile_eligible,
+            sensitivity: claim.sensitivity,
+            sourceAuthorLabel: claim.source_author_label,
+            subjectLabel:
+              participantLabel(subject.display_label_snapshot, subject.username_snapshot) ??
+              subject.display_label_snapshot,
+            subjectRef: subject.subject_ref,
+            updatedAt: claim.updated_at.toISOString(),
+          },
+        ];
       });
       const selection = selectProfileClaims(candidates, input.now);
       const selectedClaims = selection.subjects.flatMap((subject) => subject.claims);
-      const insertedView = await client.query<{ created_at: Date; id: string; profile_view_ref: string }>(
-         `INSERT INTO profile_views
+      const insertedView = await client.query<{
+        created_at: Date;
+        id: string;
+        profile_view_ref: string;
+      }>(
+        `INSERT INTO profile_views
             (family_id, viewer_conversation_id, viewer_user_id, subject_count,
              claim_count, total_characters, eve_session_id, eve_turn_id)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, profile_view_ref, created_at`,
-        [auth.familyId, input.conversationId, auth.userId, selection.subjects.length,
-          selectedClaims.length, selection.totalCharacters,
-          input.provenance.sessionId, input.provenance.turnId],
+        [
+          auth.familyId,
+          input.conversationId,
+          auth.userId,
+          selection.subjects.length,
+          selectedClaims.length,
+          selection.totalCharacters,
+          input.provenance.sessionId,
+          input.provenance.turnId,
+        ],
       );
       const view = insertedView.rows[0]!;
       for (const [subjectOrdinal, selectedSubject] of selection.subjects.entries()) {
-        const sourceSubject = subjects.find((subject) => subject.subject_ref === selectedSubject.subjectRef)!;
+        const sourceSubject = subjects.find(
+          (subject) => subject.subject_ref === selectedSubject.subjectRef,
+        )!;
         await client.query(
           `INSERT INTO profile_view_subjects
              (profile_view_id, ordinal, profile_subject_id, subject_ref_snapshot,
               subject_label_snapshot, priority_reason, total_characters)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [view.id, subjectOrdinal, sourceSubject.id, selectedSubject.subjectRef,
-            selectedSubject.subjectLabel, selectedSubject.priority, selectedSubject.totalCharacters],
+          [
+            view.id,
+            subjectOrdinal,
+            sourceSubject.id,
+            selectedSubject.subjectRef,
+            selectedSubject.subjectLabel,
+            selectedSubject.priority,
+            selectedSubject.totalCharacters,
+          ],
         );
         for (const [claimOrdinal, selectedClaim] of selectedSubject.claims.entries()) {
           const sourceClaim = claims.find((claim) => claim.memory_ref === selectedClaim.memoryRef)!;
@@ -335,16 +380,32 @@ export const profileViewRepository = {
                  evidence_kind, observed_at, source_author_label_snapshot, rendered_characters,
                  attribute_snapshot)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-            [view.id, subjectOrdinal, claimOrdinal, sourceClaim.id, selectedClaim.memoryRef,
-              selectedClaim.content, selectedClaim.kind, selectedClaim.confirmation,
-              selectedClaim.originScope, selectedClaim.originLabel, selectedClaim.evidenceKind,
-              selectedClaim.observedAt, selectedClaim.sourceAuthorLabel,
-              selectedClaim.renderedText.length, selectedClaim.attribute],
+            [
+              view.id,
+              subjectOrdinal,
+              claimOrdinal,
+              sourceClaim.id,
+              selectedClaim.memoryRef,
+              selectedClaim.content,
+              selectedClaim.kind,
+              selectedClaim.confirmation,
+              selectedClaim.originScope,
+              selectedClaim.originLabel,
+              selectedClaim.evidenceKind,
+              selectedClaim.observedAt,
+              selectedClaim.sourceAuthorLabel,
+              selectedClaim.renderedText.length,
+              selectedClaim.attribute,
+            ],
           );
         }
       }
       await client.query("COMMIT");
-      return toProfileView({ generatedAt: view.created_at, profileViewRef: view.profile_view_ref, selection });
+      return toProfileView({
+        generatedAt: view.created_at,
+        profileViewRef: view.profile_view_ref,
+        selection,
+      });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -370,7 +431,11 @@ export const profileViewRepository = {
       );
       const view = viewResult.rows[0];
       if (!view) throw new AppError("AGENT_PROFILE_VIEW_NOT_FOUND", "Снимок профиля не найден");
-      const conversation = await requireConversationAccess(client, auth, view.viewer_conversation_id);
+      const conversation = await requireConversationAccess(
+        client,
+        auth,
+        view.viewer_conversation_id,
+      );
       const rows = await client.query<{
         claim_ordinal: number;
         confirmation: MemoryConfirmation;

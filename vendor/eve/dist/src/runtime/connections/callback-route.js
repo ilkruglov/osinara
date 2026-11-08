@@ -25,9 +25,7 @@ function buildCallbackChannelDefinition(n, r) {
         ? EVE_CONNECTION_CALLBACK_ROUTE_PATTERN
         : EVE_LEGACY_CONNECTION_CALLBACK_ROUTE_PATTERN,
     fetch:
-      r === `attempt`
-        ? handleConnectionCallbackRequest
-        : handleLegacyConnectionCallbackRequest,
+      r === `attempt` ? handleConnectionCallbackRequest : handleLegacyConnectionCallbackRequest,
     logicalPath: `framework://channels/${i}`,
     sourceId: `eve:framework:connection-callback-${r}-${n.toLowerCase()}`,
     sourceKind: `module`,
@@ -50,20 +48,11 @@ async function handleCallbackRequest(e, t, i) {
     o = t.params.attemptId,
     s = t.params.token;
   if (typeof a != `string` || a.length === 0)
-    return Response.json(
-      { error: `Missing connection name.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing connection name.`, ok: !1 }, { status: 400 });
   if (typeof s != `string` || s.length === 0)
-    return Response.json(
-      { error: `Missing callback token.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing callback token.`, ok: !1 }, { status: 400 });
   if (!i && (typeof o != `string` || o.length === 0))
-    return Response.json(
-      { error: `Missing authorization attempt ID.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing authorization attempt ID.`, ok: !1 }, { status: 400 });
   let c = await projectAuthorizationCallback(e);
   try {
     await resumeHook(s, {
@@ -77,10 +66,7 @@ async function handleCallbackRequest(e, t, i) {
       ],
     });
   } catch {
-    return Response.json(
-      { error: `Connection callback not pending.`, ok: !1 },
-      { status: 404 },
-    );
+    return Response.json({ error: `Connection callback not pending.`, ok: !1 }, { status: 404 });
   }
   return buildAuthorizationCompletePage();
 }
@@ -98,9 +84,7 @@ async function projectAuthorizationCallback(e) {
     if (n && r.includes(`application/x-www-form-urlencoded`))
       for (let [e, r] of new URLSearchParams(n)) t[e] = r;
   }
-  return n === void 0
-    ? { params: t, method: e.method }
-    : { params: t, method: e.method, body: n };
+  return n === void 0 ? { params: t, method: e.method } : { params: t, method: e.method, body: n };
 }
 export {
   HTTP_CONNECTION_CALLBACK_CHANNEL_NAME_PREFIX,

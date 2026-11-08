@@ -24,15 +24,34 @@ export interface SlotSupersedeInput {
 }
 
 export async function lockSlotClaims(
-  client: PoolClient, auth: MemoryAuthorization,
-  input: { attribute: string; kind: MemoryKind; scope: MemoryScope; scopePartitionKey: string; subjectLabel: string | null; subjectParticipantId: string | null; subjectUserId: string | null; memoryProjectId: string | null },
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  input: {
+    attribute: string;
+    kind: MemoryKind;
+    scope: MemoryScope;
+    scopePartitionKey: string;
+    subjectLabel: string | null;
+    subjectParticipantId: string | null;
+    subjectUserId: string | null;
+    memoryProjectId: string | null;
+  },
 ): Promise<SlotClaimRow[]> {
   // Lock the identity before inserting, including an empty slot. Row locks alone miss first-write races.
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([
-    "memory-slot", auth.familyId, input.scope, input.scopePartitionKey, input.attribute,
-    input.kind === "episode" ? "episode" : "semantic", input.subjectLabel,
-    input.subjectParticipantId, input.subjectUserId, input.memoryProjectId,
-  ])]);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    JSON.stringify([
+      "memory-slot",
+      auth.familyId,
+      input.scope,
+      input.scopePartitionKey,
+      input.attribute,
+      input.kind === "episode" ? "episode" : "semantic",
+      input.subjectLabel,
+      input.subjectParticipantId,
+      input.subjectUserId,
+      input.memoryProjectId,
+    ]),
+  ]);
   // The slot is one subject in one partition; a label-only subject is still one slot per label.
   // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
   // version chain); an episode slot only ever holds episodes.
@@ -48,8 +67,17 @@ export async function lockSlotClaims(
         AND item.subject_user_id IS NOT DISTINCT FROM $8::uuid
         AND item.subject_label IS NOT DISTINCT FROM $9::text
       ORDER BY item.created_at, item.id FOR UPDATE OF item`,
-    [auth.familyId, input.scope, input.scopePartitionKey, input.memoryProjectId, input.attribute,
-      slotKinds, input.subjectParticipantId, input.subjectUserId, input.subjectLabel],
+    [
+      auth.familyId,
+      input.scope,
+      input.scopePartitionKey,
+      input.memoryProjectId,
+      input.attribute,
+      slotKinds,
+      input.subjectParticipantId,
+      input.subjectUserId,
+      input.subjectLabel,
+    ],
   );
   return previous.rows;
 }
@@ -80,11 +108,13 @@ function formatSlotRecords(rows: readonly SlotClaimRow[]): string {
   // A replace built from a cut record would drop what the cut hid: those records are read in
   // full first (Codex review, 4 October 2026).
   const unread = [...cut, ...rest];
-  return shown.join("; ") +
+  return (
+    shown.join("; ") +
     (rest.length > 0 ? `; ещё ${rest.length}: ${rest.join(", ")}` : "") +
     (unread.length > 0
       ? `. Перед replace прочитай полный текст через list_memories: ${unread.join(", ")}`
-      : "");
+      : "")
+  );
 }
 
 /**
@@ -120,16 +150,27 @@ export function requireSlotUpdate(
   const code = update ? "AGENT_MEMORY_SLOT_CHANGED" : "AGENT_MEMORY_SLOT_REVIEW_REQUIRED";
   if ((actual.size > 0 && !update) || (update && (stale || incomplete))) {
     throw new SlotConflictRefusal({
-      category: "conflict", code, field: "slotUpdate", retryable: false, sideEffectStatus: "not_started",
+      category: "conflict",
+      code,
+      field: "slotUpdate",
+      retryable: false,
+      sideEffectStatus: "not_started",
       reason: update ? "Состав слота изменился после чтения" : "В слоте уже есть активные записи",
-      correction: "Передай slotUpdate с previousMemoryRefs из текущих ссылок слота ниже: add, если новая запись дополняет их (достаточно прочитанных); replace с полной новой версией, если заменяет (все ссылки). Текущие записи слота: " + formatSlotRecords(rows),
+      correction:
+        "Передай slotUpdate с previousMemoryRefs из текущих ссылок слота ниже: add, если новая запись дополняет их (достаточно прочитанных); replace с полной новой версией, если заменяет (все ссылки). Текущие записи слота: " +
+        formatSlotRecords(rows),
     });
   }
   if (update?.action === "add" && actual.size >= MEMORY_LIST_MAX_LIMIT) {
     throw new ModelFacingError({
-      category: "conflict", code: "AGENT_MEMORY_SLOT_LIMIT_REACHED", field: "slotUpdate",
-      retryable: false, sideEffectStatus: "not_started", reason: "Достигнут предел отдельных деталей в одном слоте",
-      correction: "Собери полную новую версию всех прочитанных записей с action=replace, сохранив актуальные детали.",
+      category: "conflict",
+      code: "AGENT_MEMORY_SLOT_LIMIT_REACHED",
+      field: "slotUpdate",
+      retryable: false,
+      sideEffectStatus: "not_started",
+      reason: "Достигнут предел отдельных деталей в одном слоте",
+      correction:
+        "Собери полную новую версию всех прочитанных записей с action=replace, сохранив актуальные детали.",
     });
   }
   return update?.action === "replace" ? rows.map((row) => row.id) : [];
@@ -169,8 +210,14 @@ export async function supersedeSlotClaims(
       `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
        VALUES ($1, $2, 'memory.superseded', $3,
                jsonb_build_object('scope', $4::text, 'attribute', $5::text, 'supersededBy', $6::text))`,
-      [auth.familyId, input.systemActor ? null : auth.userId, previousId, input.scope,
-        input.attribute, input.newClaimId],
+      [
+        auth.familyId,
+        input.systemActor ? null : auth.userId,
+        previousId,
+        input.scope,
+        input.attribute,
+        input.newClaimId,
+      ],
     );
   }
   return ids;

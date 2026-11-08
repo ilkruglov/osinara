@@ -97,13 +97,19 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice: vi.fn(),
     });
     const tasks: Promise<unknown>[] = [];
-    const context = { dispatch: vi.fn(), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never;
+    const context = {
+      dispatch: vi.fn(),
+      waitUntil: (task: Promise<unknown>) => tasks.push(task),
+    } as never;
 
     await handle.drain(context);
     await Promise.all(tasks);
 
     expect(storage.value.claimNext).toHaveBeenCalledTimes(2);
-    expect(storage.value.claimNext).toHaveBeenCalledWith(60_000, { maxWaitMilliseconds: 2_000, quietMilliseconds: 500 });
+    expect(storage.value.claimNext).toHaveBeenCalledWith(60_000, {
+      maxWaitMilliseconds: 2_000,
+      quietMilliseconds: 500,
+    });
     expect(ready).toHaveBeenCalledTimes(2);
   });
 
@@ -121,7 +127,10 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice: vi.fn(),
     });
     const tasks: Promise<unknown>[] = [];
-    const context = { dispatch: vi.fn(), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never;
+    const context = {
+      dispatch: vi.fn(),
+      waitUntil: (task: Promise<unknown>) => tasks.push(task),
+    } as never;
 
     await handle.drain(context);
     await Promise.all(tasks);
@@ -130,8 +139,9 @@ describe("createTelegramDurableIngress", () => {
 
     expect(storage.value.releaseStaleLeases).toHaveBeenCalledTimes(1);
     expect(storage.value.claimNext).toHaveBeenCalledTimes(2);
-    expect(storage.value.releaseStaleLeases.mock.invocationCallOrder[0]!)
-      .toBeLessThan(storage.value.claimNext.mock.invocationCallOrder[0]!);
+    expect(storage.value.releaseStaleLeases.mock.invocationCallOrder[0]!).toBeLessThan(
+      storage.value.claimNext.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("acknowledges after enqueue and processes voice in the background", async () => {
@@ -151,7 +161,8 @@ describe("createTelegramDurableIngress", () => {
     let backgroundTask: Promise<unknown> | undefined;
     const raw = voicePayload();
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     const handle = createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn().mockResolvedValue(true),
@@ -175,7 +186,9 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.enqueue).toHaveBeenCalledTimes(1);
     expect(transcribeVoice).not.toHaveBeenCalled();
     if (!backgroundTask) {
-      throw new Error("AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain");
+      throw new Error(
+        "AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain",
+      );
     }
 
     // Eve keeps the durable stream open for future turns, so waiting must itself settle the drain.
@@ -202,10 +215,7 @@ describe("createTelegramDurableIngress", () => {
       "Купи молоко",
     );
     expect(dispatch.mock.calls[0]?.[0].message.text).toBe("Купи молоко");
-    expect(storage.value.beginDispatch).toHaveBeenCalledWith(
-      "1001",
-      storage.claim.leaseToken,
-    );
+    expect(storage.value.beginDispatch).toHaveBeenCalledWith("1001", storage.claim.leaseToken);
     expect(storage.value.completeWithSession).toHaveBeenCalledWith(
       "1001",
       storage.claim.leaseToken,
@@ -234,7 +244,8 @@ describe("createTelegramDurableIngress", () => {
     });
     const raw = voicePayload();
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     const handle = createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn().mockResolvedValue(false),
@@ -287,7 +298,8 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.updateId = "1002";
     storage.claim.voice = null as never;
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     storage.value.hasPendingApprovals.mockResolvedValue(true);
     const dispatch = vi.fn().mockResolvedValue({
       getEventStream: async () =>
@@ -334,8 +346,11 @@ describe("createTelegramDurableIngress", () => {
       1,
     );
     expect(storage.value.hasPendingApprovals).toHaveBeenCalledWith("session-parked");
-    expect(logged.mock.calls.some(([line]) =>
-      String(line).includes("AGENT_TELEGRAM_APPROVAL_BATCH_PENDING"))).toBe(true);
+    expect(
+      logged.mock.calls.some(([line]) =>
+        String(line).includes("AGENT_TELEGRAM_APPROVAL_BATCH_PENDING"),
+      ),
+    ).toBe(true);
     logged.mockRestore();
   });
 
@@ -361,7 +376,8 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.updateId = "1003";
     storage.claim.voice = null as never;
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     const dispatch = vi.fn().mockResolvedValue({
       getEventStream: async () =>
         new ReadableStream({
@@ -413,11 +429,16 @@ describe("createTelegramDurableIngress", () => {
       ...storage.claim,
       deliveryContinuationKey: "102::",
       ingressContinuationKey: "102::",
-      payload: { ...voicePayload(), message: { ...(voicePayload().message as object), chat: { id: 102, type: "private" } }, update_id: 1002 },
+      payload: {
+        ...voicePayload(),
+        message: { ...(voicePayload().message as object), chat: { id: 102, type: "private" } },
+        update_id: 1002,
+      },
       queueId: "123e4567-e89b-42d3-a456-426614174002",
       updateId: "1002",
     };
-    storage.value.claimNext.mockReset()
+    storage.value.claimNext
+      .mockReset()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(second)
       .mockResolvedValue(null);
@@ -426,21 +447,23 @@ describe("createTelegramDurableIngress", () => {
       releaseFirstTurn = resolve;
     });
     const dispatched: string[] = [];
-    const dispatch = vi.fn().mockImplementation(async (update: { message: { chat: { id: number } } }) => {
-      const chatId = String(update.message.chat.id);
-      dispatched.push(chatId);
-      return {
-        getEventStream: async () =>
-          new ReadableStream({
-            async start(controller) {
-              // Chat 101 stays busy until the test releases it; chat 102 answers at once.
-              if (chatId === "101") await firstTurnReleased;
-              controller.enqueue({ type: "session.waiting" });
-            },
-          }),
-        id: `session-${chatId}`,
-      };
-    });
+    const dispatch = vi
+      .fn()
+      .mockImplementation(async (update: { message: { chat: { id: number } } }) => {
+        const chatId = String(update.message.chat.id);
+        dispatched.push(chatId);
+        return {
+          getEventStream: async () =>
+            new ReadableStream({
+              async start(controller) {
+                // Chat 101 stays busy until the test releases it; chat 102 answers at once.
+                if (chatId === "101") await firstTurnReleased;
+                controller.enqueue({ type: "session.waiting" });
+              },
+            }),
+          id: `session-${chatId}`,
+        };
+      });
     const handle = createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn().mockResolvedValue(false),
@@ -491,11 +514,13 @@ describe("createTelegramDurableIngress", () => {
         from: { first_name: "Osinara", id: 8_748_025_221, is_bot: true, username: "osinara_bot" },
         message_id: 557,
         rich_message: {
-          blocks: [{
-            blocks: [{ text: "Скрытая часть ответа другого бота.", type: "paragraph" }],
-            summary: "Полный ответ",
-            type: "details",
-          }],
+          blocks: [
+            {
+              blocks: [{ text: "Скрытая часть ответа другого бота.", type: "paragraph" }],
+              summary: "Полный ответ",
+              type: "details",
+            },
+          ],
         },
       },
       update_id: 1004,
@@ -504,7 +529,8 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.updateId = "1004";
     storage.claim.voice = null as never;
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     const dispatch = vi.fn().mockResolvedValue({
       getEventStream: async () =>
         new ReadableStream({
@@ -535,13 +561,20 @@ describe("createTelegramDurableIngress", () => {
     } as TelegramVerifiedUpdateContext);
     await backgroundTask;
 
-    expect(dispatch.mock.calls[0]?.[0].message.text).toBe("Полный ответ\n\nСкрытая часть ответа другого бота.");
+    expect(dispatch.mock.calls[0]?.[0].message.text).toBe(
+      "Полный ответ\n\nСкрытая часть ответа другого бота.",
+    );
   });
 
   function seriesRaw(
     updateId: number,
     text: string,
-    from: { first_name: string; id: number; is_bot: boolean; username?: string } = { first_name: "Пух", id: 202, is_bot: false, username: "nyxandro" },
+    from: { first_name: string; id: number; is_bot: boolean; username?: string } = {
+      first_name: "Пух",
+      id: 202,
+      is_bot: false,
+      username: "nyxandro",
+    },
   ) {
     return {
       message: {
@@ -566,7 +599,10 @@ describe("createTelegramDurableIngress", () => {
     };
   }
 
-  function seriesIngress(storage: ReturnType<typeof repository>, _dispatch: ReturnType<typeof vi.fn>) {
+  function seriesIngress(
+    storage: ReturnType<typeof repository>,
+    _dispatch: ReturnType<typeof vi.fn>,
+  ) {
     return createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn(),
@@ -588,31 +624,41 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.voice = null as never;
     storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
     // The repository applies the predicate in queue order; a message from someone else ends the run.
-    storage.value.claimFollowing = vi.fn(async (input: { accept: (payload: Record<string, unknown>) => boolean }) => {
-      const candidates = [
-        second,
-        third,
-        { ...seriesClaim(storage, 2004, "а я тут"), payload: seriesRaw(2004, "а я тут", { first_name: "Илья", id: 303, is_bot: false }) },
-      ];
-      const accepted = [];
-      for (const candidate of candidates) {
-        if (!input.accept(candidate.payload)) break;
-        accepted.push(candidate);
-      }
-      return accepted;
-    });
-    const dispatch = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockResolvedValueOnce({
-      getEventStream: async () =>
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue({ type: "session.waiting" });
+    storage.value.claimFollowing = vi.fn(
+      async (input: { accept: (payload: Record<string, unknown>) => boolean }) => {
+        const candidates = [
+          second,
+          third,
+          {
+            ...seriesClaim(storage, 2004, "а я тут"),
+            payload: seriesRaw(2004, "а я тут", { first_name: "Илья", id: 303, is_bot: false }),
           },
-        }),
-      id: "session-series",
-    });
+        ];
+        const accepted = [];
+        for (const candidate of candidates) {
+          if (!input.accept(candidate.payload)) break;
+          accepted.push(candidate);
+        }
+        return accepted;
+      },
+    );
+    const dispatch = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        getEventStream: async () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: "session.waiting" });
+            },
+          }),
+        id: "session-series",
+      });
     const handle = seriesIngress(storage, dispatch);
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
 
     await handle({
@@ -625,11 +671,13 @@ describe("createTelegramDurableIngress", () => {
     } as TelegramVerifiedUpdateContext);
     await backgroundTask;
 
-    expect(storage.value.claimFollowing).toHaveBeenCalledWith(expect.objectContaining({
-      afterUpdateId: "2001",
-      limit: 4,
-      queueId: storage.claim.queueId,
-    }));
+    expect(storage.value.claimFollowing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        afterUpdateId: "2001",
+        limit: 4,
+        queueId: storage.claim.queueId,
+      }),
+    );
     expect(dispatch).toHaveBeenCalledTimes(3);
     expect(dispatch.mock.calls.map((call) => call[0].message.text)).toEqual([
       "Мия, смотри",
@@ -644,9 +692,18 @@ describe("createTelegramDurableIngress", () => {
       role: "current",
       telegramMessageIds: ["2001", "2002"],
     });
-    expect(storage.value.beginDispatch.mock.calls.map((call) => call[0])).toEqual(["2001", "2002", "2003"]);
+    expect(storage.value.beginDispatch.mock.calls.map((call) => call[0])).toEqual([
+      "2001",
+      "2002",
+      "2003",
+    ]);
     expect(storage.value.complete.mock.calls.map((call) => call[0])).toEqual(["2001", "2002"]);
-    expect(storage.value.completeWithSession).toHaveBeenCalledWith("2003", third.leaseToken, "session-series", 1);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "2003",
+      third.leaseToken,
+      "session-series",
+      1,
+    );
     expect(storage.value.fail).not.toHaveBeenCalled();
   });
 
@@ -667,10 +724,14 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.voice = null as never;
     storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
     storage.value.claimFollowing = vi.fn().mockResolvedValue([second]);
-    storage.value.beginDispatch = vi.fn().mockRejectedValueOnce(new AppError(
-      "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
-      "Не уверена, что обработала это сообщение",
-    ));
+    storage.value.beginDispatch = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new AppError(
+          "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
+          "Не уверена, что обработала это сообщение",
+        ),
+      );
     const notifyFailure = vi.fn();
     const dispatch = vi.fn();
     const handle = createTelegramDurableIngress({
@@ -684,7 +745,8 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice: vi.fn(),
     });
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -703,7 +765,9 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.release.mock.calls.map((call) => call[0])).toEqual(["3002"]);
     expect(notifyFailure).toHaveBeenCalledTimes(1);
     expect(notifyFailure.mock.calls[0]?.[0].message.messageId).toBe("3001");
-    expect(notifyFailure.mock.calls[0]?.[1]).toMatchObject({ code: "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED" });
+    expect(notifyFailure.mock.calls[0]?.[1]).toMatchObject({
+      code: "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
+    });
   });
 
   it("hands the turn the queue tail that arrived after its message", async () => {
@@ -714,8 +778,19 @@ describe("createTelegramDurableIngress", () => {
     storage.claim.voice = null as never;
     storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
     storage.value.listPendingAfter = vi.fn().mockResolvedValue([
-      { payload: seriesRaw(4002, "уже вписала", { first_name: "Осинара", id: 777, is_bot: true, username: "osinara_bot" }), receivedAt: new Date("2026-09-05T22:20:00Z") },
-      { payload: seriesRaw(4003, "и я тут", { first_name: "Илья", id: 303, is_bot: false }), receivedAt: new Date("2026-09-05T22:21:00Z") },
+      {
+        payload: seriesRaw(4002, "уже вписала", {
+          first_name: "Осинара",
+          id: 777,
+          is_bot: true,
+          username: "osinara_bot",
+        }),
+        receivedAt: new Date("2026-09-05T22:20:00Z"),
+      },
+      {
+        payload: seriesRaw(4003, "и я тут", { first_name: "Илья", id: 303, is_bot: false }),
+        receivedAt: new Date("2026-09-05T22:21:00Z"),
+      },
     ]);
     const dispatch = vi.fn().mockResolvedValueOnce({
       getEventStream: async () =>
@@ -728,7 +803,8 @@ describe("createTelegramDurableIngress", () => {
     });
     const handle = seriesIngress(storage, dispatch);
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
 
     await handle({
@@ -742,11 +818,23 @@ describe("createTelegramDurableIngress", () => {
     await backgroundTask;
 
     expect(storage.value.listPendingAfter).toHaveBeenCalledWith({
-      afterUpdateId: "4001", limit: 10, queueId: storage.claim.queueId,
+      afterUpdateId: "4001",
+      limit: 10,
+      queueId: storage.claim.queueId,
     });
     expect(dispatch.mock.calls[0]?.[0].message.raw.osinara_pending).toEqual([
-      expect.objectContaining({ isBot: true, messageId: "4002", senderName: "osinara_bot", text: "уже вписала" }),
-      expect.objectContaining({ isBot: false, messageId: "4003", senderName: "Илья", text: "и я тут" }),
+      expect.objectContaining({
+        isBot: true,
+        messageId: "4002",
+        senderName: "osinara_bot",
+        text: "уже вписала",
+      }),
+      expect.objectContaining({
+        isBot: false,
+        messageId: "4003",
+        senderName: "Илья",
+        text: "и я тут",
+      }),
     ]);
     // The queue tail is only read, never leased: those messages keep their own turns.
     expect(storage.value.beginDispatch.mock.calls.map((call) => call[0])).toEqual(["4001"]);
@@ -771,15 +859,18 @@ describe("createTelegramDurableIngress", () => {
       return new Date(Date.now() + 300);
     });
     // The last turn outlives several heartbeat ticks (lease 300 ms, tick every 100 ms).
-    const dispatch = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({
-      getEventStream: async () =>
-        new ReadableStream({
-          start(controller) {
-            setTimeout(() => controller.enqueue({ type: "session.waiting" }), 450);
-          },
-        }),
-      id: "session-long",
-    });
+    const dispatch = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        getEventStream: async () =>
+          new ReadableStream({
+            start(controller) {
+              setTimeout(() => controller.enqueue({ type: "session.waiting" }), 450);
+            },
+          }),
+        id: "session-long",
+      });
     const handle = createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn(),
@@ -790,7 +881,8 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice: vi.fn(),
     });
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
 
     await handle({
@@ -803,7 +895,12 @@ describe("createTelegramDurableIngress", () => {
     } as TelegramVerifiedUpdateContext);
     await backgroundTask;
 
-    expect(storage.value.completeWithSession).toHaveBeenCalledWith("5002", second.leaseToken, "session-long", 1);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "5002",
+      second.leaseToken,
+      "session-long",
+      1,
+    );
     expect(storage.value.fail).not.toHaveBeenCalled();
     expect(storage.value.renewLease.mock.calls.map((call) => call[0])).not.toContain("5001");
   });
@@ -815,12 +912,14 @@ describe("createTelegramDurableIngress", () => {
     const third = seriesClaim(storage, 3003, "Мия, третье");
     storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
     storage.value.claimFollowing = vi.fn().mockResolvedValue([second, third]);
-    const dispatch = vi.fn()
+    const dispatch = vi
+      .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("AGENT_TEST_DISPATCH_FAILED: сбой"));
     const handle = seriesIngress(storage, dispatch);
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
 
     await handle({
@@ -875,7 +974,10 @@ describe("createTelegramDurableIngress", () => {
         backgroundTask = task;
       },
     } as TelegramVerifiedUpdateContext);
-    const outcome = await backgroundTask!.then(() => "settled", () => "rejected");
+    const outcome = await backgroundTask!.then(
+      () => "settled",
+      () => "rejected",
+    );
     return { notifyFailure, outcome, storage };
   }
 
@@ -884,7 +986,9 @@ describe("createTelegramDurableIngress", () => {
 
     expect(outcome).toBe("settled");
     expect(storage.value.releaseUndelivered.mock.calls.map((call) => call[0])).toEqual(["4001"]);
-    expect(storage.value.releaseUndelivered.mock.calls[0]![2]).toMatchObject({ code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING" });
+    expect(storage.value.releaseUndelivered.mock.calls[0]![2]).toMatchObject({
+      code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING",
+    });
     expect(storage.value.fail).not.toHaveBeenCalled();
     expect(notifyFailure).not.toHaveBeenCalled();
   });
@@ -905,7 +1009,8 @@ describe("createTelegramDurableIngress", () => {
     const dispatch = vi.fn().mockResolvedValue(undefined);
     const handle = seriesIngress(storage, dispatch);
     const update = parseTelegramUpdate(head.payload);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
     let backgroundTask: Promise<unknown> | undefined;
 
     await handle({
@@ -948,7 +1053,12 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice,
     });
 
-    const response = await handle({ dispatch, raw, update, waitUntil } as TelegramVerifiedUpdateContext);
+    const response = await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil,
+    } as TelegramVerifiedUpdateContext);
 
     expect(response.status).toBe(200);
     expect(acceptMedia).toHaveBeenCalledWith(update.message, "1001", "unsupported_media", false);
@@ -970,10 +1080,18 @@ describe("createTelegramDurableIngress", () => {
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_491,
-        rich_message: { blocks: [
-          { photo: [{ file_id: "p-small", file_unique_id: "u1", height: 89, width: 90 }, { file_id: "p-large", file_unique_id: "u1", height: 1_280, width: 1_280 }], type: "photo" },
-          { text: "пост про эвалы", type: "paragraph" },
-        ] },
+        rich_message: {
+          blocks: [
+            {
+              photo: [
+                { file_id: "p-small", file_unique_id: "u1", height: 89, width: 90 },
+                { file_id: "p-large", file_unique_id: "u1", height: 1_280, width: 1_280 },
+              ],
+              type: "photo",
+            },
+            { text: "пост про эвалы", type: "paragraph" },
+          ],
+        },
         sender_chat: { id: -1_003_674_400_630, title: "Остриков пилит агентов", type: "channel" },
       },
       update_id: 85_121_293,
@@ -981,19 +1099,42 @@ describe("createTelegramDurableIngress", () => {
     const update = parseTelegramUpdate(raw);
     if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
     const handle = createTelegramDurableIngress({
-      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
-      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+      acceptMedia,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
     });
 
-    const response = await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+    const response = await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as unknown as TelegramVerifiedUpdateContext);
 
     expect(response.status).toBe(200);
     // The lifted photo met the gate as a native photo, with the largest size as the attachment.
-    expect(acceptMedia).toHaveBeenCalledWith(expect.objectContaining({ attachments: [expect.objectContaining({ fileId: "p-large", kind: "photo" })], text: "пост про эвалы" }), "85121293", "native_photo", true);
+    expect(acceptMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [expect.objectContaining({ fileId: "p-large", kind: "photo" })],
+        text: "пост про эвалы",
+      }),
+      "85121293",
+      "native_photo",
+      true,
+    );
     // The stored update keeps the paragraphs and no file: nothing can lift the photo later.
-    const stored = storage.value.enqueue.mock.calls[0]![0] as { payload: { message: { rich_message: { blocks: unknown[] } } }; updateId: string };
+    const stored = storage.value.enqueue.mock.calls[0]![0] as {
+      payload: { message: { rich_message: { blocks: unknown[] } } };
+      updateId: string;
+    };
     expect(stored.updateId).toBe("85121293");
-    expect(stored.payload.message.rich_message.blocks).toEqual([{ text: "пост про эвалы", type: "paragraph" }]);
+    expect(stored.payload.message.rich_message.blocks).toEqual([
+      { text: "пост про эвалы", type: "paragraph" },
+    ]);
     expect(JSON.stringify(stored.payload)).not.toContain("p-large");
   });
 
@@ -1007,7 +1148,12 @@ describe("createTelegramDurableIngress", () => {
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_493,
-        rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }, { text: "пост с видео", type: "paragraph" }] },
+        rich_message: {
+          blocks: [
+            { type: "video", video: { file_id: "v1" } },
+            { text: "пост с видео", type: "paragraph" },
+          ],
+        },
         voice: { duration: 3, file_id: "voice-1", mime_type: "audio/ogg" },
       },
       update_id: 85_121_295,
@@ -1015,14 +1161,29 @@ describe("createTelegramDurableIngress", () => {
     const update = parseTelegramUpdate(raw);
     if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
     const handle = createTelegramDurableIngress({
-      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
-      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+      acceptMedia,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
     });
 
-    const response = await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+    const response = await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as unknown as TelegramVerifiedUpdateContext);
 
     expect(response.status).toBe(200);
-    expect(acceptMedia).toHaveBeenCalledWith(expect.anything(), "85121295", "unsupported_media", false);
+    expect(acceptMedia).toHaveBeenCalledWith(
+      expect.anything(),
+      "85121295",
+      "unsupported_media",
+      false,
+    );
     expect(storage.value.enqueue).not.toHaveBeenCalled();
   });
 
@@ -1030,29 +1191,64 @@ describe("createTelegramDurableIngress", () => {
     const storage = repository();
     storage.value.claimNext.mockReset().mockResolvedValue(null);
     const acceptMedia = vi.fn().mockResolvedValue(false);
-    const document = { file_id: "d1", file_name: "правила.md", file_size: 512, file_unique_id: "ud", mime_type: "text/markdown" };
+    const document = {
+      file_id: "d1",
+      file_name: "правила.md",
+      file_size: 512,
+      file_unique_id: "ud",
+      mime_type: "text/markdown",
+    };
     const raw = {
       message: {
         chat: { id: -1_003_576_522_523, type: "supergroup" },
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_494,
-        rich_message: { blocks: [{ document, type: "document" }, { text: "правила группы в файле", type: "paragraph" }] },
+        rich_message: {
+          blocks: [
+            { document, type: "document" },
+            { text: "правила группы в файле", type: "paragraph" },
+          ],
+        },
       },
       update_id: 85_121_296,
     };
     const update = parseTelegramUpdate(raw);
     if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
     const handle = createTelegramDurableIngress({
-      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
-      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+      acceptMedia,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
     });
 
-    await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+    await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as unknown as TelegramVerifiedUpdateContext);
 
-    expect(acceptMedia).toHaveBeenCalledWith(expect.objectContaining({ attachments: [expect.objectContaining({ fileId: "d1", fileName: "правила.md", kind: "document" })], text: "правила группы в файле" }), "85121296", "text_document_candidate", true);
-    const stored = storage.value.enqueue.mock.calls[0]![0] as { payload: { message: { rich_message: { blocks: unknown[] } } } };
-    expect(stored.payload.message.rich_message.blocks).toEqual([{ text: "правила группы в файле", type: "paragraph" }]);
+    expect(acceptMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ fileId: "d1", fileName: "правила.md", kind: "document" }),
+        ],
+        text: "правила группы в файле",
+      }),
+      "85121296",
+      "text_document_candidate",
+      true,
+    );
+    const stored = storage.value.enqueue.mock.calls[0]![0] as {
+      payload: { message: { rich_message: { blocks: unknown[] } } };
+    };
+    expect(stored.payload.message.rich_message.blocks).toEqual([
+      { text: "правила группы в файле", type: "paragraph" },
+    ]);
     expect(JSON.stringify(stored.payload)).not.toContain("d1");
   });
 
@@ -1066,22 +1262,43 @@ describe("createTelegramDurableIngress", () => {
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_495,
-        rich_message: { blocks: [{ type: "video", video: { file_id: "v-1" } }, { caption: { text: "кадр" }, photo: [{ file_id: "p-1" }], type: "photo" }, { text: "два вложения", type: "paragraph" }] },
+        rich_message: {
+          blocks: [
+            { type: "video", video: { file_id: "v-1" } },
+            { caption: { text: "кадр" }, photo: [{ file_id: "p-1" }], type: "photo" },
+            { text: "два вложения", type: "paragraph" },
+          ],
+        },
       },
       update_id: 85_121_297,
     };
     const update = parseTelegramUpdate(raw);
     if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
     const handle = createTelegramDurableIngress({
-      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
-      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+      acceptMedia,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
     });
 
-    await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+    await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as unknown as TelegramVerifiedUpdateContext);
 
     expect(acceptMedia).not.toHaveBeenCalled();
-    const stored = storage.value.enqueue.mock.calls[0]![0] as { payload: { message: { rich_message: { blocks: unknown[] } } } };
-    expect(stored.payload.message.rich_message.blocks).toEqual([{ text: "кадр", type: "paragraph" }, { text: "два вложения", type: "paragraph" }]);
+    const stored = storage.value.enqueue.mock.calls[0]![0] as {
+      payload: { message: { rich_message: { blocks: unknown[] } } };
+    };
+    expect(stored.payload.message.rich_message.blocks).toEqual([
+      { text: "кадр", type: "paragraph" },
+      { text: "два вложения", type: "paragraph" },
+    ]);
     expect(JSON.stringify(stored.payload)).not.toContain("file_id");
   });
 
@@ -1095,18 +1312,36 @@ describe("createTelegramDurableIngress", () => {
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_492,
-        rich_message: { blocks: [{ photo: [{ file_id: "p1", file_unique_id: "u1", height: 640, width: 640 }], type: "photo" }, { text: "с правом", type: "paragraph" }] },
+        rich_message: {
+          blocks: [
+            {
+              photo: [{ file_id: "p1", file_unique_id: "u1", height: 640, width: 640 }],
+              type: "photo",
+            },
+            { text: "с правом", type: "paragraph" },
+          ],
+        },
       },
       update_id: 85_121_294,
     };
     const update = parseTelegramUpdate(raw);
     if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
     const handle = createTelegramDurableIngress({
-      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
-      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+      acceptMedia,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
     });
 
-    await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+    await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as unknown as TelegramVerifiedUpdateContext);
 
     expect(acceptMedia).toHaveBeenCalledWith(expect.anything(), "85121294", "native_photo", true);
     expect(storage.value.enqueue).toHaveBeenCalledWith(expect.objectContaining({ payload: raw }));
@@ -1119,16 +1354,26 @@ describe("createTelegramDurableIngress", () => {
     const raw = voicePayload();
     (raw.message as Record<string, unknown>).chat = { id: -1001, type: "supergroup" };
     const update = parseTelegramUpdate(raw);
-    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое сообщение");
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое сообщение");
     const press = {
       callback_query: {
-        chat_instance: "1", data: "eve:0", from: { first_name: "Анна", id: 101, is_bot: false }, id: "cb-9",
-        message: { chat: { id: 101, type: "private" }, date: 1_700_000_000, message_id: 88, text: "Кнопка" },
+        chat_instance: "1",
+        data: "eve:0",
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        id: "cb-9",
+        message: {
+          chat: { id: 101, type: "private" },
+          date: 1_700_000_000,
+          message_id: 88,
+          text: "Кнопка",
+        },
       },
       update_id: 1009,
     };
     const pressUpdate = parseTelegramUpdate(press);
-    if (!pressUpdate) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое нажатие");
+    if (!pressUpdate)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое нажатие");
     const handle = createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(false),
       authorizeVoice: vi.fn(),
@@ -1140,13 +1385,25 @@ describe("createTelegramDurableIngress", () => {
       transcribeVoice: vi.fn(),
     });
 
-    const response = await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as TelegramVerifiedUpdateContext);
-    await handle({ dispatch: vi.fn(), raw: press, update: pressUpdate, waitUntil: vi.fn() } as TelegramVerifiedUpdateContext);
+    const response = await handle({
+      dispatch: vi.fn(),
+      raw,
+      update,
+      waitUntil: vi.fn(),
+    } as TelegramVerifiedUpdateContext);
+    await handle({
+      dispatch: vi.fn(),
+      raw: press,
+      update: pressUpdate,
+      waitUntil: vi.fn(),
+    } as TelegramVerifiedUpdateContext);
 
     expect(response.status).toBe(200);
     expect(storage.value.enqueue).toHaveBeenCalledTimes(1);
     expect(noteInboundMessage).toHaveBeenCalledExactlyOnceWith({
-      chatId: "-1001", message: expect.objectContaining({ date: 1_700_000_000 }), updateId: "1001",
+      chatId: "-1001",
+      message: expect.objectContaining({ date: 1_700_000_000 }),
+      updateId: "1001",
     });
   });
 
@@ -1158,13 +1415,15 @@ describe("createTelegramDurableIngress", () => {
         date: 1_700_000_000,
         from: { first_name: "Анна", id: 101, is_bot: false },
         message_id: 78,
-        photo: [{
-          file_id: "photo-file-1",
-          file_size: 1_024,
-          file_unique_id: "photo-unique-1",
-          height: 640,
-          width: 640,
-        }],
+        photo: [
+          {
+            file_id: "photo-file-1",
+            file_size: 1_024,
+            file_unique_id: "photo-unique-1",
+            height: 640,
+            width: 640,
+          },
+        ],
       },
       update_id: 1002,
     };
@@ -1194,7 +1453,9 @@ describe("createTelegramDurableIngress", () => {
       },
     } as TelegramVerifiedUpdateContext);
     if (!backgroundTask) {
-      throw new Error("AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain");
+      throw new Error(
+        "AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain",
+      );
     }
     await backgroundTask;
 
@@ -1247,7 +1508,9 @@ describe("createTelegramDurableIngress", () => {
       },
     } as TelegramVerifiedUpdateContext);
     if (!backgroundTask) {
-      throw new Error("AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain");
+      throw new Error(
+        "AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain",
+      );
     }
     await backgroundTask;
 

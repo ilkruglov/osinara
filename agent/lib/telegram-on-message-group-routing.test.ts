@@ -120,9 +120,11 @@ describe("createTelegramMessageHandler group routing", () => {
       ...message,
       replyToMessage: { ...message.replyToMessage!, messageThreadId: 42 },
     });
-    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "group-101:42:88",
-    }));
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseContinuationToken: "group-101:42:88",
+      }),
+    );
   });
 
   it("records an ordinary message in the unified timeline without starting a turn", async () => {
@@ -137,7 +139,9 @@ describe("createTelegramMessageHandler group routing", () => {
     });
     const handler = createTelegramMessageHandler(repository);
 
-    await expect(handler(telegramContext().context, groupMessage("обычная реплика"))).resolves.toBeNull();
+    await expect(
+      handler(telegramContext().context, groupMessage("обычная реплика")),
+    ).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledTimes(1);
     expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
       groupId: "group-1",
@@ -305,7 +309,10 @@ describe("createTelegramMessageHandler group routing", () => {
     });
     const handler = createTelegramMessageHandler(repository);
 
-    const result = await handler(telegramContext().context, groupMessage(`@${BOT_USERNAME} подведи итог`));
+    const result = await handler(
+      telegramContext().context,
+      groupMessage(`@${BOT_USERNAME} подведи итог`),
+    );
 
     expect(repository.currentTime.findTurnTimezone).toHaveBeenCalledWith(null, "family-1");
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(
@@ -345,12 +352,14 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await handler(telegramContext().context, message);
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      currentEntryId: "00000000-0000-4000-8000-000000000013",
-      currentSequence: "13",
-      replyTargetUnavailable: false,
-      replyToSequenceId: "8",
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentEntryId: "00000000-0000-4000-8000-000000000013",
+        currentSequence: "13",
+        replyTargetUnavailable: false,
+        replyToSequenceId: "8",
+      }),
+    );
   });
 
   it("passes a verified raw reply snapshot when the target was not journaled", async () => {
@@ -394,16 +403,18 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await handler(telegramContext().context, message);
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      replyQuotedText: "streisand",
-      replyTargetSnapshot: {
-        contentText: "У меня настроен vless, ссылочку кинул в streisand",
-        senderDisplayName: "nlp_daily",
-        senderUsername: "nlp_daily",
-      },
-      replyTargetUnavailable: true,
-      replyToSequenceId: null,
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyQuotedText: "streisand",
+        replyTargetSnapshot: {
+          contentText: "У меня настроен vless, ссылочку кинул в streisand",
+          senderDisplayName: "nlp_daily",
+          senderUsername: "nlp_daily",
+        },
+        replyTargetUnavailable: true,
+        replyToSequenceId: null,
+      }),
+    );
   });
 
   it("drops a duplicate all-mode delivery before authorization and model dispatch", async () => {
@@ -458,7 +469,9 @@ describe("createTelegramMessageHandler group routing", () => {
     const repository = repositories();
     const handler = createTelegramMessageHandler(repository);
 
-    await expect(handler(telegramContext().context, groupMessage("обычная реплика"))).resolves.toBeNull();
+    await expect(
+      handler(telegramContext().context, groupMessage("обычная реплика")),
+    ).resolves.toBeNull();
     expect(repository.journal.record).not.toHaveBeenCalled();
   });
 });

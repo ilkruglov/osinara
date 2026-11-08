@@ -120,17 +120,20 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
     await deleteClaim(fixture, fixture.claimId);
     await fillJournalToRetention(fixture.groupId);
 
-    await expect(recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900001")))
-      .resolves.toMatchObject({ status: "inserted" });
+    await expect(
+      recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900001")),
+    ).resolves.toMatchObject({ status: "inserted" });
 
     await expectJournalPrunedToCap(fixture.groupId);
     // Deleted memory stays recoverable: its evidence loses only the live link to the pruned row.
-    expect(await evidenceOf(fixture.claimId)).toEqual([{
-      author_user_id: fixture.userId,
-      source_message_id: "701",
-      timeline_entry_id: null,
-      timeline_sequence: "1",
-    }]);
+    expect(await evidenceOf(fixture.claimId)).toEqual([
+      {
+        author_user_id: fixture.userId,
+        source_message_id: "701",
+        timeline_entry_id: null,
+        timeline_sequence: "1",
+      },
+    ]);
   });
 
   it("keeps accepting group messages when a source author was linked to a user later", async () => {
@@ -141,26 +144,28 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
       "UPDATE conversation_participants SET linked_user_id = NULL WHERE conversation_id = $1",
       [fixture.conversationId],
     );
-    await database().query(
-      "UPDATE claim_evidence SET author_user_id = NULL WHERE claim_id = $1",
-      [fixture.claimId],
-    );
+    await database().query("UPDATE claim_evidence SET author_user_id = NULL WHERE claim_id = $1", [
+      fixture.claimId,
+    ]);
     await database().query(
       "UPDATE conversation_participants SET linked_user_id = $2 WHERE conversation_id = $1",
       [fixture.conversationId, fixture.userId],
     );
     await fillJournalToRetention(fixture.groupId);
 
-    await expect(recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900002")))
-      .resolves.toMatchObject({ status: "inserted" });
+    await expect(
+      recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900002")),
+    ).resolves.toMatchObject({ status: "inserted" });
 
     await expectJournalPrunedToCap(fixture.groupId);
-    expect(await evidenceOf(fixture.claimId)).toEqual([{
-      author_user_id: null,
-      source_message_id: "701",
-      timeline_entry_id: null,
-      timeline_sequence: "1",
-    }]);
+    expect(await evidenceOf(fixture.claimId)).toEqual([
+      {
+        author_user_id: null,
+        source_message_id: "701",
+        timeline_entry_id: null,
+        timeline_sequence: "1",
+      },
+    ]);
   });
 
   it("still rejects attaching evidence to deleted memory", async () => {
@@ -168,14 +173,17 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
     const deletedClaimId = await insertUnsourcedClaim(fixture);
     await deleteClaim(fixture, deletedClaimId);
 
-    await expect(database().query(
-      "UPDATE claim_evidence SET claim_id = $2 WHERE claim_id = $1",
-      [fixture.claimId, deletedClaimId],
-    )).rejects.toThrow("AGENT_CLAIM_EVIDENCE_PROVENANCE_INVALID");
+    await expect(
+      database().query("UPDATE claim_evidence SET claim_id = $2 WHERE claim_id = $1", [
+        fixture.claimId,
+        deletedClaimId,
+      ]),
+    ).rejects.toThrow("AGENT_CLAIM_EVIDENCE_PROVENANCE_INVALID");
 
     await deleteClaim(fixture, fixture.claimId);
-    await expect(database().query(
-      `INSERT INTO claim_evidence
+    await expect(
+      database().query(
+        `INSERT INTO claim_evidence
          (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
           origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
           author_participant_id, author_user_id, author_label_snapshot, observed_at,
@@ -187,8 +195,9 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
               evidence_snippet, timeline_entry_id, timeline_sequence, source_message_id,
               source_snapshot
        FROM claim_evidence WHERE claim_id = $1`,
-      [fixture.claimId],
-    )).rejects.toThrow("AGENT_CLAIM_EVIDENCE_PROVENANCE_INVALID");
+        [fixture.claimId],
+      ),
+    ).rejects.toThrow("AGENT_CLAIM_EVIDENCE_PROVENANCE_INVALID");
   });
 
   it("still rejects evidence authors that differ from their participant's user link", async () => {
@@ -204,13 +213,17 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
       [fixture.conversationId, fixture.familyId],
     );
 
-    await expect(database().query(
-      "UPDATE claim_evidence SET author_user_id = $2 WHERE claim_id = $1",
-      [fixture.claimId, stranger.rows[0]!.id],
-    )).rejects.toThrow("AGENT_CLAIM_EVIDENCE_AUTHOR_LINK_INVALID");
-    await expect(database().query(
-      "UPDATE claim_evidence SET author_participant_id = $2 WHERE claim_id = $1",
-      [fixture.claimId, unlinked.rows[0]!.id],
-    )).rejects.toThrow("AGENT_CLAIM_EVIDENCE_AUTHOR_LINK_INVALID");
+    await expect(
+      database().query("UPDATE claim_evidence SET author_user_id = $2 WHERE claim_id = $1", [
+        fixture.claimId,
+        stranger.rows[0]!.id,
+      ]),
+    ).rejects.toThrow("AGENT_CLAIM_EVIDENCE_AUTHOR_LINK_INVALID");
+    await expect(
+      database().query("UPDATE claim_evidence SET author_participant_id = $2 WHERE claim_id = $1", [
+        fixture.claimId,
+        unlinked.rows[0]!.id,
+      ]),
+    ).rejects.toThrow("AGENT_CLAIM_EVIDENCE_AUTHOR_LINK_INVALID");
   });
 });

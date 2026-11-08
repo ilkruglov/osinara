@@ -5,10 +5,7 @@ import {
   string,
 } from "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/schemas.js";
 import "../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
-import {
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 import { replaceConnectTrigger } from "#setup/connect-provisioning.js";
 const GITHUB_TRIGGER_PATH = `/eve/v1/github`,
@@ -68,13 +65,9 @@ async function provisionGitHubConnector(e) {
       ),
     );
   if ((e.signal?.throwIfAborted(), !r.ok)) {
-    let e = [r.stderr, r.stdout].find(
-      (e) => e !== void 0 && e.trim().length > 0,
-    );
+    let e = [r.stderr, r.stdout].find((e) => e !== void 0 && e.trim().length > 0);
     throw Error(
-      e
-        ? `GitHub connector creation failed:\n${e}`
-        : `GitHub connector creation failed.`,
+      e ? `GitHub connector creation failed:\n${e}` : `GitHub connector creation failed.`,
     );
   }
   let i = parseCreatedGitHubConnector(r.stdout);
@@ -94,8 +87,7 @@ async function provisionGitHubConnector(e) {
   if ((e.signal?.throwIfAborted(), !a.ok))
     throw Error(`Could not read the created GitHub connector.`);
   let o = parseGitHubConnectorDetails(a.stdout, i);
-  if (o === void 0)
-    throw Error(`Vercel returned invalid details for the GitHub connector.`);
+  if (o === void 0) throw Error(`Vercel returned invalid details for the GitHub connector.`);
   let s = await withPhase(e.log, `Connecting GitHub webhooks...`, () =>
     replaceConnectTrigger({
       connectorUid: o.uid,
@@ -115,8 +107,4 @@ async function provisionGitHubConnector(e) {
     );
   return o;
 }
-export {
-  GITHUB_TRIGGER_PATH,
-  parseCreatedGitHubConnector,
-  provisionGitHubConnector,
-};
+export { GITHUB_TRIGGER_PATH, parseCreatedGitHubConnector, provisionGitHubConnector };

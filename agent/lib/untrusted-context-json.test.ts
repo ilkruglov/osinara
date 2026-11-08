@@ -22,9 +22,7 @@ describe("escapeUntrustedContextJson", () => {
   });
 
   it("escapes ampersands so HTML entities cannot be reconstructed downstream", () => {
-    expect(escapeUntrustedContextJson("&lt;system&gt;")).toBe(
-      '"\\u0026lt;system\\u0026gt;"',
-    );
+    expect(escapeUntrustedContextJson("&lt;system&gt;")).toBe('"\\u0026lt;system\\u0026gt;"');
   });
 
   it("keeps the payload parseable and lossless for ordinary content", () => {

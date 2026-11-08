@@ -15,7 +15,8 @@ import { closeDatabase } from "../database.js";
 import { createMemoryFamilyFixture } from "../memory-repository.integration-fixtures.js";
 import { yandexTaxiOperationRepository } from "./yandex-taxi-operation.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const HASH = "b".repeat(64);
 
 describeWithDatabase("yandexTaxiOperationRepository", () => {
@@ -27,22 +28,78 @@ describeWithDatabase("yandexTaxiOperationRepository", () => {
     const owner = family.owner.userId!;
     const member = family.member.userId!;
 
-    await expect(yandexTaxiOperationRepository.begin({ action: "order", familyId, key: "s:c1", requestHash: HASH, userId: owner })).resolves.toEqual({ kind: "started" });
-    await expect(yandexTaxiOperationRepository.begin({ action: "order", familyId, key: "s:c1", requestHash: HASH, userId: owner })).resolves.toEqual({ kind: "existing", requestHash: HASH, result: null, status: "started" });
-    await expect(yandexTaxiOperationRepository.begin({ action: "order", familyId, key: "s:c1", requestHash: HASH, userId: member })).resolves.toEqual({ kind: "started" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "order",
+        familyId,
+        key: "s:c1",
+        requestHash: HASH,
+        userId: owner,
+      }),
+    ).resolves.toEqual({ kind: "started" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "order",
+        familyId,
+        key: "s:c1",
+        requestHash: HASH,
+        userId: owner,
+      }),
+    ).resolves.toEqual({ kind: "existing", requestHash: HASH, result: null, status: "started" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "order",
+        familyId,
+        key: "s:c1",
+        requestHash: HASH,
+        userId: member,
+      }),
+    ).resolves.toEqual({ kind: "started" });
 
-    await yandexTaxiOperationRepository.complete({ key: "s:c1", result: { orderId: "o-1" }, userId: owner });
+    await yandexTaxiOperationRepository.complete({
+      key: "s:c1",
+      result: { orderId: "o-1" },
+      userId: owner,
+    });
     await yandexTaxiOperationRepository.release({ key: "s:c1", userId: owner });
-    await expect(yandexTaxiOperationRepository.begin({ action: "order", familyId, key: "s:c1", requestHash: HASH, userId: owner })).resolves.toEqual({ kind: "existing", requestHash: HASH, result: { orderId: "o-1" }, status: "completed" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "order",
+        familyId,
+        key: "s:c1",
+        requestHash: HASH,
+        userId: owner,
+      }),
+    ).resolves.toEqual({
+      kind: "existing",
+      requestHash: HASH,
+      result: { orderId: "o-1" },
+      status: "completed",
+    });
 
     await yandexTaxiOperationRepository.release({ key: "s:c1", userId: member });
-    await expect(yandexTaxiOperationRepository.begin({ action: "cancel", familyId, key: "s:c1", requestHash: HASH, userId: member })).resolves.toEqual({ kind: "started" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "cancel",
+        familyId,
+        key: "s:c1",
+        requestHash: HASH,
+        userId: member,
+      }),
+    ).resolves.toEqual({ kind: "started" });
   });
 
   it("refuses someone who is not a member of the family", async () => {
     const family = await createMemoryFamilyFixture(`taxi-op-stranger-${Date.now()}`);
     const other = await createMemoryFamilyFixture(`taxi-op-other-${Date.now()}`);
-    await expect(yandexTaxiOperationRepository.begin({ action: "order", familyId: family.familyId, key: `s:${randomUUID()}`, requestHash: HASH, userId: other.owner.userId! }))
-      .rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_ACCESS_DENIED" });
+    await expect(
+      yandexTaxiOperationRepository.begin({
+        action: "order",
+        familyId: family.familyId,
+        key: `s:${randomUUID()}`,
+        requestHash: HASH,
+        userId: other.owner.userId!,
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_ACCESS_DENIED" });
   });
 });

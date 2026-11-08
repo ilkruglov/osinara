@@ -32,8 +32,7 @@ function expectProviderOptions(e, t) {
 }
 function expectOnlyKnownKeys(e, t, n) {
   let r = new Set(t);
-  for (let t of Object.keys(e))
-    if (!r.has(t)) throw Error(`${n} Unknown key "${t}".`);
+  for (let t of Object.keys(e)) if (!r.has(t)) throw Error(`${n} Unknown key "${t}".`);
 }
 function getOptionalStringRecordProperty(e, t, n) {
   let r = e[t];

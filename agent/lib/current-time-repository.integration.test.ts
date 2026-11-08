@@ -14,9 +14,14 @@ import { closeDatabase, database } from "./database.js";
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const url = process.env.DATABASE_URL;
 if (enabled) {
-  if (!url) throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+  if (!url)
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   if (!new URL(url).pathname.slice(1).endsWith("_test")) {
-    throw new Error("AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test");
+    throw new Error(
+      "AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test",
+    );
   }
 }
 const describeWithDatabase = enabled ? describe : describe.skip;
@@ -43,12 +48,9 @@ async function createFixture(suffix: string, ownerTimezone: string | null): Prom
      RETURNING id`,
     [`tz-owner-${suffix}`, `tz-member-${suffix}`, `tz-plain-${suffix}`, `tz-other-${suffix}`],
   );
-  const [ownerId, memberWithTimezoneId, memberWithoutTimezoneId, otherOwnerId] = users.rows.map((row) => row.id) as [
-    string,
-    string,
-    string,
-    string,
-  ];
+  const [ownerId, memberWithTimezoneId, memberWithoutTimezoneId, otherOwnerId] = users.rows.map(
+    (row) => row.id,
+  ) as [string, string, string, string];
   await database().query(
     `INSERT INTO family_memberships (family_id, user_id, role)
      VALUES ($1, $2, 'owner'), ($1, $3, 'member'), ($1, $4, 'member'), ($5, $6, 'owner')`,
@@ -64,7 +66,14 @@ async function createFixture(suffix: string, ownerTimezone: string | null): Prom
       [ownerId, ownerTimezone],
     );
   }
-  return { familyId, memberWithTimezoneId, memberWithoutTimezoneId, otherFamilyId, otherOwnerId, ownerId };
+  return {
+    familyId,
+    memberWithTimezoneId,
+    memberWithoutTimezoneId,
+    otherFamilyId,
+    otherOwnerId,
+    ownerId,
+  };
 }
 
 describeWithDatabase("currentTimeRepository.findTurnTimezone", () => {
@@ -75,26 +84,35 @@ describeWithDatabase("currentTimeRepository.findTurnTimezone", () => {
   it("prefers the member's own timezone and falls back to the owner's", async () => {
     const fixture = await createFixture(`own-${Date.now()}`, "Europe/Moscow");
 
-    await expect(currentTimeRepository.findTurnTimezone(fixture.memberWithTimezoneId, fixture.familyId))
-      .resolves.toBe("Asia/Tokyo");
-    await expect(currentTimeRepository.findTurnTimezone(fixture.memberWithoutTimezoneId, fixture.familyId))
-      .resolves.toBe("Europe/Moscow");
-    await expect(currentTimeRepository.findTurnTimezone(null, fixture.familyId))
-      .resolves.toBe("Europe/Moscow");
-    await expect(currentTimeRepository.findTurnTimezone(fixture.ownerId, fixture.familyId))
-      .resolves.toBe("Europe/Moscow");
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.memberWithTimezoneId, fixture.familyId),
+    ).resolves.toBe("Asia/Tokyo");
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.memberWithoutTimezoneId, fixture.familyId),
+    ).resolves.toBe("Europe/Moscow");
+    await expect(currentTimeRepository.findTurnTimezone(null, fixture.familyId)).resolves.toBe(
+      "Europe/Moscow",
+    );
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.ownerId, fixture.familyId),
+    ).resolves.toBe("Europe/Moscow");
   });
 
   it("resolves to null without an owner setting and never reads another family", async () => {
     const fixture = await createFixture(`none-${Date.now()}`, null);
 
-    await expect(currentTimeRepository.findTurnTimezone(null, fixture.familyId)).resolves.toBeNull();
-    await expect(currentTimeRepository.findTurnTimezone(fixture.memberWithoutTimezoneId, fixture.familyId))
-      .resolves.toBeNull();
-    await expect(currentTimeRepository.findTurnTimezone(fixture.memberWithTimezoneId, fixture.familyId))
-      .resolves.toBe("Asia/Tokyo");
+    await expect(
+      currentTimeRepository.findTurnTimezone(null, fixture.familyId),
+    ).resolves.toBeNull();
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.memberWithoutTimezoneId, fixture.familyId),
+    ).resolves.toBeNull();
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.memberWithTimezoneId, fixture.familyId),
+    ).resolves.toBe("Asia/Tokyo");
     // A user id from another family gets that family's owner, not the stranger's own setting.
-    await expect(currentTimeRepository.findTurnTimezone(fixture.otherOwnerId, fixture.familyId))
-      .resolves.toBeNull();
+    await expect(
+      currentTimeRepository.findTurnTimezone(fixture.otherOwnerId, fixture.familyId),
+    ).resolves.toBeNull();
   });
 });

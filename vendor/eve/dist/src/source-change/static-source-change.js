@@ -28,8 +28,7 @@ async function updateAgentModelSettings(t, n) {
     };
   let l = await editedSourceBail(s, c.nextSource, i.logicalPath);
   return l === void 0
-    ? (await writeSourceIfChanged(o, s, c.nextSource),
-      { kind: `applied`, changed: c.changed })
+    ? (await writeSourceIfChanged(o, s, c.nextSource), { kind: `applied`, changed: c.changed })
     : l;
 }
 async function updateAgentModelName(t, n) {
@@ -51,8 +50,7 @@ async function updateAgentModelName(t, n) {
     };
   let l = await editedSourceBail(s, c.nextSource, i.logicalPath);
   return l === void 0
-    ? (await writeSourceIfChanged(a, s, c.nextSource),
-      { kind: `applied`, from: c.from, to: c.to })
+    ? (await writeSourceIfChanged(a, s, c.nextSource), { kind: `applied`, from: c.from, to: c.to })
     : l;
 }
 async function writeSourceIfChanged(e, r, i) {

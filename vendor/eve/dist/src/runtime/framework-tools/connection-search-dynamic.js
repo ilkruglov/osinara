@@ -22,13 +22,9 @@ import {
 import { defineDynamic, defineTool } from "#public/definitions/tool.js";
 import { resolveConnectionAuthorization } from "#runtime/connections/resolve-authorization.js";
 import { writeCachedToken } from "#runtime/connections/authorization-tokens.js";
-import {
-  principalKey,
-  resolveConnectionPrincipal,
-} from "#runtime/connections/principal.js";
+import { principalKey, resolveConnectionPrincipal } from "#runtime/connections/principal.js";
 var __eveStepRegistrySym = Symbol.for(`@workflow/core//registeredSteps`);
-globalThis[__eveStepRegistrySym] ||
-  (globalThis[__eveStepRegistrySym] = new Map());
+globalThis[__eveStepRegistrySym] || (globalThis[__eveStepRegistrySym] = new Map());
 var __eveStepRegistry = globalThis[__eveStepRegistrySym];
 const logger = createLogger(`framework.connection-search-dynamic`),
   CONNECTION_SEARCH_INPUT_SCHEMA = z.strictObject({
@@ -54,9 +50,7 @@ const logger = createLogger(`framework.connection-search-dynamic`),
     qualifiedName: z.string().optional(),
     tool: z.string().optional(),
   }),
-  CONNECTION_SEARCH_OUTPUT_SCHEMA = z.array(
-    CONNECTION_SEARCH_RESULT_ITEM_SCHEMA,
-  ),
+  CONNECTION_SEARCH_OUTPUT_SCHEMA = z.array(CONNECTION_SEARCH_RESULT_ITEM_SCHEMA),
   ConnectionSearchResultsKey = new ContextKey(`eve.connectionSearchResults`);
 function qualifiedConnectionToolName(e, t) {
   return `${e}__${t}`;
@@ -99,8 +93,7 @@ async function completePendingAuthorizations(e, t) {
         resume: t.resume,
         callback: t.callback,
       });
-    (writeCachedToken(n, r.connectionName, principalKey(o), s),
-      i.add(r.connectionName));
+    (writeCachedToken(n, r.connectionName, principalKey(o), s), i.add(r.connectionName));
   }
   return i;
 }
@@ -219,10 +212,7 @@ async function executeConnectionSearch(e) {
             description: n.description,
             inputSchema: n.inputSchema,
             outputSchema: n.outputSchema,
-            qualifiedName: qualifiedConnectionToolName(
-              e.connectionName,
-              n.name,
-            ),
+            qualifiedName: qualifiedConnectionToolName(e.connectionName, n.name),
             tool: n.name,
           },
           score: t,
@@ -259,13 +249,11 @@ function extractDiscoveredTools(e) {
     if (n.role !== `tool`) continue;
     let e = n.content;
     for (let n of e) {
-      if (n.type !== `tool-result` || n.toolName !== `connection_search`)
-        continue;
+      if (n.type !== `tool-result` || n.toolName !== `connection_search`) continue;
       let e = n.output;
       if (e == null) continue;
       let r = typeof e == `object` && `type` in e && `value` in e ? e.value : e;
-      if (Array.isArray(r))
-        for (let e of r) e.tool && e.qualifiedName && t.set(e.qualifiedName, e);
+      if (Array.isArray(r)) for (let e of r) e.tool && e.qualifiedName && t.set(e.qualifiedName, e);
     }
   }
   return [...t.values()];
@@ -301,11 +289,7 @@ const connectionSearchDynamicDefinition = defineDynamic({
           approval: a,
           outputSchema: e.outputSchema,
           execute: async (e, n) =>
-            await __eve_dynamic_exec_1(
-              { ctx: t, connectionName: r, toolName: i },
-              e,
-              n,
-            ),
+            await __eve_dynamic_exec_1({ ctx: t, connectionName: r, toolName: i }, e, n),
           __executeStepFn: __eve_dynamic_exec_1,
           __closureVars: { ctx: t, connectionName: r, toolName: i },
         });
@@ -340,9 +324,7 @@ async function __eve_dynamic_exec_1(e, t, n) {
     }
   }
   try {
-    return await f
-      .getClient(s)
-      .executeTool(d, t, { abortSignal: n.abortSignal });
+    return await f.getClient(s).executeTool(d, t, { abortSignal: n.abortSignal });
   } catch (e) {
     if (!isConnectionAuthorizationRequiredError(e) || !m) throw e;
     if (_)
@@ -376,13 +358,7 @@ async function __eve_dynamic_exec_1(e, t, n) {
   }
 }
 ((__eve_dynamic_exec_0.stepId = `eve:dynamic-tool//__eve_dynamic_exec_0`),
-  __eveStepRegistry.set(
-    `eve:dynamic-tool//__eve_dynamic_exec_0`,
-    __eve_dynamic_exec_0,
-  ),
+  __eveStepRegistry.set(`eve:dynamic-tool//__eve_dynamic_exec_0`, __eve_dynamic_exec_0),
   (__eve_dynamic_exec_1.stepId = `eve:dynamic-tool//__eve_dynamic_exec_1`),
-  __eveStepRegistry.set(
-    `eve:dynamic-tool//__eve_dynamic_exec_1`,
-    __eve_dynamic_exec_1,
-  ));
+  __eveStepRegistry.set(`eve:dynamic-tool//__eve_dynamic_exec_1`, __eve_dynamic_exec_1));
 export { connectionSearchDynamicDefinition as default, extractDiscoveredTools };

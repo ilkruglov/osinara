@@ -28,7 +28,7 @@ function parseStreamErrorMessage(e) {
 function* causeChainMessages(t) {
   let n = new Set(),
     r = t;
-  for (; r != null && !n.has(r); ) {
+  for (; r != null && !n.has(r);) {
     if ((n.add(r), r instanceof Error)) {
       (yield r.message, (r = r.cause));
       continue;

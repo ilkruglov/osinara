@@ -31,8 +31,7 @@ function resolveRetryPolicy(e, t) {
   return { ...t, ...e };
 }
 function resolveStreamReconnectPolicy(e) {
-  if (e && `reconnect` in e && e.reconnect === !1)
-    return NO_STREAM_RECONNECT_POLICY;
+  if (e && `reconnect` in e && e.reconnect === !1) return NO_STREAM_RECONNECT_POLICY;
   let t = e;
   return {
     retryableErrorStatuses: t?.retryableErrorStatuses
@@ -87,14 +86,7 @@ async function* followStreamIterable(e) {
     let f = !1;
     try {
       for await (let e of readNdjsonStream(d.body))
-        if (
-          ((o += 1),
-          (f = !0),
-          (s = a.baseDelayMs),
-          (c = 0),
-          yield e,
-          u !== void 0 && o > u)
-        )
+        if (((o += 1), (f = !0), (s = a.baseDelayMs), (c = 0), yield e, u !== void 0 && o > u))
           return;
     } catch (e) {
       if (!isStreamDisconnectError(e)) throw e;
@@ -136,18 +128,12 @@ async function openStreamBody(t) {
         signal: t.signal ?? null,
       });
     } catch (e) {
-      if (
-        t.signal?.aborted ||
-        !isStreamDisconnectError(e) ||
-        o === s.maxAttempts - 1
-      )
-        throw e;
+      if (t.signal?.aborted || !isStreamDisconnectError(e) || o === s.maxAttempts - 1) throw e;
       (await sleep(d, t.signal), (d = Math.min(d * 2, s.maxDelayMs)));
       continue;
     }
     if (h.ok) {
-      if (!h.body)
-        throw new ClientError(h.status, `Response body is null.`, h.headers);
+      if (!h.body) throw new ClientError(h.status, `Response body is null.`, h.headers);
       return { body: h.body, tailIndex: parseTailIndexHeader(h.headers) };
     }
     if (
@@ -157,8 +143,7 @@ async function openStreamBody(t) {
       !r.retryableErrorStatuses.has(h.status))
     )
       throw new ClientError(h.status, l, h.headers);
-    o < s.maxAttempts - 1 &&
-      (await sleep(d, t.signal), (d = Math.min(d * 2, s.maxDelayMs)));
+    o < s.maxAttempts - 1 && (await sleep(d, t.signal), (d = Math.min(d * 2, s.maxDelayMs)));
   }
   throw new ClientError(c ?? 0, l ?? `Failed to open message stream.`, u);
 }

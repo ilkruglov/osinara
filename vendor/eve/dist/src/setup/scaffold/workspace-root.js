@@ -73,11 +73,7 @@ function workspaceRootPackageJsonPath(e, t) {
 }
 async function ensurePackageJsonWorkspaceIncludesProject(e) {
   let n = findAncestorPackageJsonWorkspaceRoot(e);
-  if (
-    n === void 0 ||
-    resolve(n) === resolve(e) ||
-    findClaimingPackageJsonWorkspaceRoot(e) === n
-  )
+  if (n === void 0 || resolve(n) === resolve(e) || findClaimingPackageJsonWorkspaceRoot(e) === n)
     return;
   let r = join(n, `package.json`),
     i = JSON.parse(await readFile(r, `utf8`)),
@@ -107,8 +103,7 @@ async function ensurePackageManagerWorkspaceIncludesProject(e, t) {
 function packageManagerRootOnlyPackageJsonPatch(e, t) {
   let n = {};
   if (
-    (t.nodeEngineRequirement !== void 0 &&
-      (n.nodeEngineRequirement = t.nodeEngineRequirement),
+    (t.nodeEngineRequirement !== void 0 && (n.nodeEngineRequirement = t.nodeEngineRequirement),
     t.aiPackageVersion !== void 0)
   )
     switch (e) {
@@ -128,10 +123,7 @@ async function patchWorkspaceRootPackageJson(e, t, n) {
   if (!isPackageManagerWorkspaceMember(e, t)) return { changed: !1 };
   let r = workspaceRootPackageJsonPath(e, t);
   if (r === void 0 || !existsSync(r)) return { changed: !1 };
-  let i = await patchPackageJson(
-    r,
-    packageManagerRootOnlyPackageJsonPatch(e, n),
-  );
+  let i = await patchPackageJson(r, packageManagerRootOnlyPackageJsonPatch(e, n));
   return (
     i.changed &&
       (await n.onWorkspaceRootMutation?.({
@@ -147,13 +139,10 @@ async function applyPackageManagerWorkspaceConfiguration(t) {
     r =
       t.packageManager === `pnpm`
         ? void 0
-        : await ensurePackageManagerWorkspaceIncludesProject(
-            t.packageManager,
-            n,
-          ),
-    i = await getPackageManagerStrategy(
-      t.packageManager,
-    ).applyProjectConfiguration(t.projectRoot, { workspaceProbeRoot: n }),
+        : await ensurePackageManagerWorkspaceIncludesProject(t.packageManager, n),
+    i = await getPackageManagerStrategy(t.packageManager).applyProjectConfiguration(t.projectRoot, {
+      workspaceProbeRoot: n,
+    }),
     o = [...(r === void 0 ? [] : [r]), ...i.filesWritten],
     s = [...i.filesSkipped];
   for (let n of o)

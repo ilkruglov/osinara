@@ -13,13 +13,7 @@ async function buildDevelopmentHostCandidate(r) {
       a ||
         ((a = !0),
         (o = {
-          entry:
-            t?.entry ??
-            resolve(
-              i.options.output.dir,
-              i.options.output.serverDir,
-              `index.mjs`,
-            ),
+          entry: t?.entry ?? resolve(i.options.output.dir, i.options.output.serverDir, `index.mjs`),
           workerData: t?.workerData ?? {},
         }),
         c?.());
@@ -28,9 +22,7 @@ async function buildDevelopmentHostCandidate(r) {
       a || ((a = !0), (s = e), c?.());
     });
   try {
-    if (
-      (await prepare(i), await build(i), await waitForSignal(l), s !== void 0)
-    )
+    if ((await prepare(i), await build(i), await waitForSignal(l), s !== void 0))
       throw s instanceof Error ? s : Error(String(s));
     if (o === void 0 || o.entry.length === 0)
       throw Error(`Nitro did not emit a development worker entry.`);
@@ -46,12 +38,7 @@ async function waitForSignal(e) {
       e,
       new Promise((e, n) => {
         t = setTimeout(
-          () =>
-            n(
-              Error(
-                `Timed out waiting for the Nitro dev build to emit a worker.`,
-              ),
-            ),
+          () => n(Error(`Timed out waiting for the Nitro dev build to emit a worker.`)),
           12e4,
         );
       }),

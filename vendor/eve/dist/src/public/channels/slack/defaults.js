@@ -1,28 +1,18 @@
-import {
-  createLogger,
-  extractErrorId,
-  formatErrorHint,
-} from "#internal/logging.js";
+import { createLogger, extractErrorId, formatErrorHint } from "#internal/logging.js";
 import {
   SLACK_MAX_BLOCKS_PER_MESSAGE,
   truncateMessageText,
   truncateTypingStatus,
 } from "#public/channels/slack/limits.js";
 import { describeActionRequests } from "#public/channels/slack/action-status.js";
-import {
-  buildSlackAuthContext,
-  slackUserIdFromAuthContext,
-} from "#public/channels/slack/auth.js";
+import { buildSlackAuthContext, slackUserIdFromAuthContext } from "#public/channels/slack/auth.js";
 import {
   buildAuthCompletedText,
   buildAuthEphemeralBlocks,
   buildAuthRequiredPublicText,
   formatConnectionDisplayName,
 } from "#public/channels/slack/connections.js";
-import {
-  buildAnsweredBlocks,
-  renderInputRequestPostParts,
-} from "#public/channels/slack/hitl.js";
+import { buildAnsweredBlocks, renderInputRequestPostParts } from "#public/channels/slack/hitl.js";
 const log = createLogger(`slack.defaults`);
 function blockContainsRequestAction(e, t) {
   if (typeof e != `object` || !e) return !1;
@@ -54,16 +44,10 @@ function defaultSlackAuth(e, t) {
     : null;
 }
 async function defaultOnAppMention(e, t) {
-  return (
-    await e.thread.startTyping(`Thinking...`),
-    { auth: defaultSlackAuth(t, e) }
-  );
+  return (await e.thread.startTyping(`Thinking...`), { auth: defaultSlackAuth(t, e) });
 }
 async function defaultOnDirectMessage(e, t) {
-  return (
-    await e.thread.startTyping(`Thinking...`),
-    { auth: defaultSlackAuth(t, e) }
-  );
+  return (await e.thread.startTyping(`Thinking...`), { auth: defaultSlackAuth(t, e) });
 }
 function firstNonEmptyLine(e) {
   for (let t of e.split(/\r?\n/u)) {
@@ -89,8 +73,7 @@ function buildInputRequestPosts(e) {
     n = [];
   for (let r of e) {
     let e = renderInputRequestPostParts(r);
-    (e.details && t.push({ ...e.details, request: r }),
-      n.push({ ...e.controls, request: r }));
+    (e.details && t.push({ ...e.details, request: r }), n.push({ ...e.controls, request: r }));
   }
   return [...groupInputRequestPostParts(t), ...groupInputRequestPostParts(n)];
 }
@@ -99,9 +82,7 @@ function groupInputRequestPostParts(e) {
   for (let n of e) {
     let e = t.at(-1);
     e && e.blocks.length + n.blocks.length <= SLACK_MAX_BLOCKS_PER_MESSAGE
-      ? (e.blocks.push(...n.blocks),
-        e.fallbacks.push(n.text),
-        e.requests.push(n.request))
+      ? (e.blocks.push(...n.blocks), e.fallbacks.push(n.text), e.requests.push(n.request))
       : t.push({
           blocks: [...n.blocks],
           fallbacks: [n.text],
@@ -121,10 +102,7 @@ const defaultEvents = {
   async "approval.candidate"(e, t, n) {
     let r = t.state.pendingApprovalCandidateUsers?.[e.candidateId];
     if (e.outcome === `pending` && r !== void 0) {
-      await t.thread.postEphemeral(
-        r,
-        `Checking whether you can approve this action…`,
-      );
+      await t.thread.postEphemeral(r, `Checking whether you can approve this action…`);
       return;
     }
     r !== void 0 &&
@@ -194,15 +172,11 @@ const defaultEvents = {
       await t.thread.startTyping(truncateTypingStatus(r));
       return;
     }
-    await t.thread.startTyping(
-      truncateTypingStatus(describeActionRequests(e.actions)),
-    );
+    await t.thread.startTyping(truncateTypingStatus(describeActionRequests(e.actions)));
   },
   async "message.completed"(e, t, n) {
     if (e.finishReason === `tool-calls`) {
-      t.state.pendingToolCallMessage = e.message
-        ? (firstNonEmptyLine(e.message) ?? null)
-        : null;
+      t.state.pendingToolCallMessage = e.message ? (firstNonEmptyLine(e.message) ?? null) : null;
       return;
     }
     if (((t.state.pendingToolCallMessage = null), !e.message)) {
@@ -241,9 +215,7 @@ const defaultEvents = {
     let r = e.authorization?.displayName ?? formatConnectionDisplayName(e.name),
       i =
         e.candidateId === void 0
-          ? (slackUserIdFromAuthContext(n.session.auth.current) ??
-            t.state.triggeringUserId ??
-            null)
+          ? (slackUserIdFromAuthContext(n.session.auth.current) ?? t.state.triggeringUserId ?? null)
           : (t.state.pendingApprovalCandidateUsers?.[e.candidateId] ?? null),
       a = e.authorization?.url,
       o = t.state.pendingAuthMessageTs ?? {};
@@ -271,9 +243,7 @@ const defaultEvents = {
             url: a,
             userCode: n,
           }),
-          text: n
-            ? `Sign in with ${r}: ${a} (code: ${n})`
-            : `Sign in with ${r}: ${a}`,
+          text: n ? `Sign in with ${r}: ${a} (code: ${n})` : `Sign in with ${r}: ${a}`,
         });
       } catch (t) {
         log.error(`Slack auth ephemeral delivery failed`, {

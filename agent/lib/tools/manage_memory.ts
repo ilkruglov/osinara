@@ -37,10 +37,8 @@ export type ManageMemoryAction = (typeof MANAGE_MEMORY_ACTIONS)[number];
 
 const ACTION_DESCRIPTIONS: Readonly<Record<ManageMemoryAction, string>> = {
   delete: 'Delete payload: {"action":"delete","memoryRef":"mem_..."}.',
-  edit:
-    'Edit payload: {"action":"edit","memoryRef":"mem_...","content":"Полная новая версия"}; kind и sensitivity добавляй только при явном изменении классификации.',
-  undo:
-    'Undo только для немедленной отмены только что сделанной записи: {"action":"undo","memoryRef":"mem_..."}.',
+  edit: 'Edit payload: {"action":"edit","memoryRef":"mem_...","content":"Полная новая версия"}; kind и sensitivity добавляй только при явном изменении классификации.',
+  undo: 'Undo только для немедленной отмены только что сделанной записи: {"action":"undo","memoryRef":"mem_..."}.',
 };
 
 // Mutation integrity guidance lives with the tool: it matters only when the model is about to
@@ -66,17 +64,21 @@ export function manageMemoryPresentation(actions: readonly ManageMemoryAction[])
       mutableActions.length > 0
         ? "Если основание слабое или полезность снизится, не мутируй запись: уточни факт или сохрани отдельный claim. При AGENT_MEMORY_INPUT_INVALID исправь payload только по ошибке."
         : null,
-      ...MANAGE_MEMORY_ACTIONS
-        .filter((action) => actions.includes(action))
-        .map((action) => ACTION_DESCRIPTIONS[action]),
-    ].filter((section): section is string => section !== null).join(" "),
-    inputSchema: z.object({
-      action: z.enum([firstAction, ...otherActions]),
-      content: z.string().optional(),
-      kind: z.string().optional(),
-      memoryRef: z.string().optional(),
-      sensitivity: z.string().optional(),
-    }).strict(),
+      ...MANAGE_MEMORY_ACTIONS.filter((action) => actions.includes(action)).map(
+        (action) => ACTION_DESCRIPTIONS[action],
+      ),
+    ]
+      .filter((section): section is string => section !== null)
+      .join(" "),
+    inputSchema: z
+      .object({
+        action: z.enum([firstAction, ...otherActions]),
+        content: z.string().optional(),
+        kind: z.string().optional(),
+        memoryRef: z.string().optional(),
+        sensitivity: z.string().optional(),
+      })
+      .strict(),
   };
 }
 
@@ -103,13 +105,10 @@ function requireEditInput(input: Record<string, unknown>) {
     "action=edit",
     INPUT_ERROR_CODE,
   );
-  const kind = optionalEnum(input, "kind", MEMORY_KINDS, INPUT_ERROR_CODE) as MemoryKind | undefined;
-  const sensitivity = optionalEnum(
-    input,
-    "sensitivity",
-    MEMORY_SENSITIVITIES,
-    INPUT_ERROR_CODE,
-  ) as MemorySensitivity | undefined;
+  const kind = optionalEnum(input, "kind", MEMORY_KINDS, INPUT_ERROR_CODE) as
+    MemoryKind | undefined;
+  const sensitivity = optionalEnum(input, "sensitivity", MEMORY_SENSITIVITIES, INPUT_ERROR_CODE) as
+    MemorySensitivity | undefined;
   return {
     ...(kind === undefined ? {} : { kind }),
     content: requiredString(input, "content", INPUT_ERROR_CODE, "Исправленный текст памяти", {

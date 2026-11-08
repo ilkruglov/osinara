@@ -59,25 +59,30 @@ async function currentAccess(
       )
     : { rows: [] };
   const currentOwner = membership.rows[0]?.role === "owner";
-  const allowed = conflict.scope === "personal"
-    ? Boolean(
-        auth.userId && membership.rows[0] &&
-        conflict.owner_a_user_id === auth.userId && conflict.owner_b_user_id === auth.userId &&
-        conflict.scope_partition_key === auth.userId
-      )
-    : conflict.scope === "family"
-      // Authorship alone is not enough: the author must still be a member of the family.
-      ? Boolean(membership.rows[0]) && (currentOwner || Boolean(
-          auth.userId && conflict.author_a_user_id === auth.userId &&
-          conflict.author_b_user_id === auth.userId
-        ))
-      : Boolean(
-          auth.groupId === conflict.scope_partition_key &&
-          (currentOwner || (
-            conflict.author_a_telegram_user_id === auth.telegramUserId &&
-            conflict.author_b_telegram_user_id === auth.telegramUserId
-          ))
-        );
+  const allowed =
+    conflict.scope === "personal"
+      ? Boolean(
+          auth.userId &&
+          membership.rows[0] &&
+          conflict.owner_a_user_id === auth.userId &&
+          conflict.owner_b_user_id === auth.userId &&
+          conflict.scope_partition_key === auth.userId,
+        )
+      : conflict.scope === "family"
+        ? // Authorship alone is not enough: the author must still be a member of the family.
+          Boolean(membership.rows[0]) &&
+          (currentOwner ||
+            Boolean(
+              auth.userId &&
+              conflict.author_a_user_id === auth.userId &&
+              conflict.author_b_user_id === auth.userId,
+            ))
+        : Boolean(
+            auth.groupId === conflict.scope_partition_key &&
+            (currentOwner ||
+              (conflict.author_a_telegram_user_id === auth.telegramUserId &&
+                conflict.author_b_telegram_user_id === auth.telegramUserId)),
+          );
   if (!allowed) {
     throw new AppError(
       "AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED",
@@ -95,9 +100,16 @@ async function currentAccess(
   }
 }
 
-function resultFor(conflict: ConflictRow, input: ResolveMemoryConflictInput): MemoryConflictResolution {
+function resultFor(
+  conflict: ConflictRow,
+  input: ResolveMemoryConflictInput,
+): MemoryConflictResolution {
   if (input.action === "choose") {
-    return { chosenMemoryRef: input.memoryRef, conflictRef: conflict.conflict_ref, resolution: "chosen" };
+    return {
+      chosenMemoryRef: input.memoryRef,
+      conflictRef: conflict.conflict_ref,
+      resolution: "chosen",
+    };
   }
   return {
     conflictRef: conflict.conflict_ref,
@@ -171,20 +183,20 @@ export const memoryConflictRepository = {
 
       let chosenClaimId: string | null = null;
       if (input.action === "choose") {
-        chosenClaimId = input.memoryRef === conflict.memory_ref_a
-          ? conflict.claim_a_id
-          : input.memoryRef === conflict.memory_ref_b
-            ? conflict.claim_b_id
-            : null;
+        chosenClaimId =
+          input.memoryRef === conflict.memory_ref_a
+            ? conflict.claim_a_id
+            : input.memoryRef === conflict.memory_ref_b
+              ? conflict.claim_b_id
+              : null;
         if (!chosenClaimId) {
           throw new AppError(
             "AGENT_MEMORY_CONFLICT_CHOICE_INVALID",
             "Выбранная запись не относится к этому конфликту",
           );
         }
-        const retractedId = chosenClaimId === conflict.claim_a_id
-          ? conflict.claim_b_id
-          : conflict.claim_a_id;
+        const retractedId =
+          chosenClaimId === conflict.claim_a_id ? conflict.claim_b_id : conflict.claim_a_id;
         await client.query(
           `UPDATE memory_items SET claim_status = 'retracted', superseded_by = NULL,
                   duplicate_of = NULL, updated_at = now() WHERE id = $1`,

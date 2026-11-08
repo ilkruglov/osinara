@@ -41,8 +41,7 @@ export interface PrepareSoftwareUpdateProposalInput {
 }
 
 export type PrepareSoftwareUpdateProposalResult =
-  | { proposalId: string; status: "created" }
-  | { status: "duplicate" };
+  { proposalId: string; status: "created" } | { status: "duplicate" };
 
 export interface BindSoftwareUpdateTelegramMessageInput {
   chatId: string;

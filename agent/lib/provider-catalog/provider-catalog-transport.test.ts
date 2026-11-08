@@ -45,7 +45,10 @@ describe("provider catalog transport", () => {
       fetch,
       providerId: "deepseek",
       timeoutMs: REQUEST_TIMEOUT_MS,
-    }).then((value) => ({ value }), (error: unknown) => ({ error }));
+    }).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
 
     expect(await outcome).toEqual({
@@ -59,7 +62,10 @@ describe("provider catalog transport", () => {
 
   it.each([
     [jsonResponse({ error: "unavailable" }, 503), "AGENT_PROVIDER_METADATA_HTTP_FAILED"],
-    [jsonResponse({ deepseek: { id: "deepseek", models: [] } }), "AGENT_PROVIDER_METADATA_RESPONSE_INVALID"],
+    [
+      jsonResponse({ deepseek: { id: "deepseek", models: [] } }),
+      "AGENT_PROVIDER_METADATA_RESPONSE_INVALID",
+    ],
   ] as const)("fails fast for invalid models.dev metadata %#", async (metadataResponse, code) => {
     const fetch = createCatalogFetch({
       [DEEPSEEK_MODELS_URL]: jsonResponse({ object: "list", data: [] }),
@@ -143,7 +149,10 @@ describe("provider catalog transport", () => {
       fetch,
       providerId: "deepseek",
       timeoutMs: REQUEST_TIMEOUT_MS,
-    }).then((value) => ({ value }), (error: unknown) => ({ error }));
+    }).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
 
     expect(await outcome).toEqual({
@@ -161,7 +170,10 @@ describe("provider catalog transport", () => {
       fetch,
       providerId: "deepseek",
       timeoutMs: REQUEST_TIMEOUT_MS,
-    }).then((value) => ({ value }), (error: unknown) => ({ error }));
+    }).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
 
     expect(await outcome).toEqual({

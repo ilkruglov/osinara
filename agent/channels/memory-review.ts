@@ -9,10 +9,7 @@
  */
 import { defineChannel, POST } from "eve/channels";
 
-import {
-  bindMemoryTurnSources,
-  releaseMemoryTurnSources,
-} from "../lib/memory-turn-source.js";
+import { bindMemoryTurnSources, releaseMemoryTurnSources } from "../lib/memory-turn-source.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import {
   memoryReviewBatchId,
@@ -42,9 +39,8 @@ export default defineChannel<undefined, void, { batchId: string }>({
   events: {
     async "turn.started"(_data, _channel, ctx) {
       const batchId = memoryReviewBatchId(ctx);
-      if (!batchId) throw new Error(
-        "AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Internal review turn has no batch",
-      );
+      if (!batchId)
+        throw new Error("AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Internal review turn has no batch");
       const appSessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(appSessionId, ctx.session.id);
       await memoryReviewRepository.bindEveTurn({
@@ -57,9 +53,8 @@ export default defineChannel<undefined, void, { batchId: string }>({
     },
     async "turn.completed"(_data, _channel, ctx) {
       const batchId = memoryReviewBatchId(ctx);
-      if (!batchId) throw new Error(
-        "AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Completed review turn has no batch",
-      );
+      if (!batchId)
+        throw new Error("AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Completed review turn has no batch");
       const terminal = await memoryReviewRepository.completeBatch({
         batchId,
         completedAt: new Date(),
@@ -71,9 +66,8 @@ export default defineChannel<undefined, void, { batchId: string }>({
     },
     async "turn.failed"(data, _channel, ctx) {
       const batchId = memoryReviewBatchId(ctx);
-      if (!batchId) throw new Error(
-        "AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Failed review turn has no batch",
-      );
+      if (!batchId)
+        throw new Error("AGENT_MEMORY_REVIEW_CONTEXT_INVALID: Failed review turn has no batch");
       const terminal = await memoryReviewRepository.failRunning({
         batchId,
         diagnosticCode: data.code,
@@ -98,12 +92,11 @@ export default defineChannel<undefined, void, { batchId: string }>({
     async "session.failed"(data, channel) {
       // A competing root lost channel ownership; the existing review root remains authoritative.
       if (isHookConflictFailure(data)) return;
-      const batchId = memoryReviewBatchIdFromContinuationToken(
-        channel.continuation?.token ?? "",
-      );
-      if (!batchId) throw new Error(
-        "AGENT_MEMORY_REVIEW_CONTINUATION_INVALID: Failed review session has no batch route",
-      );
+      const batchId = memoryReviewBatchIdFromContinuationToken(channel.continuation?.token ?? "");
+      if (!batchId)
+        throw new Error(
+          "AGENT_MEMORY_REVIEW_CONTINUATION_INVALID: Failed review session has no batch route",
+        );
       await memoryReviewDispatchRepository.markSessionAmbiguous({
         batchId,
         diagnosticCode: "AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS",

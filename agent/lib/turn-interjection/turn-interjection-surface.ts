@@ -21,9 +21,17 @@ import { withTurnInterjection } from "./turn-interjection-tool.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
-export const TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES = ["bash", "glob", "grep", "read_file", "write_file"] as const;
+export const TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES = [
+  "bash",
+  "glob",
+  "grep",
+  "read_file",
+  "write_file",
+] as const;
 
-const FRAMEWORK_TOOLS: Readonly<Record<(typeof TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES)[number], AnyToolDefinition>> = {
+const FRAMEWORK_TOOLS: Readonly<
+  Record<(typeof TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES)[number], AnyToolDefinition>
+> = {
   bash,
   glob,
   grep,
@@ -44,6 +52,9 @@ export function withTurnInterjectionSurface(
   // An application tool of the same name keeps precedence over the framework built-in.
   const combined = { ...FRAMEWORK_TOOLS, ...surface };
   return Object.fromEntries(
-    Object.entries(combined).map(([name, definition]) => [name, withTurnInterjection(definition, turnInterjection)]),
+    Object.entries(combined).map(([name, definition]) => [
+      name,
+      withTurnInterjection(definition, turnInterjection),
+    ]),
   );
 }

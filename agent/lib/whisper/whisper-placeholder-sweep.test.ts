@@ -13,7 +13,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WHISPER_EMPTY_ANSWER_TEXT } from "./telegram-whisper-delivery.js";
-import { memoryPlaceholders, PLACEHOLDER_KEY, placeholderApi } from "./whisper-placeholder.test-fixtures.js";
+import {
+  memoryPlaceholders,
+  PLACEHOLDER_KEY,
+  placeholderApi,
+} from "./whisper-placeholder.test-fixtures.js";
 import { sweepWhisperPlaceholders } from "./whisper-placeholder-sweep.js";
 
 const OTHER_KEY = { ...PLACEHOLDER_KEY, placeholderMessageId: 32 };
@@ -24,7 +28,10 @@ describe("sweepWhisperPlaceholders", () => {
   it("removes an orphan placeholder and closes an unanswered one", async () => {
     const api = placeholderApi();
     const store = memoryPlaceholders({
-      stale: [{ ...PLACEHOLDER_KEY, reason: "orphan" }, { ...OTHER_KEY, reason: "unanswered" }],
+      stale: [
+        { ...PLACEHOLDER_KEY, reason: "orphan" },
+        { ...OTHER_KEY, reason: "unanswered" },
+      ],
     });
     store.seed("open");
     store.seed("open", OTHER_KEY);
@@ -33,7 +40,10 @@ describe("sweepWhisperPlaceholders", () => {
 
     expect(api.delete).toHaveBeenCalledExactlyOnceWith(PLACEHOLDER_KEY);
     expect(store.row()).toMatchObject({ pendingContent: null, status: "closed" });
-    expect(api.edit).toHaveBeenCalledExactlyOnceWith({ ...OTHER_KEY, content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT } });
+    expect(api.edit).toHaveBeenCalledExactlyOnceWith({
+      ...OTHER_KEY,
+      content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT },
+    });
     expect(store.row(OTHER_KEY)).toMatchObject({ pendingContent: null, status: "failed" });
     expect(store.repository.purge).toHaveBeenCalledOnce();
   });
@@ -44,14 +54,24 @@ describe("sweepWhisperPlaceholders", () => {
     const store = memoryPlaceholders();
     store.seed("open");
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await store.repository.transition(PLACEHOLDER_KEY, { content: { format: "plain", text: "Да." }, from: ["open"], to: "answered" });
+    await store.repository.transition(PLACEHOLDER_KEY, {
+      content: { format: "plain", text: "Да." },
+      from: ["open"],
+      to: "answered",
+    });
 
     await sweepWhisperPlaceholders({ api, placeholders: store.repository });
-    expect(store.row()).toMatchObject({ attemptCount: 1, pendingContent: { format: "plain", text: "Да." } });
+    expect(store.row()).toMatchObject({
+      attemptCount: 1,
+      pendingContent: { format: "plain", text: "Да." },
+    });
     await sweepWhisperPlaceholders({ api, placeholders: store.repository });
 
     expect(api.edit).toHaveBeenCalledTimes(2);
-    expect(api.edit).toHaveBeenLastCalledWith({ ...PLACEHOLDER_KEY, content: { format: "plain", text: "Да." } });
+    expect(api.edit).toHaveBeenLastCalledWith({
+      ...PLACEHOLDER_KEY,
+      content: { format: "plain", text: "Да." },
+    });
     expect(store.row()).toMatchObject({ pendingContent: null, status: "answered" });
   });
 
@@ -61,12 +81,19 @@ describe("sweepWhisperPlaceholders", () => {
     const store = memoryPlaceholders();
     store.seed("open");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await store.repository.transition(PLACEHOLDER_KEY, { content: { remove: true }, from: ["open"], to: "answered" });
+    await store.repository.transition(PLACEHOLDER_KEY, {
+      content: { remove: true },
+      from: ["open"],
+      to: "answered",
+    });
 
-    for (let pass = 0; pass < 6; pass += 1) await sweepWhisperPlaceholders({ api, placeholders: store.repository });
+    for (let pass = 0; pass < 6; pass += 1)
+      await sweepWhisperPlaceholders({ api, placeholders: store.repository });
 
     expect(api.delete).toHaveBeenCalledTimes(5);
     expect(store.row()).toMatchObject({ attemptCount: 5, pendingContent: null });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_TELEGRAM_WHISPER_DELIVERY_ABANDONED"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("AGENT_TELEGRAM_WHISPER_DELIVERY_ABANDONED"),
+    );
   });
 });

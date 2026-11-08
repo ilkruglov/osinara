@@ -1,11 +1,4 @@
-const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS = [
-  `.cts`,
-  `.mts`,
-  `.cjs`,
-  `.mjs`,
-  `.ts`,
-  `.js`,
-];
+const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS = [`.cts`, `.mts`, `.cjs`, `.mjs`, `.ts`, `.js`];
 function getSupportedModuleBaseName(t) {
   for (let n of SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS)
     if (t.endsWith(n) && t.length > n.length) return t.slice(0, -n.length);

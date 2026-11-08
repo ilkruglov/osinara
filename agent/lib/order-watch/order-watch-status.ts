@@ -83,33 +83,65 @@ function carLine(observed: TaxiObservation, withDriver: boolean): string {
     observed.plates,
     withDriver && observed.driver ? `водитель ${observed.driver}` : null,
     observed.minutesLeft === null ? null : `будет через ${observed.minutesLeft} мин`,
-  ].filter((part): part is string => Boolean(part)).map((part) => clip(part, 100)).join(", ");
+  ]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => clip(part, 100))
+    .join(", ");
 }
 
-export function decideTaxiWatch(previous: OrderWatchState | null, observed: TaxiObservation): OrderWatchDecision {
-  const state: OrderWatchState = { car: observed.car, plates: observed.plates, status: observed.status };
-  const phase = (status: string | null | undefined) => (status ? TAXI_PHASE[status] ?? status : null);
+export function decideTaxiWatch(
+  previous: OrderWatchState | null,
+  observed: TaxiObservation,
+): OrderWatchDecision {
+  const state: OrderWatchState = {
+    car: observed.car,
+    plates: observed.plates,
+    status: observed.status,
+  };
+  const phase = (status: string | null | undefined) =>
+    status ? (TAXI_PHASE[status] ?? status) : null;
   const final = TAXI_FINAL[observed.status];
   const ended = final !== undefined || observed.status === "complete";
-  if (ended && previous?.status === observed.status) return { finished: true, loud: false, message: null, state };
+  if (ended && previous?.status === observed.status)
+    return { finished: true, loud: false, message: null, state };
   if (final) return { finished: true, loud: true, message: final, state };
   if (observed.status === "complete") {
-    return { finished: true, loud: true, message: `Поездка завершена${observed.finalCost ? `, стоимость ${clip(observed.finalCost, 40)}` : ""}.`, state };
+    return {
+      finished: true,
+      loud: true,
+      message: `Поездка завершена${observed.finalCost ? `, стоимость ${clip(observed.finalCost, 40)}` : ""}.`,
+      state,
+    };
   }
   const samePhase = phase(previous?.status) === phase(observed.status);
   if (observed.status === "driving") {
-    if (!samePhase) return { finished: false, loud: false, message: `Такси едет: ${carLine(observed, true)}.`, state };
+    if (!samePhase)
+      return {
+        finished: false,
+        loud: false,
+        message: `Такси едет: ${carLine(observed, true)}.`,
+        state,
+      };
     const carChanged = Boolean(observed.plates) && observed.plates !== previous?.plates;
-    return { finished: false, loud: carChanged, message: carChanged ? `Сменилась машина: ${carLine(observed, false)}.` : null, state };
+    return {
+      finished: false,
+      loud: carChanged,
+      message: carChanged ? `Сменилась машина: ${carLine(observed, false)}.` : null,
+      state,
+    };
   }
-  if (samePhase || TAXI_QUIET.has(observed.status)) return { finished: false, loud: false, message: null, state };
+  if (samePhase || TAXI_QUIET.has(observed.status))
+    return { finished: false, loud: false, message: null, state };
   const arrived = phase(observed.status) === "arrived";
   const message = arrived
     ? `Такси на месте: ${carLine({ ...observed, minutesLeft: null }, false)}.`
-    : observed.status === "transporting" ? "Поездка началась."
-    : observed.status === "preexpired" ? "Машину пока не нашли, поиск скоро закончится."
-    : observed.status === "scheduled" ? "Предзаказ такси принят."
-    : `Такси: ${yandexTaxiStatusLabel(observed.status)}.`;
+    : observed.status === "transporting"
+      ? "Поездка началась."
+      : observed.status === "preexpired"
+        ? "Машину пока не нашли, поиск скоро закончится."
+        : observed.status === "scheduled"
+          ? "Предзаказ такси принят."
+          : `Такси: ${yandexTaxiStatusLabel(observed.status)}.`;
   return { finished: false, loud: arrived || observed.status === "preexpired", message, state };
 }
 
@@ -135,26 +167,51 @@ export function decideLavkaWatch(
   options: { sinceStartMs: number },
 ): OrderWatchDecision {
   if (observed === null) {
-    if (previous?.status === "gone" || LAVKA_FINAL.has(previous?.status ?? "")) return { finished: true, loud: false, message: null, state: previous! };
+    if (previous?.status === "gone" || LAVKA_FINAL.has(previous?.status ?? ""))
+      return { finished: true, loud: false, message: null, state: previous! };
     if (previous?.seen) {
-      return { finished: true, loud: true, message: "Лавка: заказа больше нет среди текущих, похоже, он доставлен или закрыт.", state: { ...previous, status: "gone" } };
+      return {
+        finished: true,
+        loud: true,
+        message: "Лавка: заказа больше нет среди текущих, похоже, он доставлен или закрыт.",
+        state: { ...previous, status: "gone" },
+      };
     }
     return options.sinceStartMs < ORDER_WATCH_UNSEEN_GRACE_MS
       ? { finished: false, loud: false, message: null, state: previous ?? { status: null } }
-      : { finished: true, loud: true, message: "Лавка: не вижу этот заказ среди текущих, перестаю следить.", state: { status: "gone" } };
+      : {
+          finished: true,
+          loud: true,
+          message: "Лавка: не вижу этот заказ среди текущих, перестаю следить.",
+          state: { status: "gone" },
+        };
   }
   const state: OrderWatchState = { seen: true, status: observed.status };
   const finished = LAVKA_FINAL.has(observed.status);
-  if (finished && previous?.status === observed.status) return { finished: true, loud: false, message: null, state };
+  if (finished && previous?.status === observed.status)
+    return { finished: true, loud: false, message: null, state };
   // No status yet: the first look, or a first message Telegram did not take (kept as not told).
-  const quiet = observed.status === previous?.status || ((previous?.status ?? null) === null && LAVKA_QUIET_FIRST.has(observed.status));
+  const quiet =
+    observed.status === previous?.status ||
+    ((previous?.status ?? null) === null && LAVKA_QUIET_FIRST.has(observed.status));
   if (quiet && !finished) return { finished: false, loud: false, message: null, state };
-  const title = clip(observed.title) || LAVKA_LABELS[observed.status] || `статус «${clip(observed.status, 40)}»`;
+  const title =
+    clip(observed.title) ||
+    LAVKA_LABELS[observed.status] ||
+    `статус «${clip(observed.status, 40)}»`;
   const subtitle = clip(observed.subtitle);
-  return { finished, loud: finished || observed.status === "delivery_arrived", message: `Лавка: ${sentence(title)}${subtitle ? ` ${sentence(subtitle)}` : ""}`, state };
+  return {
+    finished,
+    loud: finished || observed.status === "delivery_arrived",
+    message: `Лавка: ${sentence(title)}${subtitle ? ` ${sentence(subtitle)}` : ""}`,
+    state,
+  };
 }
 
-export function isFinalOrderState(service: "yandex_lavka" | "yandex_taxi", state: OrderWatchState | null): boolean {
+export function isFinalOrderState(
+  service: "yandex_lavka" | "yandex_taxi",
+  state: OrderWatchState | null,
+): boolean {
   const status = state?.status ?? null;
   if (status === null) return false;
   return service === "yandex_taxi"

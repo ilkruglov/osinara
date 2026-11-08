@@ -15,7 +15,15 @@ const envelope = (text: string, sender = "Yuri") =>
 
 describe("isAddressedToMia", () => {
   it("recognises the name in every case form, Cyrillic or Latin", () => {
-    for (const text of ["Мия, что по шинам?", "спроси у Мии", "передай Мие", "покажи Мию", "с Мией не спорь", "mia, hi", "Мия?"]) {
+    for (const text of [
+      "Мия, что по шинам?",
+      "спроси у Мии",
+      "передай Мие",
+      "покажи Мию",
+      "с Мией не спорь",
+      "mia, hi",
+      "Мия?",
+    ]) {
       expect(isAddressedToMia(envelope(text)), text).toBe(true);
     }
   });

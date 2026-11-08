@@ -43,8 +43,7 @@ function findEvePackageRoot() {
   let o = dirname(realpathSync(fileURLToPath(import.meta.url)));
   for (;;) {
     let i = join(o, `package.json`);
-    if (existsSync(i) && JSON.parse(readFileSync(i, `utf8`)).name === `eve`)
-      return o;
+    if (existsSync(i) && JSON.parse(readFileSync(i, `utf8`)).name === `eve`) return o;
     let a = dirname(o);
     if (a === o) return;
     o = a;
@@ -79,18 +78,13 @@ function resolveTokenFromDevTree(e) {
   if (i !== void 0)
     try {
       let e = findEvePackageRoot();
-      if (
-        e === void 0 ||
-        !existsSync(join(e, `scripts/stamp-version-tokens.mjs`))
-      )
-        return;
+      if (e === void 0 || !existsSync(join(e, `scripts/stamp-version-tokens.mjs`))) return;
       if (i.kind === `eve-version`) {
         let n = JSON.parse(readFileSync(join(e, `package.json`), `utf8`));
         return typeof n.version == `string` ? n.version : void 0;
       }
       if (i.kind === `eve-node-engine`) {
-        let n = JSON.parse(readFileSync(join(e, `package.json`), `utf8`))
-          .engines?.node;
+        let n = JSON.parse(readFileSync(join(e, `package.json`), `utf8`)).engines?.node;
         return typeof n == `string` ? n : void 0;
       }
       let a = findWorkspaceManifest(e);

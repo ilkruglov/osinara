@@ -36,22 +36,47 @@ describe("som scripts", () => {
 
 describe("parsePageView", () => {
   it("validates the mark result and drops malformed rows", () => {
-    const view = parsePageView(JSON.stringify({
-      epoch: "ep-1", title: "Запись", url: "https://x.ru/book",
-      elements: [
-        { n: 1, role: "link", text: "Записаться" },
-        { n: 2, role: "textbox", text: "Телефон", value: "+7", state: ["required"] },
-        { n: 3, role: "checkbox", text: "Мужская стрижка", state: ["checked"] },
-        { n: "x", role: "button" },
-        "junk",
-      ],
-    }));
+    const view = parsePageView(
+      JSON.stringify({
+        epoch: "ep-1",
+        title: "Запись",
+        url: "https://x.ru/book",
+        elements: [
+          { n: 1, role: "link", text: "Записаться" },
+          { n: 2, role: "textbox", text: "Телефон", value: "+7", state: ["required"] },
+          { n: 3, role: "checkbox", text: "Мужская стрижка", state: ["checked"] },
+          { n: "x", role: "button" },
+          "junk",
+        ],
+      }),
+    );
     expect(view.epoch).toBe("ep-1");
     expect(view).toMatchObject({ stateHash: 0, textHash: 0 });
-    expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", title: "x".repeat(300), url: "https://x.ru" })).title).toHaveLength(200);
-    expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", stateHash: 7, textHash: 9, url: "https://x.ru" }))).toMatchObject({ stateHash: 7, textHash: 9 });
+    expect(
+      parsePageView(
+        JSON.stringify({ elements: [], epoch: "e", title: "x".repeat(300), url: "https://x.ru" }),
+      ).title,
+    ).toHaveLength(200);
+    expect(
+      parsePageView(
+        JSON.stringify({
+          elements: [],
+          epoch: "e",
+          stateHash: 7,
+          textHash: 9,
+          url: "https://x.ru",
+        }),
+      ),
+    ).toMatchObject({ stateHash: 7, textHash: 9 });
     expect(view.elements).toHaveLength(3);
-    expect(view.elements[2]).toEqual({ inForm: false, n: 3, role: "checkbox", state: ["checked"], text: "Мужская стрижка", value: null });
+    expect(view.elements[2]).toEqual({
+      inForm: false,
+      n: 3,
+      role: "checkbox",
+      state: ["checked"],
+      text: "Мужская стрижка",
+      value: null,
+    });
   });
 
   it("rejects a result without epoch or url", () => {
@@ -61,26 +86,43 @@ describe("parsePageView", () => {
 });
 
 describe("renderElements and viewHash", () => {
-  const view = parsePageView(JSON.stringify({
-    epoch: "e", title: "t", url: "https://x.ru/",
-    elements: [
-      { n: 1, role: "textbox", text: "Имя", value: "Илья" },
-      { n: 2, role: "checkbox", text: "Стрижка", state: ["checked"] },
-      { n: 3, role: "button", text: "Продолжить", state: ["disabled"] },
-    ],
-  }));
+  const view = parsePageView(
+    JSON.stringify({
+      epoch: "e",
+      title: "t",
+      url: "https://x.ru/",
+      elements: [
+        { n: 1, role: "textbox", text: "Имя", value: "Илья" },
+        { n: 2, role: "checkbox", text: "Стрижка", state: ["checked"] },
+        { n: 3, role: "button", text: "Продолжить", state: ["disabled"] },
+      ],
+    }),
+  );
 
   it("renders one line per element with what the model decides on", () => {
-    expect(renderElements(view)).toBe([
-      "[1] textbox Имя · Илья",
-      "[2] checkbox Стрижка (checked)",
-      "[3] button Продолжить (disabled)",
-    ].join("\n"));
+    expect(renderElements(view)).toBe(
+      [
+        "[1] textbox Имя · Илья",
+        "[2] checkbox Стрижка (checked)",
+        "[3] button Продолжить (disabled)",
+      ].join("\n"),
+    );
   });
 
   it("hashes content, not numbering or epoch", () => {
-    const renumbered = parsePageView(JSON.stringify({ ...view, epoch: "f", elements: view.elements.map((e, i) => ({ ...e, n: i + 10 })) }));
-    const toggled = parsePageView(JSON.stringify({ ...view, elements: view.elements.map((e) => e.n === 2 ? { ...e, state: [] } : e) }));
+    const renumbered = parsePageView(
+      JSON.stringify({
+        ...view,
+        epoch: "f",
+        elements: view.elements.map((e, i) => ({ ...e, n: i + 10 })),
+      }),
+    );
+    const toggled = parsePageView(
+      JSON.stringify({
+        ...view,
+        elements: view.elements.map((e) => (e.n === 2 ? { ...e, state: [] } : e)),
+      }),
+    );
     expect(viewHash(renumbered)).toBe(viewHash(view));
     expect(viewHash(toggled)).not.toBe(viewHash(view));
   });

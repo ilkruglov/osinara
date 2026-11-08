@@ -7,22 +7,16 @@ const DEV_DISPATCH_SCHEDULE_PATH_PATTERN = RegExp(
   `^${EVE_ROUTE_PREFIX.replace(/\//g, `\\/`)}\\/dev\\/schedules\\/([^/]+)$`,
 );
 async function handleDevScheduleDispatchRequest(e, n) {
-  let r = new URL(n.url).pathname.match(
-    DEV_DISPATCH_SCHEDULE_PATH_PATTERN,
-  )?.[1];
+  let r = new URL(n.url).pathname.match(DEV_DISPATCH_SCHEDULE_PATH_PATTERN)?.[1];
   if (typeof r != `string` || r.length === 0)
     return Response.json({ error: `Missing schedule id.` }, { status: 400 });
   let i;
   try {
     i = decodeURIComponent(r);
   } catch {
-    return Response.json(
-      { error: `Schedule id is not a valid URI component.` },
-      { status: 400 },
-    );
+    return Response.json({ error: `Schedule id is not a valid URI component.` }, { status: 400 });
   }
-  if (i.length === 0)
-    return Response.json({ error: `Missing schedule id.` }, { status: 400 });
+  if (i.length === 0) return Response.json({ error: `Missing schedule id.` }, { status: 400 });
   try {
     let t = await dispatchScheduleInDev({ artifactsConfig: e, scheduleId: i });
     return Response.json({

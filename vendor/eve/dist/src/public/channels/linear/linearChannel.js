@@ -9,10 +9,7 @@ import {
   updateLinearAgentSession,
 } from "#public/channels/linear/api.js";
 import { LINEAR_CHANNEL_DEFAULT_ROUTE } from "#public/channels/linear/constants.js";
-import {
-  createDefaultEvents,
-  defaultOnAgentSession,
-} from "#public/channels/linear/defaults.js";
+import { createDefaultEvents, defaultOnAgentSession } from "#public/channels/linear/defaults.js";
 import {
   formatLinearContextBlock,
   linearContinuationToken,
@@ -45,37 +42,34 @@ function linearChannel(e = {}) {
       return rebuildLinearContext(t, n, e);
     },
     routes: [
-      POST(
-        e.route ?? LINEAR_CHANNEL_DEFAULT_ROUTE,
-        async (n, { from: r, waitUntil: i }) => {
-          let a = await verifyInbound(n, e.credentials, e.maxSkewMs);
-          if (a === null) return new Response(`unauthorized`, { status: 401 });
-          let o;
-          try {
-            o = parseLinearWebhookEvent({ body: a, headers: n.headers });
-          } catch (e) {
-            return (
-              log.warn(`inbound Linear body is not valid JSON`, { error: e }),
-              jsonOk({ ignored: !0, ok: !0 })
-            );
-          }
-          return o === null
-            ? jsonOk({ ignored: !0, ok: !0 })
-            : o.kind === `agent_session`
-              ? (i(
-                  dispatchAgentSession({
-                    config: e,
-                    event: o,
-                    from: r,
-                    onAgentSession: t,
-                  }),
-                ),
-                jsonOk({ ok: !0 }))
-              : e.onDataWebhook === void 0
-                ? jsonOk({ ignored: !0, ok: !0 })
-                : (i(Promise.resolve(e.onDataWebhook(o))), jsonOk({ ok: !0 }));
-        },
-      ),
+      POST(e.route ?? LINEAR_CHANNEL_DEFAULT_ROUTE, async (n, { from: r, waitUntil: i }) => {
+        let a = await verifyInbound(n, e.credentials, e.maxSkewMs);
+        if (a === null) return new Response(`unauthorized`, { status: 401 });
+        let o;
+        try {
+          o = parseLinearWebhookEvent({ body: a, headers: n.headers });
+        } catch (e) {
+          return (
+            log.warn(`inbound Linear body is not valid JSON`, { error: e }),
+            jsonOk({ ignored: !0, ok: !0 })
+          );
+        }
+        return o === null
+          ? jsonOk({ ignored: !0, ok: !0 })
+          : o.kind === `agent_session`
+            ? (i(
+                dispatchAgentSession({
+                  config: e,
+                  event: o,
+                  from: r,
+                  onAgentSession: t,
+                }),
+              ),
+              jsonOk({ ok: !0 }))
+            : e.onDataWebhook === void 0
+              ? jsonOk({ ignored: !0, ok: !0 })
+              : (i(Promise.resolve(e.onDataWebhook(o))), jsonOk({ ok: !0 }));
+      }),
     ],
     async receive(t, { from: r }) {
       let i = t.target,
@@ -160,18 +154,12 @@ async function dispatchAgentSession(e) {
     credentials: e.config.credentials,
     fetch: e.config.api?.fetch,
   });
-  await e
-    .from(linearContinuationToken(t.agentSession.id))
-    .send(i, {
-      auth: r.auth,
-      context: [
-        formatLinearContextBlock(t),
-        ...t.previousComments,
-        ...(r.context ?? []),
-      ],
-      state: stateFromAgentSession(t.agentSession),
-      title: r.title,
-    });
+  await e.from(linearContinuationToken(t.agentSession.id)).send(i, {
+    auth: r.auth,
+    context: [formatLinearContextBlock(t), ...t.previousComments, ...(r.context ?? [])],
+    state: stateFromAgentSession(t.agentSession),
+    title: r.title,
+  });
 }
 async function resolveReceiveSession(e, t) {
   if (hasString(e, `agentSessionId`)) return { id: e.agentSessionId };
@@ -191,9 +179,7 @@ async function resolveReceiveSession(e, t) {
       externalLink: readNonEmptyString(e.externalLink),
       externalUrls: readExternalUrls(e.externalUrls),
     });
-  throw Error(
-    `linearChannel().receive requires target.agentSessionId, issueId, or commentId.`,
-  );
+  throw Error(`linearChannel().receive requires target.agentSessionId, issueId, or commentId.`);
 }
 function stateFromAgentSession(e) {
   return {
@@ -239,10 +225,7 @@ function hasString(e, t) {
 }
 function readExternalUrls(e) {
   if (!Array.isArray(e)) return;
-  let n = e.filter(
-    (e) =>
-      isObject(e) && typeof e.label == `string` && typeof e.url == `string`,
-  );
+  let n = e.filter((e) => isObject(e) && typeof e.label == `string` && typeof e.url == `string`);
   return n.length > 0 ? n : void 0;
 }
 function jsonOk(e) {

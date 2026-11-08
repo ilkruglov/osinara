@@ -6,12 +6,14 @@ import { type ResolvedAgentGraphBundle } from "#runtime/graph.js";
  * into a runtime-owned recursive agent graph.
  */
 interface ResolveRuntimeAgentGraphInput {
-    manifest: CompiledAgentManifest;
-    moduleMap: CompiledModuleMap;
+  manifest: CompiledAgentManifest;
+  moduleMap: CompiledModuleMap;
 }
 /**
  * Resolves the compiled authored manifest and flattened module graph into one
  * runtime-owned bundle of agent nodes.
  */
-export declare function resolveRuntimeAgentGraph(input: ResolveRuntimeAgentGraphInput): Promise<ResolvedAgentGraphBundle>;
+export declare function resolveRuntimeAgentGraph(
+  input: ResolveRuntimeAgentGraphInput,
+): Promise<ResolvedAgentGraphBundle>;
 export {};

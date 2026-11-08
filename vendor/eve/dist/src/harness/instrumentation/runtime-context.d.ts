@@ -4,16 +4,16 @@ import type { HarnessSession } from "#harness/types.js";
 import type { RuntimeContextResolver } from "#tracing/otel-declaration.js";
 import type { InstrumentationDefinition } from "#public/instrumentation/index.js";
 export interface BuildTelemetryRuntimeContextInput {
-    readonly eveVersion: string;
-    readonly authored: InstrumentationDefinition | undefined;
-    readonly emissionState: HarnessEmissionState;
-    readonly environment: string;
-    readonly modelInput: {
-        readonly instructions: string | SystemModelMessage | undefined;
-        readonly messages: readonly ModelMessage[];
-    };
-    readonly providerResolvers?: readonly RuntimeContextResolver[];
-    readonly session: HarnessSession;
+  readonly eveVersion: string;
+  readonly authored: InstrumentationDefinition | undefined;
+  readonly emissionState: HarnessEmissionState;
+  readonly environment: string;
+  readonly modelInput: {
+    readonly instructions: string | SystemModelMessage | undefined;
+    readonly messages: readonly ModelMessage[];
+  };
+  readonly providerResolvers?: readonly RuntimeContextResolver[];
+  readonly session: HarnessSession;
 }
 /**
  * Builds per-model-call runtime context for AI SDK telemetry spans.
@@ -22,4 +22,6 @@ export interface BuildTelemetryRuntimeContextInput {
  * reserved `eve.*` keys, and callback failures are warning-only so
  * instrumentation cannot compromise the normal turn flow.
  */
-export declare function buildTelemetryRuntimeContext(input: BuildTelemetryRuntimeContextInput): Record<string, unknown> | undefined;
+export declare function buildTelemetryRuntimeContext(
+  input: BuildTelemetryRuntimeContextInput,
+): Record<string, unknown> | undefined;

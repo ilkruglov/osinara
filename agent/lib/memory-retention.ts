@@ -34,11 +34,13 @@ export async function purgeSoftDeletedMemory(now: Date): Promise<number> {
   );
   const deletedCount = result.rowCount ?? 0;
   if (deletedCount > 0) {
-    console.info(JSON.stringify({
-      code: "AGENT_MEMORY_PURGE_COMPLETED",
-      deletedCount,
-      batchLimitReached: deletedCount === MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE,
-    }));
+    console.info(
+      JSON.stringify({
+        code: "AGENT_MEMORY_PURGE_COMPLETED",
+        deletedCount,
+        batchLimitReached: deletedCount === MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE,
+      }),
+    );
   }
   return deletedCount;
 }

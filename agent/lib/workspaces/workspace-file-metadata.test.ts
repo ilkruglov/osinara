@@ -17,12 +17,15 @@ const PNG_BYTES = Buffer.from(
 
 describe("detectWorkspaceFileMetadata", () => {
   it("keeps the actual image MIME after a shell move", async () => {
-    await expect(detectWorkspaceFileMetadata(PNG_BYTES, "photos/image.png"))
-      .resolves.toEqual({ extractedText: null, mediaType: "image/png" });
+    await expect(detectWorkspaceFileMetadata(PNG_BYTES, "photos/image.png")).resolves.toEqual({
+      extractedText: null,
+      mediaType: "image/png",
+    });
   });
 
   it("indexes supported UTF-8 documents", async () => {
-    await expect(detectWorkspaceFileMetadata(Buffer.from("family notes"), "notes/readme.md"))
-      .resolves.toEqual({ extractedText: "family notes", mediaType: "text/markdown" });
+    await expect(
+      detectWorkspaceFileMetadata(Buffer.from("family notes"), "notes/readme.md"),
+    ).resolves.toEqual({ extractedText: "family notes", mediaType: "text/markdown" });
   });
 });

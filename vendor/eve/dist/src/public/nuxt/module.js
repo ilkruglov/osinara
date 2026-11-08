@@ -1,24 +1,16 @@
-import {
-  joinRoutePrefix,
-  normalizeOrigin,
-  resolveProductionTarget,
-} from "./routing.js";
+import { joinRoutePrefix, normalizeOrigin, resolveProductionTarget } from "./routing.js";
 import { EVE_BASE_URL_ENV, resolveSharedEveDevServer } from "./dev-server.js";
 import { EVE_ROUTE_PREFIX } from "#protocol/routes.js";
 import { isAbsolute, resolve } from "node:path";
 import { addImports, defineNuxtModule, extendRouteRules } from "@nuxt/kit";
-import {
-  ensureEveVercelServicesConfig,
-  mergeEveVercelConfig,
-} from "#shared/vercel-services.js";
+import { ensureEveVercelServicesConfig, mergeEveVercelConfig } from "#shared/vercel-services.js";
 function resolveApplicationRoot(e, t) {
   return t === void 0 || t.length === 0 ? e : isAbsolute(t) ? t : resolve(e, t);
 }
 async function resolveEveProxyTarget(a) {
   if (!a.dev) return resolveProductionTarget();
   let o = process.env[EVE_BASE_URL_ENV]?.trim();
-  if (o && o.length > 0)
-    return joinRoutePrefix(normalizeOrigin(o), EVE_ROUTE_PREFIX);
+  if (o && o.length > 0) return joinRoutePrefix(normalizeOrigin(o), EVE_ROUTE_PREFIX);
   let s = await resolveSharedEveDevServer(a.appRoot);
   return (
     s.process !== void 0 && a.onDevServerSpawned?.(s.process),
@@ -32,8 +24,7 @@ var module_default = defineNuxtModule({
     let n = t.options.rootDir,
       r = resolveApplicationRoot(n, e.eveRoot);
     if (
-      (addImports({ name: `useEveAgent`, from: `eve/vue` }),
-      !t.options.dev && process.env.VERCEL)
+      (addImports({ name: `useEveAgent`, from: `eve/vue` }), !t.options.dev && process.env.VERCEL)
     ) {
       let i = await ensureEveVercelServicesConfig({
         appRoot: r,

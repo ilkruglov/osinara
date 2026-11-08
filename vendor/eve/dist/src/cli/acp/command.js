@@ -1,15 +1,9 @@
 import "#compiled/commander/index.js";
 import { applicationCommand } from "#cli/application-command.js";
 import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
-import {
-  parseDevelopmentHeaderOption,
-  resolveDevelopmentUrlTarget,
-} from "#cli/dev/url-target.js";
+import { parseDevelopmentHeaderOption, resolveDevelopmentUrlTarget } from "#cli/dev/url-target.js";
 import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
-import {
-  FORCED_EXIT_BACKSTOP_MS,
-  installShutdownSignal,
-} from "#cli/shutdown.js";
+import { FORCED_EXIT_BACKSTOP_MS, installShutdownSignal } from "#cli/shutdown.js";
 function registerAcpCommand(s) {
   applicationCommand(
     s.program.command(`acp`),
@@ -17,16 +11,8 @@ function registerAcpCommand(s) {
     (e) => resolveDevelopmentUrlTarget(e.opts(), e.processedArgs[0]) === void 0,
   )
     .description(`Serve an eve agent through stable ACP v1 over stdio.`)
-    .argument(
-      `[url]`,
-      `Connect to an existing server URL`,
-      parseDevelopmentServerUrl,
-    )
-    .option(
-      `-u, --url <url>`,
-      `Connect to an existing server URL`,
-      parseDevelopmentServerUrl,
-    )
+    .argument(`[url]`, `Connect to an existing server URL`, parseDevelopmentServerUrl)
+    .option(`-u, --url <url>`, `Connect to an existing server URL`, parseDevelopmentServerUrl)
     .option(`--scope <team>`, `Vercel team that owns the URL target`)
     .option(
       `-H, --header <header>`,
@@ -60,17 +46,17 @@ ACP does not grant the agent access to the client's workspace or terminal.
       let l,
         u,
         closeServer = () =>
-          l === void 0
-            ? Promise.resolve()
-            : ((u ??= l.close()), u.catch(() => void 0), u);
+          l === void 0 ? Promise.resolve() : ((u ??= l.close()), u.catch(() => void 0), u);
       c.signal.addEventListener(`abort`, () => void closeServer(), {
         once: !0,
       });
       try {
-        l = (s.startHost ?? (await loadStartHost()))(
-          s.applicationContext.root,
-          { existing: `reject`, host: `127.0.0.1`, output: `stderr`, port: 0 },
-        );
+        l = (s.startHost ?? (await loadStartHost()))(s.applicationContext.root, {
+          existing: `reject`,
+          host: `127.0.0.1`,
+          output: `stderr`,
+          port: 0,
+        });
         let e = await Promise.race([l.start(), c.stopped.then(() => void 0)]);
         if (e === void 0) return;
         (await runAcp(s, {
@@ -95,8 +81,7 @@ async function runAcp(e, t) {
   }
   let { options: s } = await (
     e.resolveVerifiedRemoteDevelopmentClient ??
-    (await import(`#setup/verified-remote-client.js`))
-      .resolveVerifiedRemoteDevelopmentClient
+    (await import(`#setup/verified-remote-client.js`)).resolveVerifiedRemoteDevelopmentClient
   )({
     headers: a,
     serverUrl: i.serverUrl,
@@ -113,7 +98,6 @@ async function runAcp(e, t) {
   });
 }
 async function loadStartHost() {
-  return (await import(`#cli/dev/local-server-process.js`))
-    .createDevelopmentServer;
+  return (await import(`#cli/dev/local-server-process.js`)).createDevelopmentServer;
 }
 export { registerAcpCommand };

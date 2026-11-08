@@ -11,9 +11,12 @@ import type { InstrumentationDefinition } from "#public/instrumentation/index.js
  *
  * @internal — not part of the public API.
  */
-export declare function registerInstrumentationConfig(config: InstrumentationDefinition, input: {
+export declare function registerInstrumentationConfig(
+  config: InstrumentationDefinition,
+  input: {
     readonly agentName: string;
-}): Promise<void>;
+  },
+): Promise<void>;
 /**
  * Returns the registered instrumentation config, or `undefined` when no
  * `defineInstrumentation` export was provided.

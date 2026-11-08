@@ -13,7 +13,9 @@
 import { isAgentNameMentioned } from "../../agent/lib/telegram-message-policy.js";
 
 export function isAddressedToMia(envelope: string): boolean {
-  const block = envelope.match(/<current_telegram_message>([\s\S]*?)<\/current_telegram_message>/u)?.[1]?.trim();
+  const block = envelope
+    .match(/<current_telegram_message>([\s\S]*?)<\/current_telegram_message>/u)?.[1]
+    ?.trim();
   if (!block) return false;
   let text = block;
   try {

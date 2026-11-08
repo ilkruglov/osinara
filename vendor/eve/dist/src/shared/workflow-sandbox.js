@@ -13,11 +13,7 @@ async function createWorkflowSandboxTool(e) {
   let { createCodeModeTool: t } = await loadWorkflowSandboxModule();
   return t(
     e.hostTools,
-    createWorkflowSandboxOptions(
-      e.bridgeRequestLimit,
-      e.continuationSecurity,
-      e.lifecycle,
-    ),
+    createWorkflowSandboxOptions(e.bridgeRequestLimit, e.continuationSecurity, e.lifecycle),
   );
 }
 async function requestWorkflowSandboxInterrupt(e) {

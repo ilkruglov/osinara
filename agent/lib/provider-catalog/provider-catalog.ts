@@ -55,10 +55,7 @@ interface LiveModelReference {
 }
 
 /** Delegates to provider-specific schemas after the transport has established a successful response. */
-function parseLiveProviderResponse(
-  providerId: ProviderId,
-  body: unknown,
-): LiveModelReference[] {
+function parseLiveProviderResponse(providerId: ProviderId, body: unknown): LiveModelReference[] {
   const protocol = PROVIDER_ENDPOINTS[providerId].protocol;
   return parseOpenAiModelList(providerId, body).map(({ id }) => ({ id, protocol }));
 }

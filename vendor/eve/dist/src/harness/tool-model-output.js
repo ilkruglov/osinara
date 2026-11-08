@@ -50,8 +50,7 @@ function normalizeToolModelOutput(e) {
           }),
         };
       if (r.type === `content`)
-        for (let t of r.value)
-          t.type === `file` && warnOversizedFilePayload(t, e.toolName);
+        for (let t of r.value) t.type === `file` && warnOversizedFilePayload(t, e.toolName);
       return r;
     },
   );

@@ -20,8 +20,8 @@ export declare const SESSION_LIMIT_STOP_OPTION_ID = "stop";
  * violation.
  */
 export declare function createSessionLimitContinuationRequest(input: {
-    readonly sessionId: string;
-    readonly violation: SessionTokenLimitViolation;
+  readonly sessionId: string;
+  readonly violation: SessionTokenLimitViolation;
 }): InputRequest;
 /**
  * Returns true when a request is a harness-authored session-limit
@@ -45,8 +45,10 @@ export declare function isSessionLimitContinuationRequestId(requestId: string): 
  * next step because the violation still holds.
  */
 export declare function resolveSessionLimitContinuation(input: {
-    readonly requests: readonly InputRequest[];
-    readonly responses: readonly InputResponse[];
-}): {
-    readonly granted: boolean;
-} | undefined;
+  readonly requests: readonly InputRequest[];
+  readonly responses: readonly InputResponse[];
+}):
+  | {
+      readonly granted: boolean;
+    }
+  | undefined;

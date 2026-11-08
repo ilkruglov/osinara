@@ -31,9 +31,7 @@ function createAgentSourceManifest(e) {
 }
 function deriveAgentIdFromRoots(n, i, a) {
   let o = normalizeLogicalPath(relative(n, i));
-  return o === `` || o === `.` || o === `agent`
-    ? (a ?? basename(n))
-    : basename(i);
+  return o === `` || o === `.` || o === `agent` ? (a ?? basename(n)) : basename(i);
 }
 function createPathDerivedSourceId(e) {
   return normalizeLogicalPath(e);

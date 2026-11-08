@@ -3,32 +3,32 @@ import { type GitHubChannelCredentials } from "#public/channels/github/auth.js";
 import type { SandboxSession } from "#shared/sandbox-session.js";
 /** Options for cloning a GitHub repository ref into the active sandbox. */
 export interface GitHubCheckoutOptions {
-    readonly depth?: number;
-    readonly includeBase?: boolean;
-    readonly mode?: "full" | "shallow";
-    readonly path?: string;
-    readonly ref?: string;
+  readonly depth?: number;
+  readonly includeBase?: boolean;
+  readonly mode?: "full" | "shallow";
+  readonly path?: string;
+  readonly ref?: string;
 }
 /** Result returned after a GitHub checkout completes. */
 export interface GitHubCheckout {
-    readonly baseRef: string | null;
-    readonly path: string;
-    readonly ref: string;
-    readonly sha: string;
+  readonly baseRef: string | null;
+  readonly path: string;
+  readonly ref: string;
+  readonly sha: string;
 }
 /** Internal descriptor used by channel-owned checkout paths. */
 export interface GitHubCheckoutInput extends GitHubCheckoutOptions {
-    readonly api?: GitHubApiOptions;
-    readonly baseRef?: string | null;
-    readonly baseSha?: string | null;
-    readonly credentials?: GitHubChannelCredentials;
-    readonly defaultBranch?: string | null;
-    readonly headRef?: string | null;
-    readonly headSha?: string | null;
-    readonly installationId?: number | null;
-    readonly owner?: string;
-    readonly pullRequestNumber?: number | null;
-    readonly repo?: string;
+  readonly api?: GitHubApiOptions;
+  readonly baseRef?: string | null;
+  readonly baseSha?: string | null;
+  readonly credentials?: GitHubChannelCredentials;
+  readonly defaultBranch?: string | null;
+  readonly headRef?: string | null;
+  readonly headSha?: string | null;
+  readonly installationId?: number | null;
+  readonly owner?: string;
+  readonly pullRequestNumber?: number | null;
+  readonly repo?: string;
 }
 /**
  * Clones a described GitHub repository ref into the given sandbox.
@@ -45,4 +45,7 @@ export interface GitHubCheckoutInput extends GitHubCheckoutOptions {
  *
  * Channel-internal; not part of the public GitHub channel API.
  */
-export declare function checkoutGitHubRepository(sandbox: SandboxSession, input: GitHubCheckoutInput): Promise<GitHubCheckout>;
+export declare function checkoutGitHubRepository(
+  sandbox: SandboxSession,
+  input: GitHubCheckoutInput,
+): Promise<GitHubCheckout>;

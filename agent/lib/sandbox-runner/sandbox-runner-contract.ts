@@ -33,24 +33,30 @@ const SANDBOX_RUNNER_SEED_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 const eveSessionIdSchema = z.string().regex(/^wrun_[A-Z0-9]{26}$/u);
 // Eve sanitizes custom-backend keys to this alphabet and truncates them to 120 characters.
-const sessionIdSchema = z.string().min(1).max(120).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u);
+const sessionIdSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u);
 const workspaceIdSchema = z.uuid();
 const mountPointSchema = z.enum(["family", "group", "personal"]);
 const workspaceMountSchema = z.strictObject({
   mountPoint: mountPointSchema,
   workspaceId: workspaceIdSchema,
 });
-const workspaceSandboxUseOptionsSchema = z.strictObject({
-  mounts: z.array(workspaceMountSchema).max(2),
-  sandboxSessionId: sessionIdSchema,
-}).superRefine((options, context) => {
-  const points = options.mounts.map((mount) => mount.mountPoint);
-  if (new Set(points).size !== points.length) {
-    context.addIssue({ code: "custom", message: "Duplicate mount point", path: ["mounts"] });
-  }
-});
+const workspaceSandboxUseOptionsSchema = z
+  .strictObject({
+    mounts: z.array(workspaceMountSchema).max(2),
+    sandboxSessionId: sessionIdSchema,
+  })
+  .superRefine((options, context) => {
+    const points = options.mounts.map((mount) => mount.mountPoint);
+    if (new Set(points).size !== points.length) {
+      context.addIssue({ code: "custom", message: "Duplicate mount point", path: ["mounts"] });
+    }
+  });
 const seedFileSchema = z.strictObject({
-  contentBase64: z.base64().max(Math.ceil(SANDBOX_RUNNER_SEED_FILE_MAX_BYTES * 4 / 3) + 4),
+  contentBase64: z.base64().max(Math.ceil((SANDBOX_RUNNER_SEED_FILE_MAX_BYTES * 4) / 3) + 4),
   path: z.string().min(2).max(4_096).startsWith("/"),
 });
 
@@ -64,66 +70,72 @@ export function sandboxSeedDigest(
   return hash.digest("hex");
 }
 
-const createSandboxRequestSchema = z.strictObject({
-  access: z.enum(["restricted", "trusted"]),
-  eveSessionId: eveSessionIdSchema,
-  mounts: z.array(workspaceMountSchema).min(1).max(2),
-  sandboxSessionId: sessionIdSchema,
-  seedDigest: z.string().regex(/^[0-9a-f]{64}$/u),
-  seedFiles: z.array(seedFileSchema).max(SANDBOX_RUNNER_SEED_FILES_MAX).optional(),
-}).superRefine((request, context) => {
-  const points = request.mounts.map((mount) => mount.mountPoint);
-  if (new Set(points).size !== points.length) {
-    context.addIssue({ code: "custom", message: "Duplicate mount point", path: ["mounts"] });
-    return;
-  }
-
-  // Seed paths are canonical absolute paths and must never target mounted credentials.
-  const seedPaths = request.seedFiles?.map((file) => file.path) ?? [];
-  if (new Set(seedPaths).size !== seedPaths.length) {
-    context.addIssue({ code: "custom", message: "Duplicate seed path", path: ["seedFiles"] });
-  }
-  for (const [index, path] of seedPaths.entries()) {
-    const workspacePath = /^\/workspace\/.+/u.test(path);
-    const trustedToolPath = request.access === "trusted" && /^\/tools\/(?:family|personal)\/.+/u.test(path);
-    const isolatedHomePath = request.access !== "trusted" && /^\/tmp\/home\/.+/u.test(path);
-    if (
-      (!workspacePath && !trustedToolPath && !isolatedHomePath) ||
-      posix.normalize(path) !== path
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Seed path is outside sandbox data roots",
-        path: ["seedFiles", index, "path"],
-      });
+const createSandboxRequestSchema = z
+  .strictObject({
+    access: z.enum(["restricted", "trusted"]),
+    eveSessionId: eveSessionIdSchema,
+    mounts: z.array(workspaceMountSchema).min(1).max(2),
+    sandboxSessionId: sessionIdSchema,
+    seedDigest: z.string().regex(/^[0-9a-f]{64}$/u),
+    seedFiles: z.array(seedFileSchema).max(SANDBOX_RUNNER_SEED_FILES_MAX).optional(),
+  })
+  .superRefine((request, context) => {
+    const points = request.mounts.map((mount) => mount.mountPoint);
+    if (new Set(points).size !== points.length) {
+      context.addIssue({ code: "custom", message: "Duplicate mount point", path: ["mounts"] });
+      return;
     }
-  }
-  if (request.seedFiles && sandboxSeedDigest(request.seedFiles) !== request.seedDigest) {
-    context.addIssue({ code: "custom", message: "Seed digest mismatch", path: ["seedDigest"] });
-  }
 
-  // Restricted sessions are external groups and may receive only their isolated group workspace.
-  if (request.access === "restricted") {
-    if (points.length !== 1 || points[0] !== "group") {
-      context.addIssue({ code: "custom", message: "Restricted scope mismatch", path: ["mounts"] });
+    // Seed paths are canonical absolute paths and must never target mounted credentials.
+    const seedPaths = request.seedFiles?.map((file) => file.path) ?? [];
+    if (new Set(seedPaths).size !== seedPaths.length) {
+      context.addIssue({ code: "custom", message: "Duplicate seed path", path: ["seedFiles"] });
     }
-    return;
-  }
+    for (const [index, path] of seedPaths.entries()) {
+      const workspacePath = /^\/workspace\/.+/u.test(path);
+      const trustedToolPath =
+        request.access === "trusted" && /^\/tools\/(?:family|personal)\/.+/u.test(path);
+      const isolatedHomePath = request.access !== "trusted" && /^\/tmp\/home\/.+/u.test(path);
+      if (
+        (!workspacePath && !trustedToolPath && !isolatedHomePath) ||
+        posix.normalize(path) !== path
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Seed path is outside sandbox data roots",
+          path: ["seedFiles", index, "path"],
+        });
+      }
+    }
+    if (request.seedFiles && sandboxSeedDigest(request.seedFiles) !== request.seedDigest) {
+      context.addIssue({ code: "custom", message: "Seed digest mismatch", path: ["seedDigest"] });
+    }
 
-  // Trusted sessions must never smuggle an external group volume into a network-enabled sandbox.
-  if (points.includes("group")) {
-    context.addIssue({ code: "custom", message: "Trusted scope mismatch", path: ["mounts"] });
-  }
-});
+    // Restricted sessions are external groups and may receive only their isolated group workspace.
+    if (request.access === "restricted") {
+      if (points.length !== 1 || points[0] !== "group") {
+        context.addIssue({
+          code: "custom",
+          message: "Restricted scope mismatch",
+          path: ["mounts"],
+        });
+      }
+      return;
+    }
 
-const environmentSchema = z.record(
-  z.string().min(1).max(256),
-  z.string().max(32_768),
-).superRefine((environment, context) => {
-  if (Object.keys(environment).length > SANDBOX_RUNNER_ENVIRONMENT_MAX_ENTRIES) {
-    context.addIssue({ code: "custom", message: "Too many environment entries" });
-  }
-});
+    // Trusted sessions must never smuggle an external group volume into a network-enabled sandbox.
+    if (points.includes("group")) {
+      context.addIssue({ code: "custom", message: "Trusted scope mismatch", path: ["mounts"] });
+    }
+  });
+
+const environmentSchema = z
+  .record(z.string().min(1).max(256), z.string().max(32_768))
+  .superRefine((environment, context) => {
+    if (Object.keys(environment).length > SANDBOX_RUNNER_ENVIRONMENT_MAX_ENTRIES) {
+      context.addIssue({ code: "custom", message: "Too many environment entries" });
+    }
+  });
 
 const processRequestSchema = z.strictObject({
   command: z.string().min(1).max(SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS),
@@ -135,8 +147,19 @@ const processRequestSchema = z.strictObject({
 });
 
 const googleWorkspaceExecutionRequestSchema = z.strictObject({
-  accessToken: z.string().min(1).max(16 * 1024),
-  argv: z.array(z.string().min(1).max(64 * 1024)).min(1).max(128),
+  accessToken: z
+    .string()
+    .min(1)
+    .max(16 * 1024),
+  argv: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(64 * 1024),
+    )
+    .min(1)
+    .max(128),
   timeoutMs: z.number().int().positive().max(SANDBOX_RUNNER_TIMEOUT_MAX_MS),
   workspaceId: workspaceIdSchema,
 });

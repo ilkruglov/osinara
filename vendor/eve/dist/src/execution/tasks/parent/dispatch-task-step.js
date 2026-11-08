@@ -7,10 +7,7 @@ import {
   prepareRuntimeActionDispatch,
   startSubagent,
 } from "#execution/dispatch-runtime-actions-shared.js";
-import {
-  beginDelegatedTask,
-  settleDelegatedDispatch,
-} from "#execution/tasks/parent/delegate.js";
+import { beginDelegatedTask, settleDelegatedDispatch } from "#execution/tasks/parent/delegate.js";
 import {
   checkTaskContinuationAvailability,
   describeTaskDispatch,
@@ -24,8 +21,7 @@ async function dispatchTaskStep(r) {
     sessionState: r.sessionState,
     taskControls: !0,
   });
-  if (i === void 0)
-    return { results: [], sessionState: r.sessionState, pendingTasks: [] };
+  if (i === void 0) return { results: [], sessionState: r.sessionState, pendingTasks: [] };
   let { batch: a, bundle: o, session: s } = i,
     c = r.parentWritable.getWriter(),
     l = s,
@@ -47,9 +43,7 @@ async function dispatchTaskStep(r) {
           serializedContext: i.serializedContext,
           session: l,
         });
-        ((l = t.session),
-          t.pendingTask !== void 0 && d.push(t.pendingTask),
-          u.push(t.result));
+        ((l = t.session), t.pendingTask !== void 0 && d.push(t.pendingTask), u.push(t.result));
         continue;
       }
       if (e.kind === `resume`) {
@@ -162,8 +156,7 @@ async function dispatchTaskStep(r) {
   }
   return {
     results: u,
-    sessionState:
-      l === s ? r.sessionState : createDurableSessionState({ session: l }),
+    sessionState: l === s ? r.sessionState : createDurableSessionState({ session: l }),
     pendingTasks: d,
   };
 }

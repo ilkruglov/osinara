@@ -10,11 +10,7 @@ function isSerializedUrlFilePart(e) {
 function deserializeUrlFilePart(e) {
   return new URL(e.slice(8));
 }
-const INTERNAL_REF_SCHEMES = [
-  EVE_URL_SCHEME,
-  SANDBOX_URL_SCHEME,
-  ATTACHMENT_REF_SCHEME,
-];
+const INTERNAL_REF_SCHEMES = [EVE_URL_SCHEME, SANDBOX_URL_SCHEME, ATTACHMENT_REF_SCHEME];
 function hasInternalRefScheme(e) {
   return INTERNAL_REF_SCHEMES.some((t) => e.startsWith(t));
 }

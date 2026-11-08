@@ -5,8 +5,8 @@ import type { Prompter } from "./prompter.js";
  * agent driving `--json` learns exactly which flag is missing.
  */
 export declare class HeadlessPromptError extends Error {
-    readonly promptMessage: string;
-    constructor(promptMessage: string);
+  readonly promptMessage: string;
+  constructor(promptMessage: string);
 }
 /** Sink for human-readable progress lines emitted during a headless run. */
 export type HeadlessLogSink = (text: string) => void;
@@ -19,28 +19,31 @@ export type HeadlessLogSink = (text: string) => void;
  */
 export declare function createHeadlessPrompter(sink: HeadlessLogSink): Prompter;
 export interface HeadlessNextStep {
-    command: string;
+  command: string;
 }
 /** A structured lifecycle event emitted as one NDJSON line on stdout in `--json` mode. */
-export type HeadlessEvent = {
-    type: "done";
-    projectPath: string;
-    channels: string[];
-    model: string;
-} | {
-    type: "action-required";
-    status: "action_required";
-    kind: string;
-    reason: string;
-    message: string;
-    command: string;
-    next: HeadlessNextStep[];
-} | {
-    type: "error";
-    status: "error";
-    reason: string;
-    message: string;
-    hint?: string;
-};
+export type HeadlessEvent =
+  | {
+      type: "done";
+      projectPath: string;
+      channels: string[];
+      model: string;
+    }
+  | {
+      type: "action-required";
+      status: "action_required";
+      kind: string;
+      reason: string;
+      message: string;
+      command: string;
+      next: HeadlessNextStep[];
+    }
+  | {
+      type: "error";
+      status: "error";
+      reason: string;
+      message: string;
+      hint?: string;
+    };
 /** Serializes one event as a single NDJSON line. */
 export declare function formatHeadlessEvent(event: HeadlessEvent): string;

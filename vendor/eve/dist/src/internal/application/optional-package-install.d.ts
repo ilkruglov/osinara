@@ -14,8 +14,8 @@ export declare function detectProjectPackageManager(appRoot: string): ProjectPac
  * the install fails.
  */
 export declare function installPackageIntoProject(input: {
-    readonly appRoot: string;
-    readonly packageName: string;
+  readonly appRoot: string;
+  readonly packageName: string;
 }): Promise<void>;
 /**
  * Loads an optional engine package, auto-installing it into the
@@ -24,15 +24,15 @@ export declare function installPackageIntoProject(input: {
  * production deployments never mutate the application.
  */
 export declare function loadOptionalEnginePackage<T>(input: {
-    readonly appRoot: string;
-    readonly autoInstall: boolean;
-    readonly importInstalledModule?: () => Promise<T>;
-    readonly importModule: () => Promise<T>;
-    readonly missingMessage: string;
-    readonly packageName: string;
+  readonly appRoot: string;
+  readonly autoInstall: boolean;
+  readonly importInstalledModule?: () => Promise<T>;
+  readonly importModule: () => Promise<T>;
+  readonly missingMessage: string;
+  readonly packageName: string;
 }): Promise<T>;
 /** Imports an optional engine from the application without installing it. */
 export declare function importInstalledEnginePackage<T>(input: {
-    readonly appRoot: string;
-    readonly packageName: string;
+  readonly appRoot: string;
+  readonly packageName: string;
 }): Promise<T>;

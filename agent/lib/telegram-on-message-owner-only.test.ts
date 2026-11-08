@@ -108,10 +108,12 @@ describe("Telegram owner-only external group dispatch", () => {
       .mockResolvedValueOnce(ownerOnlyGroup());
     repository.telegram.findIdentity.mockResolvedValue(null);
 
-    await expect(createTelegramMessageHandler(repository)(
-      telegramContext().context,
-      groupMessage(`@${BOT_USERNAME} ответь мне`),
-    )).resolves.toBeNull();
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegramContext().context,
+        groupMessage(`@${BOT_USERNAME} ответь мне`),
+      ),
+    ).resolves.toBeNull();
 
     expect(repository.telegram.findGroup).toHaveBeenCalledTimes(2);
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();

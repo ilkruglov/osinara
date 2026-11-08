@@ -1,12 +1,5 @@
-const ALLOWED_DYNAMIC_TOOL_EVENTS = new Set([
-    `session.started`,
-    `turn.started`,
-    `step.started`,
-  ]),
-  ALLOWED_DYNAMIC_INSTRUCTION_EVENTS = new Set([
-    `session.started`,
-    `turn.started`,
-  ]),
+const ALLOWED_DYNAMIC_TOOL_EVENTS = new Set([`session.started`, `turn.started`, `step.started`]),
+  ALLOWED_DYNAMIC_INSTRUCTION_EVENTS = new Set([`session.started`, `turn.started`]),
   ALLOWED_DYNAMIC_SKILL_EVENTS = new Set([`session.started`, `turn.started`]),
   DYNAMIC_SENTINEL_KIND = `eve:dynamic`;
 function assertResolverOnlyDynamicSentinel(e, t) {

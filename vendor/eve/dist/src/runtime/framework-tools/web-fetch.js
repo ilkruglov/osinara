@@ -16,9 +16,7 @@ const WEB_FETCH_INPUT_SCHEMA = z.strictObject({
       .optional(),
     url: z
       .string()
-      .describe(
-        `The fully-formed URL to fetch content from. Must start with https://.`,
-      ),
+      .describe(`The fully-formed URL to fetch content from. Must start with https://.`),
   }),
   WEB_FETCH_OUTPUT_SCHEMA = z.strictObject({
     content: z.string(),
@@ -47,8 +45,4 @@ const WEB_FETCH_INPUT_SCHEMA = z.strictObject({
     sourceId: `eve:web-fetch-tool`,
     sourceKind: `module`,
   };
-export {
-  WEB_FETCH_INPUT_SCHEMA,
-  WEB_FETCH_OUTPUT_SCHEMA,
-  WEB_FETCH_TOOL_DEFINITION,
-};
+export { WEB_FETCH_INPUT_SCHEMA, WEB_FETCH_OUTPUT_SCHEMA, WEB_FETCH_TOOL_DEFINITION };

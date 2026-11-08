@@ -71,10 +71,7 @@ var MicrosandboxVm = class {
         }
       );
     let n = this.#o,
-      r = createProviderName(
-        `eve-sbx-state`,
-        `${this.#e.sessionKey}:${randomUUID()}`,
-      );
+      r = createProviderName(`eve-sbx-state`, `${this.#e.sessionKey}:${randomUUID()}`);
     return (
       await this.stopAndSnapshot(r),
       (this.#o = r),
@@ -117,22 +114,14 @@ var MicrosandboxVm = class {
   }
   async removePersisted() {
     (await removeSandboxIfExists(this.#e.module, this.#a),
-      this.#o !== void 0 &&
-        (await removeSnapshotIfExists$1(this.#e.module, this.#o)));
+      this.#o !== void 0 && (await removeSnapshotIfExists$1(this.#e.module, this.#o)));
   }
   async setNetworkPolicy(e) {
     let n = this.#o,
-      r = createProviderName(
-        `eve-sbx-state`,
-        `${this.#e.sessionKey}:${randomUUID()}`,
-      ),
+      r = createProviderName(`eve-sbx-state`, `${this.#e.sessionKey}:${randomUUID()}`),
       i = this.#a;
-    (await this.stopAndSnapshot(r),
-      await removeSandboxIfExists(this.#e.module, i));
-    let a = createProviderName(
-      `eve-sbx-ses`,
-      `${this.#e.sessionKey}:${randomUUID()}`,
-    );
+    (await this.stopAndSnapshot(r), await removeSandboxIfExists(this.#e.module, i));
+    let a = createProviderName(`eve-sbx-ses`, `${this.#e.sessionKey}:${randomUUID()}`);
     ((this.#i = await createMicrosandbox({
       fromSnapshot: r,
       module: this.#e.module,
@@ -146,20 +135,15 @@ var MicrosandboxVm = class {
       (this.#a = a),
       (this.#n = e),
       (this.#o = void 0),
-      this.#t !== void 0 &&
-        this.#r !== void 0 &&
-        (await this.writeMetadata(this.#t, this.#r)),
+      this.#t !== void 0 && this.#r !== void 0 && (await this.writeMetadata(this.#t, this.#r)),
       await removeSnapshotIfExists$1(this.#e.module, r),
       n !== void 0 && (await removeSnapshotIfExists$1(this.#e.module, n)));
   }
   async spawn(e) {
-    if (e.abortSignal?.aborted)
-      throw new DOMException(`The operation was aborted.`, `AbortError`);
+    if (e.abortSignal?.aborted) throw new DOMException(`The operation was aborted.`, `AbortError`);
     let t = {
         ...this.#e.options.env,
-        ...createTransformBrokerEnvironment(
-          createMicrosandboxNetworkPlan(this.#n),
-        ),
+        ...createTransformBrokerEnvironment(createMicrosandboxNetworkPlan(this.#n)),
         ...e.env,
       },
       n = await this.#i.execStreamWith(`bash`, (n) =>
@@ -212,8 +196,7 @@ var MicrosandboxVm = class {
       }));
   }
   async runInternalCommand(e) {
-    if (e.abortSignal?.aborted)
-      throw new DOMException(`The operation was aborted.`, `AbortError`);
+    if (e.abortSignal?.aborted) throw new DOMException(`The operation was aborted.`, `AbortError`);
     let t = await this.#i.execWith(`bash`, (t) =>
       t.args([`-lc`, e.command]).cwd(WORKSPACE_ROOT).user(e.user),
     );
@@ -249,17 +232,12 @@ async function createPreparedMicrosandbox(e) {
     );
   return (
     e.setupBaseRuntime &&
-      (await withProgressHeartbeat(
-        `preparing base runtime inside VM`,
-        e.log,
-        async () => {
-          await ensureMicrosandboxBaseRuntime(n, { log: e.log });
-        },
-      ),
+      (await withProgressHeartbeat(`preparing base runtime inside VM`, e.log, async () => {
+        await ensureMicrosandboxBaseRuntime(n, { log: e.log });
+      }),
       e.networkPolicy !== void 0 &&
         e.networkPolicy !== `allow-all` &&
-        (e.log?.(`applying network policy`),
-        await r.setNetworkPolicy(e.networkPolicy))),
+        (e.log?.(`applying network policy`), await r.setNetworkPolicy(e.networkPolicy))),
     r
   );
 }
@@ -273,11 +251,7 @@ async function connectMicrosandbox(e) {
       ? null
       : await restoreMicrosandboxSessionSnapshot(e);
   }
-  if (
-    t.status !== `running` &&
-    t.status !== `draining` &&
-    e.metadata.stateSnapshotName !== void 0
-  )
+  if (t.status !== `running` && t.status !== `draining` && e.metadata.stateSnapshotName !== void 0)
     return await restoreMicrosandboxSessionSnapshot(e);
   let n =
     t.status === `running` || t.status === `draining`
@@ -333,33 +307,25 @@ async function restoreMicrosandboxSessionSnapshot(e) {
   return (await i.writeMetadata(e.metadataPath, e.metadata.optionsHash), i);
 }
 async function loadMicrosandboxModule(e) {
-  (e.log?.(`checking microsandbox platform support`),
-    await assertMicrosandboxPlatformCandidate());
-  let t = await withProgressHeartbeat(
-    `loading microsandbox npm package`,
-    e.log,
-    () =>
-      loadOptionalEnginePackage({
-        appRoot: e.appRoot,
-        autoInstall: e.options.setup.autoInstall,
-        importModule: async () => await import(`microsandbox`),
-        missingMessage:
-          "The microsandbox sandbox backend requires the `microsandbox` package, which is not bundled with eve. Install it in your application (for example `pnpm add -D microsandbox`), or use docker() / vercel() instead.",
-        packageName: MICROSANDBOX_PACKAGE_NAME,
-      }),
+  (e.log?.(`checking microsandbox platform support`), await assertMicrosandboxPlatformCandidate());
+  let t = await withProgressHeartbeat(`loading microsandbox npm package`, e.log, () =>
+    loadOptionalEnginePackage({
+      appRoot: e.appRoot,
+      autoInstall: e.options.setup.autoInstall,
+      importModule: async () => await import(`microsandbox`),
+      missingMessage:
+        "The microsandbox sandbox backend requires the `microsandbox` package, which is not bundled with eve. Install it in your application (for example `pnpm add -D microsandbox`), or use docker() / vercel() instead.",
+      packageName: MICROSANDBOX_PACKAGE_NAME,
+    }),
   );
   if ((e.log?.(`checking microsandbox VM runtime`), !t.isInstalled())) {
     if (!e.options.setup.autoInstall || !isEveDevEnvironment())
       throw Error(
         "The microsandbox VM runtime is not installed. Run `npx microsandbox install`, set MSB_PATH for a custom install, or let `eve dev` install it automatically with microsandbox({ setup: { autoInstall: true } }).",
       );
-    await withProgressHeartbeat(
-      `installing microsandbox VM runtime`,
-      e.log,
-      async () => {
-        await t.setup().skipVerify(e.options.setup.skipVerify).install();
-      },
-    );
+    await withProgressHeartbeat(`installing microsandbox VM runtime`, e.log, async () => {
+      await t.setup().skipVerify(e.options.setup.skipVerify).install();
+    });
   }
   return (e.log?.(`microsandbox runtime ready`), t);
 }
@@ -390,16 +356,13 @@ async function loadMicrosandboxWithoutInstall(e) {
 async function stopAndSnapshotMicrosandboxSandbox(e, t, n) {
   for (let r = 0; r < 3; r += 1) {
     let i = await e.Sandbox.get(t);
-    await i
-      .stopWithTimeout(r === 0 ? MICROSANDBOX_STOP_TIMEOUT_MS : 0)
-      .catch(() => {});
+    await i.stopWithTimeout(r === 0 ? MICROSANDBOX_STOP_TIMEOUT_MS : 0).catch(() => {});
     try {
       await i.snapshot(n);
       return;
     } catch (e) {
       if (!isMicrosandboxSnapshotSourceRunningError(e) || r === 2) throw e;
-      (await i.kill().catch(() => {}),
-        await new Promise((e) => setTimeout(e, 250)));
+      (await i.kill().catch(() => {}), await new Promise((e) => setTimeout(e, 250)));
     }
   }
 }
@@ -426,15 +389,9 @@ async function createMicrosandbox(e) {
     .pullPolicy(e.options.pullPolicy)
     .replace()
     .workdir(e.workdir);
-  ((t =
-    e.fromSnapshot === void 0
-      ? t.image(e.options.image)
-      : t.fromSnapshot(e.fromSnapshot)),
+  ((t = e.fromSnapshot === void 0 ? t.image(e.options.image) : t.fromSnapshot(e.fromSnapshot)),
     e.user !== void 0 && (t = t.user(e.user)));
-  let n =
-    e.fromSnapshot === void 0
-      ? `image "${e.options.image}"`
-      : `snapshot "${e.fromSnapshot}"`;
+  let n = e.fromSnapshot === void 0 ? `image "${e.options.image}"` : `snapshot "${e.fromSnapshot}"`;
   return await createMicrosandboxWithProgress({
     builder: applyMicrosandboxNetwork(t, e.networkPolicy),
     errorType: e.module.MicrosandboxError,
@@ -446,17 +403,13 @@ async function removeSandboxIfExists(e, t) {
   for (let n = 0; n < 3; n += 1)
     try {
       let r = await e.Sandbox.get(t);
-      (await r
-        .stopWithTimeout(n === 0 ? MICROSANDBOX_STOP_TIMEOUT_MS : 0)
-        .catch(() => {}),
+      (await r.stopWithTimeout(n === 0 ? MICROSANDBOX_STOP_TIMEOUT_MS : 0).catch(() => {}),
         await r.remove());
       return;
     } catch (r) {
       if (isMicrosandboxNotFoundError$1(r)) return;
       if (isMicrosandboxStillRunningError(r) && n < 2) {
-        (await (await e.Sandbox.get(t).catch(() => null))
-          ?.kill()
-          .catch(() => {}),
+        (await (await e.Sandbox.get(t).catch(() => null))?.kill().catch(() => {}),
           await new Promise((e) => setTimeout(e, 250)));
         continue;
       }

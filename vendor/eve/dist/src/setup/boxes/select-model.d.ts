@@ -2,17 +2,27 @@ import { z } from "#compiled/zod/index.js";
 import { type Asker, type SelectOption } from "../ask.js";
 import type { SetupState } from "../state.js";
 import type { SetupBox } from "../step.js";
-declare const gatewayCatalogModelSchema: z.ZodObject<{
+declare const gatewayCatalogModelSchema: z.ZodObject<
+  {
     id: z.ZodString;
     name: z.ZodString;
     type: z.ZodString;
     owned_by: z.ZodString;
     released: z.ZodCatch<z.ZodOptional<z.ZodNumber>>;
     tags: z.ZodCatch<z.ZodOptional<z.ZodArray<z.ZodString>>>;
-    pricing: z.ZodCatch<z.ZodOptional<z.ZodObject<{
-        service_tiers: z.ZodCatch<z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
-    }, z.core.$strip>>>;
-}, z.core.$strip>;
+    pricing: z.ZodCatch<
+      z.ZodOptional<
+        z.ZodObject<
+          {
+            service_tiers: z.ZodCatch<z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+          },
+          z.core.$strip
+        >
+      >
+    >;
+  },
+  z.core.$strip
+>;
 /** One model entry from the AI Gateway catalog response. */
 export type GatewayCatalogModel = z.infer<typeof gatewayCatalogModelSchema>;
 /** Fetches the raw AI Gateway catalog. The default for {@link SelectModelDeps}. */
@@ -31,27 +41,29 @@ export declare function parseGatewayCatalog(input: unknown): GatewayCatalogModel
  * picker opens on just them and scrolling or filtering reaches the rest. Falls
  * back to a static shortlist when the catalog is missing or yields nothing.
  */
-export declare function modelOptionsFromCatalog(catalog: readonly GatewayCatalogModel[] | undefined): SelectOption<string>[];
+export declare function modelOptionsFromCatalog(
+  catalog: readonly GatewayCatalogModel[] | undefined,
+): SelectOption<string>[];
 /** Injected for tests; defaults to the real AI Gateway catalog fetch. */
 export interface SelectModelDeps {
-    fetchModels: (signal?: AbortSignal) => Promise<GatewayCatalogModel[]>;
+  fetchModels: (signal?: AbortSignal) => Promise<GatewayCatalogModel[]>;
 }
 export interface SelectModelOptions {
-    /** Resolves the model question; the composed stack decides how. */
-    asker: Asker;
-    /**
-     * Resolve to this value without fetching the catalog or asking. Stays a
-     * factory option (not a `withAnswers` rung) because a preset must keep
-     * short-circuiting the catalog fetch and must keep accepting ids the
-     * filtered catalog does not list, exactly as the dual-face box did.
-     */
-    presetModel?: string;
-    /**
-     * Pre-select this model in the picker so enter confirms it. Falls back to the
-     * top catalog entry when omitted or not present in the catalog.
-     */
-    defaultModel?: string;
-    deps?: SelectModelDeps;
+  /** Resolves the model question; the composed stack decides how. */
+  asker: Asker;
+  /**
+   * Resolve to this value without fetching the catalog or asking. Stays a
+   * factory option (not a `withAnswers` rung) because a preset must keep
+   * short-circuiting the catalog fetch and must keep accepting ids the
+   * filtered catalog does not list, exactly as the dual-face box did.
+   */
+  presetModel?: string;
+  /**
+   * Pre-select this model in the picker so enter confirms it. Falls back to the
+   * top catalog entry when omitted or not present in the catalog.
+   */
+  defaultModel?: string;
+  deps?: SelectModelDeps;
 }
 /**
  * THE MODEL BOX: pick the default model baked into `agent/agent.ts`. The
@@ -63,5 +75,7 @@ export interface SelectModelOptions {
  * provisioning box's later decision, and the byok scaffold derives its
  * provider block from whatever model was picked here.
  */
-export declare function selectModel(options: SelectModelOptions): SetupBox<SetupState, string, string>;
+export declare function selectModel(
+  options: SelectModelOptions,
+): SetupBox<SetupState, string, string>;
 export {};

@@ -14,46 +14,46 @@ export type RemoteAgentUrl = string | (() => string | Promise<string>);
  * subagent tool.
  */
 export interface RemoteAgentDefinition {
-    readonly auth?: OutboundAuthFn;
-    /**
-     * The parent agent reads this as the lowered subagent tool's description.
-     */
-    readonly description: string;
-    /**
-     * Forwards the dispatching turn's session principal to the remote
-     * deployment as the `forwardedPrincipal` create-session body field, so the
-     * remote session runs as the same end user as the parent (per-user
-     * Connect, local subagents, and further remote hops all see that
-     * principal). Defaults to `false` — forwarding identity to another
-     * deployment is an explicit decision, never ambient.
-     *
-     * Only principal metadata crosses the wire, never tokens or credentials —
-     * {@link auth} keeps authenticating *this* deployment to the remote. The
-     * receiver must opt in with `eveChannel({ trustedForwarders })`;
-     * a receiver that refuses the forwarder (or accepts no forwarded principal
-     * at all) rejects with 403 and the dispatch fails.
-     */
-    readonly forwardPrincipal?: boolean;
-    readonly headers?: HeadersValue;
-    readonly kind: "remote";
-    /**
-     * Optional structured return type the caller requires from the remote agent.
-     * The compiler lowers it to JSON Schema and sends it on the remote
-     * create-session request; the remote deployment enforces it like any
-     * task-mode output schema.
-     */
-    readonly outputSchema?: StandardJSONSchemaV1<unknown, unknown> | JsonObject;
-    /**
-     * Route eve appends to `url` for the create-session request. Defaults to the
-     * framework create-session route (`/eve/v1/session`).
-     */
-    readonly path: string;
-    /**
-     * Base URL of the remote eve deployment to call. Accepts a static string
-     * (baked at compile time) or a function resolved at runtime — use the
-     * function form to read a URL from `process.env`.
-     */
-    readonly url: RemoteAgentUrl;
+  readonly auth?: OutboundAuthFn;
+  /**
+   * The parent agent reads this as the lowered subagent tool's description.
+   */
+  readonly description: string;
+  /**
+   * Forwards the dispatching turn's session principal to the remote
+   * deployment as the `forwardedPrincipal` create-session body field, so the
+   * remote session runs as the same end user as the parent (per-user
+   * Connect, local subagents, and further remote hops all see that
+   * principal). Defaults to `false` — forwarding identity to another
+   * deployment is an explicit decision, never ambient.
+   *
+   * Only principal metadata crosses the wire, never tokens or credentials —
+   * {@link auth} keeps authenticating *this* deployment to the remote. The
+   * receiver must opt in with `eveChannel({ trustedForwarders })`;
+   * a receiver that refuses the forwarder (or accepts no forwarded principal
+   * at all) rejects with 403 and the dispatch fails.
+   */
+  readonly forwardPrincipal?: boolean;
+  readonly headers?: HeadersValue;
+  readonly kind: "remote";
+  /**
+   * Optional structured return type the caller requires from the remote agent.
+   * The compiler lowers it to JSON Schema and sends it on the remote
+   * create-session request; the remote deployment enforces it like any
+   * task-mode output schema.
+   */
+  readonly outputSchema?: StandardJSONSchemaV1<unknown, unknown> | JsonObject;
+  /**
+   * Route eve appends to `url` for the create-session request. Defaults to the
+   * framework create-session route (`/eve/v1/session`).
+   */
+  readonly path: string;
+  /**
+   * Base URL of the remote eve deployment to call. Accepts a static string
+   * (baked at compile time) or a function resolved at runtime — use the
+   * function form to read a URL from `process.env`.
+   */
+  readonly url: RemoteAgentUrl;
 }
 /**
  * Authored input that {@link defineRemoteAgent} accepts. eve derives identity
@@ -61,7 +61,7 @@ export interface RemoteAgentDefinition {
  * carry a `name` field.
  */
 export type RemoteAgentDefinitionInput = Omit<RemoteAgentDefinition, "kind" | "path"> & {
-    readonly path?: string;
+  readonly path?: string;
 };
 /**
  * Defines a remote eve agent that the parent can call as a subagent tool. The

@@ -15,4 +15,7 @@ export declare function parseSpecDocument(text: string): unknown;
  * `schemes`/`host`/`basePath`. Returns `undefined` when neither shape
  * yields an absolute HTTP(S) URL.
  */
-export declare function extractServerUrl(document: Record<string, unknown>, specSource: string | Record<string, unknown> | undefined): string | undefined;
+export declare function extractServerUrl(
+  document: Record<string, unknown>,
+  specSource: string | Record<string, unknown> | undefined,
+): string | undefined;

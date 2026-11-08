@@ -34,14 +34,17 @@ function assertDownloadSize(size: number): void {
 
 function throwDownloadFailure(error: unknown): never {
   if (isAppError(error)) throw error;
-  console.error(JSON.stringify({
-    code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
   throw new ModelFacingError({
     category: "dependency",
     code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
-    correction: "Не повторяйте скачивание автоматически. Попросите пользователя отправить файл ещё раз.",
+    correction:
+      "Не повторяйте скачивание автоматически. Попросите пользователя отправить файл ещё раз.",
     reason: "Не удалось получить файл из Telegram из-за транспортного сбоя.",
     retryable: false,
     sideEffectStatus: "not_started",
@@ -61,10 +64,12 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
     if (!response.ok) {
       // Every early refusal releases the body, or the pooled connection stays busy with it.
       await response.body?.cancel().catch(() => undefined);
-      console.error(JSON.stringify({
-        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
-        providerStatus: response.status,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+          providerStatus: response.status,
+        }),
+      );
       throw new AppError(
         "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
         "Не удалось получить файл из Telegram. Отправьте его ещё раз",
@@ -88,7 +93,11 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
     // Counted while streaming: a missing or wrong Content-Length must not let the whole body be
     // buffered before the limit applies (security review, 5 October 2026).
     try {
-      return await readBoundedBody(response, TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES, downloadTooLarge);
+      return await readBoundedBody(
+        response,
+        TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES,
+        downloadTooLarge,
+      );
     } catch (error) {
       throwDownloadFailure(error);
     }

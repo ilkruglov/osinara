@@ -1,11 +1,8 @@
 import { ContextKey } from "#context/key.js";
-const ConnectionAuthorizationTokensKey = new ContextKey(
-  `eve.connectionAuthorizationTokens`,
-);
+const ConnectionAuthorizationTokensKey = new ContextKey(`eve.connectionAuthorizationTokens`);
 function readCachedToken(e, t, n) {
   let r = e.get(ConnectionAuthorizationTokensKey)?.[t]?.[n];
-  if (r !== void 0 && !(r.expiresAt !== void 0 && r.expiresAt <= Date.now()))
-    return r;
+  if (r !== void 0 && !(r.expiresAt !== void 0 && r.expiresAt <= Date.now())) return r;
 }
 function writeCachedToken(e, t, n, r) {
   let i = e.get(ConnectionAuthorizationTokensKey) ?? {},
@@ -28,9 +25,4 @@ function evictCachedToken(e, t, n) {
 function asContainer(e) {
   return e;
 }
-export {
-  ConnectionAuthorizationTokensKey,
-  evictCachedToken,
-  readCachedToken,
-  writeCachedToken,
-};
+export { ConnectionAuthorizationTokensKey, evictCachedToken, readCachedToken, writeCachedToken };

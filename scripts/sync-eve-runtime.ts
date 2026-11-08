@@ -20,19 +20,55 @@ const root = new URL("../", import.meta.url);
 
 export const EVE_RUNTIME_MODULES = [
   ["scripts/eve-runtime/delta-pacing.ts", "vendor/eve/dist/src/harness/osinara-delta-pacing.js"],
-  ["agent/lib/html-entities.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-entities.js"],
-  ["agent/lib/html-markdown.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-markdown.js"],
+  [
+    "agent/lib/html-entities.ts",
+    "vendor/eve/dist/src/execution/web-fetch/osinara-html-entities.js",
+  ],
+  [
+    "agent/lib/html-markdown.ts",
+    "vendor/eve/dist/src/execution/web-fetch/osinara-html-markdown.js",
+  ],
   ["agent/lib/html-text.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-text.js"],
-  ["scripts/eve-runtime/ndjson-stream.ts", "vendor/eve/dist/src/execution/osinara-ndjson-stream.js"],
-  ["scripts/eve-runtime/started-run-hook.ts", "vendor/eve/dist/src/execution/osinara-started-run-hook.js"],
-  ["scripts/eve-runtime/telegram-send-pacing.ts", "vendor/eve/dist/src/public/channels/telegram/osinara-telegram-send-pacing.js"],
-  ["scripts/eve-runtime/event-log-cache.ts", "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js"],
-  ["scripts/eve-runtime/paged-stream.ts", "vendor/workflow-world-postgres/dist/osinara-paged-stream.js"],
-  ["scripts/eve-runtime/payload-blobs.ts", "vendor/workflow-world-postgres/dist/osinara-payload-blobs.js"],
-  ["scripts/eve-runtime/stream-listener.ts", "vendor/workflow-world-postgres/dist/osinara-stream-listener.js"],
-  ["scripts/eve-runtime/stuck-run-recovery.ts", "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js"],
-  ["scripts/eve-runtime/workflow-pool-trace.ts", "vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js"],
-  ["scripts/eve-runtime/workflow-settings.ts", "vendor/workflow-world-postgres/dist/osinara-workflow-settings.js"],
+  [
+    "scripts/eve-runtime/ndjson-stream.ts",
+    "vendor/eve/dist/src/execution/osinara-ndjson-stream.js",
+  ],
+  [
+    "scripts/eve-runtime/started-run-hook.ts",
+    "vendor/eve/dist/src/execution/osinara-started-run-hook.js",
+  ],
+  [
+    "scripts/eve-runtime/telegram-send-pacing.ts",
+    "vendor/eve/dist/src/public/channels/telegram/osinara-telegram-send-pacing.js",
+  ],
+  [
+    "scripts/eve-runtime/event-log-cache.ts",
+    "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js",
+  ],
+  [
+    "scripts/eve-runtime/paged-stream.ts",
+    "vendor/workflow-world-postgres/dist/osinara-paged-stream.js",
+  ],
+  [
+    "scripts/eve-runtime/payload-blobs.ts",
+    "vendor/workflow-world-postgres/dist/osinara-payload-blobs.js",
+  ],
+  [
+    "scripts/eve-runtime/stream-listener.ts",
+    "vendor/workflow-world-postgres/dist/osinara-stream-listener.js",
+  ],
+  [
+    "scripts/eve-runtime/stuck-run-recovery.ts",
+    "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js",
+  ],
+  [
+    "scripts/eve-runtime/workflow-pool-trace.ts",
+    "vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js",
+  ],
+  [
+    "scripts/eve-runtime/workflow-settings.ts",
+    "vendor/workflow-world-postgres/dist/osinara-workflow-settings.js",
+  ],
 ] as const;
 
 export function projectPath(relative: string): string {
@@ -50,7 +86,12 @@ function vendoredImports(source: string, code: string): string {
   const targetDirectory = target.slice(0, target.lastIndexOf("/") + 1);
   let rewritten = code;
   for (const [otherSource, otherTarget] of EVE_RUNTIME_MODULES) {
-    if (otherSource === source || !otherSource.startsWith(sourceDirectory) || !otherTarget.startsWith(targetDirectory)) continue;
+    if (
+      otherSource === source ||
+      !otherSource.startsWith(sourceDirectory) ||
+      !otherTarget.startsWith(targetDirectory)
+    )
+      continue;
     const from = `"./${otherSource.slice(sourceDirectory.length).replace(/\.ts$/u, ".js")}"`;
     rewritten = rewritten.split(from).join(`"./${otherTarget.slice(targetDirectory.length)}"`);
   }

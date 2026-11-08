@@ -21,7 +21,9 @@ const model = mockModel(async ({ lastUserMessage, messages, tools }) => {
   // `toolResults` spans the whole prompt, earlier turns included; the command of this turn is
   // the tool message after the latest user message (Codex review, 4 October 2026).
   let lastUser = -1;
-  messages.forEach((message, index) => { if (message.role === "user") lastUser = index; });
+  messages.forEach((message, index) => {
+    if (message.role === "user") lastUser = index;
+  });
   const ranThisTurn = messages.slice(lastUser + 1).some((message) => message.role === "tool");
   if (toolCall === "bash" && !ranThisTurn && tools.some((tool) => tool.name === "bash")) {
     return { toolCalls: [{ name: "bash", input: { command: "echo load-probe" } }] };
@@ -33,8 +35,12 @@ const model = mockModel(async ({ lastUserMessage, messages, tools }) => {
 // AI SDK's mock keeps every call's options (whole prompt and tool schemas) for test assertions.
 // Over a load run that was ~170 KB a turn, and the server ended in garbage collection rather than
 // turns (3 October 2026); the production model keeps nothing.
-interface RecordingMock { doGenerateCalls: unknown[]; doStreamCalls: unknown[] }
-const recording = model as unknown as RecordingMock & Record<"doGenerate" | "doStream", (options: unknown) => Promise<unknown>>;
+interface RecordingMock {
+  doGenerateCalls: unknown[];
+  doStreamCalls: unknown[];
+}
+const recording = model as unknown as RecordingMock &
+  Record<"doGenerate" | "doStream", (options: unknown) => Promise<unknown>>;
 for (const name of ["doGenerate", "doStream"] as const) {
   const call = recording[name];
   recording[name] = async (options) => {

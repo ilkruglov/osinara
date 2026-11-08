@@ -23,10 +23,7 @@ function renderSearchItem(e, t, n) {
           : void 0,
     c = normalizeRegistryText(e.item.name),
     l = c.split(`/`).at(-1) ?? c,
-    u = [
-      `  ${n.label(l)}${s === void 0 ? `` : n.muted(` · ${s}`)}`,
-      ...o.map((e) => `    ${e}`),
-    ];
+    u = [`  ${n.label(l)}${s === void 0 ? `` : n.muted(` · ${s}`)}`, ...o.map((e) => `    ${e}`)];
   if (!e.item.description)
     return u.join(`
 `);
@@ -35,10 +32,7 @@ function renderSearchItem(e, t, n) {
     return u.join(`
 `);
   let f = wrapVisibleLine(d, a),
-    p =
-      f.length <= 2
-        ? f
-        : [f[0], `${clipVisible(f[1], Math.max(1, a - 1)).trimEnd()}…`];
+    p = f.length <= 2 ? f : [f[0], `${clipVisible(f[1], Math.max(1, a - 1)).trimEnd()}…`];
   return (
     u.push(...p.map((e) => n.muted(`    ${e}`))),
     u.join(`
@@ -93,8 +87,7 @@ function registryViewText(t, n) {
     a.push(`Documentation   ${e}`);
   }
   (a.push(`Source          Official eve registry`),
-    r.dependencies?.length &&
-      a.push(``, `Packages`, ...r.dependencies.map((e) => `  ${e}`)));
+    r.dependencies?.length && a.push(``, `Packages`, ...r.dependencies.map((e) => `  ${e}`)));
   let o = r.files?.map((e) => e.target) ?? [];
   return (
     o.length > 0 && a.push(``, `Files`, ...o.map((e) => `  ${e}`)),

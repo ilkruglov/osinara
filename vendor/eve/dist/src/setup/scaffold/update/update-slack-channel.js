@@ -1,6 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-const CONNECT_SLACK_CREDENTIALS_REGEX =
-  /(connectSlackCredentials\(\s*)(["'`])([^"'`]+)\2/;
+const CONNECT_SLACK_CREDENTIALS_REGEX = /(connectSlackCredentials\(\s*)(["'`])([^"'`]+)\2/;
 async function updateSlackChannelConnectorUid(r, i) {
   let a;
   try {
@@ -11,10 +10,7 @@ async function updateSlackChannelConnectorUid(r, i) {
   return CONNECT_SLACK_CREDENTIALS_REGEX.test(a)
     ? (await writeFile(
         r,
-        a.replace(
-          CONNECT_SLACK_CREDENTIALS_REGEX,
-          (e, t, n) => `${t}${n}${i}${n}`,
-        ),
+        a.replace(CONNECT_SLACK_CREDENTIALS_REGEX, (e, t, n) => `${t}${n}${i}${n}`),
         `utf8`,
       ),
       { patched: !0 })

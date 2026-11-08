@@ -3,27 +3,18 @@ import { InvalidArgumentError } from "#compiled/commander/index.js";
 import { applicationCommand } from "#cli/application-command.js";
 function parseSearchLimit(e) {
   if (!/^\d+$/u.test(e))
-    throw new InvalidArgumentError(
-      `Expected a positive integer, received "${e}".`,
-    );
+    throw new InvalidArgumentError(`Expected a positive integer, received "${e}".`);
   let n = Number(e);
   if (n < 1 || n > 100)
-    throw new InvalidArgumentError(
-      `Expected a limit between 1 and 100, received "${e}".`,
-    );
+    throw new InvalidArgumentError(`Expected a limit between 1 and 100, received "${e}".`);
   return n;
 }
 function registerRegistryCommands(r) {
   let { applicationContext: i, logger: a, program: o } = r,
     s = applicationCommand(o.command(`add [item]`), i)
-      .description(
-        `Install a registry item; relative paths use the official eve registry.`,
-      )
+      .description(`Install a registry item; relative paths use the official eve registry.`)
       .option(`-o, --overwrite`, `Overwrite existing files.`)
-      .option(
-        `--skip-install`,
-        `Run the item's setup flow without installing it.`,
-      )
+      .option(`--skip-install`, `Run the item's setup flow without installing it.`)
       .option(`--skip-setup`, `Skip the item's setup flow.`)
       .option(
         `--non-interactive`,
@@ -48,17 +39,13 @@ Search the registry:
           return;
         }
         if (n.answer !== void 0 && !n.nonInteractive)
-          throw new InvalidArgumentError(
-            `--answer requires --non-interactive.`,
-          );
+          throw new InvalidArgumentError(`--answer requires --non-interactive.`);
         let { runAddCommand: r } = await import(`./registry.js`);
         await r(a, i.root, e, { ...n, answers: n.answer });
       }),
     c = o
       .command(`registry`)
-      .description(
-        `Configure and browse extension and agent registry catalogs.`,
-      );
+      .description(`Configure and browse extension and agent registry catalogs.`);
   (applicationCommand(c.command(`add <registries...>`), i)
     .description(`Add registry namespace mappings to package.json.`)
     .action(async (e) => {
@@ -76,12 +63,7 @@ Search the registry:
     applicationCommand(c.command(`search <query>`), i)
       .description(`Search all registries or one source.`)
       .option(`-r, --registry <source>`, `Search one registry.`)
-      .option(
-        `--limit <count>`,
-        `Maximum results to return (default: 10).`,
-        parseSearchLimit,
-        10,
-      )
+      .option(`--limit <count>`, `Maximum results to return (default: 10).`, parseSearchLimit, 10)
       .option(`--json`, `Output as JSON`)
       .action(async (e, t) => {
         let { runRegistrySearchCommand: n } = await import(`./registry.js`);

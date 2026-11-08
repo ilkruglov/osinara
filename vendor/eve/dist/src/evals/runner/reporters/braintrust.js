@@ -56,13 +56,10 @@ var BraintrustReporter = class {
         eveParked: e.result.derived.parked,
       };
     (e.result.traceContexts.length > 0 &&
-      ((a.eveTraceIds = [
-        ...new Set(e.result.traceContexts.map((e) => e.traceId)),
-      ]),
+      ((a.eveTraceIds = [...new Set(e.result.traceContexts.map((e) => e.traceId))]),
       (a.eveTraceContexts = e.result.traceContexts)),
       i.length > 0 && (a.eveFailedAssertions = i),
-      e.result.derived.failureCode &&
-        (a.eveFailureCode = e.result.derived.failureCode));
+      e.result.derived.failureCode && (a.eveFailureCode = e.result.derived.failureCode));
     let o = {
       toolCallCount: e.result.derived.toolCallCount,
       subagentCallCount: e.result.derived.subagentCallCount,
@@ -85,8 +82,7 @@ var BraintrustReporter = class {
       try {
         this.#t && (await this.#t.flush());
         let e = await this.#n.summarize();
-        e.experimentUrl &&
-          console.log(`Braintrust experiment: ${e.experimentUrl}\n\n`);
+        e.experimentUrl && console.log(`Braintrust experiment: ${e.experimentUrl}\n\n`);
       } finally {
         (await this.#n.close(), (this.#n = void 0), (this.#t = void 0));
       }

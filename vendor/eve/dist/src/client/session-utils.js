@@ -1,7 +1,4 @@
-import {
-  isCurrentTurnBoundaryEvent,
-  isTurnFailureEvent,
-} from "#protocol/message.js";
+import { isCurrentTurnBoundaryEvent, isTurnFailureEvent } from "#protocol/message.js";
 function summarizeTurnEvents(n) {
   let r,
     i,

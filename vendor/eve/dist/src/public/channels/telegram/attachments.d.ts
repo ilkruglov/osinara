@@ -6,18 +6,24 @@ import { type UploadPolicy } from "#public/channels/upload-policy.js";
 /** URL protocol used by the channel to defer Telegram file downloads to `fetchFile`. */
 export declare const TELEGRAM_FILE_URL_PROTOCOL = "telegram-file:";
 /** Emits one {@link FilePart} per supported Telegram attachment. */
-export declare function collectTelegramFileParts(attachments: readonly TelegramAttachment[], policy: UploadPolicy): FilePart[];
+export declare function collectTelegramFileParts(
+  attachments: readonly TelegramAttachment[],
+  policy: UploadPolicy,
+): FilePart[];
 /** Combines text/caption + file parts into the {@link UserContent} shape the harness expects. */
-export declare function buildTelegramTurnMessage(message: Pick<TelegramMessage, "caption" | "text">, fileParts: readonly FilePart[]): string | UserContent;
+export declare function buildTelegramTurnMessage(
+  message: Pick<TelegramMessage, "caption" | "text">,
+  fileParts: readonly FilePart[],
+): string | UserContent;
 /**
  * Creates a `fetchFile` function for `telegram-file:` URLs. The returned
  * function resolves to `null` for unrecognized URLs and throws on HTTP errors
  * or upload-policy violations.
  */
 export declare function createTelegramFetchFile(input: {
-    readonly api?: Omit<TelegramApiOptions, "credentials">;
-    readonly credentials?: TelegramApiOptions["credentials"];
-    readonly policy: UploadPolicy;
+  readonly api?: Omit<TelegramApiOptions, "credentials">;
+  readonly credentials?: TelegramApiOptions["credentials"];
+  readonly policy: UploadPolicy;
 }): (url: string) => Promise<FetchFileResult | null>;
 /**
  * Builds a `telegram-file:` URL (fileId in the path, optional `filename` and
@@ -25,7 +31,7 @@ export declare function createTelegramFetchFile(input: {
  * `fetchFile`. {@link createTelegramFetchFile} parses it back.
  */
 export declare function createTelegramFileUrl(input: {
-    readonly fileId: string;
-    readonly filename?: string;
-    readonly mediaType?: string;
+  readonly fileId: string;
+  readonly filename?: string;
+  readonly mediaType?: string;
 }): URL;

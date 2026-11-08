@@ -67,9 +67,10 @@ export function createGoogleWorkspaceAuthorizationStarter(
     await dependencies.completeAuthorizationDelivery(auth, authorization.authorizationId);
     return {
       expiresAt: authorization.expiresAt,
-      notice: auth.scope === "family"
-        ? "Ссылка для подключения общего Google Workspace отправлена владельцу в личный чат."
-        : "Ссылка для подключения Google Workspace отправлена в личный чат.",
+      notice:
+        auth.scope === "family"
+          ? "Ссылка для подключения общего Google Workspace отправлена владельцу в личный чат."
+          : "Ссылка для подключения Google Workspace отправлена в личный чат.",
       pending: true,
       ready: false,
     };

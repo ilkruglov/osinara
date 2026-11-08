@@ -17,10 +17,7 @@ const JOURNAL_SCHEMA_VERSION = 1;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 
-export type ModelConfigTransactionPhase =
-  | "activation_started"
-  | "prepared"
-  | "rollback_started";
+export type ModelConfigTransactionPhase = "activation_started" | "prepared" | "rollback_started";
 
 interface JournalBytes {
   readonly base64: string;
@@ -130,12 +127,14 @@ export function serializeTransactionJournal(journal: ModelConfigTransactionJourn
     config: encodeBytes(journal.previousConfig),
     env: encodeBytes(journal.previousEnv),
   };
-  return Buffer.from(JSON.stringify({
-    candidate,
-    phase: journal.phase,
-    previous,
-    schemaVersion: JOURNAL_SCHEMA_VERSION,
-  }));
+  return Buffer.from(
+    JSON.stringify({
+      candidate,
+      phase: journal.phase,
+      previous,
+      schemaVersion: JOURNAL_SCHEMA_VERSION,
+    }),
+  );
 }
 
 export function withJournalPhase(

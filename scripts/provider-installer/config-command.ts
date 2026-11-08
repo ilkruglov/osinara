@@ -48,10 +48,11 @@ async function selectModel(
     models.map((candidate) => ({ label: candidate.displayName, value: candidate.id })),
   );
   const model = models.find((candidate) => candidate.id === id);
-  if (!model) throw new InstallerError(
-    "OSINARA_CONFIG_MODEL_SELECTION_INVALID",
-    "Выбранная модель отсутствует в актуальном каталоге",
-  );
+  if (!model)
+    throw new InstallerError(
+      "OSINARA_CONFIG_MODEL_SELECTION_INVALID",
+      "Выбранная модель отсутствует в актуальном каталоге",
+    );
   return model;
 }
 
@@ -99,10 +100,15 @@ export async function runInteractiveConfigCommand(
     ? requireCredential(await dependencies.prompts.secret("Введите Groq API key"), "Groq API key")
     : undefined;
   if (groqApiKey !== undefined) await dependencies.validateGroq(groqApiKey);
-  const config = buildModelProviderConfig(provider, {
-    ...model,
-    reasoningOptions: [...model.reasoningOptions],
-  }, reasoning, voiceEnabled);
+  const config = buildModelProviderConfig(
+    provider,
+    {
+      ...model,
+      reasoningOptions: [...model.reasoningOptions],
+    },
+    reasoning,
+    voiceEnabled,
+  );
   return await dependencies.apply({
     configBytes: Buffer.from(`${JSON.stringify(config, null, 2)}\n`, "utf8"),
     groqApiKey,

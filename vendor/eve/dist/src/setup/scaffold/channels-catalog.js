@@ -24,9 +24,7 @@ function buildScaffoldableChannels() {
     r = [];
   for (let e of CHANNEL_SCAFFOLDS) {
     if (!n.delete(e.slug))
-      throw Error(
-        `Channel overlay "${e.slug}" is not a scaffoldable channel in @eve/catalog.`,
-      );
+      throw Error(`Channel overlay "${e.slug}" is not a scaffoldable channel in @eve/catalog.`);
     let t = {
       slug: e.slug,
       kind: e.kind,
@@ -37,9 +35,7 @@ function buildScaffoldableChannels() {
   }
   if (n.size > 0) {
     let e = [...n].sort().join(`, `);
-    throw Error(
-      `Scaffoldable catalog channels missing a scaffolder overlay: ${e}.`,
-    );
+    throw Error(`Scaffoldable catalog channels missing a scaffolder overlay: ${e}.`);
   }
   return r;
 }

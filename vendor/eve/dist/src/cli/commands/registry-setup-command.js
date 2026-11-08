@@ -25,14 +25,11 @@ async function resolveNodePackageBin(e, n) {
   let s = dirname(e),
     c = PackageJsonSchema.parse(JSON.parse(await readFile(e, `utf8`))),
     l = declaredBinPath(c, n);
-  if (l === void 0)
-    throw Error(`Package "${c.name}" does not declare a "${n}" binary.`);
+  if (l === void 0) throw Error(`Package "${c.name}" does not declare a "${n}" binary.`);
   let u = resolve(s, l),
     d = relative(s, u);
   if (d.startsWith(`..`) || isAbsolute(d))
-    throw Error(
-      `Package "${c.name}" declares its "${n}" binary outside the package directory.`,
-    );
+    throw Error(`Package "${c.name}" declares its "${n}" binary outside the package directory.`);
   return u;
 }
 function send(e, t) {
@@ -136,12 +133,9 @@ function handlePresentation(e, t, n, r) {
 async function runRegistrySetupCommand(t, n, r, i) {
   let a = findPackageJSON(n.package, pathToFileURL(resolve(t, `package.json`)));
   if (a === void 0)
-    throw Error(
-      `Setup package "${n.package}" is not installed. Run \`eve add ${r}\` first.`,
-    );
+    throw Error(`Setup package "${n.package}" is not installed. Run \`eve add ${r}\` first.`);
   let c = await resolveNodePackageBin(a, n.bin);
-  if (i === void 0)
-    throw Error(`Registry setup commands require a parent prompter.`);
+  if (i === void 0) throw Error(`Registry setup commands require a parent prompter.`);
   return new Promise((e, a) => {
     let o = spawn(process.execPath, [c, ...n.args], {
         cwd: t,
@@ -158,9 +152,7 @@ async function runRegistrySetupCommand(t, n, r, i) {
       f = !1,
       p,
       m = new Map(),
-      h = createProcessOutputBuffer(({ text: e }) =>
-        i.prompter.log.commandOutput(e),
-      );
+      h = createProcessOutputBuffer(({ text: e }) => i.prompter.log.commandOutput(e));
     (o.stdout?.on(`data`, (e) => h.write(`stdout`, e)),
       o.stderr?.on(`data`, (e) => h.write(`stderr`, e)));
     let g,
@@ -171,16 +163,13 @@ async function runRegistrySetupCommand(t, n, r, i) {
       };
     i.signal?.addEventListener(`abort`, cancel, { once: !0 });
     let cleanup = () => {
-      (h.flush(),
-        i.signal?.removeEventListener(`abort`, cancel),
-        g !== void 0 && clearTimeout(g));
+      (h.flush(), i.signal?.removeEventListener(`abort`, cancel), g !== void 0 && clearTimeout(g));
       for (let e of m.values()) e();
       m.clear();
     };
     (o.on(`message`, (e) => {
       if (!isRegistrySetupChildMessage(e)) {
-        (cancel(),
-          a(Error(`Setup command sent an invalid registry protocol message.`)));
+        (cancel(), a(Error(`Setup command sent an invalid registry protocol message.`)));
         return;
       }
       if (e.type === `ready`) {
@@ -209,11 +198,7 @@ async function runRegistrySetupCommand(t, n, r, i) {
         if ((cleanup(), !l)) {
           if (((l = !0), p?.kind === `completed`)) {
             if (t !== 0) {
-              a(
-                Error(
-                  `Setup command reported success, then exited with code ${t ?? `unknown`}.`,
-                ),
-              );
+              a(Error(`Setup command reported success, then exited with code ${t ?? `unknown`}.`));
               return;
             }
             let n = { kind: `completed`, facts: p.facts };

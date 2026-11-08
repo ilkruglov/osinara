@@ -22,13 +22,16 @@ import { telegramInboxDirectory } from "./telegram-inbox-path.js";
 
 interface AttachmentImporterDependencies {
   download(attachment: TelegramAttachment): Promise<Uint8Array>;
-  writeBinary(auth: WorkspaceAuthorization, input: {
-    bytes: Uint8Array;
-    mediaType: string;
-    operationKey: string;
-    path: string;
-    scope: WorkspaceScope;
-  }): Promise<WorkspaceFileRecord>;
+  writeBinary(
+    auth: WorkspaceAuthorization,
+    input: {
+      bytes: Uint8Array;
+      mediaType: string;
+      operationKey: string;
+      path: string;
+      scope: WorkspaceScope;
+    },
+  ): Promise<WorkspaceFileRecord>;
 }
 
 export interface StoredTelegramAttachment {
@@ -64,11 +67,12 @@ const MEDIA_TYPE_DEFAULT_EXTENSIONS: Readonly<Record<string, string>> = {
 function defaultAttachmentName(attachment: TelegramAttachment, index: number): string {
   if (attachment.fileName) return attachment.fileName;
   const identity = attachment.fileUniqueId ?? String(index + 1);
-  const extension = attachment.kind === "photo"
-    ? ".jpg"
-    : attachment.mediaType
-    ? MEDIA_TYPE_DEFAULT_EXTENSIONS[attachment.mediaType]
-    : undefined;
+  const extension =
+    attachment.kind === "photo"
+      ? ".jpg"
+      : attachment.mediaType
+        ? MEDIA_TYPE_DEFAULT_EXTENSIONS[attachment.mediaType]
+        : undefined;
   // Telegram file names are optional presentation metadata. Keep an opaque document storable even
   // when neither Telegram nor content detection can provide a meaningful extension.
   return `${attachment.kind}-${identity}${extension ?? ""}`;
@@ -103,9 +107,10 @@ export function createTelegramWorkspaceAttachmentImporter(
       for (const [index, attachment] of input.attachments.entries()) {
         const bytes = await dependencies.download(attachment);
         // Restricted groups persist only files that Eve's text-only read_file can consume.
-        const validator = input.scope === "group"
-          ? validateReadableTextAttachmentContent
-          : validateAttachmentContent;
+        const validator =
+          input.scope === "group"
+            ? validateReadableTextAttachmentContent
+            : validateAttachmentContent;
         const validated = await validator({
           bytes,
           ...(attachment.mediaType ? { declaredMediaType: attachment.mediaType } : {}),

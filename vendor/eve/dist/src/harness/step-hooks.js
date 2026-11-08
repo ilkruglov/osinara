@@ -4,15 +4,9 @@ import {
   createStepCompletedEvent,
 } from "#protocol/message.js";
 import { contextStorage } from "#context/container.js";
-import {
-  emitStepStarted,
-  normalizeAssistantStepFinishReason,
-} from "#harness/emission.js";
+import { emitStepStarted, normalizeAssistantStepFinishReason } from "#harness/emission.js";
 import { createRuntimeActionRequestFromToolCall } from "#harness/runtime-actions.js";
-import {
-  isAuthorizationSignal,
-  isPendingAuthorizationToolOutput,
-} from "#harness/authorization.js";
+import { isAuthorizationSignal, isPendingAuthorizationToolOutput } from "#harness/authorization.js";
 import {
   createRuntimeToolResultFromMessagePart,
   createRuntimeToolResultFromStepResult,
@@ -21,10 +15,7 @@ import {
 import { isInvalidToolCall } from "#harness/tool-call-input-errors.js";
 import { readToolInterrupt } from "#harness/tool-interrupts.js";
 import { extractToolApprovalInputRequests } from "#harness/input-extraction.js";
-import {
-  applyConversationCacheControl,
-  mergeGatewayAutoCaching,
-} from "#harness/prompt-cache.js";
+import { applyConversationCacheControl, mergeGatewayAutoCaching } from "#harness/prompt-cache.js";
 import { requireSessionModelReference } from "#harness/types.js";
 function buildStepHooks(e) {
   let t = e.session,
@@ -38,12 +29,7 @@ function buildStepHooks(e) {
       let a = r;
       (n &&
         e.emitStepStarted !== !1 &&
-        (await emitStepStarted(
-          n,
-          e.emissionState,
-          requireSessionModelReference(t).id,
-          r,
-        )),
+        (await emitStepStarted(n, e.emissionState, requireSessionModelReference(t).id, r)),
         e.cachePath.kind === `anthropic-direct` &&
           e.marker &&
           (a = applyConversationCacheControl([...r], e.marker)));
@@ -62,9 +48,7 @@ function buildStepHooks(e) {
   };
 }
 async function emitStepActions(r, i, s, c) {
-  let l = new Set(
-      s.toolCalls.filter(isProviderExecutedToolCall).map((e) => e.toolCallId),
-    ),
+  let l = new Set(s.toolCalls.filter(isProviderExecutedToolCall).map((e) => e.toolCallId)),
     u = new Set([
       ...(c.excludedActionCallIds ?? []),
       ...l,
@@ -77,13 +61,9 @@ async function emitStepActions(r, i, s, c) {
     isExcluded = (e, t) => u.has(e) || c.excludedActionToolNames.has(t),
     d = s.toolCalls
       .filter(
-        (e) =>
-          !isExcluded(e.toolCallId, e.toolName) &&
-          !c.emittedActionCallIds?.has(e.toolCallId),
+        (e) => !isExcluded(e.toolCallId, e.toolName) && !c.emittedActionCallIds?.has(e.toolCallId),
       )
-      .map((e) =>
-        createRuntimeActionRequestFromToolCall({ toolCall: e, tools: c.tools }),
-      );
+      .map((e) => createRuntimeActionRequestFromToolCall({ toolCall: e, tools: c.tools }));
   d.length > 0 &&
     (await r(
       createActionsRequestedEvent({
@@ -128,8 +108,7 @@ function isProviderExecutedToolCall(e) {
 function reconcileToolResults(e) {
   let t = new Map();
   for (let n of e.toolResults)
-    n.providerExecuted !== !0 &&
-      t.set(n.toolCallId, createRuntimeToolResultFromStepResult(n));
+    n.providerExecuted !== !0 && t.set(n.toolCallId, createRuntimeToolResultFromStepResult(n));
   for (let n of e.content ?? [])
     n.type !== `tool-error` ||
       n.providerExecuted === !0 ||
@@ -137,8 +116,7 @@ function reconcileToolResults(e) {
       t.set(n.toolCallId, createRuntimeToolResultFromToolError(n));
   for (let n of extractToolResultParts(e.response.messages))
     n.providerExecuted !== !0 &&
-      (t.has(n.toolCallId) ||
-        t.set(n.toolCallId, createRuntimeToolResultFromMessagePart(n)));
+      (t.has(n.toolCallId) || t.set(n.toolCallId, createRuntimeToolResultFromMessagePart(n)));
   return [...t.values()];
 }
 function shouldSkipAuthorizationActionResult(e, t) {

@@ -10,8 +10,7 @@ const HITL_ACTION_PREFIX = `eve_input:`,
   HITL_FREEFORM_MODAL_CALLBACK_ID = `eve_input_freeform_submit`,
   HITL_FREEFORM_MODAL_BLOCK_ID = `eve_freeform_block`,
   HITL_FREEFORM_MODAL_ACTION_ID = `eve_freeform_text`,
-  BUTTON_ACTION_ID_RE =
-    /^(?:(?<kind>tool-approval):)?(?<requestId>.+):button:\d+$/u,
+  BUTTON_ACTION_ID_RE = /^(?:(?<kind>tool-approval):)?(?<requestId>.+):button:\d+$/u,
   TOOL_INPUT_SUFFIX = "\n```";
 function deriveHitlResponse(e) {
   if (!e.actionId.startsWith(`eve_input:`)) return null;
@@ -153,10 +152,7 @@ function buildCardButton(e, t, n) {
     action_id: `${t}:button:${n}`,
     value: e.id,
   };
-  return (
-    (e.style === `primary` || e.style === `danger`) && (i.style = e.style),
-    i
-  );
+  return ((e.style === `primary` || e.style === `danger`) && (i.style = e.style), i);
 }
 function buildOption(e) {
   let t = {
@@ -164,10 +160,7 @@ function buildOption(e) {
       value: e.id,
     },
     n = truncatePlainText(e.description);
-  return (
-    n && n.length > 0 && (t.description = { text: n, type: `plain_text` }),
-    t
-  );
+  return (n && n.length > 0 && (t.description = { text: n, type: `plain_text` }), t);
 }
 function renderInputRequestCardBlock(e, n) {
   return {
@@ -194,17 +187,12 @@ function cardButtonOptions(e) {
 }
 function toCardButtonOption(e) {
   let t = { id: e.id, label: e.label };
-  return e.style === `primary` || e.style === `danger`
-    ? { ...t, style: e.style }
-    : t;
+  return e.style === `primary` || e.style === `danger` ? { ...t, style: e.style } : t;
 }
 function buildAnsweredBlocks(t) {
   let n = [];
   for (let e of t.promptBlocks) e != null && n.push(e);
-  let r = truncateWithEllipsis(
-    t.answerLabel,
-    SLACK_SECTION_TEXT_MAX_LENGTH - 20 - 1,
-  );
+  let r = truncateWithEllipsis(t.answerLabel, SLACK_SECTION_TEXT_MAX_LENGTH - 20 - 1);
   return (
     n.push({
       type: `section`,
@@ -221,9 +209,7 @@ function buildAnsweredBlocks(t) {
 }
 function renderInputRequestDetailBlocks(e) {
   let t = formatToolInputDetails(e);
-  return t === void 0
-    ? []
-    : [{ type: `section`, text: { type: `mrkdwn`, text: t } }];
+  return t === void 0 ? [] : [{ type: `section`, text: { type: `mrkdwn`, text: t } }];
 }
 function renderToolInputContainerBlock(e) {
   let t = formatToolInputContainerText(e);

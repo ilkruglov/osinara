@@ -23,7 +23,11 @@ import { lstat, mkdir, readdir, realpath, rename, rm, writeFile } from "node:fs/
 
 import type Docker from "dockerode";
 
-import { dockerStatus, inspectContainer, requireRunningContainer } from "./docker-sandbox-container.js";
+import {
+  dockerStatus,
+  inspectContainer,
+  requireRunningContainer,
+} from "./docker-sandbox-container.js";
 import { sandboxContainerName } from "./docker-sandbox-lifecycle.js";
 import {
   browserStateSubpath,
@@ -64,7 +68,8 @@ async function stateFiles(directory: string): Promise<string[]> {
   }
   const files: string[] = [];
   for (const name of names) {
-    if (name.startsWith(LOGGED_IN_STATE_PREFIX) && await isRegularFile(`${directory}/${name}`)) files.push(name);
+    if (name.startsWith(LOGGED_IN_STATE_PREFIX) && (await isRegularFile(`${directory}/${name}`)))
+      files.push(name);
   }
   return files;
 }
@@ -83,7 +88,7 @@ export async function migrateBrowserState(toolsRoot: string, workspaceId: string
   const source = `${toolsRoot}/${workspaceId}/home/.agent-browser/sessions`;
   let sourceIsReal = false;
   try {
-    sourceIsReal = await realpath(source) === source;
+    sourceIsReal = (await realpath(source)) === source;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -106,11 +111,22 @@ export async function migrateBrowserState(toolsRoot: string, workspaceId: string
     }
   }
   await writeFile(marker, `${new Date().toISOString()}\n`);
-  console.info(JSON.stringify({ code: "AGENT_SANDBOX_RUNNER_BROWSER_STATE_MOVED", moved, removed, sourceIsReal }));
+  console.info(
+    JSON.stringify({
+      code: "AGENT_SANDBOX_RUNNER_BROWSER_STATE_MOVED",
+      moved,
+      removed,
+      sourceIsReal,
+    }),
+  );
 }
 
 export async function removeBrowserContainer(docker: Docker, sessionId: string): Promise<void> {
-  const existing = await inspectContainer(docker, sessionId, sandboxBrowserContainerName(sessionId));
+  const existing = await inspectContainer(
+    docker,
+    sessionId,
+    sandboxBrowserContainerName(sessionId),
+  );
   if (!existing) return;
   await existing.container.remove({ force: true, v: true }).catch((error) => {
     if (dockerStatus(error) !== 404) throw error;
@@ -135,18 +151,26 @@ export async function requireBrowserContainer(input: {
 }): Promise<Docker.Container> {
   const session = await inspectContainer(input.docker, input.sessionId);
   if (!session) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
-  const sessionMounts = (session.inspection.HostConfig.Mounts ?? []) as Array<Docker.MountSettings & {
-    VolumeOptions?: { Subpath?: string };
-  }>;
-  const toolsWorkspaceId = sessionMounts.find((mount) => mount.Target.startsWith("/tools/"))?.VolumeOptions?.Subpath;
+  const sessionMounts = (session.inspection.HostConfig.Mounts ?? []) as Array<
+    Docker.MountSettings & {
+      VolumeOptions?: { Subpath?: string };
+    }
+  >;
+  const toolsWorkspaceId = sessionMounts.find((mount) => mount.Target.startsWith("/tools/"))
+    ?.VolumeOptions?.Subpath;
   if (!toolsWorkspaceId) {
-    throw new Error("AGENT_SANDBOX_RUNNER_BROWSER_UNAVAILABLE: The browser runs only beside a trusted sandbox");
+    throw new Error(
+      "AGENT_SANDBOX_RUNNER_BROWSER_UNAVAILABLE: The browser runs only beside a trusted sandbox",
+    );
   }
   const name = sandboxBrowserContainerName(input.sessionId);
   const existing = await inspectContainer(input.docker, input.sessionId, name);
   const labels = existing?.inspection.Config.Labels;
-  if (existing && (labels?.[POLICY_LABEL] !== SANDBOX_CONTAINER_POLICY_VERSION ||
-    labels?.[SANDBOX_PARENT_LABEL] !== session.inspection.Id)) {
+  if (
+    existing &&
+    (labels?.[POLICY_LABEL] !== SANDBOX_CONTAINER_POLICY_VERSION ||
+      labels?.[SANDBOX_PARENT_LABEL] !== session.inspection.Id)
+  ) {
     await existing.container.remove({ force: true, v: true });
   } else if (existing) {
     const { container } = await requireRunningContainer(
@@ -159,7 +183,9 @@ export async function requireBrowserContainer(input: {
     );
     return container;
   }
-  await mkdir(`${input.toolsRoot}/${browserStateSubpath(toolsWorkspaceId)}/home`, { recursive: true });
+  await mkdir(`${input.toolsRoot}/${browserStateSubpath(toolsWorkspaceId)}/home`, {
+    recursive: true,
+  });
   const options = buildBrowserContainerOptions(input.runtime, {
     eveSessionId: session.inspection.Config.Labels?.[EVE_SESSION_LABEL] ?? "",
     parentContainerId: session.inspection.Id,

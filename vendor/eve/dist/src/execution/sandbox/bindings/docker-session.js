@@ -4,10 +4,7 @@ import { expectDockerSuccess } from "#execution/sandbox/bindings/docker-utils.js
 import { dirname } from "node:path/posix";
 import { resolveWorkspacePath } from "#execution/sandbox/bindings/local-backend-utils.js";
 import { shellQuote } from "#execution/sandbox/shell-quote.js";
-import {
-  bufferToStream,
-  streamToBuffer,
-} from "#execution/sandbox/stream-utils.js";
+import { bufferToStream, streamToBuffer } from "#execution/sandbox/stream-utils.js";
 const DOCKER_KILL_TREE_SCRIPT = [
   `pid_file="$1"`,
   `target="$(cat "$pid_file" 2>/dev/null)" || exit 0`,
@@ -35,26 +32,14 @@ function createDockerInternalSession(s) {
   let { cli: c, containerName: l } = s;
   async function killSpawnTree(e) {
     await c
-      .run([
-        `exec`,
-        l,
-        `bash`,
-        `-c`,
-        DOCKER_KILL_TREE_SCRIPT,
-        `eve-kill-tree`,
-        e,
-      ])
+      .run([`exec`, l, `bash`, `-c`, DOCKER_KILL_TREE_SCRIPT, `eve-kill-tree`, e])
       .catch(() => {});
   }
   return {
     id: s.id,
     resolvePath: resolveWorkspacePath,
     async spawn(n) {
-      let r = [
-        `exec`,
-        `-w`,
-        resolveWorkspacePath(n.workingDirectory ?? WORKSPACE_ROOT),
-      ];
+      let r = [`exec`, `-w`, resolveWorkspacePath(n.workingDirectory ?? WORKSPACE_ROOT)];
       for (let [e, t] of Object.entries(n.env ?? {})) r.push(`-e`, `${e}=${t}`);
       let i = `/tmp/.eve-sbx-spawn-${randomUUID()}.pid`,
         a = `echo "$$" > ${shellQuote(i)}; bash -lc ${shellQuote(n.command)}; status=$?; rm -f ${shellQuote(i)}; exit $status`;
@@ -79,13 +64,7 @@ function createDockerInternalSession(s) {
     async readFile(e) {
       let t = shellQuote(e.path),
         r = await c.run(
-          [
-            `exec`,
-            l,
-            `bash`,
-            `-lc`,
-            `if [ -e ${t} ]; then exec cat ${t}; else exit 43; fi`,
-          ],
+          [`exec`, l, `bash`, `-lc`, `if [ -e ${t} ]; then exec cat ${t}; else exit 43; fi`],
           { signal: e.abortSignal },
         );
       return r.exitCode === 43

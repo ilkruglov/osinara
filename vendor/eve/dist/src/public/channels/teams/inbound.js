@@ -10,10 +10,7 @@ const HTML_ENTITY_MAP = {
     "&#39;": `'`,
     "&#x27;": `'`,
   },
-  HTML_ENTITY_PATTERN = new RegExp(
-    Object.keys(HTML_ENTITY_MAP).join(`|`),
-    `gi`,
-  );
+  HTML_ENTITY_PATTERN = new RegExp(Object.keys(HTML_ENTITY_MAP).join(`|`), `gi`);
 let turndownService = null;
 function parseTeamsActivity(e) {
   return isObject(e)
@@ -113,9 +110,7 @@ function parseConversation(n) {
   return !isObject(n) || !isNonEmptyString(n.id)
     ? null
     : {
-        conversationType: isNonEmptyString(n.conversationType)
-          ? n.conversationType
-          : void 0,
+        conversationType: isNonEmptyString(n.conversationType) ? n.conversationType : void 0,
         id: n.id,
         isGroup: typeof n.isGroup == `boolean` ? n.isGroup : void 0,
         name: isNonEmptyString(n.name) ? n.name : void 0,
@@ -136,8 +131,7 @@ function parseMentions(n) {
   if (!Array.isArray(n)) return [];
   let r = [];
   for (let i of n) {
-    if (!isObject(i) || i.type !== `mention` || !isNonEmptyString(i.text))
-      continue;
+    if (!isObject(i) || i.type !== `mention` || !isNonEmptyString(i.text)) continue;
     let n = parseChannelAccount(i.mentioned);
     n && r.push({ mentioned: n, text: i.text, type: `mention` });
   }
@@ -201,10 +195,7 @@ function looksLikeHtml(e) {
   return /<\/?[a-z][\s\S]*>/i.test(e);
 }
 function decodeHtmlEntities(e) {
-  return e.replace(
-    HTML_ENTITY_PATTERN,
-    (e) => HTML_ENTITY_MAP[e.toLowerCase()] ?? e,
-  );
+  return e.replace(HTML_ENTITY_PATTERN, (e) => HTML_ENTITY_MAP[e.toLowerCase()] ?? e);
 }
 function getTurndownService() {
   return (

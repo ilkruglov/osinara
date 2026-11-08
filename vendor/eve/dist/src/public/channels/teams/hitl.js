@@ -92,10 +92,7 @@ function deriveTeamsInputResponses(e) {
         : typeof t.eve_option == `string`
           ? t[TEAMS_HITL_CHOICE_INPUT_ID]
           : void 0,
-    a =
-      typeof t.eve_freeform_text == `string`
-        ? t[TEAMS_HITL_FREEFORM_INPUT_ID]
-        : void 0;
+    a = typeof t.eve_freeform_text == `string` ? t[TEAMS_HITL_FREEFORM_INPUT_ID] : void 0;
   return i === void 0
     ? a === void 0
       ? [{ requestId: r }]
@@ -106,9 +103,7 @@ function readTeamsInputReplyToActivityId(e) {
   let t = readActivityValue(e);
   if (!t) return null;
   let n = readHitlPayload(t);
-  return n && typeof n.replyToActivityId == `string`
-    ? n.replyToActivityId
-    : null;
+  return n && typeof n.replyToActivityId == `string` ? n.replyToActivityId : null;
 }
 function teamsInvokeResponse(e = {}) {
   return {
@@ -122,10 +117,7 @@ function renderInputs(e) {
     ? [
         {
           choices: e.options.map((e) => ({
-            title: truncate(
-              e.label,
-              TEAMS_ADAPTIVE_CARD_CHOICE_TITLE_MAX_LENGTH,
-            ),
+            title: truncate(e.label, TEAMS_ADAPTIVE_CARD_CHOICE_TITLE_MAX_LENGTH),
             value: e.id,
           })),
           id: TEAMS_HITL_CHOICE_INPUT_ID,
@@ -148,21 +140,15 @@ function renderInputs(e) {
 function renderActions(e, t) {
   let payload = (n) => {
       let r = { requestId: e.requestId };
-      return (
-        t !== void 0 && (r.replyToActivityId = t),
-        n !== void 0 && (r.optionId = n),
-        r
-      );
+      return (t !== void 0 && (r.replyToActivityId = t), n !== void 0 && (r.optionId = n), r);
     },
     i = e.options;
   return i && i.length > 0 && e.display !== `select`
-    ? i
-        .slice(0, TEAMS_ADAPTIVE_CARD_ACTION_LIMIT)
-        .map((e) => ({
-          data: { [TEAMS_HITL_DATA_KEY]: payload(e.id) },
-          title: truncate(e.label, TEAMS_ADAPTIVE_CARD_ACTION_TITLE_MAX_LENGTH),
-          type: `Action.Submit`,
-        }))
+    ? i.slice(0, TEAMS_ADAPTIVE_CARD_ACTION_LIMIT).map((e) => ({
+        data: { [TEAMS_HITL_DATA_KEY]: payload(e.id) },
+        title: truncate(e.label, TEAMS_ADAPTIVE_CARD_ACTION_TITLE_MAX_LENGTH),
+        type: `Action.Submit`,
+      }))
     : [
         {
           data: { [TEAMS_HITL_DATA_KEY]: payload() },

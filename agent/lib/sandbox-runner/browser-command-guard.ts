@@ -32,11 +32,16 @@ function normalized(command: string): string {
 /** The binary as a word (a path prefix allowed); a directory of that name (`…/agent-browser/scripts`) is not it. */
 const AGENT_BROWSER_WORD = /(?<![\w.-])agent-browser(?![\w/.-])/gu;
 /** Every call must name the reader session right after the binary; a flag elsewhere in the line proves nothing. */
-const READER_RIGHT_AFTER = new RegExp(`^\\s+--session(?:=|\\s+)${READER_SESSION}(?=\\s|$|[;&|)])`, "u");
+const READER_RIGHT_AFTER = new RegExp(
+  `^\\s+--session(?:=|\\s+)${READER_SESSION}(?=\\s|$|[;&|)])`,
+  "u",
+);
 /** A nested shell, eval or xargs decides itself which words reach the binary. */
-const WRAPPER = /(?:^|[\s;&|(`])(?:(?:ba|z|da)?sh\s+(?:-\w*\s+)*-\w*c|eval|exec|xargs|source|env\s+-\w*S)(?=\s|$)/u;
+const WRAPPER =
+  /(?:^|[\s;&|(`])(?:(?:ba|z|da)?sh\s+(?:-\w*\s+)*-\w*c|eval|exec|xargs|source|env\s+-\w*S)(?=\s|$)/u;
 /** A name assembled from variables or globs cannot be read by a string check at all. */
-const ASSEMBLED = /[$*?[{][^\s;&|]{0,12}brows|brows[^\s;&|]{0,12}[$*?\]{}]|agent-[^\s;&|]{0,6}[$*?[{]/u;
+const ASSEMBLED =
+  /[$*?[{][^\s;&|]{0,12}brows|brows[^\s;&|]{0,12}[$*?\]{}]|agent-[^\s;&|]{0,6}[$*?[{]/u;
 
 function drivesToolSession(command: string): boolean {
   const text = normalized(command).replace(/(?:^|\s)#[^\n]*/gu, " ");
@@ -47,7 +52,9 @@ function drivesToolSession(command: string): boolean {
   return calls.some((call) => !READER_RIGHT_AFTER.test(text.slice(call.index + call[0].length)));
 }
 
-export function refuseBrowserCommand(command: string): { exitCode: number; stderr: string; stdout: string } | null {
+export function refuseBrowserCommand(
+  command: string,
+): { exitCode: number; stderr: string; stdout: string } | null {
   if (!drivesToolSession(command)) return null;
   return {
     exitCode: 126,

@@ -26,7 +26,10 @@ export interface ReinforceByRefsResult {
 }
 
 export const memoryReinforcementRepository = {
-  async reinforceByRefs(auth: MemoryAuthorization, input: ReinforceByRefsInput): Promise<ReinforceByRefsResult> {
+  async reinforceByRefs(
+    auth: MemoryAuthorization,
+    input: ReinforceByRefsInput,
+  ): Promise<ReinforceByRefsResult> {
     const requested = [...new Set(input.memoryRefs)];
     if (requested.length === 0) return { reinforced: [], unknown: [] };
     const client = await database().connect();
@@ -85,7 +88,14 @@ export const memoryReinforcementRepository = {
           `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
            VALUES ($1, $2, 'memory.reinforced', $3,
                    jsonb_build_object('reason', $4::text, 'sessionId', $5::text, 'turnId', $6::text))`,
-          [auth.familyId, auth.userId, row.id, input.reason, input.provenance.sessionId, input.provenance.turnId],
+          [
+            auth.familyId,
+            auth.userId,
+            row.id,
+            input.reason,
+            input.provenance.sessionId,
+            input.provenance.turnId,
+          ],
         );
       }
       await client.query("COMMIT");

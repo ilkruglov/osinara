@@ -35,7 +35,9 @@ async function fixture(
   const groupType = options.type ?? "family_private";
   const messageMode = options.messageMode ?? "addressed_only";
   const scope = options.scope ?? "family";
-  const family = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ('HITL') RETURNING id");
+  const family = await database().query<{ id: string }>(
+    "INSERT INTO families (name) VALUES ('HITL') RETURNING id",
+  );
   const owner = await database().query<{ id: string }>(
     `INSERT INTO users (telegram_user_id, display_name)
      VALUES ($1, 'Владелец') RETURNING id`,
@@ -96,7 +98,9 @@ async function fixture(
 
 describeWithDatabase("Telegram HITL approval repository", () => {
   beforeEach(async () => {
-    await database().query("TRUNCATE telegram_hitl_approvals, conversation_session_routes, conversation_sessions, telegram_groups, family_memberships, users, families CASCADE");
+    await database().query(
+      "TRUNCATE telegram_hitl_approvals, conversation_session_routes, conversation_sessions, telegram_groups, family_memberships, users, families CASCADE",
+    );
   });
   afterAll(async () => closeDatabase());
 
@@ -160,7 +164,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       selectedOptionLabel: "Нет, отклонить",
       status: "authorized",
     });
-    await expect(telegramHitlApprovalRepository.claimCallback(input)).resolves.toEqual({ status: "expired" });
+    await expect(telegramHitlApprovalRepository.claimCallback(input)).resolves.toEqual({
+      status: "expired",
+    });
     await expect(
       telegramHitlApprovalRepository.requireToolExecutionApproval({
         applicationSessionId: current.sessionId,
@@ -191,7 +197,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       toolInputHash: "a".repeat(64),
       toolName: "test_tool",
     };
-    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval(exact)).resolves.toBeUndefined();
+    await expect(
+      telegramHitlApprovalRepository.requireToolExecutionApproval(exact),
+    ).resolves.toBeUndefined();
     await expect(
       telegramHitlApprovalRepository.requireToolExecutionApproval({
         ...exact,
@@ -241,10 +249,12 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       telegramUserId: OWNER_TELEGRAM_ID,
     });
     expect(claimed).toMatchObject({
-      auth: { attributes: {
-        telegramConversationId: "00000000-0000-4000-8000-000000000077",
-        telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
-      } },
+      auth: {
+        attributes: {
+          telegramConversationId: "00000000-0000-4000-8000-000000000077",
+          telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
+        },
+      },
       status: "authorized",
     });
   });
@@ -252,8 +262,12 @@ describeWithDatabase("Telegram HITL approval repository", () => {
   it("keeps a callback claimable after the Eve turn pauses for approval", async () => {
     const current = await fixture();
 
-    await expect(telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl")).resolves.toBe(true);
-    await expect(sessionRepository.recordTurnCompleted(current.sessionId, "wrun_hitl", true)).resolves.toBe("recorded");
+    await expect(
+      telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl"),
+    ).resolves.toBe(true);
+    await expect(
+      sessionRepository.recordTurnCompleted(current.sessionId, "wrun_hitl", true),
+    ).resolves.toBe("recorded");
     await expect(
       telegramHitlApprovalRepository.claimCallback({
         baseContinuationToken: "-1001:55:88",
@@ -263,7 +277,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
         telegramUserId: OWNER_TELEGRAM_ID,
       }),
     ).resolves.toMatchObject({ status: "authorized" });
-    await expect(telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl")).resolves.toBe(false);
+    await expect(
+      telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl"),
+    ).resolves.toBe(false);
   });
 
   it("keeps other simultaneously rendered requests pending", async () => {
@@ -351,16 +367,19 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       selectedOptionId: "approve",
       status: "authorized",
     });
-    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval({
-      applicationSessionId: current.sessionId,
-      eveSessionId: "wrun_hitl",
-      telegramUserId: OWNER_TELEGRAM_ID,
-      toolCallId: "call-2",
-      toolInputHash: "b".repeat(64),
-      toolName: "test_tool",
-    })).resolves.toBeUndefined();
-    await expect(telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl"))
-      .resolves.toBe(false);
+    await expect(
+      telegramHitlApprovalRepository.requireToolExecutionApproval({
+        applicationSessionId: current.sessionId,
+        eveSessionId: "wrun_hitl",
+        telegramUserId: OWNER_TELEGRAM_ID,
+        toolCallId: "call-2",
+        toolInputHash: "b".repeat(64),
+        toolName: "test_tool",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl"),
+    ).resolves.toBe(false);
     // The prompt is spent as a whole: a second tap cannot answer the other request alone.
     await expect(
       telegramHitlApprovalRepository.claimCallback({
@@ -401,7 +420,12 @@ describeWithDatabase("Telegram HITL approval repository", () => {
 
     await telegramHitlApprovalRepository.clearForEveSession(current.sessionId, "wrun_hitl");
 
-    await expect(database().query<{ eve_session_id: string }>("SELECT eve_session_id FROM telegram_hitl_approvals WHERE application_session_id = $1", [current.sessionId])).resolves.toMatchObject({
+    await expect(
+      database().query<{ eve_session_id: string }>(
+        "SELECT eve_session_id FROM telegram_hitl_approvals WHERE application_session_id = $1",
+        [current.sessionId],
+      ),
+    ).resolves.toMatchObject({
       rows: [{ eve_session_id: "wrun_hitl_new" }],
     });
   });
@@ -445,7 +469,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       scope: "group",
       type: "external",
     });
-    await database().query("UPDATE family_memberships SET role = 'member' WHERE user_id = $1", [current.ownerId]);
+    await database().query("UPDATE family_memberships SET role = 'member' WHERE user_id = $1", [
+      current.ownerId,
+    ]);
 
     await expect(
       telegramHitlApprovalRepository.claimCallback({
@@ -471,9 +497,11 @@ describeWithDatabase("Telegram HITL approval repository", () => {
         telegramUserId: OWNER_TELEGRAM_ID,
       }),
     ).resolves.toBe("not_applicable");
-    await expect(database().query(
-      "SELECT consumed_at FROM telegram_hitl_approvals WHERE telegram_message_id = 88",
-    )).resolves.toMatchObject({ rows: [{ consumed_at: null }] });
+    await expect(
+      database().query(
+        "SELECT consumed_at FROM telegram_hitl_approvals WHERE telegram_message_id = 88",
+      ),
+    ).resolves.toMatchObject({ rows: [{ consumed_at: null }] });
     await expect(
       telegramHitlApprovalRepository.claimCallback({
         baseContinuationToken: "-1001:55:88",

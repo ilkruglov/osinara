@@ -14,7 +14,7 @@ import { requireReminderAuthorization } from "../reminders/reminder-context.js";
 const TOOL_DESCRIPTION = [
   "Получить точные текущие дату и время из системных часов.",
   "Без timezone использует настроенный IANA timezone текущего пользователя; если он не настроен, возвращает только UTC.",
-  "Для времени в другом часовом поясе передай timezone, например {\"timezone\":\"Asia/Tokyo\"}.",
+  'Для времени в другом часовом поясе передай timezone, например {"timezone":"Asia/Tokyo"}.',
   "Используй для уточнения текущего времени, даты, дня недели, timezone или после долгой операции; не угадывай эти значения.",
 ].join(" ");
 

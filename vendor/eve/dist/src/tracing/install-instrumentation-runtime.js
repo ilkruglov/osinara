@@ -31,19 +31,14 @@ function installInstrumentationRuntime(e) {
       (s = r.prepareSessionTrace),
       (c = r.prepareTurnTrace),
       (runInContext = r.runInContext));
-    let i = e.collected.pipeline.spanProcessors
-      .filter(isSpanProcessor)
-      .filter(hasSessionRelease);
+    let i = e.collected.pipeline.spanProcessors.filter(isSpanProcessor).filter(hasSessionRelease);
     i.length > 0 && a.push(sessionReleaseProvider(i));
   }
   let l = [...t, ...e.providers, ...a],
     u;
   return registerInstrumentationRuntime({
     forceFlush: () =>
-      settleAll([
-        ...(o === void 0 ? [] : [o.forceFlush]),
-        ...l.map((e) => () => e.flush?.()),
-      ]),
+      settleAll([...(o === void 0 ? [] : [o.forceFlush]), ...l.map((e) => () => e.flush?.())]),
     hooks: createInstrumentationHooks({
       parallel: e.providers,
       serialAfter: a,

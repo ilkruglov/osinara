@@ -1,5 +1,11 @@
 import type { ContextKey } from "#context/key.js";
-export type { Session, SessionAuth, SessionAuthContext, SessionParent, SessionTurn, } from "#context/keys.js";
+export type {
+  Session,
+  SessionAuth,
+  SessionAuthContext,
+  SessionParent,
+  SessionTurn,
+} from "#context/keys.js";
 /**
  * Returns the current value of a context key, or `undefined` when unset.
  *
@@ -30,7 +36,10 @@ export declare function hasContext<T>(key: ContextKey<T>): boolean;
  *
  * @throws When called outside of a managed step execution.
  */
-export declare function setContext<T>(key: ContextKey<T>, valueOrUpdater: T | ((current: T | undefined) => T)): T;
+export declare function setContext<T>(
+  key: ContextKey<T>,
+  valueOrUpdater: T | ((current: T | undefined) => T),
+): T;
 /**
  * Returns the current value of a context key or initializes and stores a
  * durable value when the key is unset.

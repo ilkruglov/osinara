@@ -9,8 +9,7 @@ function mockModel(t = {}) {
   return new MockLanguageModelV3({
     modelId: i,
     provider: n.provider ?? `eve-mock`,
-    doGenerate: async (e) =>
-      createGenerateResult(await r(createRequest(e)), e, i),
+    doGenerate: async (e) => createGenerateResult(await r(createRequest(e)), e, i),
     doStream: async (e) =>
       createStreamResult(createGenerateResult(await r(createRequest(e)), e, i)),
   });
@@ -104,17 +103,13 @@ function createGenerateResult(e, t, n) {
   let i = typeof e == `string` ? { text: e } : e,
     a = i.toolCalls ?? [];
   if (!(`text` in i) && a.length === 0)
-    throw Error(
-      `mockModel responders must return text or at least one item in "toolCalls".`,
-    );
+    throw Error(`mockModel responders must return text or at least one item in "toolCalls".`);
   let o = [];
   i.text !== void 0 && o.push({ text: i.text, type: `text` });
   for (let [e, n] of a.entries())
     o.push({
       input: JSON.stringify(n.input ?? {}),
-      toolCallId:
-        n.id ??
-        `mock-tool-call-${countUserMessages(t)}-${countToolResults(t)}-${e + 1}`,
+      toolCallId: n.id ?? `mock-tool-call-${countUserMessages(t)}-${countToolResults(t)}-${e + 1}`,
       toolName: n.name,
       type: `tool-call`,
     });
@@ -149,8 +144,7 @@ function createStreamResult(e) {
       let e = `mock-text-${n}`;
       ((n += 1),
         t.push({ id: e, type: `text-start` }),
-        r.text.length > 0 &&
-          t.push({ delta: r.text, id: e, type: `text-delta` }),
+        r.text.length > 0 && t.push({ delta: r.text, id: e, type: `text-delta` }),
         t.push({ id: e, type: `text-end` }));
       continue;
     }

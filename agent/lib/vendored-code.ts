@@ -18,14 +18,16 @@ export function codeText(code: string): string {
 }
 
 export function codeShape(code: string): string {
-  return code
-    .replace(/\s+/gu, "")
-    .replace(/,([)\]}])/gu, "$1")
-    .replace(/;\}/gu, "}")
-    .replace(/[()]/gu, "")
-    .replace(/'/gu, "\"")
-    // A snippet cut after `,` or `;` may stand before a closing brace in the formatted source.
-    .replace(/[,;]$/u, "");
+  return (
+    code
+      .replace(/\s+/gu, "")
+      .replace(/,([)\]}])/gu, "$1")
+      .replace(/;\}/gu, "}")
+      .replace(/[()]/gu, "")
+      .replace(/'/gu, '"')
+      // A snippet cut after `,` or `;` may stand before a closing brace in the formatted source.
+      .replace(/[,;]$/u, "")
+  );
 }
 
 export function topLevelFunction(source: string, name: string): string {

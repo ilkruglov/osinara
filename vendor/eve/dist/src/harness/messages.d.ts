@@ -1,5 +1,10 @@
 import type { ModelMessage, UserContent } from "ai";
-import type { ChannelDeliveryMetadataEntry, DeliverPayload, SessionAuthContext, TurnCaller } from "#channel/types.js";
+import type {
+  ChannelDeliveryMetadataEntry,
+  DeliverPayload,
+  SessionAuthContext,
+  TurnCaller,
+} from "#channel/types.js";
 import type { StepInput } from "#harness/types.js";
 /**
  * Merges two {@link StepInput} values into one.
@@ -15,7 +20,9 @@ export declare function coalesceTurnInputs(a: StepInput, b: StepInput): StepInpu
  * Returns `undefined` when no parts remain, allowing callers to omit the user
  * turn entirely rather than create an empty model prompt block.
  */
-export declare function normalizeUserContent(content: string | UserContent | undefined): string | UserContent | undefined;
+export declare function normalizeUserContent(
+  content: string | UserContent | undefined,
+): string | UserContent | undefined;
 /**
  * Extracts the final visible assistant text from model response messages.
  *
@@ -24,13 +31,16 @@ export declare function normalizeUserContent(content: string | UserContent | und
  * assistant message contains text. Returns `null` when neither source contains
  * text.
  */
-export declare function resolveAssistantStepText(messages: readonly ModelMessage[], fallback: string | undefined): string | null;
+export declare function resolveAssistantStepText(
+  messages: readonly ModelMessage[],
+  fallback: string | undefined,
+): string | null;
 /**
  * Appends user content while preserving structured attachment parts.
  */
 export declare function appendUserContent(input: {
-    readonly appended: string | UserContent;
-    readonly existing: string | UserContent;
+  readonly appended: string | UserContent;
+  readonly existing: string | UserContent;
 }): string | UserContent;
 /**
  * Structural shape of the workflow `DeliverHookPayload`. Using a
@@ -38,11 +48,11 @@ export declare function appendUserContent(input: {
  * runtime type.
  */
 interface DeliverLike {
-    readonly auth?: SessionAuthContext | null;
-    readonly caller?: TurnCaller;
-    readonly deliveryMetadata?: readonly ChannelDeliveryMetadataEntry[];
-    readonly kind: "deliver";
-    readonly payloads: readonly DeliverPayload[];
+  readonly auth?: SessionAuthContext | null;
+  readonly caller?: TurnCaller;
+  readonly deliveryMetadata?: readonly ChannelDeliveryMetadataEntry[];
+  readonly kind: "deliver";
+  readonly payloads: readonly DeliverPayload[];
 }
 /**
  * Coalesces an array of deliver-like items into a single item by

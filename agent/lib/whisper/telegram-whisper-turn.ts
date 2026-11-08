@@ -58,7 +58,9 @@ export interface TelegramWhisperTurnDependencies {
   journal: Pick<TelegramGroupJournalRepository, "listRecent">;
   session: Pick<typeof sessionRepository, "prepareTurn">;
   telegram: Pick<TelegramRepository, "findGroup" | "findIdentity">;
-  whisper: Pick<TelegramWhisperGate, "close"> & { memoryContext: typeof buildTelegramMemoryContext };
+  whisper: Pick<TelegramWhisperGate, "close"> & {
+    memoryContext: typeof buildTelegramMemoryContext;
+  };
 }
 
 function whisperEnvelope(input: {
@@ -89,9 +91,10 @@ export async function prepareTelegramWhisperTurn(input: {
 }): Promise<TelegramInboundResult> {
   const { actor, dependencies, marker, message } = input;
   const command = parseTelegramWhisperCommand(message, input.botUsername);
-  const authorized = command && actor.kind === "telegram_user" && command.receiverUserId === marker.receiverUserId
-    ? await authorizeTelegramWhisper(dependencies.telegram, message, actor.id)
-    : null;
+  const authorized =
+    command && actor.kind === "telegram_user" && command.receiverUserId === marker.receiverUserId
+      ? await authorizeTelegramWhisper(dependencies.telegram, message, actor.id)
+      : null;
   if (!command || !authorized) {
     // The placeholder was sent under the policy of a moment ago; nothing more comes of it now.
     await dependencies.whisper.close(message.chat.id, marker);
@@ -101,13 +104,20 @@ export async function prepareTelegramWhisperTurn(input: {
   const access = decision.access;
   const conversation = await dependencies.conversations.getByGroupId(group.groupId);
   if (conversation.familyId !== access.familyId) {
-    throw new AppError("AGENT_CONVERSATION_SCOPE_MISMATCH", "Разговор относится к другой семейной области");
+    throw new AppError(
+      "AGENT_CONVERSATION_SCOPE_MISMATCH",
+      "Разговор относится к другой семейной области",
+    );
   }
   const forumTopicId = telegramForumTopicId(message);
   const verifiedForumTopicId = forumTopicId === null ? null : Number(forumTopicId);
   const turnStartedAt = new Date();
   const appSession = await dependencies.session.prepareTurn({
-    baseContinuationToken: telegramWhisperContinuationToken(group.groupId, verifiedForumTopicId, actor.id),
+    baseContinuationToken: telegramWhisperContinuationToken(
+      group.groupId,
+      verifiedForumTopicId,
+      actor.id,
+    ),
     familyId: access.familyId,
     // One turn per session: the group's single active canonical session stays the group's own.
     kind: "whisper",
@@ -117,12 +127,17 @@ export async function prepareTelegramWhisperTurn(input: {
   });
   let timezone: string | null = null;
   try {
-    timezone = await dependencies.currentTime.findTurnTimezone(access.userId ?? null, access.familyId);
+    timezone = await dependencies.currentTime.findTurnTimezone(
+      access.userId ?? null,
+      access.familyId,
+    );
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   // The latest timeline of the whisper's topic, the same history a turn there starts from.
@@ -134,7 +149,10 @@ export async function prepareTelegramWhisperTurn(input: {
   });
   const timelineBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS - envelope.length - 2;
   if (timelineBudget <= 0) {
-    throw new AppError("AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE", "Текущее сообщение превышает допустимый размер контекста разговора");
+    throw new AppError(
+      "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
+      "Текущее сообщение превышает допустимый размер контекста разговора",
+    );
   }
   const recent = await dependencies.journal.listRecent({
     anchorEntryId: null,
@@ -181,7 +199,9 @@ export async function prepareTelegramWhisperTurn(input: {
         telegramChatType: message.chat.type,
         telegramConversationId: conversation.id,
         ...(forumTopicId === null ? {} : { telegramForumTopicId: forumTopicId }),
-        ...(message.messageThreadId === undefined ? {} : { telegramMessageThreadId: String(message.messageThreadId) }),
+        ...(message.messageThreadId === undefined
+          ? {}
+          : { telegramMessageThreadId: String(message.messageThreadId) }),
         telegramTurnStartedAt: turnStartedAt.toISOString(),
         telegramUserId: actor.id,
         [TELEGRAM_WHISPER_ATTRIBUTE]: "true",

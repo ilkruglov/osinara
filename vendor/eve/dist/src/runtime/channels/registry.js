@@ -49,23 +49,15 @@ function deserializeRuntimeAdapter(e, t) {
 function requireAdapterKind(t, n) {
   let r = getAdapterKind(t);
   if (typeof r != `string` || r.length === 0)
-    throw new RuntimeRegistryError(
-      `adapter`,
-      "Adapters must declare a non-empty `kind` field.",
-      {
-        entryName: `unknown`,
-        logicalPath: n?.logicalPath,
-        sourceId: n?.sourceId,
-      },
-    );
+    throw new RuntimeRegistryError(`adapter`, "Adapters must declare a non-empty `kind` field.", {
+      entryName: `unknown`,
+      logicalPath: n?.logicalPath,
+      sourceId: n?.sourceId,
+    });
   return r;
 }
 function carriesAdapterBehavior(e) {
-  if (
-    e.deliver !== void 0 ||
-    e.fetchFile !== void 0 ||
-    e.createAdapterContext !== void 0
-  )
+  if (e.deliver !== void 0 || e.fetchFile !== void 0 || e.createAdapterContext !== void 0)
     return !0;
   for (let [t, n] of Object.entries(e))
     if (!ADAPTER_NON_EVENT_FIELDS.has(t) && typeof n == `function`) return !0;

@@ -112,7 +112,8 @@ export function normalizeProviderUsage(usage: unknown): NormalizedProviderUsage 
     ? usage.completion_tokens_details
     : {};
   const cacheHitTokens = count(usage.prompt_cache_hit_tokens) ?? count(promptDetails.cached_tokens);
-  const cacheMissTokens = count(usage.prompt_cache_miss_tokens) ??
+  const cacheMissTokens =
+    count(usage.prompt_cache_miss_tokens) ??
     (cacheHitTokens !== null && promptTokens !== null ? promptTokens - cacheHitTokens : null);
   return {
     cacheHitTokens,
@@ -138,19 +139,24 @@ function observeChoices(payload: Record<string, unknown>, shape: ResponseShape):
   if (payload.type === "response.output_text.delta" && typeof payload.delta === "string") {
     shape.contentChars += payload.delta.length;
   }
-  if (typeof payload.type === "string" && /^response\.(completed|incomplete|failed)$/u.test(payload.type)) {
+  if (
+    typeof payload.type === "string" &&
+    /^response\.(completed|incomplete|failed)$/u.test(payload.type)
+  ) {
     shape.finishReason = payload.type.slice("response.".length);
   }
   // Streamed Responses items: function calls by name, so a turn's tool choice is visible in the log.
   if (payload.type === "response.output_item.done" && isRecord(payload.item)) {
     const item = payload.item;
-    if (item.type === "function_call" && typeof item.name === "string") shape.toolCalls.push(item.name);
+    if (item.type === "function_call" && typeof item.name === "string")
+      shape.toolCalls.push(item.name);
     if (item.type === "web_search_call") shape.webSearchCalls += 1;
   }
   // A streamed completion nests the final response; a JSON reply carries it at the top level.
-  const finalResponse = isRecord(payload.response) && Array.isArray(payload.response.output)
-    ? payload.response
-    : payload;
+  const finalResponse =
+    isRecord(payload.response) && Array.isArray(payload.response.output)
+      ? payload.response
+      : payload;
   if (typeof finalResponse.status === "string" && Array.isArray(finalResponse.output)) {
     shape.finishReason = finalResponse.status;
     // The completed event repeats every item; streamed counts above already covered them.
@@ -158,10 +164,12 @@ function observeChoices(payload: Record<string, unknown>, shape: ResponseShape):
     for (const item of finalResponse.output) {
       if (!isRecord(item)) continue;
       if (!streamed && item.type === "web_search_call") shape.webSearchCalls += 1;
-      if (!streamed && item.type === "function_call" && typeof item.name === "string") shape.toolCalls.push(item.name);
+      if (!streamed && item.type === "function_call" && typeof item.name === "string")
+        shape.toolCalls.push(item.name);
       if (item.type === "message" && Array.isArray(item.content)) {
         for (const part of item.content) {
-          if (isRecord(part) && typeof part.text === "string") shape.contentChars += part.text.length;
+          if (isRecord(part) && typeof part.text === "string")
+            shape.contentChars += part.text.length;
         }
       }
     }
@@ -170,7 +178,11 @@ function observeChoices(payload: Record<string, unknown>, shape: ResponseShape):
   for (const choice of payload.choices) {
     if (!isRecord(choice)) continue;
     if (typeof choice.finish_reason === "string") shape.finishReason = choice.finish_reason;
-    const part = isRecord(choice.delta) ? choice.delta : isRecord(choice.message) ? choice.message : null;
+    const part = isRecord(choice.delta)
+      ? choice.delta
+      : isRecord(choice.message)
+        ? choice.message
+        : null;
     if (part && typeof part.content === "string") shape.contentChars += part.content.length;
   }
 }
@@ -188,13 +200,15 @@ function emit(
   usage: NormalizedProviderUsage,
   shape: ResponseShape,
 ): void {
-  log(JSON.stringify({
-    code: "AGENT_MODEL_USAGE",
-    modelId: context.modelId,
-    url: context.url,
-    ...usage,
-    ...shape,
-  }));
+  log(
+    JSON.stringify({
+      code: "AGENT_MODEL_USAGE",
+      modelId: context.modelId,
+      url: context.url,
+      ...usage,
+      ...shape,
+    }),
+  );
 }
 
 function observeStream(
@@ -206,7 +220,12 @@ function observeStream(
   let pending = "";
   // Streaming providers report usage in one late chunk; the last observed value wins.
   let usage: NormalizedProviderUsage | null = null;
-  const shape: ResponseShape = { contentChars: 0, finishReason: null, toolCalls: [], webSearchCalls: 0 };
+  const shape: ResponseShape = {
+    contentChars: 0,
+    finishReason: null,
+    toolCalls: [],
+    webSearchCalls: 0,
+  };
   const consume = (text: string, flush: boolean): void => {
     pending += text;
     const lines = pending.split(/\r?\n/u);
@@ -218,21 +237,27 @@ function observeStream(
       // Anthropic streams input usage inside message_start.message and output usage in message_delta.
       const nested = isRecord(payload.message)
         ? payload.message.usage
-        : isRecord(payload.response) ? payload.response.usage : undefined;
-      usage = mergeUsage(usage, normalizeProviderUsage(payload.usage) ?? normalizeProviderUsage(nested));
-
+        : isRecord(payload.response)
+          ? payload.response.usage
+          : undefined;
+      usage = mergeUsage(
+        usage,
+        normalizeProviderUsage(payload.usage) ?? normalizeProviderUsage(nested),
+      );
     }
   };
-  return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-    flush() {
-      consume(decoder.decode(), true);
-      if (usage !== null) emit(log, context, usage, shape);
-    },
-    transform(chunk, controller) {
-      controller.enqueue(chunk);
-      consume(decoder.decode(chunk, { stream: true }), false);
-    },
-  }));
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      flush() {
+        consume(decoder.decode(), true);
+        if (usage !== null) emit(log, context, usage, shape);
+      },
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+        consume(decoder.decode(chunk, { stream: true }), false);
+      },
+    }),
+  );
 }
 
 export function observeModelUsage(
@@ -250,15 +275,24 @@ export function observeModelUsage(
     });
   }
   // Usage is read from a copy so the caller's body stream stays untouched.
-  void response.clone().text().then((text) => {
-    const payload = parseJson(text);
-    if (payload === null) return;
-    const usage = normalizeProviderUsage(payload.usage);
-    if (usage === null) return;
-    const shape: ResponseShape = { contentChars: 0, finishReason: null, toolCalls: [], webSearchCalls: 0 };
-    observeChoices(payload, shape);
-    emit(log, context, usage, shape);
-  }).catch(() => undefined);
+  void response
+    .clone()
+    .text()
+    .then((text) => {
+      const payload = parseJson(text);
+      if (payload === null) return;
+      const usage = normalizeProviderUsage(payload.usage);
+      if (usage === null) return;
+      const shape: ResponseShape = {
+        contentChars: 0,
+        finishReason: null,
+        toolCalls: [],
+        webSearchCalls: 0,
+      };
+      observeChoices(payload, shape);
+      emit(log, context, usage, shape);
+    })
+    .catch(() => undefined);
   return response;
 }
 
@@ -352,7 +386,10 @@ export interface CompactionEvent {
  * One line per Eve compaction event. Prod ran three days without a single compaction while prompts
  * grew to 133k tokens (10 сентября 2026); the event log is how the fact is seen at all.
  */
-export function formatCompactionLog(event: CompactionEvent, durationMs: number | null = null): string {
+export function formatCompactionLog(
+  event: CompactionEvent,
+  durationMs: number | null = null,
+): string {
   const requested = event.type === "compaction.requested";
   return JSON.stringify({
     code: requested ? "AGENT_COMPACTION_REQUESTED" : "AGENT_COMPACTION_COMPLETED",
@@ -363,4 +400,3 @@ export function formatCompactionLog(event: CompactionEvent, durationMs: number |
     ...(durationMs === null ? {} : { durationMs }),
   });
 }
-

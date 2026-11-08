@@ -9,25 +9,36 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { pruneTerminalWorkflowRuns, pruneTerminalWorkflowRunsWithin } from "./workflow-run-retention.js";
+import {
+  pruneTerminalWorkflowRuns,
+  pruneTerminalWorkflowRunsWithin,
+} from "./workflow-run-retention.js";
 
 function client(rows: Array<Record<string, unknown>[]>, failOn?: string) {
   // Only SELECTs consume scripted rows; BEGIN, DELETE and COMMIT answer with nothing.
   const query = vi.fn(async (text: string, _values?: readonly unknown[]) => {
     if (failOn && text.includes(failOn)) throw new Error("boom");
-    return { rowCount: 1, rows: /^\s*SELECT/u.test(text) ? rows.shift() ?? [] : [] };
+    return { rowCount: 1, rows: /^\s*SELECT/u.test(text) ? (rows.shift() ?? []) : [] };
   });
   return { query };
 }
 
 describe("pruneTerminalWorkflowRuns", () => {
   it("selects old finished turn runs and deletes each in its own transaction", async () => {
-    const c = client([[{ id: "wrun_A" }, { id: "wrun_B" }], [{ status: "completed" }], [{ status: "cancelled" }]]);
+    const c = client([
+      [{ id: "wrun_A" }, { id: "wrun_B" }],
+      [{ status: "completed" }],
+      [{ status: "cancelled" }],
+    ]);
     expect(await pruneTerminalWorkflowRuns(c, { batch: 10, retentionDays: 7 })).toBe(2);
     const [selectText, selectValues] = c.query.mock.calls[0]!;
     expect(selectText).toContain("token_retention_until");
     expect(selectText).toContain("make_interval(days => $2::int)");
-    expect(selectValues).toEqual([["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"], 7, 10]);
+    expect(selectValues).toEqual([
+      ["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"],
+      7,
+      10,
+    ]);
     const texts = c.query.mock.calls.map((call) => call[0]);
     expect(texts.filter((t) => t === "BEGIN")).toHaveLength(2);
     expect(texts.filter((t) => t === "COMMIT")).toHaveLength(2);

@@ -4,14 +4,20 @@ import type { H3Event } from "nitro";
  * for tests so callers can supply a real {@link Request}; production
  * traffic flows through the Nitro {@link H3Event} default export.
  */
-export declare function buildHomePageResponse(input: {
+export declare function buildHomePageResponse(
+  input: {
     readonly agentName: string;
-}, request: Request): Response;
+  },
+  request: Request,
+): Response;
 /**
  * Nitro route handler for `GET /`. Adapts the Nitro event shape into
  * {@link buildHomePageResponse}.
  */
-export declare function handleHomePageRequest(input: {
+export declare function handleHomePageRequest(
+  input: {
     readonly agentName: string;
-}, request: Request): Response;
+  },
+  request: Request,
+): Response;
 export default function handleStaticHomePageRequest(event: H3Event): Response;

@@ -16,6 +16,9 @@ export declare function assertMicrosandboxPlatformCandidate(): Promise<void>;
  * verifies Bash, creates the `vercel-sandbox` user, and hands it
  * `/workspace`.
  */
-export declare function ensureMicrosandboxBaseRuntime(sandbox: MicrosandboxSandbox, options?: {
+export declare function ensureMicrosandboxBaseRuntime(
+  sandbox: MicrosandboxSandbox,
+  options?: {
     readonly log?: (message: string) => void;
-}): Promise<void>;
+  },
+): Promise<void>;

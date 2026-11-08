@@ -90,15 +90,11 @@ async function scaffoldExtensionProject(r) {
     p = resolve(r.workspaceProbeDirectory ?? s),
     m = isPackageManagerWorkspaceMember(u, p);
   if (c) await assertCanCreateInPlace(s, l);
-  else if (await pathExists(s))
-    throw Error(`Cannot create project because "${s}" already exists.`);
+  else if (await pathExists(s)) throw Error(`Cannot create project because "${s}" already exists.`);
   let h = {
     appName: basename(s),
     eveVersion: d.version,
-    zodPackageVersion: resolveVersionToken(
-      `zodPackageVersion`,
-      r.zodPackageVersion ?? `4.4.3`,
-    ),
+    zodPackageVersion: resolveVersionToken(`zodPackageVersion`, r.zodPackageVersion ?? `4.4.3`),
     typescriptPackageVersion: resolveVersionToken(
       `typescriptPackageVersion`,
       r.typescriptPackageVersion ?? `7.0.2`,

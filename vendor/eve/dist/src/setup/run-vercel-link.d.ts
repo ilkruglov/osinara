@@ -6,5 +6,10 @@ type VercelOutputHandler = NonNullable<RunVercelOptions["onOutput"]>;
  * AI Gateway model calls. Safe to call repeatedly; Vercel CLI no-ops if
  * the env is already fresh.
  */
-export declare function runVercelEnvPull(projectRoot: string, onOutput?: VercelOutputHandler, signal?: AbortSignal, nonInteractive?: boolean): Promise<boolean>;
+export declare function runVercelEnvPull(
+  projectRoot: string,
+  onOutput?: VercelOutputHandler,
+  signal?: AbortSignal,
+  nonInteractive?: boolean,
+): Promise<boolean>;
 export {};

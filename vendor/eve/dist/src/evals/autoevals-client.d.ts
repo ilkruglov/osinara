@@ -7,8 +7,8 @@ import { Factuality } from "autoevals";
 type AutoevalsClient = NonNullable<Parameters<typeof Factuality>[0]["client"]>;
 type ProviderOptions = Parameters<typeof generateText>[0]["providerOptions"];
 interface AutoevalsClientConfig {
-    readonly languageModel: LanguageModel;
-    readonly providerOptions?: ProviderOptions;
+  readonly languageModel: LanguageModel;
+  readonly providerOptions?: ProviderOptions;
 }
 export declare function createAutoevalsClient(config: AutoevalsClientConfig): AutoevalsClient;
 export {};

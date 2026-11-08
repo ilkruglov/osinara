@@ -48,30 +48,18 @@ async function addAgentToProject(i) {
   }
   let c = agentTemplateFiles(i.model, i.reasoning),
     l = [];
-  for (let t of Object.keys(c))
-    (await pathExists(join(i.projectRoot, t))) && l.push(t);
+  for (let t of Object.keys(c)) (await pathExists(join(i.projectRoot, t))) && l.push(t);
   if (
-    (l.length === 0 &&
-      (await pathExists(join(i.projectRoot, `agent`))) &&
-      l.push(`agent/`),
+    (l.length === 0 && (await pathExists(join(i.projectRoot, `agent`))) && l.push(`agent/`),
     l.length > 0)
   )
     throw Error(
       `Cannot add an eve agent to "${i.projectRoot}" because it already has: ${l.join(`, `)}.`,
     );
   let u = resolveEvePackageContract(i.evePackage),
-    d = resolveVersionToken(
-      `aiPackageVersion`,
-      i.aiPackageVersion ?? `^7.0.58`,
-    ),
-    f = resolveVersionToken(
-      `connectPackageVersion`,
-      i.connectPackageVersion ?? `0.4.3`,
-    ),
-    p = resolveVersionToken(
-      `zodPackageVersion`,
-      i.zodPackageVersion ?? `4.4.3`,
-    ),
+    d = resolveVersionToken(`aiPackageVersion`, i.aiPackageVersion ?? `^7.0.58`),
+    f = resolveVersionToken(`connectPackageVersion`, i.connectPackageVersion ?? `0.4.3`),
+    p = resolveVersionToken(`zodPackageVersion`, i.zodPackageVersion ?? `4.4.3`),
     m = [];
   for (let [e, n] of Object.entries(c)) {
     let r = join(i.projectRoot, e);
@@ -84,12 +72,10 @@ async function addAgentToProject(i) {
       zod: p,
     },
     g = {};
-  for (let [e, t] of Object.entries(h))
-    hasDeclaredDependency(s, e) || (g[e] = t);
+  for (let [e, t] of Object.entries(h)) hasDeclaredDependency(s, e) || (g[e] = t);
   let _ = {};
   (Object.keys(g).length > 0 && (_.dependencies = g),
-    isPackageManagerWorkspaceMember(a, i.projectRoot) ||
-      (_.nodeEngineRequirement = u.nodeEngine));
+    isPackageManagerWorkspaceMember(a, i.projectRoot) || (_.nodeEngineRequirement = u.nodeEngine));
   let v = await patchPackageJson(o, _),
     y = await patchWorkspaceRootPackageJson(a, i.projectRoot, {
       aiPackageVersion: d,

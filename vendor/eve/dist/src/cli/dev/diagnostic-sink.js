@@ -6,12 +6,7 @@ async function createDevDiagnosticSink(i, a = {}) {
   let s = a.now?.() ?? new Date(),
     c = a.pid ?? process.pid,
     l = join(o, `dev-${s.toISOString().replaceAll(`:`, `-`)}-${c}.log`);
-  return createOpenSink(
-    i,
-    l,
-    await open(l, `wx`, 384),
-    () => a.now?.() ?? new Date(),
-  );
+  return createOpenSink(i, l, await open(l, `wx`, 384), () => a.now?.() ?? new Date());
 }
 function createOpenSink(e, t, n, r) {
   let o = Promise.resolve(),

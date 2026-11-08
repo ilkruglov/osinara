@@ -54,15 +54,10 @@ const MAX_ALLOWED_DEVELOPMENT_SERVER_PORT = 65535,
   PORT_ENV = `PORT`;
 async function isActiveDevelopmentServerForApp(e) {
   try {
-    let t = await new DevelopmentServerState(
-      await resolveDiscoveryProject(e.appRoot),
-    ).read();
-    return t === void 0 ||
-      !isLoopbackServerUrl(t) ||
-      !(await isEveServerHealthy(t))
+    let t = await new DevelopmentServerState(await resolveDiscoveryProject(e.appRoot)).read();
+    return t === void 0 || !isLoopbackServerUrl(t) || !(await isEveServerHealthy(t))
       ? !1
-      : new URL(t).origin ===
-          new URL(normalizeDevelopmentServerClientUrl(e.serverUrl)).origin;
+      : new URL(t).origin === new URL(normalizeDevelopmentServerClientUrl(e.serverUrl)).origin;
   } catch {
     return !1;
   }
@@ -71,8 +66,7 @@ function isAddressInUseError(e) {
   return e instanceof Error && `code` in e && e.code === `EADDRINUSE`;
 }
 function resolveDevelopmentServerPort(e) {
-  let t =
-    typeof e == `string` ? Number(e) : (e ?? DEFAULT_DEVELOPMENT_SERVER_PORT);
+  let t = typeof e == `string` ? Number(e) : (e ?? DEFAULT_DEVELOPMENT_SERVER_PORT);
   if (!Number.isInteger(t) || t < 0 || t > MAX_ALLOWED_DEVELOPMENT_SERVER_PORT)
     throw Error(
       `Invalid development server port "${String(e)}". Expected an integer between 0 and ${MAX_ALLOWED_DEVELOPMENT_SERVER_PORT}.`,
@@ -126,35 +120,23 @@ function addDevelopmentControlHandler(e) {
     let o = await e.workflowWorld?.handleRequest(a);
     if (o !== void 0) return o;
     let s = new URL(a.url);
-    if (
-      s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_ROUTE_PATH &&
-      a.method === `GET`
-    )
+    if (s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_ROUTE_PATH && a.method === `GET`)
       return handleDevRuntimeArtifactsRequest({ appRoot: e.appRoot });
-    let c =
-        s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_SUSPEND_ROUTE_PATH &&
-        a.method === `POST`,
-      l =
-        s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_RESUME_ROUTE_PATH &&
-        a.method === `POST`,
+    let c = s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_SUSPEND_ROUTE_PATH && a.method === `POST`,
+      l = s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_RESUME_ROUTE_PATH && a.method === `POST`,
       u =
         s.pathname === EVE_DEV_RUNTIME_ARTIFACTS_REBUILD_ROUTE_PATH &&
         (a.method === `GET` || a.method === `POST`);
     if (!c && !l && !u) return;
     let d = e.getWatcher();
     return d === void 0
-      ? Response.json(
-          { error: `The development server is still starting.` },
-          { status: 503 },
-        )
+      ? Response.json({ error: `The development server is still starting.` }, { status: 503 })
       : c
         ? (await d.suspend(), Response.json({ suspended: !0 }))
         : l
           ? (await d.resume({ silent: s.searchParams.get(`silent`) === `1` }),
             handleDevRuntimeArtifactsRequest({ appRoot: e.appRoot }))
-          : (s.searchParams.get(`force`) === `1`
-              ? await d.rebuild()
-              : await d.flush(),
+          : (s.searchParams.get(`force`) === `1` ? await d.rebuild() : await d.flush(),
             handleDevRuntimeArtifactsRequest({ appRoot: e.appRoot }));
   });
 }
@@ -192,23 +174,13 @@ function createDevelopmentServerCleanupError(e) {
       let t = e[0];
       return t instanceof Error
         ? t
-        : Error(
-            `Failed to close the development server: ${toErrorMessage(t)}`,
-            { cause: t },
-          );
+        : Error(`Failed to close the development server: ${toErrorMessage(t)}`, { cause: t });
     }
-    return AggregateError(
-      e,
-      `Multiple development-server resources failed to close.`,
-    );
+    return AggregateError(e, `Multiple development-server resources failed to close.`);
   }
 }
 function createDevelopmentServerStartupCleanupError(e, t) {
-  return AggregateError(
-    [e, ...t],
-    `${toErrorMessage(e)} Cleanup also failed.`,
-    { cause: e },
-  );
+  return AggregateError([e, ...t], `${toErrorMessage(e)} Cleanup also failed.`, { cause: e });
 }
 async function listenForDevelopmentServer(e) {
   let t = resolveDevelopmentServerPorts({
@@ -273,8 +245,7 @@ async function startNitroDevelopmentServer(t, n) {
     let i = resolveNitroCompiledArtifactsSource(
       createDevelopmentNitroArtifactsConfig({
         appRoot: t.appRoot,
-        configuredWorld:
-          t.compileResult.manifest.config.experimental?.workflow?.world,
+        configuredWorld: t.compileResult.manifest.config.experimental?.workflow?.world,
       }),
     );
     pruneLocalSandboxTemplatesInBackground(t.appRoot);
@@ -299,10 +270,7 @@ async function startNitroDevelopmentServer(t, n) {
         getWatcher: () => T,
         workflowWorld: w,
       }));
-    let l =
-        n.host ??
-        a.options.devServer.hostname ??
-        DEFAULT_DEVELOPMENT_SERVER_HOST,
+    let l = n.host ?? a.options.devServer.hostname ?? DEFAULT_DEVELOPMENT_SERVER_HOST,
       u = c === void 0,
       d = await devBootPhase(
         `binding port`,
@@ -359,8 +327,7 @@ async function startNitroDevelopmentServer(t, n) {
     )),
       await f.write(p));
     let h = S;
-    if (h === void 0)
-      throw Error(`Workflow local queue environment was not initialized.`);
+    if (h === void 0) throw Error(`Workflow local queue environment was not initialized.`);
     let g = T,
       _ = x,
       k = w,
@@ -422,12 +389,9 @@ function createDevelopmentServer(e, t = {}) {
   let n, r;
   return {
     start() {
-      if (n !== void 0)
-        throw Error(`DevelopmentServer.start() was already called.`);
+      if (n !== void 0) throw Error(`DevelopmentServer.start() was already called.`);
       return (
-        (n = startNitroDevelopmentServer(e, t).then(
-          ({ handle: e, close: t }) => ((r = t), e),
-        )),
+        (n = startNitroDevelopmentServer(e, t).then(({ handle: e, close: t }) => ((r = t), e))),
         n
       );
     },

@@ -12,7 +12,8 @@ export declare const DISCOVER_MODULE_SLOT_COLLISION = "discover/module-slot-coll
  * Shared diagnostic emitted when the required instructions prompt source
  * is missing.
  */
-export declare const DISCOVER_REQUIRED_INSTRUCTIONS_MISSING = "discover/required-instructions-missing";
+export declare const DISCOVER_REQUIRED_INSTRUCTIONS_MISSING =
+  "discover/required-instructions-missing";
 /**
  * Shared diagnostic emitted when discovery falls back to the deprecated
  * `system.{md,ts,...}` slot because no `instructions.{md,ts,...}` source
@@ -43,7 +44,8 @@ export declare const DISCOVER_CHANNELS_DIRECTORY_INVALID = "discover/channels-di
  * Shared diagnostic emitted when the authored `extensions/` root is not a
  * directory.
  */
-export declare const DISCOVER_EXTENSIONS_DIRECTORY_INVALID = "discover/extensions-directory-invalid";
+export declare const DISCOVER_EXTENSIONS_DIRECTORY_INVALID =
+  "discover/extensions-directory-invalid";
 /**
  * Shared diagnostic emitted when an authored `tools/*.{ts,…}` filename does
  * not satisfy the model tool-name charset rule.
@@ -64,7 +66,8 @@ export declare const DISCOVER_SANDBOX_DIRECTORY_INVALID = "discover/sandbox-dire
  * Shared diagnostic emitted when the authored `instructions/` root is not a
  * directory.
  */
-export declare const DISCOVER_INSTRUCTIONS_DIRECTORY_INVALID = "discover/instructions-directory-invalid";
+export declare const DISCOVER_INSTRUCTIONS_DIRECTORY_INVALID =
+  "discover/instructions-directory-invalid";
 /**
  * Shared diagnostic emitted when an authored `channels/**` filename or
  * directory segment does not satisfy the channel slug charset rule.
@@ -133,7 +136,10 @@ export type StringDirent = Dirent<string>;
 /**
  * Reads one directory through `source` and returns its entries sorted by name.
  */
-export declare function readSortedDirectoryEntries(source: ProjectSource, directoryPath: string): Promise<ProjectSourceEntry[]>;
+export declare function readSortedDirectoryEntries(
+  source: ProjectSource,
+  directoryPath: string,
+): Promise<ProjectSourceEntry[]>;
 /**
  * Discovers instructions sources from a root directory.
  *
@@ -146,28 +152,28 @@ export declare function readSortedDirectoryEntries(source: ProjectSource, direct
  * in the returned array.
  */
 export declare function discoverInstructionsSource(input: {
-    required?: boolean;
-    rootEntries: readonly ProjectSourceEntry[];
-    rootPath: string;
-    source: ProjectSource;
+  required?: boolean;
+  rootEntries: readonly ProjectSourceEntry[];
+  rootPath: string;
+  source: ProjectSource;
 }): Promise<{
-    diagnostics: DiscoverDiagnostic[];
-    instructions: InstructionsSourceRef[];
+  diagnostics: DiscoverDiagnostic[];
+  instructions: InstructionsSourceRef[];
 }>;
 /**
  * Discovers one flat module slot such as `agent.ts` or `subagent.cjs`.
  */
 export declare function discoverFlatModuleSource(input: {
-    missingDiagnostic?: {
-        code: string;
-        message: string;
-    };
-    rootEntries: readonly ProjectSourceEntry[];
-    rootPath: string;
-    slotName: string;
+  missingDiagnostic?: {
+    code: string;
+    message: string;
+  };
+  rootEntries: readonly ProjectSourceEntry[];
+  rootPath: string;
+  slotName: string;
 }): {
-    diagnostics: DiscoverDiagnostic[];
-    module?: ModuleSourceRef;
+  diagnostics: DiscoverDiagnostic[];
+  module?: ModuleSourceRef;
 };
 /**
  * Returns a discovery diagnostic when a tool slot name violates
@@ -177,12 +183,18 @@ export declare function discoverFlatModuleSource(input: {
  * `validateSegment` so the discover layer rejects illegal filenames before
  * the compiler ever loads the module.
  */
-export declare function createToolNameDiagnostic(slotName: string, sourcePath: string): DiscoverDiagnostic | null;
+export declare function createToolNameDiagnostic(
+  slotName: string,
+  sourcePath: string,
+): DiscoverDiagnostic | null;
 /**
  * Returns a discovery diagnostic when a connection slot name violates
  * {@link CONNECTION_SLUG_PATTERN}, or `null` when it satisfies the rule.
  */
-export declare function createConnectionNameDiagnostic(slotName: string, sourcePath: string): DiscoverDiagnostic | null;
+export declare function createConnectionNameDiagnostic(
+  slotName: string,
+  sourcePath: string,
+): DiscoverDiagnostic | null;
 /**
  * Returns a discovery diagnostic when a channel filesystem segment violates
  * {@link CHANNEL_SLUG_PATTERN}, or `null` when it satisfies the rule.
@@ -191,7 +203,10 @@ export declare function createConnectionNameDiagnostic(slotName: string, sourceP
  * file leaves and directory ancestors both go through this check so the
  * runtime never sees a malformed URL segment.
  */
-export declare function createChannelNameDiagnostic(segment: string, sourcePath: string): DiscoverDiagnostic | null;
+export declare function createChannelNameDiagnostic(
+  segment: string,
+  sourcePath: string,
+): DiscoverDiagnostic | null;
 /**
  * Returns a discovery diagnostic when a hook filesystem segment violates
  * {@link HOOK_SLUG_PATTERN}, or `null` when it satisfies the rule.
@@ -199,7 +214,10 @@ export declare function createChannelNameDiagnostic(segment: string, sourcePath:
  * Each path segment under `agent/hooks/` is validated independently so
  * the runtime never sees a malformed slug.
  */
-export declare function createHookNameDiagnostic(segment: string, sourcePath: string): DiscoverDiagnostic | null;
+export declare function createHookNameDiagnostic(
+  segment: string,
+  sourcePath: string,
+): DiscoverDiagnostic | null;
 /**
  * Returns a discovery diagnostic when an extension mount filename violates
  * {@link EXTENSION_SLUG_PATTERN}, or `null` when it satisfies the rule.
@@ -208,22 +226,37 @@ export declare function createHookNameDiagnostic(segment: string, sourcePath: st
  * the extension composes into the consuming agent, so it must be a legal
  * identifier segment.
  */
-export declare function createExtensionNameDiagnostic(slotName: string, sourcePath: string): DiscoverDiagnostic | null;
-export { discoverNamedSourceDirectory, type DiscoverNamedSourceDirectoryModuleInput, type DiscoverNamedSourceDirectoryWithMarkdownInput, } from "#discover/named-source-directory.js";
+export declare function createExtensionNameDiagnostic(
+  slotName: string,
+  sourcePath: string,
+): DiscoverDiagnostic | null;
+export {
+  discoverNamedSourceDirectory,
+  type DiscoverNamedSourceDirectoryModuleInput,
+  type DiscoverNamedSourceDirectoryWithMarkdownInput,
+} from "#discover/named-source-directory.js";
 /**
  * Emits shared diagnostics for unsupported root-level directories.
  */
 export declare function createUnsupportedRootDirectoryDiagnostics(input: {
-    classifyEntry: (name: string, entryType: DirectoryEntryType) => string;
-    createUnsupportedDirectoryMessage: (directoryName: string) => string;
-    rootEntries: readonly ProjectSourceEntry[];
-    rootPath: string;
+  classifyEntry: (name: string, entryType: DirectoryEntryType) => string;
+  createUnsupportedDirectoryMessage: (directoryName: string) => string;
+  rootEntries: readonly ProjectSourceEntry[];
+  rootPath: string;
 }): DiscoverDiagnostic[];
 /**
  * Creates one slot-collision diagnostic with shared wording.
  */
-export declare function createSlotCollisionDiagnostic(directoryPath: string, slotLogicalPath: string, fileNames: readonly string[]): DiscoverDiagnostic;
+export declare function createSlotCollisionDiagnostic(
+  directoryPath: string,
+  slotLogicalPath: string,
+  fileNames: readonly string[],
+): DiscoverDiagnostic;
 /**
  * Creates one module-slot collision diagnostic with shared wording.
  */
-export declare function createModuleSlotCollisionDiagnostic(directoryPath: string, slotLogicalPath: string, fileNames: readonly string[]): DiscoverDiagnostic;
+export declare function createModuleSlotCollisionDiagnostic(
+  directoryPath: string,
+  slotLogicalPath: string,
+  fileNames: readonly string[],
+): DiscoverDiagnostic;

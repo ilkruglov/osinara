@@ -108,8 +108,7 @@ async function notifyTaskTurnStartedStep(e) {
     },
     url: e.caller.replyTo.url,
   });
-  if (!r.ok)
-    throw Error(`Task turn-start callback failed with HTTP ${r.status}.`);
+  if (!r.ok) throw Error(`Task turn-start callback failed with HTTP ${r.status}.`);
 }
 function createSettledTurnResult(e) {
   let t = e.settled.usage ?? ZERO_TOKEN_USAGE;
@@ -198,9 +197,7 @@ async function bindTurnCallerContextStep(e) {
     Reflect.get(r, `kind`) !== SUBAGENT_ADAPTER_KIND ||
     !isSubagentAdapterState(Reflect.get(r, `state`))
   )
-    throw Error(
-      `Task-owned local turn is missing its subagent adapter binding.`,
-    );
+    throw Error(`Task-owned local turn is missing its subagent adapter binding.`);
   let a = Reflect.get(r, `state`);
   return {
     ...e.serializedContext,

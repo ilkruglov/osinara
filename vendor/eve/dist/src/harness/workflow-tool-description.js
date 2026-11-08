@@ -47,8 +47,6 @@ return verdict;
 \`\`\`${s}`;
 }
 function agentAccess(e) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(e)
-    ? `tools.${e}`
-    : `tools[${JSON.stringify(e)}]`;
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(e) ? `tools.${e}` : `tools[${JSON.stringify(e)}]`;
 }
 export { workflowToolDescription };

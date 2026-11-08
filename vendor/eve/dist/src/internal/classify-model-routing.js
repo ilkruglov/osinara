@@ -6,9 +6,7 @@ function classifyModelRouting(t, n) {
     return (r !== void 0 && (e.byok = r), e);
   }
   if (typeof t.provider != `string`)
-    throw Error(
-      "Cannot classify model routing: the authored model has no string `provider`.",
-    );
+    throw Error("Cannot classify model routing: the authored model has no string `provider`.");
   let r = typeof t.modelId == `string` ? t.modelId : ``,
     i = t.provider.split(`.`)[0];
   if (i === GATEWAY_PROVIDER) {

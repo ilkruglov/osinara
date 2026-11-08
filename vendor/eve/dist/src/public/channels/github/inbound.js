@@ -9,8 +9,7 @@ function githubContinuationToken(e) {
 }
 function shouldDispatchGitHubComment(e) {
   return (
-    !isIgnoredGitHubComment(e.body, e.author, e.botName) &&
-    extractGitHubCommentTrigger(e) !== null
+    !isIgnoredGitHubComment(e.body, e.author, e.botName) && extractGitHubCommentTrigger(e) !== null
   );
 }
 function extractGitHubCommentTrigger(e) {
@@ -28,8 +27,7 @@ function extractGitHubCommentTrigger(e) {
 }
 function parseGitHubWebhookEvent(e) {
   let t = decodePayload(e.body, e.contentType),
-    n =
-      readHeader(e.headers, `x-github-event`) ?? inferGitHubWebhookEventName(t);
+    n = readHeader(e.headers, `x-github-event`) ?? inferGitHubWebhookEventName(t);
   if (n === null) return null;
   let r = normalizeRepository(t.repository),
     i = normalizeUser(t.sender);
@@ -38,9 +36,7 @@ function parseGitHubWebhookEvent(e) {
     delivery: {
       event: n,
       hookId: readHeader(e.headers, `x-github-hook-id`) ?? readGitHubHookId(t),
-      id:
-        readHeader(e.headers, `x-github-delivery`) ??
-        inferGitHubDeliveryId(n, t),
+      id: readHeader(e.headers, `x-github-delivery`) ?? inferGitHubDeliveryId(n, t),
     },
     installationId: readInstallationId(t.installation),
     raw: t,
@@ -295,9 +291,7 @@ function readNullableString(e) {
 }
 function readPullRequestNumbers(t) {
   return Array.isArray(t)
-    ? t.flatMap((t) =>
-        isObject(t) && typeof t.number == `number` ? [t.number] : [],
-      )
+    ? t.flatMap((t) => (isObject(t) && typeof t.number == `number` ? [t.number] : []))
     : [];
 }
 function ciConversation(e) {

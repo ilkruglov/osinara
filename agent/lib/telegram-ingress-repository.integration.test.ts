@@ -83,7 +83,9 @@ describeWithDatabase("telegramIngressRepository", () => {
     await database().query(
       "UPDATE telegram_ingress_updates SET dispatch_started_at = now() - interval '31 minutes' WHERE update_id = 1101",
     );
-    await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toMatchObject([{ chatType: "private", updateId: "1101" }]);
+    await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toMatchObject([
+      { chatType: "private", updateId: "1101" },
+    ]);
     await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toEqual([]);
   });
 
@@ -96,11 +98,16 @@ describeWithDatabase("telegramIngressRepository", () => {
        ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until`,
     );
     try {
-      await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toBeNull();
+      await expect(
+        telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+      ).resolves.toBeNull();
       // A pause the controller left behind expires on its own.
-      await database().query("UPDATE deploy_turn_pause SET paused_until = now() - interval '1 second'");
-      await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST))
-        .resolves.toMatchObject({ updateId: "1201" });
+      await database().query(
+        "UPDATE deploy_turn_pause SET paused_until = now() - interval '1 second'",
+      );
+      await expect(
+        telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+      ).resolves.toMatchObject({ updateId: "1201" });
     } finally {
       await database().query("DELETE FROM deploy_turn_pause");
     }
@@ -112,7 +119,10 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(telegramIngressRepository.enqueue(update)).resolves.toBe("inserted");
     await expect(telegramIngressRepository.enqueue(update)).resolves.toBe("duplicate");
     await expect(
-      telegramIngressRepository.enqueue({ ...update, payload: { ...update.payload, forged: true } }),
+      telegramIngressRepository.enqueue({
+        ...update,
+        payload: { ...update.payload, forged: true },
+      }),
     ).rejects.toThrowError(/AGENT_TELEGRAM_UPDATE_CONFLICT/);
 
     const count = await database().query<{ count: string }>(
@@ -133,22 +143,51 @@ describeWithDatabase("telegramIngressRepository", () => {
     );
     const update = updateInput("1003", "telegram:group:-100-rich", "пост канала с фото");
 
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-rich", chatType: "supergroup", mediaKind: "native_photo", textFallback: true, updateId: update.updateId,
-    })).resolves.toBe(false);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-rich",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        textFallback: true,
+        updateId: update.updateId,
+      }),
+    ).resolves.toBe(false);
     await expect(telegramIngressRepository.enqueue(update)).resolves.toBe("inserted");
-    const ignored = await database().query("SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = $1", [update.updateId]);
+    const ignored = await database().query(
+      "SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = $1",
+      [update.updateId],
+    );
     expect(ignored.rowCount).toBe(0);
   });
 
   it("treats a redelivered rich post with its file as the duplicate of its stored text-only shape", async () => {
-    const blocks = [{ photo: [{ file_id: "p-redelivered", file_unique_id: "u" }], type: "photo" }, { text: "пост", type: "paragraph" }];
-    const withFile = { ...updateInput("1004", "telegram:group:-100-rich-again", "пост"), payload: { message: { chat: { id: -100 }, rich_message: { blocks } }, update_id: 1004 } };
-    const textOnly = { ...withFile, payload: { message: { chat: { id: -100 }, rich_message: { blocks: [{ text: "пост", type: "paragraph" }] } }, update_id: 1004 } };
+    const blocks = [
+      { photo: [{ file_id: "p-redelivered", file_unique_id: "u" }], type: "photo" },
+      { text: "пост", type: "paragraph" },
+    ];
+    const withFile = {
+      ...updateInput("1004", "telegram:group:-100-rich-again", "пост"),
+      payload: { message: { chat: { id: -100 }, rich_message: { blocks } }, update_id: 1004 },
+    };
+    const textOnly = {
+      ...withFile,
+      payload: {
+        message: {
+          chat: { id: -100 },
+          rich_message: { blocks: [{ text: "пост", type: "paragraph" }] },
+        },
+        update_id: 1004,
+      },
+    };
 
     await expect(telegramIngressRepository.enqueue(textOnly)).resolves.toBe("inserted");
     await expect(telegramIngressRepository.enqueue(withFile)).resolves.toBe("duplicate");
-    await expect(telegramIngressRepository.enqueue({ ...withFile, payload: { ...withFile.payload, update_id: 1005 } })).rejects.toMatchObject({ code: "AGENT_TELEGRAM_UPDATE_CONFLICT" });
+    await expect(
+      telegramIngressRepository.enqueue({
+        ...withFile,
+        payload: { ...withFile.payload, update_id: 1005 },
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_UPDATE_CONFLICT" });
   });
 
   it("keeps a rejected update tombstoned after the group becomes family-private", async () => {
@@ -163,21 +202,25 @@ describeWithDatabase("telegramIngressRepository", () => {
     );
     const update = updateInput("1002", "telegram:group:-100-policy", "повтор после смены зоны");
 
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-policy",
-      chatType: "supergroup",
-      mediaKind: "native_photo",
-      updateId: update.updateId,
-    })).resolves.toBe(false);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-policy",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        updateId: update.updateId,
+      }),
+    ).resolves.toBe(false);
     await database().query(
       "UPDATE telegram_groups SET type = 'family_private' WHERE telegram_chat_id = '-100-policy'",
     );
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-policy",
-      chatType: "supergroup",
-      mediaKind: "native_photo",
-      updateId: update.updateId,
-    })).resolves.toBe(false);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-policy",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        updateId: update.updateId,
+      }),
+    ).resolves.toBe(false);
     await expect(telegramIngressRepository.enqueue(update)).resolves.toBe("duplicate");
 
     const retained = await database().query<{ ignored: string; queued: string }>(
@@ -186,7 +229,9 @@ describeWithDatabase("telegramIngressRepository", () => {
          (SELECT count(*)::text FROM telegram_ingress_updates) AS queued`,
     );
     expect(retained.rows[0]).toEqual({ ignored: "1", queued: "0" });
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toBeNull();
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toBeNull();
   });
 
   it("accepts allowlisted static-image candidates and tombstones unsupported external media", async () => {
@@ -201,24 +246,30 @@ describeWithDatabase("telegramIngressRepository", () => {
       [family.rows[0]!.id],
     );
 
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-photo",
-      chatType: "supergroup",
-      mediaKind: "native_photo",
-      updateId: "1010",
-    })).resolves.toBe(true);
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-photo",
-      chatType: "supergroup",
-      mediaKind: "image_document_candidate",
-      updateId: "1011",
-    })).resolves.toBe(true);
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-photo",
-      chatType: "supergroup",
-      mediaKind: "unsupported_media",
-      updateId: "1014",
-    })).resolves.toBe(false);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-photo",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        updateId: "1010",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-photo",
+        chatType: "supergroup",
+        mediaKind: "image_document_candidate",
+        updateId: "1011",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-photo",
+        chatType: "supergroup",
+        mediaKind: "unsupported_media",
+        updateId: "1014",
+      }),
+    ).resolves.toBe(false);
 
     const ignored = await database().query<{ update_id: string }>(
       "SELECT update_id::text FROM telegram_ingress_ignored_updates ORDER BY update_id",
@@ -240,21 +291,25 @@ describeWithDatabase("telegramIngressRepository", () => {
       [family.rows[0]!.id],
     );
 
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-text-enabled",
-      chatType: "supergroup",
-      mediaKind: "text_document_candidate",
-      updateId: "1015",
-    })).resolves.toBe(true);
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-text-disabled",
-      chatType: "supergroup",
-      mediaKind: "text_document_candidate",
-      updateId: "1016",
-    })).resolves.toBe(false);
-    await expect(database().query(
-      "SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1016",
-    )).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-text-enabled",
+        chatType: "supergroup",
+        mediaKind: "text_document_candidate",
+        updateId: "1015",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-text-disabled",
+        chatType: "supergroup",
+        mediaKind: "text_document_candidate",
+        updateId: "1016",
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      database().query("SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1016"),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("tombstones a photo when any persisted external capability is malformed", async () => {
@@ -269,15 +324,17 @@ describeWithDatabase("telegramIngressRepository", () => {
       [family.rows[0]!.id],
     );
 
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-malformed-photo",
-      chatType: "supergroup",
-      mediaKind: "native_photo",
-      updateId: "1013",
-    })).resolves.toBe(false);
-    await expect(database().query(
-      "SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1013",
-    )).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-malformed-photo",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        updateId: "1013",
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      database().query("SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1013"),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("rechecks revoked external photo policy between receipt and drain", async () => {
@@ -292,12 +349,14 @@ describeWithDatabase("telegramIngressRepository", () => {
          'addressed_only', ARRAY['inspect_workspace_image'])`,
       [family.rows[0]!.id],
     );
-    await expect(telegramIngressRepository.acceptMedia({
-      chatId: "-100-revoked-photo",
-      chatType: "supergroup",
-      mediaKind: "native_photo",
-      updateId: "1012",
-    })).resolves.toBe(true);
+    await expect(
+      telegramIngressRepository.acceptMedia({
+        chatId: "-100-revoked-photo",
+        chatType: "supergroup",
+        mediaKind: "native_photo",
+        updateId: "1012",
+      }),
+    ).resolves.toBe(true);
 
     // Revocation after receipt must win at the live onMessage boundary before any remote download.
     await database().query(
@@ -326,10 +385,15 @@ describeWithDatabase("telegramIngressRepository", () => {
   it("claims only the oldest update per queue while another queue progresses", async () => {
     await telegramIngressRepository.enqueue(updateInput("2001", "telegram:private:101", "один"));
     await telegramIngressRepository.enqueue(updateInput("2002", "telegram:private:101", "два"));
-    await telegramIngressRepository.enqueue(updateInput("2003", "telegram:private:202", "другая очередь"));
+    await telegramIngressRepository.enqueue(
+      updateInput("2003", "telegram:private:202", "другая очередь"),
+    );
 
     const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
-    const independent = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const independent = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
     const blocked = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
 
     expect(first?.updateId).toBe("2001");
@@ -343,7 +407,9 @@ describeWithDatabase("telegramIngressRepository", () => {
       4,
     );
 
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toMatchObject({
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toMatchObject({
       updateId: "2002",
     });
   });
@@ -360,8 +426,12 @@ describeWithDatabase("telegramIngressRepository", () => {
     expect(wait).toBeGreaterThan(25_000);
     expect(wait).toBeLessThanOrEqual(30_000);
     // Past the cap the head is claimed whatever the chat is doing.
-    await database().query("UPDATE telegram_ingress_updates SET received_at = now() - interval '61 seconds' WHERE update_id = 2101");
-    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst))?.updateId).toBe("2101");
+    await database().query(
+      "UPDATE telegram_ingress_updates SET received_at = now() - interval '61 seconds' WHERE update_id = 2101",
+    );
+    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst))?.updateId).toBe(
+      "2101",
+    );
     expect(await telegramIngressRepository.heldPrivateChatReadyIn!(burst)).toBeNull();
   });
 
@@ -372,16 +442,24 @@ describeWithDatabase("telegramIngressRepository", () => {
     const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
 
     const tail = await telegramIngressRepository.listPendingAfter({
-      afterUpdateId: head!.updateId, limit: 1, queueId: head!.queueId,
+      afterUpdateId: head!.updateId,
+      limit: 1,
+      queueId: head!.queueId,
     });
     expect(tail.map((row) => (row.payload.message as { text: string }).text)).toEqual(["два"]);
     expect(tail[0]?.receivedAt).toBeInstanceOf(Date);
-    await expect(telegramIngressRepository.listPendingAfter({
-      afterUpdateId: head!.updateId, limit: 10, queueId: head!.queueId,
-    })).resolves.toHaveLength(2);
+    await expect(
+      telegramIngressRepository.listPendingAfter({
+        afterUpdateId: head!.updateId,
+        limit: 10,
+        queueId: head!.queueId,
+      }),
+    ).resolves.toHaveLength(2);
     // Reading the tail leases nothing: the next claim still takes the second message.
     await telegramIngressRepository.complete(head!.updateId, head!.leaseToken);
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toMatchObject({ updateId: "2202" });
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toMatchObject({ updateId: "2202" });
   });
 
   it("leases the accepted run behind a claimed head and leaves the rest pending", async () => {
@@ -403,11 +481,15 @@ describeWithDatabase("telegramIngressRepository", () => {
     expect(followers.map((claim) => claim.updateId)).toEqual(["2102", "2103"]);
     expect(new Set(followers.map((claim) => claim.leaseToken)).size).toBe(2);
     // The refused item stays pending behind the leased run and becomes the next head later.
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toBeNull();
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toBeNull();
     for (const claim of [head!, ...followers]) {
       await telegramIngressRepository.complete(claim.updateId, claim.leaseToken);
     }
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toMatchObject({
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toMatchObject({
       updateId: "2104",
     });
   });
@@ -428,15 +510,19 @@ describeWithDatabase("telegramIngressRepository", () => {
     // A stale boundary cannot complete ingress unless its cursor update commits in the same transaction.
     await telegramIngressRepository.enqueue(updateInput("2102", continuationKey, "второй turn"));
     const second = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
-    await expect(telegramIngressRepository.completeWithSession(
-      second!.updateId,
-      second!.leaseToken,
-      sessionId,
-      3,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_SESSION_CURSOR_REGRESSION/u);
-    await expect(database().query<{ status: string }>(
-      "SELECT status FROM telegram_ingress_updates WHERE update_id = 2102",
-    )).resolves.toMatchObject({ rows: [{ status: "processing" }] });
+    await expect(
+      telegramIngressRepository.completeWithSession(
+        second!.updateId,
+        second!.leaseToken,
+        sessionId,
+        3,
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_SESSION_CURSOR_REGRESSION/u);
+    await expect(
+      database().query<{ status: string }>(
+        "SELECT status FROM telegram_ingress_updates WHERE update_id = 2102",
+      ),
+    ).resolves.toMatchObject({ rows: [{ status: "processing" }] });
     await expect(telegramIngressRepository.sessionEventStreamCursor(sessionId)).resolves.toBe(4);
 
     await telegramIngressRepository.completeWithSession(
@@ -457,7 +543,10 @@ describeWithDatabase("telegramIngressRepository", () => {
       [first!.updateId],
     );
 
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
 
     expect(reclaimed?.updateId).toBe(first?.updateId);
     expect(reclaimed?.leaseToken).not.toBe(first?.leaseToken);
@@ -473,14 +562,21 @@ describeWithDatabase("telegramIngressRepository", () => {
 
   it("releases every live processing lease so a restarted process can reclaim at once", async () => {
     await telegramIngressRepository.enqueue(updateInput("3101", "telegram:private:101", "restart"));
-    await telegramIngressRepository.enqueue(updateInput("3102", "telegram:private:101", "queued behind"));
+    await telegramIngressRepository.enqueue(
+      updateInput("3102", "telegram:private:101", "queued behind"),
+    );
     const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
     expect(first?.updateId).toBe("3101");
-    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toBeNull();
+    await expect(
+      telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST),
+    ).resolves.toBeNull();
 
     await expect(telegramIngressRepository.releaseStaleLeases()).resolves.toBe(1);
 
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
     expect(reclaimed?.updateId).toBe("3101");
     expect(reclaimed?.attemptCount).toBe(2);
     expect(reclaimed?.leaseToken).not.toBe(first?.leaseToken);
@@ -506,7 +602,10 @@ describeWithDatabase("telegramIngressRepository", () => {
       message: "Передача сообщения в Eve была прервана. Обработка будет запущена повторно",
     });
 
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
     expect(reclaimed).toMatchObject({
       deliveryContinuationKey: "telegram:group:new",
       queueId: first!.queueId,
@@ -535,7 +634,10 @@ describeWithDatabase("telegramIngressRepository", () => {
       code: "AGENT_TELEGRAM_DELIVERY_INTERRUPTED",
       message: "Передача сообщения в Eve была прервана. Обработка будет запущена повторно",
     });
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
 
     expect(reclaimed).toMatchObject({
       transcript: "Купи молоко",
@@ -547,10 +649,7 @@ describeWithDatabase("telegramIngressRepository", () => {
       },
     });
     await expect(
-      telegramIngressRepository.beginVoiceTranscription(
-        reclaimed!.updateId,
-        reclaimed!.leaseToken,
-      ),
+      telegramIngressRepository.beginVoiceTranscription(reclaimed!.updateId, reclaimed!.leaseToken),
     ).resolves.toBe("completed");
     await expect(
       telegramIngressRepository.saveVoiceTranscript(
@@ -572,25 +671,30 @@ describeWithDatabase("telegramIngressRepository", () => {
       code: "AGENT_PROCESS_INTERRUPTED",
       message: "Процесс был прерван",
     });
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
 
     await expect(
-      telegramIngressRepository.beginVoiceTranscription(
-        reclaimed!.updateId,
-        reclaimed!.leaseToken,
-      ),
+      telegramIngressRepository.beginVoiceTranscription(reclaimed!.updateId, reclaimed!.leaseToken),
     ).rejects.toThrowError(/AGENT_VOICE_TRANSCRIPTION_RECOVERY_REQUIRED/);
   });
 
   it("does not repeat an Eve dispatch after its durable start marker", async () => {
-    await telegramIngressRepository.enqueue(updateInput("6001", "telegram:private:101", "действие"));
+    await telegramIngressRepository.enqueue(
+      updateInput("6001", "telegram:private:101", "действие"),
+    );
     const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
     await telegramIngressRepository.beginDispatch(first!.updateId, first!.leaseToken);
     await telegramIngressRepository.release(first!.updateId, first!.leaseToken, {
       code: "AGENT_PROCESS_INTERRUPTED",
       message: "Процесс был прерван",
     });
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
 
     await expect(
       telegramIngressRepository.beginDispatch(reclaimed!.updateId, reclaimed!.leaseToken),
@@ -605,7 +709,10 @@ describeWithDatabase("telegramIngressRepository", () => {
       code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING",
       message: "Сессия ещё не готова",
     });
-    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    const reclaimed = await telegramIngressRepository.claimNext(
+      LEASE_MILLISECONDS,
+      NO_PRIVATE_BURST,
+    );
 
     expect(reclaimed?.updateId).toBe("6002");
     expect(reclaimed?.attemptCount).toBe(2);

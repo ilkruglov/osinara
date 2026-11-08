@@ -17,7 +17,9 @@ describe("ingress stall alerts", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const deliver = vi.fn(async () => undefined);
     const sent = await dispatchIngressStallAlerts({
-      claim: async () => [{ chatType: "private", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052827" }],
+      claim: async () => [
+        { chatType: "private", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052827" },
+      ],
       deliver,
       now: () => new Date("2026-10-01T23:02:00Z"),
       recipients: async () => [{ familyId: "f", ownerTelegramUserId: "101" }],
@@ -33,21 +35,31 @@ describe("ingress stall alerts", () => {
   it("sends nothing when no message is stalled", async () => {
     const deliver = vi.fn();
     const recipients = vi.fn();
-    await expect(dispatchIngressStallAlerts({ claim: async () => [], deliver, recipients })).resolves.toBe(0);
+    await expect(
+      dispatchIngressStallAlerts({ claim: async () => [], deliver, recipients }),
+    ).resolves.toBe(0);
     expect(recipients).not.toHaveBeenCalled();
     expect(deliver).not.toHaveBeenCalled();
   });
 
   it("skips an owner whose chat is unreachable and still tells the next one", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const deliver = vi.fn()
+    const deliver = vi
+      .fn()
       .mockRejectedValueOnce(new TelegramRecipientUnreachableError("101", "blocked"))
       .mockResolvedValueOnce(undefined);
-    await expect(dispatchIngressStallAlerts({
-      claim: async () => [{ chatType: "group", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052828" }],
-      deliver,
-      recipients: async () => [{ familyId: "f", ownerTelegramUserId: "101" }, { familyId: "g", ownerTelegramUserId: "202" }],
-    })).resolves.toBe(1);
+    await expect(
+      dispatchIngressStallAlerts({
+        claim: async () => [
+          { chatType: "group", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052828" },
+        ],
+        deliver,
+        recipients: async () => [
+          { familyId: "f", ownerTelegramUserId: "101" },
+          { familyId: "g", ownerTelegramUserId: "202" },
+        ],
+      }),
+    ).resolves.toBe(1);
     expect(deliver).toHaveBeenLastCalledWith(expect.objectContaining({ chatId: "202" }));
   });
 
@@ -60,15 +72,22 @@ describe("ingress stall alerts", () => {
     const release = vi.fn(async () => undefined);
     const quietUntil = new Map<string, number>();
     let at = new Date("2026-10-01T23:02:00Z");
-    const dispatch = () => dispatchIngressStallAlerts({
-      claim: async () => [{ chatType: "private", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052829" }],
-      deliver,
-      now: () => at,
-      quietUntil,
-      recipients: async () => [{ familyId: "f", ownerTelegramUserId: "101" }],
-      release,
-      unreachable: async () => "blocked",
-    });
+    const dispatch = () =>
+      dispatchIngressStallAlerts({
+        claim: async () => [
+          {
+            chatType: "private",
+            receivedAt: new Date("2026-10-01T22:22:00Z"),
+            updateId: "85052829",
+          },
+        ],
+        deliver,
+        now: () => at,
+        quietUntil,
+        recipients: async () => [{ familyId: "f", ownerTelegramUserId: "101" }],
+        release,
+        unreachable: async () => "blocked",
+      });
 
     await dispatch();
     at = new Date("2026-10-01T23:12:00Z");
@@ -79,7 +98,9 @@ describe("ingress stall alerts", () => {
     expect(errors).toHaveBeenCalledTimes(1);
     expect(warnings).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(warnings.mock.calls[0]?.[0]))).toEqual({
-      code: "AGENT_TELEGRAM_INGRESS_STALL_ALERT_DEFERRED", owners: 1, updateId: "85052829",
+      code: "AGENT_TELEGRAM_INGRESS_STALL_ALERT_DEFERRED",
+      owners: 1,
+      updateId: "85052829",
     });
 
     at = new Date("2026-10-02T00:03:00Z");
@@ -94,9 +115,14 @@ describe("ingress stall alerts", () => {
     const deliver = vi.fn(async () => undefined);
     const release = vi.fn();
     await dispatchIngressStallAlerts({
-      claim: async () => [{ chatType: "group", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052830" }],
+      claim: async () => [
+        { chatType: "group", receivedAt: new Date("2026-10-01T22:22:00Z"), updateId: "85052830" },
+      ],
       deliver,
-      recipients: async () => [{ familyId: "f", ownerTelegramUserId: "101" }, { familyId: "g", ownerTelegramUserId: "202" }],
+      recipients: async () => [
+        { familyId: "f", ownerTelegramUserId: "101" },
+        { familyId: "g", ownerTelegramUserId: "202" },
+      ],
       release,
       unreachable: async (chatId) => (chatId === "101" ? "blocked" : null),
     });

@@ -3,17 +3,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { normalizeEsmImportSpecifier } from "#internal/application/import-specifier.js";
 const CACHED_CHANNEL_PREFIX = `eve-cached-channel:`,
-  RESOLVE_EXTENSIONS = [
-    `.ts`,
-    `.tsx`,
-    `.mts`,
-    `.cts`,
-    `.js`,
-    `.jsx`,
-    `.mjs`,
-    `.cjs`,
-    `.json`,
-  ];
+  RESOLVE_EXTENSIONS = [`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.json`];
 function createGenerationPackageBoundaryPlugin(e) {
   return {
     name: `eve-generation-package-boundary`,
@@ -55,9 +45,7 @@ function createRuntimeLoaderPackageBoundaryPlugin(e) {
           ),
         };
       let s =
-        i === void 0 ||
-        i.startsWith(`\0`) ||
-        i.startsWith(`eve-cached-channel:`)
+        i === void 0 || i.startsWith(`\0`) || i.startsWith(`eve-cached-channel:`)
           ? void 0
           : resolve(i);
       if (s !== void 0 && isPathInsideOrEqual(toCanonicalPath(s), t)) {
@@ -82,10 +70,7 @@ function createDistributionPackageBoundaryPlugin(t) {
         if (
           e !== null &&
           typeof e.id == `string` &&
-          !isPathInsideOrEqual(
-            toCanonicalPath(e.id),
-            toCanonicalPath(t.packageRoot),
-          )
+          !isPathInsideOrEqual(toCanonicalPath(e.id), toCanonicalPath(t.packageRoot))
         ) {
           let t = nearestPackageName(e.id);
           if (t !== void 0 && !r.has(t))
@@ -178,9 +163,7 @@ function isPathImport(e) {
 function isFrameworkRuntimeImport(e, t) {
   return e === `eve` || e.startsWith(`eve/`)
     ? !0
-    : e === `workflow` ||
-        e.startsWith(`workflow/`) ||
-        e.startsWith(`@workflow/`)
+    : e === `workflow` || e.startsWith(`workflow/`) || e.startsWith(`@workflow/`)
       ? t === void 0 || !isNodeModulesPath(t)
       : !1;
 }

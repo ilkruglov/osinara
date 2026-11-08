@@ -7,8 +7,7 @@ function formatChangeDetectedLogLine(e, t) {
 const CHANGE_DETECTED_PATTERN =
     /^\[eve:dev\] change detected \(\d+ events?: (.+)\), rebuilding authored artifacts\.\.\.$/u,
   MORE_EVENTS_PATTERN = /^\+(\d+) more$/u,
-  REBUILD_FAILED_PATTERN =
-    /^\[eve:dev\] rebuild (?:failed|queue error): (.+)$/u;
+  REBUILD_FAILED_PATTERN = /^\[eve:dev\] rebuild (?:failed|queue error): (.+)$/u;
 function parseDevRebuildLogLine(e) {
   if (e === `[eve:dev] authored artifacts updated.`) return { kind: `rebuilt` };
   if (e === `[eve:dev] structural change detected, reloading Nitro worker...`)
@@ -33,9 +32,7 @@ function parseDevRebuildLogLine(e) {
 }
 function formatChangeEventList(e, t) {
   let n = `${t.length} event${t.length === 1 ? `` : `s`}`,
-    r = t
-      .slice(0, 6)
-      .map((t) => `${t.event} ${formatChangeEventPath(e, t.path)}`),
+    r = t.slice(0, 6).map((t) => `${t.event} ${formatChangeEventPath(e, t.path)}`),
     i = t.length - r.length;
   return (i > 0 && r.push(`+${i} more`), `${n}: ${r.join(`, `)}`);
 }

@@ -41,10 +41,10 @@ export const googleIntegrationRepository = {
     try {
       await client.query("BEGIN");
       // A transaction lock makes the pending-state check atomic across concurrent connect calls.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [auth.workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        auth.workspaceId,
+        GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED,
+      ]);
       await assertGoogleWorkspaceAccess(client, auth, true);
       await client.query(
         `UPDATE oauth_authorizations
@@ -135,13 +135,7 @@ export const googleIntegrationRepository = {
          WHERE id = $1 AND family_id = $2 AND actor_user_id = $3
            AND workspace_id = $4 AND provider = $5 AND status = 'pending'
            AND delivery_started_at IS NOT NULL`,
-        [
-          authorizationId,
-          auth.familyId,
-          auth.userId,
-          auth.workspaceId,
-          GOOGLE_WORKSPACE_PROVIDER,
-        ],
+        [authorizationId, auth.familyId, auth.userId, auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
       );
       if (completed.rowCount !== 1) {
         throw new AppError(
@@ -191,7 +185,7 @@ export const googleIntegrationRepository = {
        RETURNING oauth_row.id AS authorization_id, oauth_row.family_id,
                  oauth_row.actor_user_id, oauth_row.workspace_id,
                  oauth_row.telegram_chat_id, workspace.scope`,
-       [googleOAuthStateHash(rawState), now, GOOGLE_WORKSPACE_PROVIDER],
+      [googleOAuthStateHash(rawState), now, GOOGLE_WORKSPACE_PROVIDER],
     );
     const claimed = result.rows[0];
     if (!claimed) {
@@ -216,19 +210,26 @@ export const googleIntegrationRepository = {
     materializeProfile: () => Promise<void>,
   ): Promise<GoogleIntegrationAccount> {
     if (!input.scopes.length) {
-      throw new AppError("AGENT_GOOGLE_SCOPE_MISSING", "Google не предоставил разрешения Workspace");
+      throw new AppError(
+        "AGENT_GOOGLE_SCOPE_MISSING",
+        "Google не предоставил разрешения Workspace",
+      );
     }
     const refresh = encryptGoogleToken(input.refreshToken, input.encryptionKey);
     const access = encryptGoogleToken(input.accessToken, input.encryptionKey);
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await assertGoogleWorkspaceAccess(client, {
-        familyId: claim.familyId,
-        scope: claim.scope,
-        userId: claim.actorUserId,
-        workspaceId: claim.workspaceId,
-      }, true);
+      await assertGoogleWorkspaceAccess(
+        client,
+        {
+          familyId: claim.familyId,
+          scope: claim.scope,
+          userId: claim.actorUserId,
+          workspaceId: claim.workspaceId,
+        },
+        true,
+      );
       const authorization = await client.query(
         `SELECT 1 FROM oauth_authorizations
          WHERE id = $1 AND family_id = $2 AND actor_user_id = $3 AND workspace_id = $4

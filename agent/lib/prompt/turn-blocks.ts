@@ -81,10 +81,12 @@ const MODE_UNAVAILABLE_BLOCK = `
 
 function logBlockFailure(code: string, error: unknown): void {
   // Prompt assembly must not fail the turn, so the cause stays in logs with a stable code.
-  console.error(JSON.stringify({
-    code,
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  console.error(
+    JSON.stringify({
+      code,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
 }
 
 async function effectiveExternalCapabilities(
@@ -93,7 +95,11 @@ async function effectiveExternalCapabilities(
   loadGrantedSkills: GrantedSkillLoader | undefined,
   scheduledRun: boolean,
 ): Promise<EffectiveExternalCapabilities> {
-  const none: EffectiveExternalCapabilities = { authoredSkills: [], capabilities: new Set(), includeApplicationCore: false };
+  const none: EffectiveExternalCapabilities = {
+    authoredSkills: [],
+    capabilities: new Set(),
+    includeApplicationCore: false,
+  };
   const policy = resolveExternalGroupToolPolicy(auth);
   if (!policy.restricted) return none;
   const identity = resolveExternalGroupPolicyIdentity(auth);
@@ -154,7 +160,8 @@ export function createModeBlockResolver(dependencies: {
     // A scheduled run has no inbound message to react to, a channel-authored turn keeps its
     // text-only surface, and an ephemeral whisper cannot be reacted to, so none of them requests
     // a reaction policy.
-    const reactionsPossible = !scheduledRun && !whisper && !isTelegramChannelSession(ctx.session.auth);
+    const reactionsPossible =
+      !scheduledRun && !whisper && !isTelegramChannelSession(ctx.session.auth);
     let reactionPolicy: TelegramReactionPolicy | null = null;
     const telegramChatId = reactionsPossible ? verifiedTelegramChatId(ctx.session.auth) : null;
     if (telegramChatId !== null) {
@@ -190,13 +197,17 @@ export function createModeBlockResolver(dependencies: {
       authoredSkills: effective.authoredSkills,
       // A whisper is described with the reading capabilities its tool surface keeps.
       capabilities: whisper
-        ? new Set([...effective.capabilities].filter((name) => WHISPER_TOOL_NAMES.includes(name as never)))
+        ? new Set(
+            [...effective.capabilities].filter((name) =>
+              WHISPER_TOOL_NAMES.includes(name as never),
+            ),
+          )
         : effective.capabilities,
       environment: "external",
       includeApplicationCore: effective.includeApplicationCore,
       reactionPolicy,
-      scheduledHistory: effective.includeApplicationCore &&
-        scheduledGroupHistoryAccess(ctx.session.auth) !== null,
+      scheduledHistory:
+        effective.includeApplicationCore && scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       scheduledRun,
     });
   }
@@ -223,8 +234,11 @@ export function createPreferenceBlockResolver(dependencies: {
 
 export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
-  loadGrantedSkills: async (identity) => (await authoredSkillGrantRepository.packagesForGroup(identity))
-    .map((pkg) => ({ description: pkg.description, name: pkg.name })),
+  loadGrantedSkills: async (identity) =>
+    (await authoredSkillGrantRepository.packagesForGroup(identity)).map((pkg) => ({
+      description: pkg.description,
+      name: pkg.name,
+    })),
   loadReactionPolicy: async (telegramChatId) => {
     const cached = await telegramReactionPolicyRepository.read(telegramChatId);
     if (cached === null) return null;

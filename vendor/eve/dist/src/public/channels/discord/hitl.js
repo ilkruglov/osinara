@@ -25,8 +25,7 @@ function renderInputRequestComponents(e) {
                   value: truncate(e.id, 100),
                 };
                 return (
-                  e.description !== void 0 &&
-                    (t.description = truncate(e.description, 100)),
+                  e.description !== void 0 && (t.description = truncate(e.description, 100)),
                   t
                 );
               }),
@@ -55,10 +54,9 @@ function renderInputRequestComponents(e) {
             {
               components: [
                 {
-                  custom_id: encodeHitlCustomId(
-                    DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX,
-                    { requestId: e.requestId },
-                  ),
+                  custom_id: encodeHitlCustomId(DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX, {
+                    requestId: e.requestId,
+                  }),
                   label: `Type your answer`,
                   style: 1,
                   type: DISCORD_COMPONENT_TYPE.BUTTON,
@@ -70,10 +68,7 @@ function renderInputRequestComponents(e) {
         : [];
 }
 function buildFreeformModalResponse(n) {
-  let a = decodeHitlCustomId(
-    n.customId,
-    DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX,
-  );
+  let a = decodeHitlCustomId(n.customId, DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX);
   if (!a) throw Error(`discordChannel: freeform custom_id is malformed.`);
   return {
     data: {
@@ -108,25 +103,19 @@ function isDiscordFreeformComponent(e) {
 function deriveComponentInputResponses(e) {
   let t = decodeHitlCustomId(e.customId, DISCORD_HITL_CUSTOM_ID_PREFIX);
   if (!t) return [];
-  if (t.optionId !== void 0)
-    return [{ optionId: t.optionId, requestId: t.requestId }];
+  if (t.optionId !== void 0) return [{ optionId: t.optionId, requestId: t.requestId }];
   let r = e.values[0];
   return r === void 0 ? [] : [{ optionId: r, requestId: t.requestId }];
 }
 function deriveModalInputResponses(e) {
-  let t = decodeHitlCustomId(
-      e.customId,
-      DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX,
-    ),
+  let t = decodeHitlCustomId(e.customId, DISCORD_HITL_FREEFORM_CUSTOM_ID_PREFIX),
     n = e.textInputs[DISCORD_HITL_FREEFORM_TEXT_INPUT_ID];
   return !t || n === void 0 ? [] : [{ requestId: t.requestId, text: n }];
 }
 function encodeHitlCustomId(e, t) {
   let n = `${e}${Buffer.from(JSON.stringify(t), `utf8`).toString(`base64url`)}`;
   if (n.length > 100)
-    throw Error(
-      `discordChannel: HITL custom_id exceeded Discord's 100-character limit.`,
-    );
+    throw Error(`discordChannel: HITL custom_id exceeded Discord's 100-character limit.`);
   return n;
 }
 function decodeHitlCustomId(e, t) {

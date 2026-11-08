@@ -21,25 +21,16 @@ async function runDeployFlow(t) {
   let { appRoot: n, prompter: r, interactive: i, signal: a } = t,
     o = { detectDeployment, inspectApplication, runLoginFlow, ...t.deps };
   try {
-    let e = (await o.inspectApplication(n)).compiledState?.manifest.config.model
-      ?.routing;
+    let e = (await o.inspectApplication(n)).compiledState?.manifest.config.model?.routing;
     if (isChatGptModelRouting(e)) return { kind: `local-model` };
   } catch {}
-  let s = await withSpinner(
-      r,
-      `Checking the current Vercel link...`,
-      async () => {
-        let e = await o.detectDeployment(n, { signal: a });
-        return (a?.throwIfAborted(), projectResolutionFromDeployment(e));
-      },
-    ),
+  let s = await withSpinner(r, `Checking the current Vercel link...`, async () => {
+      let e = await o.detectDeployment(n, { signal: a });
+      return (a?.throwIfAborted(), projectResolutionFromDeployment(e));
+    }),
     c = isProjectResolved(s);
   if (!c && !i) return { kind: `needs-link` };
-  if (
-    !c &&
-    (await o.runLoginFlow({ appRoot: n, prompter: r, signal: a })).kind ===
-      `cancelled`
-  )
+  if (!c && (await o.runLoginFlow({ appRoot: n, prompter: r, signal: a })).kind === `cancelled`)
     return { kind: `cancelled` };
   let l = inProjectSetupState(n, s, { deploymentPending: !0 }),
     u = c

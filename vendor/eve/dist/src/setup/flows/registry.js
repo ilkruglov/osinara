@@ -83,9 +83,7 @@ function itemsForCategory(e, t) {
   let n = categoryFor(t);
   return n === void 0
     ? e
-    : e.filter(
-        (e) => e.address.startsWith(n.prefix) || e.name.startsWith(n.prefix),
-      );
+    : e.filter((e) => e.address.startsWith(n.prefix) || e.name.startsWith(n.prefix));
 }
 function stringArray(e) {
   return Array.isArray(e) ? e.filter((e) => typeof e == `string`) : [];
@@ -119,26 +117,20 @@ function itemDetails(e, t) {
   let i = t.envVars;
   if (typeof i == `object` && i && !Array.isArray(i)) {
     let e = Object.keys(i);
-    e.length > 0 &&
-      n.push({ label: `Environment`, value: summarizeDetails(e) });
+    e.length > 0 && n.push({ label: `Environment`, value: summarizeDetails(e) });
   }
   let a = (Array.isArray(t.files) ? t.files : []).flatMap((e) => {
     if (typeof e != `object` || !e || Array.isArray(e)) return [];
     let t = e.target;
     return typeof t == `string` ? [t] : [];
   });
-  return (
-    a.length > 0 && n.push({ label: `Files`, value: summarizeDetails(a) }),
-    n
-  );
+  return (a.length > 0 && n.push({ label: `Files`, value: summarizeDetails(a) }), n);
 }
 async function inspectItem(e, t, n, r, a, o) {
   let s =
     a ??
     manifestRecord(
-      await withSpinner(e, `Loading registry item…`, () =>
-        t.getRegistryItemManifest(n, r.address),
-      ),
+      await withSpinner(e, `Loading registry item…`, () => t.getRegistryItemManifest(n, r.address)),
     );
   for (;;) {
     let i = {
@@ -172,9 +164,7 @@ async function inspectItem(e, t, n, r, a, o) {
 }
 async function resolveAddressItem(e, t, n, r) {
   let a = manifestRecord(
-      await withSpinner(e, `Loading registry item…`, () =>
-        t.getRegistryItemManifest(n, r),
-      ),
+      await withSpinner(e, `Loading registry item…`, () => t.getRegistryItemManifest(n, r)),
     ),
     o = {
       address: r,
@@ -194,11 +184,9 @@ async function runRegistryFlow(c) {
     c.deps.installRegistryItem === void 0) &&
     (l = await import(`#cli/commands/registry.js`));
   let u = {
-      browseRegistryCatalog:
-        c.deps?.browseRegistryCatalog ?? l.browseRegistryCatalog,
+      browseRegistryCatalog: c.deps?.browseRegistryCatalog ?? l.browseRegistryCatalog,
       detectDeployment: c.deps?.detectDeployment ?? detectDeployment,
-      getRegistryItemManifest:
-        c.deps?.getRegistryItemManifest ?? l.getRegistryItemManifest,
+      getRegistryItemManifest: c.deps?.getRegistryItemManifest ?? l.getRegistryItemManifest,
       installRegistryItem: c.deps?.installRegistryItem ?? l.installRegistryItem,
       runDeployFlow: c.deps?.runDeployFlow ?? runDeployFlow,
     },
@@ -242,8 +230,7 @@ async function runRegistryFlow(c) {
       let p = l.startsWith(ADDRESS_PREFIX)
         ? await resolveAddressItem(c.prompter, u, c.appRoot, l.slice(8))
         : { item: n[Number(l.slice(5))] };
-      if (p.item === void 0)
-        throw Error(`The selected registry item is no longer available.`);
+      if (p.item === void 0) throw Error(`The selected registry item is no longer available.`);
       let m = await inspectItem(
         c.prompter,
         u,

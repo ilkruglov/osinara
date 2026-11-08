@@ -35,14 +35,12 @@ export function isInternalTokenAuthorized(presented: string | null, expected: st
   if (presented === null) return false;
   const expectedBytes = Buffer.from(expected);
   const presentedBytes = Buffer.from(presented);
-  return expectedBytes.length === presentedBytes.length &&
-    timingSafeEqual(expectedBytes, presentedBytes);
+  return (
+    expectedBytes.length === presentedBytes.length && timingSafeEqual(expectedBytes, presentedBytes)
+  );
 }
 
-export function createApprovalTimeoutSweep(dependencies: {
-  fetch: typeof fetch;
-  token(): string;
-}) {
+export function createApprovalTimeoutSweep(dependencies: { fetch: typeof fetch; token(): string }) {
   return async function sweep(): Promise<void> {
     // Required config fails fast: a missing internal token must surface, not silently disable
     // the only mechanism that unfreezes a chat waiting on an unanswered confirmation.
@@ -64,10 +62,12 @@ export function createApprovalTimeoutSweep(dependencies: {
       }
     } catch (error) {
       // The minute schedule is the boundary: report the cycle and let the next minute retry.
-      console.error(JSON.stringify({
-        code: "AGENT_APPROVAL_TIMEOUT_SWEEP_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_APPROVAL_TIMEOUT_SWEEP_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   };
 }

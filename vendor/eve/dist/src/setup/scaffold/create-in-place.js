@@ -21,14 +21,10 @@ function isSharedMiseEntry(e) {
     n = t.at(-1),
     r = t.slice(1, -1);
   return (
-    t[0] === `mise` &&
-    (n === `toml` || n === `lock`) &&
-    r.every((e) => e !== `` && e !== `local`)
+    t[0] === `mise` && (n === `toml` || n === `lock`) && r.every((e) => e !== `` && e !== `local`)
   );
 }
 function blockingCreateInPlaceEntries(t) {
-  return t.filter(
-    (t) => !ALLOWED_CREATE_IN_PLACE_ENTRIES.has(t) && !isSharedMiseEntry(t),
-  );
+  return t.filter((t) => !ALLOWED_CREATE_IN_PLACE_ENTRIES.has(t) && !isSharedMiseEntry(t));
 }
 export { blockingCreateInPlaceEntries };

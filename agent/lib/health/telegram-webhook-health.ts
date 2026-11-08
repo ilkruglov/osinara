@@ -23,16 +23,20 @@ const ERROR_MESSAGE_MAX_LENGTH = 200;
 
 export type TelegramWebhookHealth =
   | {
-    readonly lastErrorAt: Date | null;
-    readonly lastErrorMessage: string | null;
-    readonly pendingUpdateCount: number;
-    readonly status: "read";
-    readonly url: string;
-  }
+      readonly lastErrorAt: Date | null;
+      readonly lastErrorMessage: string | null;
+      readonly pendingUpdateCount: number;
+      readonly status: "read";
+      readonly url: string;
+    }
   | { readonly status: "unreadable" };
 
 const MOSCOW = new Intl.DateTimeFormat("ru-RU", {
-  day: "numeric", hour: "2-digit", minute: "2-digit", month: "long", timeZone: "Europe/Moscow",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  month: "long",
+  timeZone: "Europe/Moscow",
 });
 
 export async function readTelegramWebhookHealth(input: {
@@ -53,7 +57,9 @@ export async function readTelegramWebhookHealth(input: {
       url: info.url,
     };
   } catch (error) {
-    return unreadable(error instanceof AppError ? error.code : "AGENT_TELEGRAM_WEBHOOK_INFO_UNAVAILABLE");
+    return unreadable(
+      error instanceof AppError ? error.code : "AGENT_TELEGRAM_WEBHOOK_INFO_UNAVAILABLE",
+    );
   }
 }
 
@@ -62,16 +68,23 @@ function unreadable(reason: string): TelegramWebhookHealth {
   return { status: "unreadable" };
 }
 
-export function formatTelegramWebhookHealth(health: TelegramWebhookHealth | null, now: Date): string | null {
+export function formatTelegramWebhookHealth(
+  health: TelegramWebhookHealth | null,
+  now: Date,
+): string | null {
   if (health === null) return null;
   if (health.status === "unreadable") return "Вебхук Telegram: не удалось проверить вебхук.";
   if (health.url === "") return "Вебхук Telegram не установлен: бот не получает сообщений.";
-  const freshError = health.lastErrorAt !== null &&
+  const freshError =
+    health.lastErrorAt !== null &&
     now.getTime() - health.lastErrorAt.getTime() <= TELEGRAM_WEBHOOK_ERROR_WINDOW_MILLISECONDS;
   if (health.pendingUpdateCount <= TELEGRAM_WEBHOOK_PENDING_ALERT && !freshError) return null;
-  const error = freshError && health.lastErrorAt !== null
-    ? `, последняя ошибка доставки ${MOSCOW.format(health.lastErrorAt)}` +
-      (health.lastErrorMessage === null ? "" : `: ${health.lastErrorMessage.slice(0, ERROR_MESSAGE_MAX_LENGTH)}`)
-    : "";
+  const error =
+    freshError && health.lastErrorAt !== null
+      ? `, последняя ошибка доставки ${MOSCOW.format(health.lastErrorAt)}` +
+        (health.lastErrorMessage === null
+          ? ""
+          : `: ${health.lastErrorMessage.slice(0, ERROR_MESSAGE_MAX_LENGTH)}`)
+      : "";
   return `Вебхук Telegram: ожидающих апдейтов ${health.pendingUpdateCount}${error}.`;
 }

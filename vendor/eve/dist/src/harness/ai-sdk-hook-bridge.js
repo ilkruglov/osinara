@@ -8,10 +8,7 @@ function createAiSdkHookBridge(i, a, o = directRunInContext, s) {
   let c = {
     capturesContent: a.capturesContent,
     modelKeys: new Map(),
-    runtimeContext:
-      s !== void 0 && Object.keys(s).length > 0
-        ? Object.freeze({ ...s })
-        : void 0,
+    runtimeContext: s !== void 0 && Object.keys(s).length > 0 ? Object.freeze({ ...s }) : void 0,
     scope: i,
     toolKeys: new Map(),
   };
@@ -36,9 +33,7 @@ function createAiSdkHookBridge(i, a, o = directRunInContext, s) {
     },
     executeLanguageModelCall({ callId: e, execute: t }) {
       let n = c.modelKeys.get(e);
-      return n === void 0
-        ? t()
-        : o({ idempotencyKey: n, scope: i, type: `model.call` }, t);
+      return n === void 0 ? t() : o({ idempotencyKey: n, scope: i, type: `model.call` }, t);
     },
     async onLanguageModelCallEnd(e) {
       let t = c.modelKeys.get(e.callId);
@@ -62,20 +57,14 @@ function createAiSdkHookBridge(i, a, o = directRunInContext, s) {
       );
     },
     async onToolExecutionStart(e) {
-      let t = toolCallIdempotencyKey(
-        c.scope,
-        e.toolCall.toolCallId,
-        c.stepNumber ?? 0,
-      );
+      let t = toolCallIdempotencyKey(c.scope, e.toolCall.toolCallId, c.stepNumber ?? 0);
       c.toolKeys.set(e.toolCall.toolCallId, t);
       let r = toToolCallStarted(c, t, e);
       await a.publish(r);
     },
     executeTool({ toolCallId: e, execute: t }) {
       let n = c.toolKeys.get(e);
-      return n === void 0
-        ? t()
-        : o({ idempotencyKey: n, scope: i, type: `tool.call` }, t);
+      return n === void 0 ? t() : o({ idempotencyKey: n, scope: i, type: `tool.call` }, t);
     },
     async onToolExecutionEnd(e) {
       let t = e.toolCall.toolCallId,
@@ -230,9 +219,7 @@ function toToolCallCompleted(e, t, n) {
 }
 function toToolOutput(e, t) {
   return e.type === `tool-result`
-    ? Object.freeze(
-        t ? { output: e.output, type: `result` } : { type: `result` },
-      )
+    ? Object.freeze(t ? { output: e.output, type: `result` } : { type: `result` })
     : Object.freeze(t ? { error: e.error, type: `error` } : { type: `error` });
 }
 export { createAiSdkHookBridge };

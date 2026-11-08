@@ -37,8 +37,7 @@ export function createStreamer(pool, drizzle) {
     await pool.query("SELECT pg_notify($1, $2)", [STREAM_TOPIC, payload]);
   };
   // Helper to convert chunk to Buffer
-  const toBuffer = (chunk) =>
-    !Buffer.isBuffer(chunk) ? Buffer.from(chunk) : chunk;
+  const toBuffer = (chunk) => (!Buffer.isBuffer(chunk) ? Buffer.from(chunk) : chunk);
   return {
     streams: {
       async write(_runId, name, chunk) {
@@ -115,9 +114,7 @@ export function createStreamer(pool, drizzle) {
         let cursorChunkId = null;
         if (options?.cursor) {
           try {
-            const decoded = JSON.parse(
-              Buffer.from(options.cursor, "base64").toString("utf-8"),
-            );
+            const decoded = JSON.parse(Buffer.from(options.cursor, "base64").toString("utf-8"));
             cursorChunkId = decoded.c;
           } catch {
             // Invalid cursor, start from beginning
@@ -158,9 +155,7 @@ export function createStreamer(pool, drizzle) {
         let baseIndex = 0;
         if (options?.cursor) {
           try {
-            const decoded = JSON.parse(
-              Buffer.from(options.cursor, "base64").toString("utf-8"),
-            );
+            const decoded = JSON.parse(Buffer.from(options.cursor, "base64").toString("utf-8"));
             if (typeof decoded.i === "number") {
               baseIndex = decoded.i;
             }
@@ -233,22 +228,21 @@ export function createStreamer(pool, drizzle) {
               return { after: anchor.id, skip: target - position };
             },
             async page(after) {
-              return drizzle
-                .select({
-                  id: streams.chunkId,
-                  eof: streams.eof,
-                  data: streams.chunkData,
-                })
-                .from(streams)
-                .where(
-                  and(
-                    eq(streams.streamId, name),
-                    ...(after ? [gt(streams.chunkId, after)] : []),
-                  ),
-                )
-                .orderBy(asc(streams.chunkId))
-                // Osinara: 32 chunks a page halves the page reads of a long turn stream.
-                .limit(32);
+              return (
+                drizzle
+                  .select({
+                    id: streams.chunkId,
+                    eof: streams.eof,
+                    data: streams.chunkData,
+                  })
+                  .from(streams)
+                  .where(
+                    and(eq(streams.streamId, name), ...(after ? [gt(streams.chunkId, after)] : [])),
+                  )
+                  .orderBy(asc(streams.chunkId))
+                  // Osinara: 32 chunks a page halves the page reads of a long turn stream.
+                  .limit(32)
+              );
             },
             subscribe(wake) {
               const key = `strm:${name}`;

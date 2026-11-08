@@ -58,9 +58,7 @@ describe("external group tool policy", () => {
   it("retains the verified external initiator policy when HITL resumes without current auth", () => {
     const initial = externalAuth(["manage_memory.delete"]);
 
-    expect(
-      resolveExternalGroupToolPolicy({ current: null, initiator: initial.current }),
-    ).toEqual({
+    expect(resolveExternalGroupToolPolicy({ current: null, initiator: initial.current })).toEqual({
       allowed: new Set(["manage_memory.delete"]),
       restricted: true,
     });

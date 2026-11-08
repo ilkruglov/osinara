@@ -35,18 +35,14 @@ describe("isBatchedApprovalStep", () => {
   it("combines only a step of several button-answered approvals", () => {
     expect(isBatchedApprovalStep([request(1)])).toBe(false);
     expect(isBatchedApprovalStep([request(1), request(2), request(3)])).toBe(true);
-    expect(isBatchedApprovalStep([
-      request(1),
-      { ...request(2), kind: "question" },
-    ])).toBe(false);
-    expect(isBatchedApprovalStep([
-      request(1),
-      request(2, { options: undefined }),
-    ])).toBe(false);
-    expect(isBatchedApprovalStep([
-      request(1),
-      request(2, { options: [{ id: "continue", label: "Продолжить" }] }),
-    ])).toBe(false);
+    expect(isBatchedApprovalStep([request(1), { ...request(2), kind: "question" }])).toBe(false);
+    expect(isBatchedApprovalStep([request(1), request(2, { options: undefined })])).toBe(false);
+    expect(
+      isBatchedApprovalStep([
+        request(1),
+        request(2, { options: [{ id: "continue", label: "Продолжить" }] }),
+      ]),
+    ).toBe(false);
   });
 });
 
@@ -60,12 +56,14 @@ describe("combineApprovalRequests", () => {
       { id: "approve", label: "Да, подтвердить все" },
       { id: "cancel", label: "Нет, отменить все" },
     ]);
-    expect(combined.prompt).toBe([
-      "Нужно подтвердить сразу 3 действия. Кнопка внизу отвечает за все.",
-      "1. Подтвердите действие 1",
-      "2. Подтвердите действие 2",
-      "3. Подтвердите действие 3",
-    ].join("\n\n"));
+    expect(combined.prompt).toBe(
+      [
+        "Нужно подтвердить сразу 3 действия. Кнопка внизу отвечает за все.",
+        "1. Подтвердите действие 1",
+        "2. Подтвердите действие 2",
+        "3. Подтвердите действие 3",
+      ].join("\n\n"),
+    );
   });
 
   it("declines a step that is not a pure approval batch", () => {

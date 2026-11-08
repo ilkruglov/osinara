@@ -17,10 +17,11 @@ import { timed } from "../lib/turn-timing.js";
 
 export default defineDynamic({
   events: {
-    "turn.started": async (_event, ctx) => defineInstructions({
-      markdown: isMemoryReviewSession(ctx)
-        ? MEMORY_REVIEW_INSTRUCTIONS
-        : await timed("instructions_mode", () => resolveModeBlock(ctx)),
-    }),
+    "turn.started": async (_event, ctx) =>
+      defineInstructions({
+        markdown: isMemoryReviewSession(ctx)
+          ? MEMORY_REVIEW_INSTRUCTIONS
+          : await timed("instructions_mode", () => resolveModeBlock(ctx)),
+      }),
   },
 });

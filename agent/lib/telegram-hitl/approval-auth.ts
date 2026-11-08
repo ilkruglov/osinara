@@ -39,13 +39,28 @@ export interface ApprovalAuthRow {
  * Policy attributes (role, scopes, group, allowlist, identity) are never taken from here.
  */
 const RETAINED_TURN_ATTRIBUTES = [
-  "memoryReviewBatchId", "memoryReviewMode", "memoryReviewSourceEntryIds", "proactiveDeliveryCursor", "sandboxSessionId",
-  "telegramConversationId", "telegramForumTopicId", "telegramMessageThreadId", "telegramProfileMentionUserIds",
-  "telegramProfileReplyTimelineSequence", "telegramProfileReplyUserId", "telegramReplyToMessageId", "telegramTimelineEntryId",
-  "telegramTimelineOmittedBeforeSequence", "telegramTimelineSequence", "telegramTimelineVisibleEntryIds", "telegramTurnStartedAt",
+  "memoryReviewBatchId",
+  "memoryReviewMode",
+  "memoryReviewSourceEntryIds",
+  "proactiveDeliveryCursor",
+  "sandboxSessionId",
+  "telegramConversationId",
+  "telegramForumTopicId",
+  "telegramMessageThreadId",
+  "telegramProfileMentionUserIds",
+  "telegramProfileReplyTimelineSequence",
+  "telegramProfileReplyUserId",
+  "telegramReplyToMessageId",
+  "telegramTimelineEntryId",
+  "telegramTimelineOmittedBeforeSequence",
+  "telegramTimelineSequence",
+  "telegramTimelineVisibleEntryIds",
+  "telegramTurnStartedAt",
 ] as const;
 
-export function retainTurnAttributes(attributes: Record<string, unknown> | undefined): Record<string, unknown> {
+export function retainTurnAttributes(
+  attributes: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   const retained: Record<string, unknown> = {};
   for (const key of RETAINED_TURN_ATTRIBUTES) {
     const value = attributes?.[key];
@@ -55,9 +70,12 @@ export function retainTurnAttributes(attributes: Record<string, unknown> | undef
 }
 
 function restoredTurnAttributes(row: ApprovalAuthRow): Record<string, unknown> {
-  const stored = row.turn_attributes && typeof row.turn_attributes === "object" && !Array.isArray(row.turn_attributes)
-    ? retainTurnAttributes(row.turn_attributes as Record<string, unknown>)
-    : {};
+  const stored =
+    row.turn_attributes &&
+    typeof row.turn_attributes === "object" &&
+    !Array.isArray(row.turn_attributes)
+      ? retainTurnAttributes(row.turn_attributes as Record<string, unknown>)
+      : {};
   return {
     ...(row.thread_id ? { sandboxSessionId: row.thread_id } : {}),
     ...stored,
@@ -78,7 +96,11 @@ interface GroupRow {
   type: GroupType;
 }
 
-async function findIdentity(client: PoolClient, telegramUserId: string, familyId: string): Promise<IdentityRow | null> {
+async function findIdentity(
+  client: PoolClient,
+  telegramUserId: string,
+  familyId: string,
+): Promise<IdentityRow | null> {
   const result = await client.query<IdentityRow>(
     `SELECT fm.family_id, fm.role, fm.user_id
        FROM users u
@@ -90,7 +112,10 @@ async function findIdentity(client: PoolClient, telegramUserId: string, familyId
   return result.rows[0] ?? null;
 }
 
-export async function resolveCurrentApprovalAuth(client: PoolClient, row: ApprovalAuthRow): Promise<SessionAuthContext | null> {
+export async function resolveCurrentApprovalAuth(
+  client: PoolClient,
+  row: ApprovalAuthRow,
+): Promise<SessionAuthContext | null> {
   const identity = await findIdentity(client, row.expected_telegram_user_id, row.family_id);
   let group: GroupRow | null = null;
   let memoryScopes: MemoryScope[];
@@ -99,7 +124,13 @@ export async function resolveCurrentApprovalAuth(client: PoolClient, row: Approv
 
   // Personal approvals remain bound to the current session owner and active family membership.
   if (row.scope === "personal") {
-    if (!identity || identity.user_id !== row.owner_user_id || identity.family_id !== row.family_id || row.telegram_chat_type !== "private") return null;
+    if (
+      !identity ||
+      identity.user_id !== row.owner_user_id ||
+      identity.family_id !== row.family_id ||
+      row.telegram_chat_type !== "private"
+    )
+      return null;
     memoryScopes = ["personal", "family"];
     role = identity.role;
     userId = identity.user_id;
@@ -111,7 +142,8 @@ export async function resolveCurrentApprovalAuth(client: PoolClient, row: Approv
       [row.group_id, row.telegram_chat_id],
     );
     group = groupResult.rows[0] ?? null;
-    if (!group || group.family_id !== row.family_id || row.telegram_chat_type === "private") return null;
+    if (!group || group.family_id !== row.family_id || row.telegram_chat_type === "private")
+      return null;
 
     // Family groups require current membership; external groups retain identity only for members.
     const familyIdentity = identity?.family_id === group.family_id ? identity : null;
@@ -143,10 +175,16 @@ export async function resolveCurrentApprovalAuth(client: PoolClient, row: Approv
       telegramMessageId: row.telegram_message_id,
       telegramActorId: row.expected_telegram_user_id,
       telegramActorKind: "telegram_user",
-      ...(row.telegram_message_thread_id === null ? {} : { telegramMessageThreadId: row.telegram_message_thread_id }),
+      ...(row.telegram_message_thread_id === null
+        ? {}
+        : { telegramMessageThreadId: row.telegram_message_thread_id }),
       // The resumed turn corrects memory and moves threads against the message that started it.
-      ...(row.telegram_conversation_id ? { telegramConversationId: row.telegram_conversation_id } : {}),
-      ...(row.telegram_timeline_entry_id ? { telegramTimelineEntryId: row.telegram_timeline_entry_id } : {}),
+      ...(row.telegram_conversation_id
+        ? { telegramConversationId: row.telegram_conversation_id }
+        : {}),
+      ...(row.telegram_timeline_entry_id
+        ? { telegramTimelineEntryId: row.telegram_timeline_entry_id }
+        : {}),
       telegramUserId: row.expected_telegram_user_id,
       ...(group ? { groupId: group.id, groupType: group.type } : {}),
       ...(group && group.type !== "family_private" ? { toolAllowlist: group.tool_allowlist } : {}),

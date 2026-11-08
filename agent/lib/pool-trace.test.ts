@@ -45,10 +45,9 @@ describe("traceSlowQueries", () => {
       thresholdMs: 150,
     });
 
-    await traced.query(
-      "SELECT content FROM memory_items_all WHERE family_id = $1",
-      ["family-secret"],
-    );
+    await traced.query("SELECT content FROM memory_items_all WHERE family_id = $1", [
+      "family-secret",
+    ]);
 
     expect(log).toHaveBeenCalledTimes(1);
     expect(JSON.parse(log.mock.calls[0]![0] as string)).toEqual({

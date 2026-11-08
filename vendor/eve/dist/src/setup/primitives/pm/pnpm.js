@@ -45,7 +45,7 @@ function releaseAgeExclusionName(e) {
 }
 function findYamlBlockEnd(e, t) {
   let n = t + 1;
-  for (; n < e.length; ) {
+  for (; n < e.length;) {
     let t = e[n] ?? ``;
     if (t.length > 0 && !t.startsWith(` `) && !t.startsWith(`	`)) break;
     n += 1;
@@ -60,12 +60,11 @@ function withSharpBuildPolicy(e) {
     n = t.split(`
 `),
     r = n.findIndex((e) => e === `allowBuilds:`);
-  if (r < 0)
-    return `${t.trim().length === 0 ? `` : `${t}\n`}allowBuilds:\n${SHARP_BUILD_POLICY}\n`;
+  if (r < 0) return `${t.trim().length === 0 ? `` : `${t}\n`}allowBuilds:\n${SHARP_BUILD_POLICY}\n`;
   let i = findYamlBlockEnd(n, r);
   if (n.slice(r + 1, i).some((e) => /^\s+sharp:/.test(e))) return e;
   let a = i;
-  for (; a > r + 1 && n[a - 1] === ``; ) --a;
+  for (; a > r + 1 && n[a - 1] === ``;) --a;
   return (
     n.splice(a, 0, SHARP_BUILD_POLICY),
     n.join(`
@@ -91,7 +90,7 @@ function withReleaseAgeExclusions(e) {
     s = RELEASE_AGE_EXCLUSIONS.filter((e) => !o.has(e));
   if (s.length === 0) return e;
   let c = i;
-  for (; c > r + 1 && n[c - 1] === ``; ) --c;
+  for (; c > r + 1 && n[c - 1] === ``;) --c;
   return (
     n.splice(c, 0, ...s.map(formatReleaseAgeExclusion)),
     n.join(`
@@ -145,9 +144,7 @@ function findClaimingAncestorPnpmWorkspaceRoot(e) {
   if (t === void 0) return;
   let r;
   try {
-    r = parsePnpmWorkspacePackagePatterns(
-      readFileSync(join(t, PNPM_WORKSPACE_PATH), `utf8`),
-    );
+    r = parsePnpmWorkspacePackagePatterns(readFileSync(join(t, PNPM_WORKSPACE_PATH), `utf8`));
   } catch {
     return t;
   }
@@ -161,10 +158,9 @@ function withPnpmWorkspacePackagePattern(e, t) {
     r = n.split(`
 `),
     i = r.findIndex((e) => e.trim() === `packages:`);
-  if (i < 0)
-    return `${n.trim().length === 0 ? `` : `${n}\n`}packages:\n  - ${t}\n`;
+  if (i < 0) return `${n.trim().length === 0 ? `` : `${n}\n`}packages:\n  - ${t}\n`;
   let a = findYamlBlockEnd(r, i);
-  for (; a > i + 1 && r[a - 1] === ``; ) --a;
+  for (; a > i + 1 && r[a - 1] === ``;) --a;
   return (
     r.splice(a, 0, `  - ${t}`),
     r.join(`
@@ -173,11 +169,7 @@ function withPnpmWorkspacePackagePattern(e, t) {
 }
 async function ensurePnpmWorkspaceIncludesProject(e) {
   let n = findAncestorPnpmWorkspaceRoot(e);
-  if (
-    n === void 0 ||
-    resolve(n) === resolve(e) ||
-    findClaimingAncestorPnpmWorkspaceRoot(e) === n
-  )
+  if (n === void 0 || resolve(n) === resolve(e) || findClaimingAncestorPnpmWorkspaceRoot(e) === n)
     return `skipped`;
   let a = join(n, PNPM_WORKSPACE_PATH),
     o = await readFile(a, `utf8`),
@@ -215,13 +207,9 @@ const pnpmPackageManager = {
   async applyProjectConfiguration(e, t) {
     let n = t?.workspaceProbeRoot ?? e,
       r = await ensurePnpmWorkspaceIncludesProject(n),
-      i = join(
-        findClaimingAncestorPnpmWorkspaceRoot(n) ?? e,
-        PNPM_WORKSPACE_PATH,
-      ),
+      i = join(findClaimingAncestorPnpmWorkspaceRoot(n) ?? e, PNPM_WORKSPACE_PATH),
       a = await ensurePnpmWorkspacePolicy(i);
-    return (r === `written` || a === `written` ? `written` : `skipped`) ==
-      `written`
+    return (r === `written` || a === `written` ? `written` : `skipped`) == `written`
       ? { filesSkipped: [], filesWritten: [i] }
       : { filesSkipped: [i], filesWritten: [] };
   },
@@ -229,9 +217,7 @@ const pnpmPackageManager = {
   installArguments: (e) => [
     `install`,
     `--no-frozen-lockfile`,
-    ...(e.bypassMinimumReleaseAge === !0
-      ? [`--config.minimum-release-age=0`]
-      : []),
+    ...(e.bypassMinimumReleaseAge === !0 ? [`--config.minimum-release-age=0`] : []),
     ...(e.ignoreWorkspace === !0 ? [`--ignore-workspace`] : []),
   ],
   prepareArguments: (e, t) => [`--dir`, e, ...t],
@@ -248,8 +234,7 @@ const pnpmPackageManager = {
     let n = process.env.PNPM_HOME;
     if (n !== void 0) {
       let t = join(n, process.platform === `win32` ? `pnpm.CMD` : `pnpm`);
-      if (existsSync(t))
-        return { args: e, command: t, shell: process.platform === `win32` };
+      if (existsSync(t)) return { args: e, command: t, shell: process.platform === `win32` };
     }
     return { args: e, command: `pnpm` };
   },

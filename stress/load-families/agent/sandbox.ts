@@ -11,7 +11,9 @@ const inProcess = defineSandbox({
   async onSession(input) {
     if (!productionSandbox.onSession) throw new Error("LOAD_SANDBOX_HOOK_MISSING");
     // The production hook asks for workspace mounts; just-bash runs them in-process.
-    await productionSandbox.onSession(input as unknown as Parameters<typeof productionSandbox.onSession>[0]);
+    await productionSandbox.onSession(
+      input as unknown as Parameters<typeof productionSandbox.onSession>[0],
+    );
   },
 });
 

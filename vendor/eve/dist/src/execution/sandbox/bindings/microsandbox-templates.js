@@ -21,9 +21,7 @@ import {
 } from "#execution/sandbox/bindings/microsandbox-runtime.js";
 const MICROSANDBOX_CACHE_DIRECTORY_NAME = `microsandbox`;
 async function pruneMicrosandboxTemplates(e) {
-  let t = resolveMicrosandboxTemplatesDirectory(
-      resolveSandboxCacheDirectory(e.appRoot),
-    ),
+  let t = resolveMicrosandboxTemplatesDirectory(resolveSandboxCacheDirectory(e.appRoot)),
     n = e.now ?? Date.now(),
     r = e.recentWindowMs ?? LOCAL_SANDBOX_TEMPLATE_RECENT_WINDOW_MS,
     a = e.retainCount ?? LOCAL_SANDBOX_TEMPLATE_RETAIN_COUNT,
@@ -31,37 +29,23 @@ async function pruneMicrosandboxTemplates(e) {
     s = o.filter((e) => !e.isTemporary);
   await Promise.all([
     ...s.map(async (t, i) => {
-      i < a ||
-        n - t.mtimeMs <= r ||
-        (await removeTemplateDirectory(e.appRoot, t.path, t.metadata));
+      i < a || n - t.mtimeMs <= r || (await removeTemplateDirectory(e.appRoot, t.path, t.metadata));
     }),
     ...o
       .filter((e) => e.isTemporary)
       .map(async (t) => {
-        n - t.mtimeMs <= r ||
-          (await removeTemplateDirectory(e.appRoot, t.path, t.metadata));
+        n - t.mtimeMs <= r || (await removeTemplateDirectory(e.appRoot, t.path, t.metadata));
       }),
   ]);
 }
 function resolveMicrosandboxTemplateRootPath(e, t) {
-  return resolveLocalBackendTemplateRootPath(
-    e,
-    MICROSANDBOX_CACHE_DIRECTORY_NAME,
-    t,
-  );
+  return resolveLocalBackendTemplateRootPath(e, MICROSANDBOX_CACHE_DIRECTORY_NAME, t);
 }
 function resolveMicrosandboxTemplatesDirectory(e) {
-  return resolveLocalBackendTemplatesDirectory(
-    e,
-    MICROSANDBOX_CACHE_DIRECTORY_NAME,
-  );
+  return resolveLocalBackendTemplatesDirectory(e, MICROSANDBOX_CACHE_DIRECTORY_NAME);
 }
 function resolveMicrosandboxSessionRootPath(e, t) {
-  return resolveLocalBackendSessionRootPath(
-    e,
-    MICROSANDBOX_CACHE_DIRECTORY_NAME,
-    t,
-  );
+  return resolveLocalBackendSessionRootPath(e, MICROSANDBOX_CACHE_DIRECTORY_NAME, t);
 }
 async function readMicrosandboxTemplateDirectories(t) {
   let i;
@@ -79,9 +63,7 @@ async function readMicrosandboxTemplateDirectories(t) {
           let i = join(t, e.name);
           return {
             isTemporary: e.name.endsWith(`.tmp`),
-            metadata: await readTemplateMetadata(
-              resolveMicrosandboxMetadataPath(i),
-            ),
+            metadata: await readTemplateMetadata(resolveMicrosandboxMetadataPath(i)),
             mtimeMs: (await stat(i)).mtimeMs,
             path: i,
           };

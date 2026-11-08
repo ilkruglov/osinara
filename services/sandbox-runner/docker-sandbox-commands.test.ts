@@ -36,8 +36,12 @@ describe("shellQuote", () => {
 
 describe("assertShellSafePath", () => {
   it("rejects control characters and accepts ordinary hostile punctuation", () => {
-    expect(() => assertShellSafePath("/workspace/a\nb")).toThrow(/AGENT_SANDBOX_RUNNER_PATH_INVALID/u);
-    expect(() => assertShellSafePath("/workspace/a\u0000b")).toThrow(/AGENT_SANDBOX_RUNNER_PATH_INVALID/u);
+    expect(() => assertShellSafePath("/workspace/a\nb")).toThrow(
+      /AGENT_SANDBOX_RUNNER_PATH_INVALID/u,
+    );
+    expect(() => assertShellSafePath("/workspace/a\u0000b")).toThrow(
+      /AGENT_SANDBOX_RUNNER_PATH_INVALID/u,
+    );
     expect(() => assertShellSafePath(HOSTILE)).not.toThrow();
   });
 });

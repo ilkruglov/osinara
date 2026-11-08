@@ -41,9 +41,8 @@ function canonicalScopedPath(
   defaultMountPoint: ScopedWorkspaceRoot["mountPoint"] | undefined,
   forbiddenPath: () => AppError,
 ): { hostRoot: string; relativePath: string; sandboxPath: string } {
-  const defaultPath = defaultMountPoint === undefined
-    ? undefined
-    : `${SANDBOX_WORKSPACE_ROOT}/${defaultMountPoint}`;
+  const defaultPath =
+    defaultMountPoint === undefined ? undefined : `${SANDBOX_WORKSPACE_ROOT}/${defaultMountPoint}`;
   const path = value ?? defaultPath;
   if (
     typeof path !== "string" ||
@@ -94,11 +93,13 @@ async function assertNoSymlinkComponent(
 function throwFileToolExecutionError(error: unknown, toolName: ScopedFileToolName): never {
   if (isAppError(error)) throw error;
   const isWrite = toolName === "write_file";
-  console.error(JSON.stringify({
-    code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
-    error: error instanceof Error ? error.message : String(error),
-    toolName,
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+      toolName,
+    }),
+  );
   throw new ModelFacingError({
     category: "dependency",
     code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
@@ -170,7 +171,8 @@ export function createScopedFileTools(
           ctx,
           "read_file",
           (input as { filePath?: unknown }).filePath,
-          async (filePath) => await dependencies.defaults.read_file.execute({ ...input, filePath }, ctx),
+          async (filePath) =>
+            await dependencies.defaults.read_file.execute({ ...input, filePath }, ctx),
         );
       },
     }),
@@ -182,7 +184,8 @@ export function createScopedFileTools(
           ctx,
           "write_file",
           (input as { filePath?: unknown }).filePath,
-          async (filePath) => await dependencies.defaults.write_file.execute({ ...input, filePath }, ctx),
+          async (filePath) =>
+            await dependencies.defaults.write_file.execute({ ...input, filePath }, ctx),
         );
       },
     }),

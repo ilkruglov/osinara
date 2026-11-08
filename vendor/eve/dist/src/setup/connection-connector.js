@@ -1,9 +1,5 @@
 import { readProjectLink } from "#setup/project-resolution.js";
-import {
-  captureVercel,
-  runVercel,
-  runVercelCaptureStdout,
-} from "#setup/primitives/run-vercel.js";
+import { captureVercel, runVercel, runVercelCaptureStdout } from "#setup/primitives/run-vercel.js";
 import { createPromptCommandOutput, withPhase } from "#setup/cli/index.js";
 const CREATED_CONNECTOR = /\bConnector created:\s*(scl_[A-Za-z0-9_-]+)\b/u;
 function isRecord(e) {
@@ -30,8 +26,7 @@ function connectorCreationFailure(e, t) {
     : `Could not create the ${e} connector. Vercel returned: ${n}`;
 }
 function parseConnectorRef(e) {
-  if (!isRecord(e) || typeof e.uid != `string` || typeof e.id != `string`)
-    return;
+  if (!isRecord(e) || typeof e.uid != `string` || typeof e.id != `string`) return;
   let t = { uid: e.uid, id: e.id };
   return (typeof e.name == `string` && (t.name = e.name), t);
 }
@@ -45,8 +40,7 @@ function parseCreatedConnector(e) {
 function parseConnectorList(e, t) {
   let n = [];
   for (let r of e) {
-    if (!isRecord(r) || (typeof r.service == `string` && r.service !== t))
-      continue;
+    if (!isRecord(r) || (typeof r.service == `string` && r.service !== t)) continue;
     let e = parseConnectorRef(r);
     e !== void 0 && n.push(e);
   }
@@ -83,27 +77,17 @@ async function listConnectors(e, n, r) {
     });
     if (!c.ok) throw Error(c.failure.message);
     let l = parseConnectorListPage(parseJson(c.stdout), e.service);
-    if (l === void 0)
-      throw Error(
-        `Vercel returned an invalid connector list for ${e.service}.`,
-      );
+    if (l === void 0) throw Error(`Vercel returned an invalid connector list for ${e.service}.`);
     i.push(...l.connectors);
     let u = l.cursor;
-    if (u !== void 0 && a.has(u))
-      throw Error(`The connector list repeated cursor ${u}.`);
+    if (u !== void 0 && a.has(u)) throw Error(`The connector list repeated cursor ${u}.`);
     (u !== void 0 && a.add(u), (o = u));
   } while (o !== void 0);
   return i;
 }
 async function supportsUserAuthorization(e, n, r, i) {
   let a = await captureVercel(
-    [
-      `api`,
-      `/v1/connect/connectors/${encodeURIComponent(r.id)}`,
-      `--scope`,
-      n.orgId,
-      `--raw`,
-    ],
+    [`api`, `/v1/connect/connectors/${encodeURIComponent(r.id)}`, `--scope`, n.orgId, `--raw`],
     { cwd: e.projectRoot, onOutput: i, signal: e.signal },
   );
   if (!a.ok) throw Error(`Could not verify connector ${r.uid}.`);
@@ -140,7 +124,7 @@ function connectorMatchesCanonicalName(e, t) {
 function nextConnectorName(e, t) {
   if (!t.has(e.toLowerCase())) return e;
   let n = 2;
-  for (; t.has(`${e}-${n}`.toLowerCase()); ) n += 1;
+  for (; t.has(`${e}-${n}`.toLowerCase());) n += 1;
   return `${e}-${n}`;
 }
 async function cleanupCreatedConnectionConnector(t) {
@@ -187,8 +171,7 @@ async function resolveFallbackConnector(e, t, n, i, s) {
       })) === `find`
     ) {
       let r = [];
-      for (let a of i)
-        (await supportsUserAuthorization(e, t, a, n)) && r.push(a);
+      for (let a of i) (await supportsUserAuthorization(e, t, a, n)) && r.push(a);
       if (r.length === 0) {
         c = `No existing ${e.service} connectors support user authorization.`;
         continue;
@@ -233,17 +216,7 @@ async function resolveFallbackConnector(e, t, n, i, s) {
         `Waiting for you to complete setup in the browser…`,
         () =>
           runVercelCaptureStdout(
-            [
-              `connect`,
-              `create`,
-              e.service,
-              `--name`,
-              l,
-              `-F`,
-              `json`,
-              `--scope`,
-              t.orgId,
-            ],
+            [`connect`, `create`, e.service, `--name`, l, `-F`, `json`, `--scope`, t.orgId],
             { cwd: e.projectRoot, onOutput: createOutput, signal: e.signal },
           ),
         { kind: `external-action`, emphasis: `browser` },
@@ -280,9 +253,7 @@ async function setupConnectionConnector(e) {
   let t = createPromptCommandOutput(e.log),
     n = e.project,
     r = await listConnectors(e, n, t),
-    a = r.find((t) =>
-      connectorMatchesCanonicalName(t, e.canonicalConnectorName),
-    ),
+    a = r.find((t) => connectorMatchesCanonicalName(t, e.canonicalConnectorName)),
     o = `Could not find a connector named ${e.canonicalConnectorName}.`;
   if (a !== void 0)
     if (await supportsUserAuthorization(e, n, a, t)) {
@@ -323,8 +294,4 @@ async function setupConnectionConnector(e) {
       : { kind: `existing`, connectorUid: s.connector.uid }
   );
 }
-export {
-  cleanupCreatedConnectionConnector,
-  parseCreatedConnector,
-  setupConnectionConnector,
-};
+export { cleanupCreatedConnectionConnector, parseCreatedConnector, setupConnectionConnector };

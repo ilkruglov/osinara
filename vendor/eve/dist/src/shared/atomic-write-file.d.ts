@@ -8,4 +8,7 @@
  * (concurrent readers, `utimes` heartbeats, antivirus scans), surfacing as
  * `EPERM`/`EACCES`/`EBUSY`, so the replace is retried briefly before giving up.
  */
-export declare function atomicWriteFile(targetPath: string, contents: string | Buffer | Uint8Array): Promise<void>;
+export declare function atomicWriteFile(
+  targetPath: string,
+  contents: string | Buffer | Uint8Array,
+): Promise<void>;

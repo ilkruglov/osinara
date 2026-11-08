@@ -12,40 +12,40 @@ import type { ResolvedRuntimeAgentNode } from "#runtime/graph.js";
  * no wrapper needed.
  */
 export type CreateRuntime = (config: {
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly nodeId?: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly nodeId?: string;
 }) => Runtime;
 /**
  * Input for building a harness step for one resolved runtime node.
  */
 export interface CreateExecutionNodeStepInput {
-    /** Cancellation signal forwarded to the tool-loop harness. */
-    readonly abortSignal?: AbortSignal;
-    /**
-     * Session-level capabilities propagated from the runtime. The
-     * harness passes this through to `buildToolSet` so `ask_question`
-     * registration and any other capability-gated behavior tracks the
-     * current run.
-     */
-    readonly capabilities?: SessionCapabilities;
-    /** Runs only a context clear and returns to the parked session. */
-    readonly clearOnly?: boolean;
-    /** Runs only a forced context compaction and returns to the parked session. */
-    readonly compactOnly?: boolean;
-    /**
-     * Runtime constructor used by the subagent tool executor to start
-     * delegated child runs on the same workflow runtime as the parent.
-     */
-    readonly createRuntime: CreateRuntime;
-    readonly handleEvent?: HandleEventFn;
-    readonly mode: RunMode;
-    readonly modelResolutionScope: RuntimeModelResolutionScope;
-    readonly node: ResolvedRuntimeAgentNode;
-    /**
-     * Effective `maxSubagents` cap configured by the experimental Workflow tool
-     * definition and materialized on the session at creation.
-     */
-    readonly workflowMaxSubagents?: number;
+  /** Cancellation signal forwarded to the tool-loop harness. */
+  readonly abortSignal?: AbortSignal;
+  /**
+   * Session-level capabilities propagated from the runtime. The
+   * harness passes this through to `buildToolSet` so `ask_question`
+   * registration and any other capability-gated behavior tracks the
+   * current run.
+   */
+  readonly capabilities?: SessionCapabilities;
+  /** Runs only a context clear and returns to the parked session. */
+  readonly clearOnly?: boolean;
+  /** Runs only a forced context compaction and returns to the parked session. */
+  readonly compactOnly?: boolean;
+  /**
+   * Runtime constructor used by the subagent tool executor to start
+   * delegated child runs on the same workflow runtime as the parent.
+   */
+  readonly createRuntime: CreateRuntime;
+  readonly handleEvent?: HandleEventFn;
+  readonly mode: RunMode;
+  readonly modelResolutionScope: RuntimeModelResolutionScope;
+  readonly node: ResolvedRuntimeAgentNode;
+  /**
+   * Effective `maxSubagents` cap configured by the experimental Workflow tool
+   * definition and materialized on the session at creation.
+   */
+  readonly workflowMaxSubagents?: number;
 }
 /**
  * Builds a harness step for one resolved runtime node using the execution-owned
@@ -66,5 +66,5 @@ export declare function buildRuntimeIdentity(node: ResolvedRuntimeAgentNode): Ru
  * Tools without `execute` (provider-managed) get entries with schema but no execute.
  */
 export declare function createNodeHarnessTools(input: {
-    readonly node: ResolvedRuntimeAgentNode;
+  readonly node: ResolvedRuntimeAgentNode;
 }): HarnessToolMap;

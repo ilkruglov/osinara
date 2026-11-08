@@ -9,7 +9,13 @@ import type { HarnessSession, StepInput } from "#harness/types.js";
 export { getApprovedTools, clearPendingSessionLimitPrompt };
 export type { RejectedActionBatch };
 export type { ResolvedInputBatch } from "#harness/input-request-resolution.js";
-export { appendPendingInputBatch, consumeDeferredStepInput, getPendingInputRequestIds, hasDeferredStepInput, hasPendingInputBatch, } from "#harness/pending-input-batches.js";
+export {
+  appendPendingInputBatch,
+  consumeDeferredStepInput,
+  getPendingInputRequestIds,
+  hasDeferredStepInput,
+  hasPendingInputBatch,
+} from "#harness/pending-input-batches.js";
 /** Returns true when the step input carries user-facing turn input. */
 export declare function hasStepInput(input?: StepInput): boolean;
 /** Returns true when any pending batch still contains a tool approval. */
@@ -22,17 +28,17 @@ export declare function hasPendingApprovalBatch(session: HarnessSession): boolea
  * requirement; question-only batches retain dismiss-and-continue behavior.
  */
 export declare function resolvePendingInput(input: {
-    readonly deferMessagesWhileApprovalsPending?: boolean;
-    readonly history?: readonly ModelMessage[];
-    readonly resolveApprovalKey?: (request: InputRequest) => string | undefined;
-    readonly session: HarnessSession;
-    readonly stepInput?: StepInput;
+  readonly deferMessagesWhileApprovalsPending?: boolean;
+  readonly history?: readonly ModelMessage[];
+  readonly resolveApprovalKey?: (request: InputRequest) => string | undefined;
+  readonly session: HarnessSession;
+  readonly stepInput?: StepInput;
 }): ResolvePendingInputResult;
 /** Creates a runtime tool-call action shape from an AI SDK tool call. */
 export declare function createRuntimeToolCallActionFromToolCall(input: {
-    readonly toolCall: {
-        readonly input: unknown;
-        readonly toolCallId: string;
-        readonly toolName: string;
-    };
+  readonly toolCall: {
+    readonly input: unknown;
+    readonly toolCallId: string;
+    readonly toolName: string;
+  };
 }): RuntimeToolCallActionRequest;

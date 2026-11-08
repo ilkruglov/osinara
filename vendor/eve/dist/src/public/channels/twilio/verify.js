@@ -1,8 +1,5 @@
 import { createHmac } from "node:crypto";
-import {
-  TwilioApiError,
-  resolveTwilioCredential,
-} from "#compiled/@chat-adapter/twilio/api.js";
+import { TwilioApiError, resolveTwilioCredential } from "#compiled/@chat-adapter/twilio/api.js";
 import {
   TwilioWebhookVerificationError,
   twilioSignatureBase,
@@ -39,9 +36,4 @@ function signTwilioRequest(t) {
 function buildTwilioSignatureBase(e, t) {
   return twilioSignatureBase(e, t);
 }
-export {
-  buildTwilioSignatureBase,
-  resolveTwilioAuthToken,
-  signTwilioRequest,
-  verifyTwilioRequest,
-};
+export { buildTwilioSignatureBase, resolveTwilioAuthToken, signTwilioRequest, verifyTwilioRequest };

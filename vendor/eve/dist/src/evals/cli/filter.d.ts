@@ -8,7 +8,7 @@ import type { EveEval } from "#evals/types.js";
  * suite excluding `real-model` evals) can never pull in an excluded eval.
  */
 export declare function filterEvalsByTags(input: {
-    readonly evaluations: readonly EveEval[];
-    readonly includeTags: readonly string[];
-    readonly excludeTags: readonly string[];
+  readonly evaluations: readonly EveEval[];
+  readonly includeTags: readonly string[];
+  readonly excludeTags: readonly string[];
 }): EveEval[];

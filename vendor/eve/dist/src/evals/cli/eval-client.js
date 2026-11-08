@@ -9,8 +9,7 @@ function resolveEvalClientOptions(t) {
 }
 async function createEvalClient(e, r = {}) {
   let i = resolveEvalClientOptions(e);
-  if (e.kind === `local` || i.auth !== void 0 || r.workspaceRoot === void 0)
-    return new Client(i);
+  if (e.kind === `local` || i.auth !== void 0 || r.workspaceRoot === void 0) return new Client(i);
   let { options: a } = await resolveVerifiedRemoteDevelopmentClient({
     serverUrl: e.url,
     workspaceRoot: r.workspaceRoot,

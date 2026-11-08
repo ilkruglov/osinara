@@ -24,7 +24,11 @@ import { withTurnInterjectionSurface } from "../turn-interjection/turn-interject
 import { authorizeAgentScheduleDelivery } from "../agent-schedules/agent-schedule-delivery-authorization.js";
 import { scheduledDeliveryMetadata } from "../agent-schedules/scheduled-session.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
-import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT, THREAD_HISTORY_PAGE_MAX_ENTRIES } from "../memory-config.js";
+import {
+  MEMORY_LIST_DEFAULT_LIMIT,
+  MEMORY_LIST_MAX_LIMIT,
+  THREAD_HISTORY_PAGE_MAX_ENTRIES,
+} from "../memory-config.js";
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
 import { externalRememberInputSchema } from "../remember-contract.js";
 import fetchTelegramAvatars from "../tools/fetch_telegram_avatars.js";
@@ -143,7 +147,9 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
       "Скачать разрешённый UTF-8 файл TXT, Markdown, JSON, CSV, TSV, HTML, XML или YAML из сообщения текущей внешней группы в /workspace/group; после импорта прочитай возвращённый path через read_file.",
     inputSchema: z
       .object({
-        attachmentId: z.uuid().describe("Opaque attachmentId из текущего сообщения или истории группы"),
+        attachmentId: z
+          .uuid()
+          .describe("Opaque attachmentId из текущего сообщения или истории группы"),
       })
       .strict(),
   },
@@ -262,7 +268,9 @@ async function withExternalGroupCapability<T>(
   if (alsoRequired === undefined) {
     await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability);
   } else {
-    await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability, { alsoRequired });
+    await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability, {
+      alsoRequired,
+    });
   }
   return await operation();
 }
@@ -277,12 +285,19 @@ function deniedTool(toolName: string): AnyToolDefinition {
   }) as unknown as AnyToolDefinition;
 }
 
-function allowedDirectTool(capability: DirectExternalToolName, definition: AnyToolDefinition): AnyToolDefinition {
+function allowedDirectTool(
+  capability: DirectExternalToolName,
+  definition: AnyToolDefinition,
+): AnyToolDefinition {
   return defineTool({
     ...definition,
     ...EXTERNAL_DIRECT_TOOL_PRESENTATION[capability],
     async execute(input, ctx) {
-      return await withExternalGroupCapability(ctx, capability, async () => await definition.execute(input, ctx));
+      return await withExternalGroupCapability(
+        ctx,
+        capability,
+        async () => await definition.execute(input, ctx),
+      );
     },
   });
 }
@@ -336,8 +351,8 @@ function buildExternalToolSurface(
   scheduledHistory: boolean,
   scheduledRun: boolean,
 ): ToolMap {
-  const imageGenerationAllowed = IMAGE_GENERATION_AVAILABLE &&
-    !scheduledRun && allowed.has("generate_image");
+  const imageGenerationAllowed =
+    IMAGE_GENERATION_AVAILABLE && !scheduledRun && allowed.has("generate_image");
   const surface: Record<string, AnyToolDefinition> = {
     ...EXTERNAL_GROUP_FILE_TOOLS,
     // The wrapper is fail-closed per skill name (imagegen, analyst skills, granted authored
@@ -351,7 +366,8 @@ function buildExternalToolSurface(
       surface.manage_behavior_preference = manageBehaviorPreference as unknown as AnyToolDefinition;
     }
     if (scheduledHistory) {
-      surface.read_scheduled_group_history = readScheduledGroupHistory as unknown as AnyToolDefinition;
+      surface.read_scheduled_group_history =
+        readScheduledGroupHistory as unknown as AnyToolDefinition;
     }
   }
   // Granted application capabilities are re-checked at execution against the live policy.
@@ -361,7 +377,11 @@ function buildExternalToolSurface(
     if (capability === "web_search" && (scheduledRun || !LOCAL_WEB_SEARCH_AVAILABLE)) continue;
     // Billable image generation requires a current interactive request, never a background run;
     // the avatars exist only for it.
-    if ((capability === "generate_image" || capability === "fetch_telegram_avatars") && !imageGenerationAllowed) continue;
+    if (
+      (capability === "generate_image" || capability === "fetch_telegram_avatars") &&
+      !imageGenerationAllowed
+    )
+      continue;
     // A card is a reply to people in the chat, never a scheduled post; the switch removes it everywhere.
     if (capability === "send_widget" && (scheduledRun || !TELEGRAM_WIDGETS_ENABLED)) continue;
     // A granted image sender still needs its live check, which `GRANTED_BY` resolves.
@@ -380,7 +400,9 @@ function buildExternalToolSurface(
       EXTERNAL_DIRECT_TOOLS.send_workspace_image,
     );
   }
-  const memoryActions = MANAGE_MEMORY_ACTIONS.filter((action) => allowed.has(`manage_memory.${action}`));
+  const memoryActions = MANAGE_MEMORY_ACTIONS.filter((action) =>
+    allowed.has(`manage_memory.${action}`),
+  );
   if (memoryActions.length > 0) {
     surface.manage_memory = allowedMemoryTool(memoryActions);
   }
@@ -394,7 +416,7 @@ function buildExternalToolSurface(
     if (toolName === "web_fetch" || toolName === "web_search") {
       // Granted local web_search and web_fetch keep their execution-time policy wrappers.
       // Other providers retain Eve's native search descriptor, with revocation at the next step.
-      if (!allowed.has(toolName) || scheduledRun && toolName === "web_search") {
+      if (!allowed.has(toolName) || (scheduledRun && toolName === "web_search")) {
         surface[toolName] = deniedTool(toolName);
       }
       continue;
@@ -402,7 +424,12 @@ function buildExternalToolSurface(
     surface[toolName] = deniedTool(toolName);
   }
   const effectiveSurface = scheduledRun
-    ? Object.fromEntries(Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]))
+    ? Object.fromEntries(
+        Object.entries(surface).map(([name, definition]) => [
+          name,
+          scheduledExternalTool(definition),
+        ]),
+      )
     : surface;
   return wrapModelFacingToolMap(effectiveSurface);
 }
@@ -428,18 +455,19 @@ const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
   private: withTurnInterjectionSurface(TRUSTED_APPLICATION_SURFACES.private),
 };
 
-const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = Object.fromEntries(
-  Object.entries(TRUSTED_APPLICATION_SURFACES).map(([environment, surface]) => {
-    // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
-    const {
-      manage_behavior_preference: _manageBehaviorPreference,
-      manage_skill: _manageSkill,
-      remember: _remember,
-      ...readOnlyPromptSurface
-    } = surface;
-    return [environment, readOnlyPromptSurface];
-  }),
-) as Record<"family" | "private", ToolMap>;
+const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> =
+  Object.fromEntries(
+    Object.entries(TRUSTED_APPLICATION_SURFACES).map(([environment, surface]) => {
+      // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
+      const {
+        manage_behavior_preference: _manageBehaviorPreference,
+        manage_skill: _manageSkill,
+        remember: _remember,
+        ...readOnlyPromptSurface
+      } = surface;
+      return [environment, readOnlyPromptSurface];
+    }),
+  ) as Record<"family" | "private", ToolMap>;
 
 const EXTERNAL_SURFACES = new Map<string, ToolMap>();
 
@@ -465,18 +493,28 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   ].join("|");
   const cached = EXTERNAL_SURFACES.get(key);
   if (cached) return cached;
-  const surface = buildExternalToolSurface(allowed, includeApplicationCore, scheduledHistory, scheduledRun);
+  const surface = buildExternalToolSurface(
+    allowed,
+    includeApplicationCore,
+    scheduledHistory,
+    scheduledRun,
+  );
   EXTERNAL_SURFACES.set(key, surface);
   return surface;
 }
 
 export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
-  const effectiveInput = input.environment === "external"
-    ? {
-      ...input,
-      capabilities: new Set([...input.capabilities].filter((name) => name !== "generate_image" && name !== "fetch_telegram_avatars")),
-    }
-    : input;
+  const effectiveInput =
+    input.environment === "external"
+      ? {
+          ...input,
+          capabilities: new Set(
+            [...input.capabilities].filter(
+              (name) => name !== "generate_image" && name !== "fetch_telegram_avatars",
+            ),
+          ),
+        }
+      : input;
   const {
     fetch_telegram_avatars: _fetchTelegramAvatars,
     generate_image: _generateImage,

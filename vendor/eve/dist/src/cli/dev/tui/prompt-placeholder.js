@@ -8,8 +8,4 @@ function promptPlaceholder(e) {
   let t = Math.floor(Math.max(0, e) / promptPlaceholderCycleMs);
   return PROMPT_PLACEHOLDER_MESSAGES[t % PROMPT_PLACEHOLDER_MESSAGES.length];
 }
-export {
-  PROMPT_PLACEHOLDER_MESSAGES,
-  promptPlaceholder,
-  promptPlaceholderCycleMs,
-};
+export { PROMPT_PLACEHOLDER_MESSAGES, promptPlaceholder, promptPlaceholderCycleMs };

@@ -5,10 +5,7 @@ import {
   isMediaTypeAllowed,
   isUploadsDisabled,
 } from "#public/channels/upload-policy.js";
-import {
-  downloadTelegramFile,
-  getTelegramFile,
-} from "#public/channels/telegram/api.js";
+import { downloadTelegramFile, getTelegramFile } from "#public/channels/telegram/api.js";
 const log = createLogger(`telegram.attachments`),
   TELEGRAM_FILE_URL_PROTOCOL = `telegram-file:`;
 function collectTelegramFileParts(e, t) {
@@ -31,11 +28,7 @@ function collectTelegramFileParts(e, t) {
 }
 function buildTelegramTurnMessage(e, t) {
   let n = e.text || e.caption;
-  return t.length === 0
-    ? n
-    : n.trim().length === 0
-      ? [...t]
-      : [{ type: `text`, text: n }, ...t];
+  return t.length === 0 ? n : n.trim().length === 0 ? [...t] : [{ type: `text`, text: n }, ...t];
 }
 function createTelegramFetchFile(e) {
   return async (r) => {
@@ -54,20 +47,15 @@ function createTelegramFetchFile(e) {
         fileBaseUrl: e.api?.fileBaseUrl,
         filePath: o.filePath,
       });
-    if (!s.ok)
-      throw Error(`Telegram file fetch returned HTTP ${s.status} for ${r}.`);
+    if (!s.ok) throw Error(`Telegram file fetch returned HTTP ${s.status} for ${r}.`);
     let c = Buffer.from(await s.arrayBuffer()),
-      l =
-        s.headers.get(`content-type`) ??
-        i.mediaType ??
-        `application/octet-stream`,
+      l = s.headers.get(`content-type`) ?? i.mediaType ?? `application/octet-stream`,
       u = { bytes: c, filename: i.filename, mediaType: l },
       d = evaluateFilePart(
         { data: u.bytes, filename: u.filename, mediaType: l, type: `file` },
         e.policy,
       );
-    if (d !== null)
-      throw Error(`Telegram file rejected — ${formatUploadPolicyViolation(d)}`);
+    if (d !== null) throw Error(`Telegram file rejected — ${formatUploadPolicyViolation(d)}`);
     return u;
   };
 }
@@ -76,14 +64,10 @@ function createTelegramFileUrl(e) {
   (e.filename !== void 0 && t.set(`filename`, e.filename),
     e.mediaType !== void 0 && t.set(`mediaType`, e.mediaType));
   let n = t.size > 0 ? `?${t.toString()}` : ``;
-  return new URL(
-    `${TELEGRAM_FILE_URL_PROTOCOL}${encodeURIComponent(e.fileId)}${n}`,
-  );
+  return new URL(`${TELEGRAM_FILE_URL_PROTOCOL}${encodeURIComponent(e.fileId)}${n}`);
 }
 function toTelegramFilePart(e, t) {
-  let n =
-      e.mediaType ??
-      (e.kind === `photo` ? `image/jpeg` : `application/octet-stream`),
+  let n = e.mediaType ?? (e.kind === `photo` ? `image/jpeg` : `application/octet-stream`),
     r = e.fileName ?? (e.kind === `photo` ? `photo-${t}.jpg` : `file-${t}`);
   return {
     data: createTelegramFileUrl({

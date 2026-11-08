@@ -109,16 +109,10 @@ const PROMPT_COMMAND_DEFINITIONS = [
   ],
   PROMPT_COMMANDS = PROMPT_COMMAND_DEFINITIONS;
 function promptCommandsFor(t) {
-  return PROMPT_COMMAND_DEFINITIONS.filter((e) =>
-    e.targets.some((e) => e === t),
-  );
+  return PROMPT_COMMAND_DEFINITIONS.filter((e) => e.targets.some((e) => e === t));
 }
 function isPromptCommandAvailableFor(t, n) {
-  return (
-    PROMPT_COMMAND_DEFINITIONS.find((e) => e.name === t)?.targets?.includes(
-      n,
-    ) ?? !1
-  );
+  return PROMPT_COMMAND_DEFINITIONS.find((e) => e.name === t)?.targets?.includes(n) ?? !1;
 }
 function parsePromptCommand(e) {
   let n = e.trim();
@@ -127,8 +121,7 @@ function parsePromptCommand(e) {
     for (let t of [e.name, ...e.aliases]) {
       let r = `/${t}`;
       if (n === r) return e.build(``);
-      if (e.takesArgument && n.startsWith(`${r} `))
-        return e.build(n.slice(r.length).trim());
+      if (e.takesArgument && n.startsWith(`${r} `)) return e.build(n.slice(r.length).trim());
     }
   return null;
 }

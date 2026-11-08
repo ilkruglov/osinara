@@ -26,7 +26,9 @@ describe("osinara CLI routing", () => {
         }),
       ).resolves.toBe(0);
       expect(operation).toHaveBeenCalledWith([]);
-      expect(writeOutput).toHaveBeenCalledWith(JSON.stringify({ code: "TEST_OK", message: command }));
+      expect(writeOutput).toHaveBeenCalledWith(
+        JSON.stringify({ code: "TEST_OK", message: command }),
+      );
     },
   );
 
@@ -47,12 +49,14 @@ describe("osinara CLI routing", () => {
     await expect(
       runCli(["install"], {
         operations: {
-          install: vi.fn().mockRejectedValue(
-            new InstallerError(
-              "OSINARA_INSTALL_RELEASE_ASSETS_UNAVAILABLE",
-              "Для установки отсутствуют release assets",
+          install: vi
+            .fn()
+            .mockRejectedValue(
+              new InstallerError(
+                "OSINARA_INSTALL_RELEASE_ASSETS_UNAVAILABLE",
+                "Для установки отсутствуют release assets",
+              ),
             ),
-          ),
         },
         writeError,
         writeOutput: vi.fn(),

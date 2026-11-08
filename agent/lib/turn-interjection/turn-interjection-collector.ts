@@ -48,7 +48,10 @@ import type {
   turnInterjectionRepository,
 } from "./turn-interjection-repository.js";
 import { isTurnInterjectionDeliveryUntracked } from "./turn-interjection-delivery.js";
-import { resolveTurnInterjectionScope, type TurnInterjectionScope } from "./turn-interjection-scope.js";
+import {
+  resolveTurnInterjectionScope,
+  type TurnInterjectionScope,
+} from "./turn-interjection-scope.js";
 import type { TurnInterjection } from "./turn-interjection-tool.js";
 
 export interface TurnInterjectionCollectorDependencies {
@@ -71,7 +74,16 @@ export interface TurnInterjectionCollectorDependencies {
 
 // Checked in order: an animation also carries a `document` field.
 const ATTACHMENT_FIELDS: readonly Exclude<TurnInterjectionAttachment, "other">[] = [
-  "photo", "video", "video_note", "animation", "audio", "sticker", "document", "location", "contact", "poll",
+  "photo",
+  "video",
+  "video_note",
+  "animation",
+  "audio",
+  "sticker",
+  "document",
+  "location",
+  "contact",
+  "poll",
 ];
 
 type Plan =
@@ -95,7 +107,9 @@ interface Collection {
 
 function sentAt(message: TelegramMessage): string | null {
   const date = message.raw.date;
-  return typeof date === "number" && Number.isSafeInteger(date) ? new Date(date * 1_000).toISOString() : null;
+  return typeof date === "number" && Number.isSafeInteger(date)
+    ? new Date(date * 1_000).toISOString()
+    : null;
 }
 
 function bounded(text: string): { text: string; truncated: boolean } {
@@ -115,7 +129,10 @@ function requireBotUsername(botUsername: string | undefined): string {
 
 function addressed(message: TelegramMessage, text: string, collection: Collection): boolean {
   if (collection.scope.chatType === "private") return true;
-  return isMessageAddressedToBot({ ...message, text }, requireBotUsername(collection.dependencies.botUsername));
+  return isMessageAddressedToBot(
+    { ...message, text },
+    requireBotUsername(collection.dependencies.botUsername),
+  );
 }
 
 /**
@@ -123,31 +140,43 @@ function addressed(message: TelegramMessage, text: string, collection: Collectio
  * reply to a message this conversation delivered; a family-group message goes to the group's
  * canonical conversation. A reply that belongs to the confirmation flow never starts a turn.
  */
-async function landsInThisConversation(message: TelegramMessage, collection: Collection): Promise<boolean> {
+async function landsInThisConversation(
+  message: TelegramMessage,
+  collection: Collection,
+): Promise<boolean> {
   const reply = message.replyToMessage;
-  if (reply !== undefined && reply.from?.isBot !== false && await collection.dependencies.repository.isReplyToPendingConfirmation({
-    replyMessageId: reply.messageId,
-    replyRouteToken: telegramBaseContinuationToken(message),
-    telegramChatId: collection.scope.telegramChatId,
-  })) return false;
+  if (
+    reply !== undefined &&
+    reply.from?.isBot !== false &&
+    (await collection.dependencies.repository.isReplyToPendingConfirmation({
+      replyMessageId: reply.messageId,
+      replyRouteToken: telegramBaseContinuationToken(message),
+      telegramChatId: collection.scope.telegramChatId,
+    }))
+  )
+    return false;
   const { scope } = collection;
   // A group message belongs to the conversation of its own forum topic, whatever its queue.
   if (scope.groupId !== null) {
     const topic = telegramForumTopicId(message);
     if ((topic === null ? null : Number(topic)) !== scope.telegramForumTopicId) return false;
   }
-  const token = scope.groupId === null
-    ? telegramBaseContinuationToken(message)
-    : groupCanonicalContinuationToken(scope.groupId, scope.telegramForumTopicId);
+  const token =
+    scope.groupId === null
+      ? telegramBaseContinuationToken(message)
+      : groupCanonicalContinuationToken(scope.groupId, scope.telegramForumTopicId);
   let route = collection.routes.get(token);
   if (route === undefined) {
     route = collection.dependencies.repository.routeSessionId(token);
     collection.routes.set(token, route);
   }
-  return await route === scope.applicationSessionId;
+  return (await route) === scope.applicationSessionId;
 }
 
-async function plan(candidate: TurnInterjectionCandidate, collection: Collection): Promise<Plan | null> {
+async function plan(
+  candidate: TurnInterjectionCandidate,
+  collection: Collection,
+): Promise<Plan | null> {
   const update = parseTelegramUpdate(candidate.payload);
   if (update?.kind !== "message") return null;
   const message = update.message;
@@ -155,13 +184,21 @@ async function plan(candidate: TurnInterjectionCandidate, collection: Collection
   if (message.from?.id !== collection.scope.telegramUserId || message.from.isBot) return null;
   const isVoice = Object.hasOwn(message.raw, "voice");
   // The same text the ordinary dispatch reads: a caption stands in for the text of a media message.
-  const text = isVoice ? message.caption : [message.text, message.caption].filter(Boolean).join("\n");
+  const text = isVoice
+    ? message.caption
+    : [message.text, message.caption].filter(Boolean).join("\n");
   if (!isVoice && isTelegramSlashCommand(text)) return null;
-  if (!addressed(message, text, collection) || !await landsInThisConversation(message, collection)) return null;
+  if (
+    !addressed(message, text, collection) ||
+    !(await landsInThisConversation(message, collection))
+  )
+    return null;
 
   if (isVoice) {
-    const usable = candidate.voice !== null &&
-      (candidate.voiceTranscript !== null || await collection.dependencies.authorizeVoice(message));
+    const usable =
+      candidate.voice !== null &&
+      (candidate.voiceTranscript !== null ||
+        (await collection.dependencies.authorizeVoice(message)));
     if (!usable) {
       return {
         contentKind: "notice",
@@ -197,7 +234,11 @@ async function plan(candidate: TurnInterjectionCandidate, collection: Collection
     };
   }
   if (!text) return null;
-  return { contentKind: "text", entry: { kind: "text", sentAt: sentAt(message), ...bounded(text) }, updateId: candidate.updateId };
+  return {
+    contentKind: "text",
+    entry: { kind: "text", sentAt: sentAt(message), ...bounded(text) },
+    updateId: candidate.updateId,
+  };
 }
 
 async function unavailableVoice(
@@ -205,7 +246,9 @@ async function unavailableVoice(
   collection: Collection,
   reason: "not_transcribed" | "transcription_failed",
 ): Promise<TurnInterjectionEntry> {
-  await collection.dependencies.repository.claim(collection.coordinate, [{ contentKind: "notice", updateId: planned.updateId }]);
+  await collection.dependencies.repository.claim(collection.coordinate, [
+    { contentKind: "notice", updateId: planned.updateId },
+  ]);
   return { kind: "voice_unavailable", reason, sentAt: planned.sentAt };
 }
 
@@ -222,34 +265,50 @@ async function voiceEntry(
   const begun = await repository.beginEarlyVoiceTranscription(planned.updateId);
   if (begun.status === "transcribed") return voice(begun.transcript);
   // Started elsewhere without a transcript: that attempt was interrupted and is never paid again.
-  if (begun.status === "unavailable") return await unavailableVoice(planned, collection, "transcription_failed");
+  if (begun.status === "unavailable")
+    return await unavailableVoice(planned, collection, "transcription_failed");
   let transcript: string;
   try {
-    transcript = (await collection.dependencies.transcribeVoice({
-      ...planned.voice,
-      ...(collection.signal ? { signal: collection.signal } : {}),
-    })).trim();
+    transcript = (
+      await collection.dependencies.transcribeVoice({
+        ...planned.voice,
+        ...(collection.signal ? { signal: collection.signal } : {}),
+      })
+    ).trim();
     if (!transcript) {
-      throw new AppError("AGENT_VOICE_TRANSCRIPT_EMPTY", "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз");
+      throw new AppError(
+        "AGENT_VOICE_TRANSCRIPT_EMPTY",
+        "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз",
+      );
     }
   } catch (error) {
     // Recovery path: the turn learns the recording failed; the ordinary turn asks for a resend.
-    console.warn(JSON.stringify({
-      code: "AGENT_TURN_INTERJECTION_VOICE_UNAVAILABLE",
-      error: error instanceof Error ? error.message : String(error),
-      eveTurnId: collection.coordinate.eveTurnId,
-      updateId: planned.updateId,
-    }));
+    console.warn(
+      JSON.stringify({
+        code: "AGENT_TURN_INTERJECTION_VOICE_UNAVAILABLE",
+        error: error instanceof Error ? error.message : String(error),
+        eveTurnId: collection.coordinate.eveTurnId,
+        updateId: planned.updateId,
+      }),
+    );
     return await unavailableVoice(planned, collection, "transcription_failed");
   }
-  return voice(await repository.saveEarlyVoiceTranscript(planned.updateId, transcript) ?? transcript);
+  return voice(
+    (await repository.saveEarlyVoiceTranscript(planned.updateId, transcript)) ?? transcript,
+  );
 }
 
-async function renderClaimed(plans: readonly Plan[], owned: ReadonlySet<string>, collection: Collection): Promise<string | null> {
+async function renderClaimed(
+  plans: readonly Plan[],
+  owned: ReadonlySet<string>,
+  collection: Collection,
+): Promise<string | null> {
   const entries: TurnInterjectionEntry[] = [];
   for (const planned of plans) {
     if (!owned.has(planned.updateId)) continue;
-    entries.push(planned.contentKind === "voice" ? await voiceEntry(planned, collection) : planned.entry);
+    entries.push(
+      planned.contentKind === "voice" ? await voiceEntry(planned, collection) : planned.entry,
+    );
   }
   if (entries.length === 0) return null;
   await collection.dependencies.repository.markReturned(collection.coordinate, [...owned]);
@@ -268,11 +327,13 @@ async function releaseClaims(
     await dependencies.repository.releaseCall(coordinate);
   } catch (error) {
     // The caller reports its own failure; a claim that stays unreleased is at worst shown again.
-    console.error(JSON.stringify({
-      code: "AGENT_TURN_INTERJECTION_RELEASE_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-      eveTurnId: coordinate.eveTurnId,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TURN_INTERJECTION_RELEASE_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+        eveTurnId: coordinate.eveTurnId,
+      }),
+    );
   }
 }
 
@@ -302,7 +363,11 @@ export function createTurnInterjectionCollector(
     await dependencies.repository.releaseCall(collection.coordinate);
     const plans: Plan[] = [];
     let afterUpdateId: string | undefined;
-    for (let page = 0; page < TURN_INTERJECTION_CANDIDATE_PAGES && plans.length < TURN_INTERJECTION_MAX_MESSAGES; page += 1) {
+    for (
+      let page = 0;
+      page < TURN_INTERJECTION_CANDIDATE_PAGES && plans.length < TURN_INTERJECTION_MAX_MESSAGES;
+      page += 1
+    ) {
       const candidates = await dependencies.repository.listCandidates({
         ...collection.coordinate,
         ...(afterUpdateId === undefined ? {} : { afterUpdateId }),

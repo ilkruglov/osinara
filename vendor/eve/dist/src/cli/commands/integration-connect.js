@@ -23,9 +23,7 @@ const defaultDependencies = {
 async function runIntegrationConnect(e) {
   let i = { ...defaultDependencies, ...e.dependencies },
     a = e.options?.nonInteractive === !0,
-    o =
-      i.createPrompter?.() ??
-      (a ? createHeadlessPrompter(() => {}) : createPrompter()),
+    o = i.createPrompter?.() ?? (a ? createHeadlessPrompter(() => {}) : createPrompter()),
     s = e.options?.signal;
   o.intro(`Set up ${e.slug}`);
   let l = await i.readProjectLink(e.appRoot);
@@ -76,15 +74,7 @@ async function runIntegrationConnect(e) {
     );
   o.outro(`Connection ${e.slug} set up.`);
 }
-async function runIntegrationConnectCommand(
-  t,
-  r,
-  i,
-  a,
-  o,
-  c = {},
-  l = defaultDependencies,
-) {
+async function runIntegrationConnectCommand(t, r, i, a, o, c = {}, l = defaultDependencies) {
   let d = createRegistrySetupClient({ signal: c.signal });
   try {
     (await runIntegrationConnect({
@@ -117,8 +107,7 @@ async function runIntegrationConnectCommand(
         (process.exitCode = 2));
       return;
     }
-    (t.error(n instanceof Error ? n.message : String(n)),
-      (process.exitCode = 1));
+    (t.error(n instanceof Error ? n.message : String(n)), (process.exitCode = 1));
   }
 }
 export { runIntegrationConnect, runIntegrationConnectCommand };

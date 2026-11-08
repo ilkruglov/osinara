@@ -17,9 +17,17 @@ import {
   MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS,
   MEMORY_EMBEDDING_QUERY_CHUNK_MAX_CHARACTERS,
 } from "./memory-config.js";
-import { chunkMemoryContent, chunkMemoryQuery, type MemoryEmbeddingChunkText } from "./memory-embedding-chunks.js";
+import {
+  chunkMemoryContent,
+  chunkMemoryQuery,
+  type MemoryEmbeddingChunkText,
+} from "./memory-embedding-chunks.js";
 
-function expectCoverage(content: string, chunks: MemoryEmbeddingChunkText[], maxCharacters: number): void {
+function expectCoverage(
+  content: string,
+  chunks: MemoryEmbeddingChunkText[],
+  maxCharacters: number,
+): void {
   let coveredThrough = 0;
   for (const [index, current] of chunks.entries()) {
     expect(current.chunkIndex).toBe(index);
@@ -36,7 +44,8 @@ function expectCoverage(content: string, chunks: MemoryEmbeddingChunkText[], max
   expect(content.slice(coveredThrough).trim()).toBe("");
 }
 
-const sentence = (index: number) => `Факт номер ${index} относится к семейной истории и был записан летом.`;
+const sentence = (index: number) =>
+  `Факт номер ${index} относится к семейной истории и был записан летом.`;
 
 describe("chunkMemoryContent", () => {
   it("keeps short content in one source-aligned chunk", () => {
@@ -46,7 +55,9 @@ describe("chunkMemoryContent", () => {
   });
 
   it("gives every paragraph its own chunk and joins a heading to the paragraph after it", () => {
-    const paragraphs = Array.from({ length: 4 }, (_, p) => Array.from({ length: 5 }, (_, s) => sentence(p * 10 + s)).join(" "));
+    const paragraphs = Array.from({ length: 4 }, (_, p) =>
+      Array.from({ length: 5 }, (_, s) => sentence(p * 10 + s)).join(" "),
+    );
     const content = ["Итог обсуждения 12.09.2026.", ...paragraphs].join("\n\n");
     const chunks = chunkMemoryContent(content);
 
@@ -74,7 +85,10 @@ describe("chunkMemoryContent", () => {
   });
 
   it("falls back to clause ends, then words, when a paragraph has no sentence ends", () => {
-    const clauses = Array.from({ length: 40 }, (_, index) => `пункт ${index} списка покупок на неделю`).join("; ");
+    const clauses = Array.from(
+      { length: 40 },
+      (_, index) => `пункт ${index} списка покупок на неделю`,
+    ).join("; ");
     const clauseChunks = chunkMemoryContent(clauses);
     expectCoverage(clauses, clauseChunks, MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS);
     expect(clauseChunks.length).toBeGreaterThan(1);
@@ -88,20 +102,29 @@ describe("chunkMemoryContent", () => {
 
   it("honours the narrow cap for text the embedder refused", () => {
     const content = Array.from({ length: 60 }, (_, index) => sentence(index)).join(" ");
-    const narrow = chunkMemoryContent(content, { maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS });
+    const narrow = chunkMemoryContent(content, {
+      maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS,
+    });
     expectCoverage(content, narrow, MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS);
     expect(narrow.length).toBeGreaterThan(chunkMemoryContent(content).length);
   });
 
   it.each([
-    ["memory", (content: string) => chunkMemoryContent(content), MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS],
+    [
+      "memory",
+      (content: string) => chunkMemoryContent(content),
+      MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS,
+    ],
     ["query", chunkMemoryQuery, MEMORY_EMBEDDING_QUERY_CHUNK_MAX_CHARACTERS],
-  ] as const)("keeps complete Unicode characters at every boundary in %s", (_name, chunk, maxCharacters) => {
-    for (const prefix of [0, 1, 119, 120, 399, 400, 499, 500, 999, 1_000]) {
-      const content = "а".repeat(prefix) + "😀🧑🏽‍💻".repeat(110) + "б".repeat(900);
-      expectCoverage(content, chunk(content), maxCharacters);
-    }
-  });
+  ] as const)(
+    "keeps complete Unicode characters at every boundary in %s",
+    (_name, chunk, maxCharacters) => {
+      for (const prefix of [0, 1, 119, 120, 399, 400, 499, 500, 999, 1_000]) {
+        const content = "а".repeat(prefix) + "😀🧑🏽‍💻".repeat(110) + "б".repeat(900);
+        expectCoverage(content, chunk(content), maxCharacters);
+      }
+    },
+  );
 
   it("makes bounded progress on text without whitespace", () => {
     // A key or hash of four thousand characters: progress is the cap minus the overlap, so a
@@ -109,8 +132,15 @@ describe("chunkMemoryContent", () => {
     const content = "a".repeat(3_999);
     const chunks = chunkMemoryContent(content);
     expectCoverage(content, chunks, MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS);
-    expect(chunks.length).toBeLessThanOrEqual(Math.ceil(content.length / (MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS - 2 * MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS)) + 1);
-    const narrow = chunkMemoryContent(content, { maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS });
+    expect(chunks.length).toBeLessThanOrEqual(
+      Math.ceil(
+        content.length /
+          (MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS - 2 * MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS),
+      ) + 1,
+    );
+    const narrow = chunkMemoryContent(content, {
+      maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS,
+    });
     expect(narrow.length).toBeLessThanOrEqual(20);
     expect(chunkMemoryQuery(content.slice(0, 2_000)).length).toBeLessThanOrEqual(10);
   });

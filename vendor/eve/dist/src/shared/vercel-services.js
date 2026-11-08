@@ -37,23 +37,17 @@ function createServiceConfigRecord(e) {
   return e;
 }
 function normalizeVercelJsonConfig(e) {
-  if (!isRecord(e))
-    throw Error(`${VERCEL_JSON_FILE_NAME} must contain a JSON object.`);
+  if (!isRecord(e)) throw Error(`${VERCEL_JSON_FILE_NAME} must contain a JSON object.`);
   let t = e.services;
   if (
     t !== void 0 &&
     !isRecord(t) &&
     !(
       Array.isArray(t) &&
-      t.every(
-        (e) =>
-          isRecord(e) && typeof e.name == `string` && e.name.trim().length > 0,
-      )
+      t.every((e) => isRecord(e) && typeof e.name == `string` && e.name.trim().length > 0)
     )
   )
-    throw Error(
-      `${VERCEL_JSON_FILE_NAME} services must be a JSON object or named service array.`,
-    );
+    throw Error(`${VERCEL_JSON_FILE_NAME} services must be a JSON object or named service array.`);
   return e;
 }
 async function readVercelJsonConfig(e) {
@@ -82,19 +76,12 @@ function createEveServiceRoute(e = `eve`) {
 function createEveServiceRequestPathRoute() {
   return {
     src: EVE_SERVICE_ROUTE_SRC,
-    transforms: [
-      { args: EVE_SERVICE_ROUTE_PATH, op: `set`, type: `request.path` },
-    ],
+    transforms: [{ args: EVE_SERVICE_ROUTE_PATH, op: `set`, type: `request.path` }],
   };
 }
 function isEveServiceRoute(e, t) {
   let n = e.destination;
-  return (
-    e.src === EVE_SERVICE_ROUTE_SRC &&
-    isRecord(n) &&
-    n.type === `service` &&
-    n.service === t
-  );
+  return e.src === EVE_SERVICE_ROUTE_SRC && isRecord(n) && n.type === `service` && n.service === t;
 }
 function insertEveServiceRoute(e, t) {
   let n = e.filter((e) => !(isRecord(e) && isEveServiceRoute(e, t))),
@@ -128,8 +115,7 @@ async function ensureEveVercelServicesConfig(t) {
     a = n === void 0 ? t.hostRoot : dirname(n),
     o = await readVercelJsonConfig(join(t.hostRoot, VERCEL_JSON_FILE_NAME)),
     s =
-      a === t.hostRoot ||
-      Object.keys(createServiceConfigRecord(o.services)).length > 0
+      a === t.hostRoot || Object.keys(createServiceConfigRecord(o.services)).length > 0
         ? o
         : await readVercelJsonConfig(join(a, VERCEL_JSON_FILE_NAME)),
     l = createServiceConfigRecord(s.services);
@@ -157,9 +143,7 @@ async function ensureEveVercelServicesConfig(t) {
 }
 function mergeEveVercelConfig(e, t) {
   let n = e?.services ?? {},
-    r = Object.entries(n).find(
-      ([e, t]) => e === `eve` || t.framework === `eve`,
-    ),
+    r = Object.entries(n).find(([e, t]) => e === `eve` || t.framework === `eve`),
     i = r?.[0] ?? `eve`,
     a = r
       ? {

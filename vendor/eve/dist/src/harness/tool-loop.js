@@ -54,10 +54,7 @@ import { renderPendingApprovalsSnippet } from "#harness/hitl/approval-prompt.js"
 import { getAgentHandleStore } from "#harness/handles/store.js";
 import { buildDynamicSubagentTools } from "#context/dynamic-subagent-lifecycle.js";
 import { TASK_UPDATE_TOOL_NAME } from "#runtime/framework-tools/tasks.js";
-import {
-  normalizeUserContent,
-  resolveAssistantStepText,
-} from "#harness/messages.js";
+import { normalizeUserContent, resolveAssistantStepText } from "#harness/messages.js";
 import {
   createRuntimeActionRequestFromToolCall,
   resolvePendingRuntimeActions,
@@ -231,8 +228,7 @@ function enrichTelemetry(e, t, n, r) {
   return {
     functionId: e?.functionId ?? t,
     includeRuntimeContext: i,
-    integrations:
-      r === void 0 ? void 0 : [r, ...getRegisteredTelemetryIntegrations()],
+    integrations: r === void 0 ? void 0 : [r, ...getRegisteredTelemetryIntegrations()],
     isEnabled: !0,
     recordInputs: e?.recordInputs ?? !1,
     recordOutputs: e?.recordOutputs ?? !1,
@@ -242,8 +238,7 @@ function mergeSystemInstructions(e) {
   if (e.length === 0) return;
   if (e.length === 1) return { ...e[0] };
   let t;
-  for (let n of e)
-    n.providerOptions !== void 0 && (t = { ...t, ...n.providerOptions });
+  for (let n of e) n.providerOptions !== void 0 && (t = { ...t, ...n.providerOptions });
   let n = {
     role: `system`,
     content: e.map((e) => e.content).join(`
@@ -265,9 +260,7 @@ async function resolveActiveRuntimeModel(e) {
   if (e.ctx === void 0) {
     let t = e.session.agent.modelReference;
     if (t === void 0)
-      throw Error(
-        `Dynamic model selection is unavailable outside an eve runtime context.`,
-      );
+      throw Error(`Dynamic model selection is unavailable outside an eve runtime context.`);
     return { model: await e.config.resolveModel(t), session: e.session };
   }
   let t = getActiveDynamicModelSelection(e.ctx);
@@ -280,8 +273,7 @@ async function resolveActiveRuntimeModel(e) {
     return { model: await e.config.resolveModel(t), session: e.session };
   }
   return {
-    model:
-      t.model === void 0 ? await e.config.resolveModel(t.reference) : t.model,
+    model: t.model === void 0 ? await e.config.resolveModel(t.reference) : t.model,
     session: updateSessionModelReference(e.session, t.reference),
   };
 }
@@ -302,10 +294,7 @@ function updateCompactionThresholdForModelReference(e) {
         ...e.compaction,
         threshold: Math.max(
           1,
-          Math.floor(
-            e.modelReference.contextWindowTokens *
-              (e.compaction.thresholdPercent ?? 0.9),
-          ),
+          Math.floor(e.modelReference.contextWindowTokens * (e.compaction.thresholdPercent ?? 0.9)),
         ),
       };
 }
@@ -338,10 +327,8 @@ function buildHarnessToolsWithDynamicSubagents(e, t) {
   let r = t.get(AuthKey),
     i = n.get(`agent`),
     a =
-      (r?.authenticator === `memory-review` &&
-        r.attributes.memoryReviewMode === `background`) ||
-      (r?.authenticator === `telegram` &&
-        r.attributes.groupType === `external`);
+      (r?.authenticator === `memory-review` && r.attributes.memoryReviewMode === `background`) ||
+      (r?.authenticator === `telegram` && r.attributes.groupType === `external`);
   a &&
     i?.runtimeAction?.kind === `subagent-call` &&
     i.runtimeAction.nodeId === `__root__` &&
@@ -349,9 +336,7 @@ function buildHarnessToolsWithDynamicSubagents(e, t) {
     n.delete(`agent`);
   for (let e of buildDynamicSubagentTools(t)) {
     if (n.has(e.name))
-      throw Error(
-        `Dynamic subagent "${e.name}" collides with another runtime-visible tool name.`,
-      );
+      throw Error(`Dynamic subagent "${e.name}" collides with another runtime-visible tool name.`);
     n.set(e.name, e);
   }
   return n;
@@ -396,9 +381,7 @@ function createToolLoopHarness(t) {
       le = A !== void 0 || ce !== void 0,
       j =
         (ce?.taskId !== void 0 ||
-          readTaskIdFromInboxToken(
-            String(se?.state?.parentContinuationToken ?? ``),
-          ) !== void 0) &&
+          readTaskIdFromInboxToken(String(se?.state?.parentContinuationToken ?? ``)) !== void 0) &&
         t.tools.has(TASK_UPDATE_TOOL_NAME),
       ue = resolveParentLineage(A, se),
       de = k?.get(ParentTraceContextKey),
@@ -416,10 +399,7 @@ function createToolLoopHarness(t) {
         turnId: activeTurnId(O),
       }),
       failModelSelection = async (n, r) => {
-        if (
-          (throwIfTurnAborted(t.abortSignal), T && recordErrorOnSpan(T, n), !M)
-        )
-          throw n;
+        if ((throwIfTurnAborted(t.abortSignal), T && recordErrorOnSpan(T, n), !M)) throw n;
         let a = createErrorId(),
           o = toErrorMessage(n);
         return (
@@ -524,15 +504,11 @@ function createToolLoopHarness(t) {
             sessionId: E.sessionId,
           });
         }
-      return (
-        await M?.(createSessionWaitingEvent()),
-        { next: null, session: E }
-      );
+      return (await M?.(createSessionWaitingEvent()), { next: null, session: E });
     }
     let N = consumeDeferredStepInput({
       input: x,
-      preferCurrentInput:
-        t.mode !== `conversation` && x !== void 0 && hasPendingApprovalBatch(E),
+      preferCurrentInput: t.mode !== `conversation` && x !== void 0 && hasPendingApprovalBatch(E),
       session: E,
     });
     E = N.session;
@@ -587,9 +563,7 @@ function createToolLoopHarness(t) {
           }),
         );
       let e = getApprovalAuditState(E.state);
-      for (let t of e.activeCandidates.filter(
-        (e) => e.pendingEventEmitted !== !0,
-      ))
+      for (let t of e.activeCandidates.filter((e) => e.pendingEventEmitted !== !0))
         (await M(
           createApprovalCandidateEvent({
             candidateId: t.candidateId,
@@ -653,8 +627,7 @@ function createToolLoopHarness(t) {
     if (z.kind === `continue-coordination`)
       return {
         next: runStep,
-        session:
-          z.stepInput === void 0 ? E : queueDeferredStepInput(E, z.stepInput),
+        session: z.stepInput === void 0 ? E : queueDeferredStepInput(E, z.stepInput),
       };
     if (z.challenges.length > 0) {
       if (M)
@@ -663,9 +636,7 @@ function createToolLoopHarness(t) {
             createAuthorizationRequiredEvent({
               authorization: e.challenge,
               candidateId: e.candidateId,
-              description:
-                e.challenge.instructions ??
-                `Authorization required for ${e.name}`,
+              description: e.challenge.instructions ?? `Authorization required for ${e.name}`,
               name: e.name,
               sequence: O.sequence,
               stepIndex: O.stepIndex,
@@ -673,8 +644,7 @@ function createToolLoopHarness(t) {
               webhookUrl: e.hookUrl,
             }),
           );
-      let e =
-        z.stepInput === void 0 ? E : queueDeferredStepInput(E, z.stepInput);
+      let e = z.stepInput === void 0 ? E : queueDeferredStepInput(E, z.stepInput);
       return {
         next: null,
         session: {
@@ -691,16 +661,8 @@ function createToolLoopHarness(t) {
       stepInput: z.stepInput,
     });
     if (B.outcome === `unresolved`) {
-      let e =
-        P.outcome === `resolved`
-          ? { ...B.session, history: [...P.messages] }
-          : B.session;
-      if (
-        M &&
-        t.mode === `conversation` &&
-        B.deferredMessage === !0 &&
-        hasStepInput(x)
-      ) {
+      let e = P.outcome === `resolved` ? { ...B.session, history: [...P.messages] } : B.session;
+      if (M && t.mode === `conversation` && B.deferredMessage === !0 && hasStepInput(x)) {
         k !== void 0 && prepareDynamicInstructionPreamble(k, e.history);
         let n = [];
         try {
@@ -731,8 +693,7 @@ function createToolLoopHarness(t) {
       return P.outcome === `resolved`
         ? (M &&
             t.mode === `conversation` &&
-            ((O = await emitTurnEpilogue(M, O, t.mode)),
-            (e = setHarnessEmissionState(e, O))),
+            ((O = await emitTurnEpilogue(M, O, t.mode)), (e = setHarnessEmissionState(e, O))),
           { next: null, session: e })
         : { next: null, session: B.session };
     }
@@ -753,9 +714,7 @@ function createToolLoopHarness(t) {
                     outcome: e.outcome,
                     requestId: e.request.requestId,
                   };
-                  return e.response === void 0
-                    ? t
-                    : { ...t, response: e.response };
+                  return e.response === void 0 ? t : { ...t, response: e.response };
                 }),
                 sequence: e.event.sequence,
                 stepIndex: e.event.stepIndex,
@@ -798,10 +757,7 @@ function createToolLoopHarness(t) {
         T && T.setAttribute(`eve.turn.id`, O.turnId));
     }
     let me = B.session.history.length;
-    E = setHarnessEmissionState(
-      { ...B.session, history: [...B.session.history, ...V] },
-      O,
-    );
+    E = setHarnessEmissionState({ ...B.session, history: [...B.session.history, ...V] }, O);
     let H = [...B.messages.slice(0, me), ...V, ...B.messages.slice(me)].filter(
         (e) =>
           e.role !== `user` ||
@@ -883,8 +839,7 @@ function createToolLoopHarness(t) {
         E.outputSchema === void 0 &&
         W !== void 0 &&
         W.get(ParentSessionKey) === void 0 &&
-        (isScheduleAppAuth(W.get(AuthKey)) ||
-          W.get(TurnTaskDeliveryKey) === !0),
+        (isScheduleAppAuth(W.get(AuthKey)) || W.get(TurnTaskDeliveryKey) === !0),
       be = await hydrateSandboxAttachments(H),
       J = [],
       Y = [];
@@ -898,15 +853,10 @@ function createToolLoopHarness(t) {
     let X = Y,
       prepareModelCallInput = (e) => {
         let t = e ? [{ role: `system`, content: e }] : [],
-          n = E.agent.system
-            ? [{ role: `system`, content: E.agent.system }]
-            : [],
+          n = E.agent.system ? [{ role: `system`, content: E.agent.system }] : [],
           r = J.length > 0 || t.length > 0 ? [...t, ...n, ...J] : void 0,
           i = r !== void 0 && q ? applySystemCacheBreakpoint(r, q) : r,
-          a =
-            i === void 0
-              ? (E.agent.system ?? void 0)
-              : mergeSystemInstructions(i);
+          a = i === void 0 ? (E.agent.system ?? void 0) : mergeSystemInstructions(i);
         return {
           instructions: a,
           telemetryRuntimeContext: buildTelemetryRuntimeContext({
@@ -925,9 +875,7 @@ function createToolLoopHarness(t) {
         let { instructions: n, telemetryRuntimeContext: i = {} } =
           e.preparedInput ?? prepareModelCallInput(e.extraSystemNote);
         e.retryReason && (i[`eve.retry.reason`] = e.retryReason);
-        let a = e.trailingUserNote
-            ? [...X, { role: `user`, content: e.trailingUserNote }]
-            : X,
+        let a = e.trailingUserNote ? [...X, { role: `user`, content: e.trailingUserNote }] : X,
           o = buildHarnessToolsWithDynamicSubagents(t.tools, W),
           s = getAdvertisedTools({ delegatedCaller: j, session: E, tools: o });
         xe = s;
@@ -953,9 +901,7 @@ function createToolLoopHarness(t) {
             });
           for (let [e, t] of Object.entries(r)) {
             if (s.get(e)?.runtimeAction !== void 0)
-              throw Error(
-                `Dynamic tool "${e}" collides with a runtime-visible subagent.`,
-              );
+              throw Error(`Dynamic tool "${e}" collides with a runtime-visible subagent.`);
             c[e] = t;
           }
         }
@@ -970,10 +916,7 @@ function createToolLoopHarness(t) {
                     emissionState: O,
                     tools: e,
                   }),
-          u =
-            t.workflow === !0
-              ? { lifecycle: l, maxSubagents: t.workflowMaxSubagents }
-              : void 0,
+          u = t.workflow === !0 ? { lifecycle: l, maxSubagents: t.workflowMaxSubagents } : void 0,
           d = await getAdvertisedTools({
             delegatedCaller: j,
             modelTools: c,
@@ -1033,16 +976,9 @@ function createToolLoopHarness(t) {
           executeModelCall = async () => {
             if (M) {
               let e = [...t.tools]
-                  .filter(
-                    ([e, t]) =>
-                      t.runtimeAction !== void 0 && s.get(e) === void 0,
-                  )
+                  .filter(([e, t]) => t.runtimeAction !== void 0 && s.get(e) === void 0)
                   .map(([e]) => e),
-                n = new Set([
-                  ASK_QUESTION_TOOL_NAME,
-                  FINAL_OUTPUT_TOOL_NAME,
-                  ...e,
-                ]),
+                n = new Set([ASK_QUESTION_TOOL_NAME, FINAL_OUTPUT_TOOL_NAME, ...e]),
                 r = await y.stream({ abortSignal: t.abortSignal, messages: a }),
                 {
                   emittedActionCallIds: i,
@@ -1055,10 +991,7 @@ function createToolLoopHarness(t) {
                   tools: s,
                 });
               throwIfTurnAborted(t.abortSignal);
-              let [d, f] = await Promise.all([
-                v.stepResult,
-                r.responseMessages,
-              ]);
+              let [d, f] = await Promise.all([v.stepResult, r.responseMessages]);
               if (
                 isEmptyModelResponse(d) &&
                 extractToolResultCallIds(f).size === 0 &&
@@ -1092,10 +1025,7 @@ function createToolLoopHarness(t) {
             });
             throwIfTurnAborted(t.abortSignal);
             let n = await v.stepResult;
-            if (
-              isEmptyModelResponse(n) &&
-              extractToolResultCallIds(e.responseMessages).size === 0
-            )
+            if (isEmptyModelResponse(n) && extractToolResultCallIds(e.responseMessages).size === 0)
               throw new EmptyModelResponseError();
             return withAccumulatedResponseMessages({
               responseMessages: e.responseMessages,
@@ -1134,8 +1064,7 @@ function createToolLoopHarness(t) {
               ...e,
               attemptIndex: Se++,
               preparedInput: t === 1 ? e.preparedInput : void 0,
-              suppressStepStartedEmission:
-                t !== 1 || e.suppressStepStartedEmission,
+              suppressStepStartedEmission: t !== 1 || e.suppressStepStartedEmission,
             }),
           { sessionId: E.sessionId, turnId: O.turnId },
           t.abortSignal,
@@ -1188,8 +1117,7 @@ function createToolLoopHarness(t) {
             }),
         ],
       });
-      if ((throwIfTurnAborted(t.abortSignal), r.outcome === `recovered`))
-        Z = r.result;
+      if ((throwIfTurnAborted(t.abortSignal), r.outcome === `recovered`)) Z = r.result;
       else {
         let n = r.error;
         if ((T && recordErrorOnSpan(T, n), !M)) throw n;
@@ -1197,16 +1125,13 @@ function createToolLoopHarness(t) {
         if (a !== null) {
           let t = createErrorId();
           return (
-            log.error(
-              `workflow stream write failed — parking session for retry by the user`,
-              {
-                ...a,
-                errorId: t,
-                error: n,
-                sessionId: E.sessionId,
-                turnId: O.turnId,
-              },
-            ),
+            log.error(`workflow stream write failed — parking session for retry by the user`, {
+              ...a,
+              errorId: t,
+              error: n,
+              sessionId: E.sessionId,
+              turnId: O.turnId,
+            }),
             (O = await emitRecoverableFailedTurn(M, O, {
               code: `WORKFLOW_STREAM_WRITE_FAILED`,
               continuationToken: E.continuationToken,
@@ -1273,10 +1198,7 @@ function createToolLoopHarness(t) {
               n
             );
           return (
-            log.error(
-              l?.message ?? `model call failed; failing the task run`,
-              h,
-            ),
+            log.error(l?.message ?? `model call failed; failing the task run`, h),
             await emitFailedStep(M, O, {
               code: `MODEL_CALL_FAILED`,
               details: m,
@@ -1286,11 +1208,7 @@ function createToolLoopHarness(t) {
             { next: { done: !0, isError: !0, output: d }, session: E }
           );
         }
-        (log.error(
-          l?.message ??
-            `model call failed — parking session for retry by the user`,
-          h,
-        ),
+        (log.error(l?.message ?? `model call failed — parking session for retry by the user`, h),
           (O = await emitRecoverableFailedTurn(M, O, {
             code: `MODEL_CALL_FAILED`,
             continuationToken: E.continuationToken,
@@ -1377,13 +1295,7 @@ function readGatewayMetadata(e) {
   return t && typeof t == `object` && !Array.isArray(t) ? t : void 0;
 }
 function buildModelCallFailureDetails(e) {
-  let {
-    catalogSummary: t,
-    error: r,
-    errorId: i,
-    modelCallDetails: a,
-    upstreamRejection: o,
-  } = e;
+  let { catalogSummary: t, error: r, errorId: i, modelCallDetails: a, upstreamRejection: o } = e;
   if (t !== null) {
     let e = {
       errorId: i,
@@ -1400,9 +1312,7 @@ function buildModelCallFailureDetails(e) {
 }
 function buildModelCallFailureLogFields(e) {
   let t = { errorId: e.errorId, sessionId: e.sessionId, turnId: e.turnId };
-  return e.recognized
-    ? { ...t, details: e.modelCallDetails }
-    : { ...t, error: e.error };
+  return e.recognized ? { ...t, details: e.modelCallDetails } : { ...t, error: e.error };
 }
 async function runModelCallRecoveryPipeline(e) {
   let t = e.error,
@@ -1433,10 +1343,7 @@ function withAccumulatedResponseMessages(e) {
 function appendMissingToolResultMessages(e) {
   let t = extractToolResultCallIds(e.responseMessages),
     n = e.append.filter((e) => !t.has(e.toolCallId));
-  return [
-    ...e.responseMessages,
-    ...(n.length > 0 ? [{ role: `tool`, content: [...n] }] : []),
-  ];
+  return [...e.responseMessages, ...(n.length > 0 ? [{ role: `tool`, content: [...n] }] : [])];
 }
 function getInvalidToolCallInputErrors(e) {
   let t = [];
@@ -1452,10 +1359,7 @@ function extractToolResultCallIds(e) {
   for (let n of e)
     if (Array.isArray(n.content))
       for (let e of n.content)
-        typeof e == `object` &&
-          e &&
-          e.type === `tool-result` &&
-          t.add(e.toolCallId);
+        typeof e == `object` && e && e.type === `tool-result` && t.add(e.toolCallId);
   return t;
 }
 async function attemptUnsupportedProviderToolRecovery(e) {
@@ -1473,9 +1377,7 @@ function isEmptyModelResponse(e) {
   );
 }
 function rethrowNoOutputAsEmptyResponse(e) {
-  throw isNoOutputGeneratedError(e)
-    ? new EmptyModelResponseError({ cause: e })
-    : e;
+  throw isNoOutputGeneratedError(e) ? new EmptyModelResponseError({ cause: e }) : e;
 }
 const EMPTY_RESPONSE_NUDGE = `Your previous reply was empty and was not delivered. Answer now from the tool results above; do not re-run tools or mention this notice.`;
 function buildEmptyResponseNudge(e) {
@@ -1484,8 +1386,7 @@ function buildEmptyResponseNudge(e) {
     : EMPTY_RESPONSE_NUDGE;
 }
 async function attemptEmptyResponseRecovery(e) {
-  if (!(e.error instanceof EmptyModelResponseError))
-    return { outcome: `skipped` };
+  if (!(e.error instanceof EmptyModelResponseError)) return { outcome: `skipped` };
   log.warn(`empty model response; reissuing the model call once`, {
     sessionId: e.sessionId,
     turnId: e.turnId,
@@ -1512,10 +1413,7 @@ async function handleStepResult(e) {
   let { config: t, emit: n, promptMessages: r, result: i, runStep: a } = e,
     { emissionState: o, session: s } = e,
     c = resolveAssistantStepText(i.response.messages, i.text),
-    l =
-      i.finishReason !== `tool-calls` &&
-      i.toolCalls.length === 0 &&
-      hasEmptyDeliverySentinel(c),
+    l = i.finishReason !== `tool-calls` && i.toolCalls.length === 0 && hasEmptyDeliverySentinel(c),
     u = getInvalidToolCallInputErrors({ toolCalls: i.toolCalls }),
     d = new Set([
       ...(i.invalidInputToolCallIds ?? []),
@@ -1574,25 +1472,18 @@ async function handleStepResult(e) {
     }),
     T = (i.toolCalls ?? [])
       .filter((e) => !d.has(e.toolCallId))
-      .filter(
-        (t) => e.runtimeActionTools.get(t.toolName)?.runtimeAction !== void 0,
-      )
+      .filter((t) => e.runtimeActionTools.get(t.toolName)?.runtimeAction !== void 0)
       .filter((e) =>
         re.get(e.toolName)?.runtimeAction === void 0
-          ? (log.warn(
-              `runtime action tool call blocked because tool is not advertised`,
-              {
-                callId: e.toolCallId,
-                sessionId: v.sessionId,
-                toolName: e.toolName,
-              },
-            ),
+          ? (log.warn(`runtime action tool call blocked because tool is not advertised`, {
+              callId: e.toolCallId,
+              sessionId: v.sessionId,
+              toolName: e.toolName,
+            }),
             !1)
           : !0,
       )
-      .map((e) =>
-        createRuntimeActionRequestFromToolCall({ toolCall: e, tools: re }),
-      );
+      .map((e) => createRuntimeActionRequestFromToolCall({ toolCall: e, tools: re }));
   if (T.length > 0) {
     if (S.length === 0)
       return {
@@ -1655,9 +1546,7 @@ async function handleStepResult(e) {
         responseAuthRequiredRequestIds: b
           .filter((t) => {
             let n = e.get(t.action.toolName)?.approval;
-            return (
-              n !== void 0 && typeof n != `function` && n.response !== void 0
-            );
+            return n !== void 0 && typeof n != `function` && n.response !== void 0;
           })
           .map((e) => e.requestId),
         responseMessages: g,
@@ -1674,8 +1563,7 @@ async function handleStepResult(e) {
           }),
         ),
         t.mode === `conversation` &&
-          ((o = await emitTurnEpilogue(n, o, t.mode)),
-          (r = setHarnessEmissionState(r, o)))),
+          ((o = await emitTurnEpilogue(n, o, t.mode)), (r = setHarnessEmissionState(r, o)))),
       { next: hasDeferredStepInput(r) ? a : null, session: r }
     );
   }
@@ -1702,9 +1590,7 @@ async function handleStepResult(e) {
             attemptId: t.attemptId,
             authorization: t.challenge,
             name: t.name,
-            description:
-              t.challenge.instructions ??
-              `Authorization required for ${t.name}`,
+            description: t.challenge.instructions ?? `Authorization required for ${t.name}`,
             webhookUrl: t.hookUrl,
             sequence: o.sequence,
             stepIndex: o.stepIndex,
@@ -1729,11 +1615,8 @@ async function handleStepResult(e) {
     oe = [...r, ...ae],
     D = { ...v, history: oe };
   return !(D.outputSchema !== void 0 && extractFinalOutput(i) !== void 0) &&
-    (ae.at(-1)?.role === `tool` ||
-      h.outcomeEndsResponse ||
-      hasDeferredStepInput(D))
-    ? (n && ((o = advanceStep(o)), (D = setHarnessEmissionState(D, o))),
-      { next: a, session: D })
+    (ae.at(-1)?.role === `tool` || h.outcomeEndsResponse || hasDeferredStepInput(D))
+    ? (n && ((o = advanceStep(o)), (D = setHarnessEmissionState(D, o))), { next: a, session: D })
     : t.mode === `task`
       ? finishTaskTurn({
           emissionState: o,
@@ -1788,9 +1671,7 @@ async function finishTaskTurn(e) {
     { emissionState: o, session: s } = e;
   if (i === void 0)
     return (
-      t &&
-        ((o = await emitTurnEpilogue(t, o, `task`)),
-        (s = setHarnessEmissionState(s, o))),
+      t && ((o = await emitTurnEpilogue(t, o, `task`)), (s = setHarnessEmissionState(s, o))),
       { next: { done: !0, output: a ?? `` }, session: s }
     );
   let c = extractFinalOutput(r);
@@ -1809,9 +1690,7 @@ async function finishTaskTurn(e) {
         session: s,
       })
     : ((s = persistStructuredAssistantTurn(s, n, c)),
-      t &&
-        ((o = await emitStructuredResult(t, o, c, `task`)),
-        (s = setHarnessEmissionState(s, o))),
+      t && ((o = await emitStructuredResult(t, o, c, `task`)), (s = setHarnessEmissionState(s, o))),
       { next: { done: !0, output: c }, session: s });
 }
 async function finishConversationTurn(e) {
@@ -1820,8 +1699,7 @@ async function finishConversationTurn(e) {
   if (i === void 0)
     return (
       t &&
-        ((o = await emitTurnEpilogue(t, o, `conversation`)),
-        (s = setHarnessEmissionState(s, o))),
+        ((o = await emitTurnEpilogue(t, o, `conversation`)), (s = setHarnessEmissionState(s, o))),
       { next: null, session: s, settledTurn: { output: a ?? `` } }
     );
   let c = extractFinalOutput(r);
@@ -1867,9 +1745,7 @@ async function continuePendingWorkflowInterrupt(e) {
       c = 0;
     for (;;) {
       o = await continueWorkflowSandboxInterrupt({
-        bridgeRequestLimit: resolveWorkflowSandboxBridgeRequestLimit(
-          e.config.workflowMaxSubagents,
-        ),
+        bridgeRequestLimit: resolveWorkflowSandboxBridgeRequestLimit(e.config.workflowMaxSubagents),
         continuationSecurity: a,
         interrupt: s,
         lifecycle: i,
@@ -1885,9 +1761,7 @@ async function continuePendingWorkflowInterrupt(e) {
         break;
       let l = getWorkflowRuntimeActionInterrupts(n.interrupt)[0];
       if (l === void 0)
-        throw Error(
-          `Workflow continuation contains no pending runtime-action interrupt.`,
-        );
+        throw Error(`Workflow continuation contains no pending runtime-action interrupt.`);
       (c++, (s = l));
     }
   } catch (e) {
@@ -1908,9 +1782,7 @@ async function continuePendingWorkflowInterrupt(e) {
     u = clearPendingWorkflowInterrupt({ ...e.session, history: l });
   if (s.status === `interrupted`) {
     if (!isWorkflowRuntimeActionInterrupt(s.interrupt))
-      throw Error(
-        `Unsupported Workflow interrupt kind "${s.interrupt.payload.kind}".`,
-      );
+      throw Error(`Unsupported Workflow interrupt kind "${s.interrupt.payload.kind}".`);
     let t = e.session.history.length,
       n = l.slice(0, t),
       r = l.slice(t);
@@ -1929,10 +1801,7 @@ async function continuePendingWorkflowInterrupt(e) {
 }
 function replaceWorkflowToolResult(e, t, n) {
   if (t === void 0) return [...e];
-  let r =
-    typeof n == `string`
-      ? { type: `text`, value: n }
-      : { type: `json`, value: n };
+  let r = typeof n == `string` ? { type: `text`, value: n } : { type: `json`, value: n };
   return e.map((e) => {
     if (e.role !== `tool`) return e;
     let n = e.content.map((e) =>
@@ -1944,9 +1813,7 @@ function replaceWorkflowToolResult(e, t, n) {
 function parkOnWorkflowInterrupt(e) {
   let t = getWorkflowRuntimeActionInterrupts(e.interrupt)[0];
   if (t === void 0)
-    throw Error(
-      `Workflow continuation contains no pending runtime-action interrupt.`,
-    );
+    throw Error(`Workflow continuation contains no pending runtime-action interrupt.`);
   let n = { ...e.baseSession, history: [...e.promptMessages] };
   return {
     next: null,
@@ -1968,8 +1835,7 @@ function createNextCompactionConfig(e, t, n) {
   };
   return (
     n.usage?.inputTokens !== void 0 &&
-      ((r.lastKnownInputTokens = n.usage.inputTokens),
-      (r.lastKnownPromptMessageCount = t.length)),
+      ((r.lastKnownInputTokens = n.usage.inputTokens), (r.lastKnownPromptMessageCount = t.length)),
     r
   );
 }

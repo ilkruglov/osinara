@@ -6,9 +6,9 @@ function loadNitroRolldown() {
     (rolldownPromise ??= (async () =>
       await import(
         pathToFileURL(
-          createRequire(
-            createRequire(import.meta.url).resolve(`nitro/package.json`),
-          ).resolve(`rolldown`),
+          createRequire(createRequire(import.meta.url).resolve(`nitro/package.json`)).resolve(
+            `rolldown`,
+          ),
         ).href
       ))()),
     rolldownPromise
@@ -19,9 +19,9 @@ function loadNitroRolldownParseAst() {
     (rolldownParseAstPromise ??= (async () =>
       await import(
         pathToFileURL(
-          createRequire(
-            createRequire(import.meta.url).resolve(`nitro/package.json`),
-          ).resolve(`rolldown/parseAst`),
+          createRequire(createRequire(import.meta.url).resolve(`nitro/package.json`)).resolve(
+            `rolldown/parseAst`,
+          ),
         ).href
       ))()),
     rolldownParseAstPromise

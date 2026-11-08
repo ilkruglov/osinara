@@ -29,7 +29,10 @@ import type { DevelopmentServer, DevelopmentServerOptions } from "#internal/nitr
  */
 export declare const DEV_SERVER_CLOSE_BUDGET_MS: number;
 export interface DevelopmentServerProcess extends DevelopmentServer {
-    wait(): Promise<void>;
+  wait(): Promise<void>;
 }
 /** Runs the CLI-owned local server outside the foreground TUI process. */
-export declare function createDevelopmentServer(appRoot: string, options?: DevelopmentServerOptions): DevelopmentServerProcess;
+export declare function createDevelopmentServer(
+  appRoot: string,
+  options?: DevelopmentServerOptions,
+): DevelopmentServerProcess;

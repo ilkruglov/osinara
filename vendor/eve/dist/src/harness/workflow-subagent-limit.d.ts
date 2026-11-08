@@ -11,10 +11,10 @@ export declare const DEFAULT_WORKFLOW_MAX_SUBAGENTS = 100;
  * actions must resolve with an error result instead of starting a child.
  */
 export type WorkflowSubagentDispatchPlan = {
-    readonly allowed: readonly RuntimeActionRequest[];
-    readonly blocked: readonly RuntimeActionRequest[];
-    readonly maxSubagents: number;
-    readonly usedCalls: number;
+  readonly allowed: readonly RuntimeActionRequest[];
+  readonly blocked: readonly RuntimeActionRequest[];
+  readonly maxSubagents: number;
+  readonly usedCalls: number;
 };
 /**
  * Counts the subagent calls this Workflow invocation has already resolved.
@@ -24,7 +24,9 @@ export type WorkflowSubagentDispatchPlan = {
  * consumed call. Entries still `interrupted` are the pending actions being
  * planned, not consumed budget.
  */
-export declare function countResolvedWorkflowSubagentCalls(interrupt: WorkflowSandboxInterrupt): number;
+export declare function countResolvedWorkflowSubagentCalls(
+  interrupt: WorkflowSandboxInterrupt,
+): number;
 /**
  * Splits the pending actions of one workflow interrupt into the prefix that
  * still fits the invocation's `maxSubagents` budget and the remainder that
@@ -32,7 +34,7 @@ export declare function countResolvedWorkflowSubagentCalls(interrupt: WorkflowSa
  * sandbox program's call order.
  */
 export declare function planWorkflowSubagentDispatch(input: {
-    readonly actions: readonly RuntimeActionRequest[];
-    readonly interrupt: WorkflowSandboxInterrupt;
-    readonly maxSubagents?: number;
+  readonly actions: readonly RuntimeActionRequest[];
+  readonly interrupt: WorkflowSandboxInterrupt;
+  readonly maxSubagents?: number;
 }): WorkflowSubagentDispatchPlan;

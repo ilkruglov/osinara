@@ -17,7 +17,10 @@ import { memoryIndexRepository } from "./memory-index-repository.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const integrationDatabaseUrl = process.env.DATABASE_URL;
-if (integrationTestsEnabled && (!integrationDatabaseUrl || !new URL(integrationDatabaseUrl).pathname.endsWith("_test"))) {
+if (
+  integrationTestsEnabled &&
+  (!integrationDatabaseUrl || !new URL(integrationDatabaseUrl).pathname.endsWith("_test"))
+) {
   throw new Error("AGENT_TEST_DATABASE_UNSAFE: Для integration-тестов нужна отдельная БД *_test");
 }
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
@@ -42,10 +45,9 @@ async function insertPendingMemory(): Promise<string> {
      RETURNING id`,
     [family.rows[0]!.id, user.rows[0]!.id],
   );
-  await database().query(
-    "INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)",
-    [memory.rows[0]!.id],
-  );
+  await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [
+    memory.rows[0]!.id,
+  ]);
   return memory.rows[0]!.id;
 }
 
@@ -109,7 +111,9 @@ describeWithDatabase("memoryIndexRepository", () => {
         embedding_status: "indexed",
       },
     ]);
-    await expect(memoryIndexRepository.claim(8, MEMORY_EMBEDDING_LEASE_MILLISECONDS)).resolves.toEqual([]);
+    await expect(
+      memoryIndexRepository.claim(8, MEMORY_EMBEDDING_LEASE_MILLISECONDS),
+    ).resolves.toEqual([]);
   });
 
   // A model change requeues every record (migration 123); a record written meanwhile must not wait
@@ -130,11 +134,16 @@ describeWithDatabase("memoryIndexRepository", () => {
        RETURNING id`,
       [older],
     );
-    await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [newer.rows[0]!.id]);
+    await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [
+      newer.rows[0]!.id,
+    ]);
 
-    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId))
-      .toEqual([newer.rows[0]!.id]);
-    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId)).toEqual([older]);
+    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId)).toEqual([
+      newer.rows[0]!.id,
+    ]);
+    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId)).toEqual([
+      older,
+    ]);
   });
 
   // Migration 123 queued soft-deleted records too, while the worker only indexes visible ones.
@@ -157,11 +166,17 @@ describeWithDatabase("memoryIndexRepository", () => {
          RETURNING id`,
         [live, `Удалённая запись ${index}`, `index-hidden-${index}`],
       );
-      await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [hidden.rows[0]!.id]);
-      await database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [hidden.rows[0]!.id]);
+      await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [
+        hidden.rows[0]!.id,
+      ]);
+      await database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [
+        hidden.rows[0]!.id,
+      ]);
     }
 
-    expect((await memoryIndexRepository.claim(4, 60_000)).map((job) => job.memoryItemId)).toEqual([live]);
+    expect((await memoryIndexRepository.claim(4, 60_000)).map((job) => job.memoryItemId)).toEqual([
+      live,
+    ]);
   });
 
   it("rejects a stale completion after an edit resets the job", async () => {
@@ -178,13 +193,15 @@ describeWithDatabase("memoryIndexRepository", () => {
       memoryIndexRepository.complete(
         memoryId,
         job!.leaseToken,
-        [{
-          chunkIndex: 0,
-          content: "Поездка в Казань",
-          embedding: Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0),
-          endOffset: 16,
-          startOffset: 0,
-        }],
+        [
+          {
+            chunkIndex: 0,
+            content: "Поездка в Казань",
+            embedding: Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0),
+            endOffset: 16,
+            startOffset: 0,
+          },
+        ],
         MEMORY_EMBEDDING_MODEL_VERSION,
       ),
     ).resolves.toBe(false);

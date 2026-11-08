@@ -32,26 +32,38 @@ function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
 
 describe("resolveConversationEnvironment", () => {
   it("selects the private profile only for personal and family scopes", () => {
-    expect(resolveConversationEnvironment(auth({
-      memoryScopes: ["personal", "family"],
-      telegramChatType: "private",
-    }))).toBe("private");
+    expect(
+      resolveConversationEnvironment(
+        auth({
+          memoryScopes: ["personal", "family"],
+          telegramChatType: "private",
+        }),
+      ),
+    ).toBe("private");
   });
 
   it("selects the family profile only for a registered family group", () => {
-    expect(resolveConversationEnvironment(auth({
-      groupType: "family_private",
-      memoryScopes: ["family"],
-      telegramChatType: "supergroup",
-    }))).toBe("family");
+    expect(
+      resolveConversationEnvironment(
+        auth({
+          groupType: "family_private",
+          memoryScopes: ["family"],
+          telegramChatType: "supergroup",
+        }),
+      ),
+    ).toBe("family");
   });
 
   it("selects the external profile for the registered external group type", () => {
-    expect(resolveConversationEnvironment(auth({
-      groupType: "external",
-      memoryScopes: ["group"],
-      telegramChatType: "group",
-    }))).toBe("external");
+    expect(
+      resolveConversationEnvironment(
+        auth({
+          groupType: "external",
+          memoryScopes: ["group"],
+          telegramChatType: "group",
+        }),
+      ),
+    ).toBe("external");
   });
 
   it("selects the external profile for a turn started by another bot", () => {
@@ -72,11 +84,15 @@ describe("resolveConversationEnvironment", () => {
   });
 
   it("rejects contradictory chat type, group type, and memory scopes", () => {
-    expect(() => resolveConversationEnvironment(auth({
-      groupType: "family_private",
-      memoryScopes: ["personal", "family"],
-      telegramChatType: "supergroup",
-    }))).toThrowError(/AGENT_CONVERSATION_ENVIRONMENT_INVALID/);
+    expect(() =>
+      resolveConversationEnvironment(
+        auth({
+          groupType: "family_private",
+          memoryScopes: ["personal", "family"],
+          telegramChatType: "supergroup",
+        }),
+      ),
+    ).toThrowError(/AGENT_CONVERSATION_ENVIRONMENT_INVALID/);
   });
 
   it("does not reuse a durable initiator when current auth is absent", () => {
@@ -85,7 +101,8 @@ describe("resolveConversationEnvironment", () => {
       telegramChatType: "private",
     });
 
-    expect(() => resolveConversationEnvironment({ current: null, initiator }))
-      .toThrowError(/AGENT_CONVERSATION_ENVIRONMENT_INVALID/);
+    expect(() => resolveConversationEnvironment({ current: null, initiator })).toThrowError(
+      /AGENT_CONVERSATION_ENVIRONMENT_INVALID/,
+    );
   });
 });

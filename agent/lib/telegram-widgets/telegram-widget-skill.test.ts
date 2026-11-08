@@ -12,17 +12,28 @@ import { describe, expect, it } from "vitest";
 
 import { measureTelegramWidget } from "./telegram-widget-limits.js";
 import { lintTelegramWidget } from "./telegram-widget-lint.js";
-import { TELEGRAM_WIDGET_SKILL_DEFINITION, TELEGRAM_WIDGET_TEMPLATES } from "./telegram-widget-skill.js";
+import {
+  TELEGRAM_WIDGET_SKILL_DEFINITION,
+  TELEGRAM_WIDGET_TEMPLATES,
+} from "./telegram-widget-skill.js";
 
 describe("telegram-widgets skill", () => {
   it("carries the instructions and the templates", () => {
     expect(TELEGRAM_WIDGET_SKILL_DEFINITION.markdown).toMatch(/send_widget/u);
-    expect(Object.keys(TELEGRAM_WIDGET_TEMPLATES).sort()).toEqual(["templates/bars.html", "templates/summary.html", "templates/tabs.html"]);
+    expect(Object.keys(TELEGRAM_WIDGET_TEMPLATES).sort()).toEqual([
+      "templates/bars.html",
+      "templates/summary.html",
+      "templates/tabs.html",
+    ]);
   });
 
   it("ships templates that pass the send_widget check cleanly and leave half the budget to the data", () => {
     for (const [path, html] of Object.entries(TELEGRAM_WIDGET_TEMPLATES)) {
-      expect(lintTelegramWidget(html, { allowLinks: false }), path).toEqual({ errors: [], links: [], warnings: [] });
+      expect(lintTelegramWidget(html, { allowLinks: false }), path).toEqual({
+        errors: [],
+        links: [],
+        warnings: [],
+      });
       expect(measureTelegramWidget(html).compressedBytes, path).toBeLessThan(2_048);
     }
   });

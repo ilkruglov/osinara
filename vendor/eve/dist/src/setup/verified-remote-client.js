@@ -23,8 +23,7 @@ async function resolveVerifiedRemoteDevelopmentClient(e) {
     let { ownerId: e, projectId: n } = i.target.deployment;
     r.authorize({
       target: i.target,
-      resolveToken: () =>
-        t.resolveDevelopmentOidcToken({ ownerId: e, projectId: n }),
+      resolveToken: () => t.resolveDevelopmentOidcToken({ ownerId: e, projectId: n }),
     });
   }
   return {

@@ -6,12 +6,10 @@ async function normalizeDynamicSubagentAgentConfig(t) {
   let n = `Dynamic subagent "${t.name}" must return defineAgent(...), defineRemoteAgent(...), or null.`,
     r = normalizeAgentDefinition(t.value, n);
   if (!r.description) throw Error(`${n} The "description" field is required.`);
-  if (r.build !== void 0)
-    throw Error(`${n} The "build" field cannot be selected at runtime.`);
+  if (r.build !== void 0) throw Error(`${n} The "build" field cannot be selected at runtime.`);
   if (r.experimental !== void 0)
     throw Error(`${n} The "experimental" field cannot be selected at runtime.`);
-  if (isDynamicModelDefinition(r.model))
-    throw Error(`${n} The returned "model" must be static.`);
+  if (isDynamicModelDefinition(r.model)) throw Error(`${n} The returned "model" must be static.`);
   let i = {
     description: r.description,
     model: await normalizeDurableModelSelection({
@@ -42,8 +40,7 @@ async function normalizeDynamicSubagentAgentConfig(t) {
   }
   return (
     r.limits !== void 0 && (i.limits = r.limits),
-    r.outputSchema !== void 0 &&
-      (i.outputSchema = serializeOutputSchema(r.outputSchema)),
+    r.outputSchema !== void 0 && (i.outputSchema = serializeOutputSchema(r.outputSchema)),
     r.reasoning !== void 0 && (i.reasoning = r.reasoning),
     i
   );

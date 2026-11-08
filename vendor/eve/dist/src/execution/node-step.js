@@ -157,8 +157,7 @@ function resolveHarnessToolDefinition(e) {
       rawExecute: o,
       scope: r.name,
     }),
-    frameworkAction:
-      i && r.name === LOAD_SKILL_TOOL_NAME ? `load-skill` : void 0,
+    frameworkAction: i && r.name === LOAD_SKILL_TOOL_NAME ? `load-skill` : void 0,
     inputSchema: r.inputSchema ?? UNSPECIFIED_INPUT_SCHEMA,
     name: r.name,
     approval: r.approval,
@@ -168,14 +167,6 @@ function resolveHarnessToolDefinition(e) {
 }
 function resolveAuthoredExecute(e) {
   let { isFrameworkTool: t, rawExecute: n, scope: i } = e;
-  return n === void 0
-    ? void 0
-    : t
-      ? n
-      : createToolExecuteWithAuth({ execute: n, scope: i });
+  return n === void 0 ? void 0 : t ? n : createToolExecuteWithAuth({ execute: n, scope: i });
 }
-export {
-  buildRuntimeIdentity,
-  createExecutionNodeStep,
-  createNodeHarnessTools,
-};
+export { buildRuntimeIdentity, createExecutionNodeStep, createNodeHarnessTools };

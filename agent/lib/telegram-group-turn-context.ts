@@ -153,17 +153,19 @@ function mergeTimelineEntries(
   const bySequence = new Map<string, TelegramGroupJournalEntry>();
   for (const entry of [...window, ...unseen]) bySequence.set(entry.sequenceId, entry);
   return [...bySequence.values()].sort((left, right) =>
-    BigInt(left.sequenceId) < BigInt(right.sequenceId) ? -1 : 1
+    BigInt(left.sequenceId) < BigInt(right.sequenceId) ? -1 : 1,
   );
 }
 
 function turnMessageError(reason: string, detail?: string): AppError {
   // The exact failure stays in logs; the caller only needs the stable contract error.
-  console.error(JSON.stringify({
-    code: TURN_MESSAGE_ERROR_CODE,
-    reason,
-    ...(detail === undefined ? {} : { detail }),
-  }));
+  console.error(
+    JSON.stringify({
+      code: TURN_MESSAGE_ERROR_CODE,
+      reason,
+      ...(detail === undefined ? {} : { detail }),
+    }),
+  );
   return new AppError(
     TURN_MESSAGE_ERROR_CODE,
     "Не удалось прочитать текущее сообщение группы. Отправьте сообщение ещё раз",
@@ -185,7 +187,8 @@ function currentTelegramMessageEnvelope(
     | "seriesSequenceIds"
   >,
 ): string {
-  const snapshotConflict = input.replyTargetSnapshot !== null &&
+  const snapshotConflict =
+    input.replyTargetSnapshot !== null &&
     input.replyTargetSnapshot !== undefined &&
     (!input.replyTargetUnavailable || input.replyToSequenceId !== null);
   if ((input.replyTargetUnavailable && input.replyToSequenceId !== null) || snapshotConflict) {
@@ -268,61 +271,65 @@ export function createTelegramGroupTurnContextPreparer(
         "Не удалось загрузить историю личного разговора",
       );
     }
-    const page = cursor === null
-      ? {
-          entries: useConversationTimeline
-            ? await dependencies.timeline!.listRecent({
-                beforeSequence: input.currentSequence,
-                conversationId: input.conversationId!,
-                limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-              })
-            : await dependencies.journal.listRecent({
-            anchorEntryId: input.currentEntryId,
-            beforeSequence: input.currentSequence,
-            groupId: input.groupId!,
-            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-            messageThreadId: input.messageThreadId,
-          }),
-          omittedBeforeSequence: null,
-        }
-      : useConversationTimeline
-        ? await dependencies.timeline!.listIncremental({
-            afterSequence: cursor,
-            applicationSessionId: input.applicationSessionId,
-            beforeSequence: input.currentSequence,
-            conversationId: input.conversationId!,
-            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-          })
-        : await dependencies.journal.listIncremental({
-            afterSequence: cursor,
-            anchorEntryId: input.currentEntryId,
-            applicationSessionId: input.applicationSessionId,
-            beforeSequence: input.currentSequence,
-            groupId: input.groupId!,
-            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-            messageThreadId: input.messageThreadId,
-          });
+    const page =
+      cursor === null
+        ? {
+            entries: useConversationTimeline
+              ? await dependencies.timeline!.listRecent({
+                  beforeSequence: input.currentSequence,
+                  conversationId: input.conversationId!,
+                  limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+                })
+              : await dependencies.journal.listRecent({
+                  anchorEntryId: input.currentEntryId,
+                  beforeSequence: input.currentSequence,
+                  groupId: input.groupId!,
+                  limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+                  messageThreadId: input.messageThreadId,
+                }),
+            omittedBeforeSequence: null,
+          }
+        : useConversationTimeline
+          ? await dependencies.timeline!.listIncremental({
+              afterSequence: cursor,
+              applicationSessionId: input.applicationSessionId,
+              beforeSequence: input.currentSequence,
+              conversationId: input.conversationId!,
+              limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+            })
+          : await dependencies.journal.listIncremental({
+              afterSequence: cursor,
+              anchorEntryId: input.currentEntryId,
+              applicationSessionId: input.applicationSessionId,
+              beforeSequence: input.currentSequence,
+              groupId: input.groupId!,
+              limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+              messageThreadId: input.messageThreadId,
+            });
     // A session sees its own turns in Eve history, but past delivery context leaves the prompt, so
     // a bounded window of the latest entries rides along with every incremental turn.
-    const recentWindow = cursor === null
-      ? []
-      : recentTimelineWindow(useConversationTimeline
-        ? await dependencies.timeline!.listRecent({
-            beforeSequence: input.currentSequence,
-            conversationId: input.conversationId!,
-            limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
-          })
-        : await dependencies.journal.listRecent({
-            anchorEntryId: input.currentEntryId,
-            beforeSequence: input.currentSequence,
-            groupId: input.groupId!,
-            limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
-            messageThreadId: input.messageThreadId,
-          }));
+    const recentWindow =
+      cursor === null
+        ? []
+        : recentTimelineWindow(
+            useConversationTimeline
+              ? await dependencies.timeline!.listRecent({
+                  beforeSequence: input.currentSequence,
+                  conversationId: input.conversationId!,
+                  limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+                })
+              : await dependencies.journal.listRecent({
+                  anchorEntryId: input.currentEntryId,
+                  beforeSequence: input.currentSequence,
+                  groupId: input.groupId!,
+                  limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+                  messageThreadId: input.messageThreadId,
+                }),
+          );
     const timelineEntries = mergeTimelineEntries(page.entries, recentWindow);
     // Current capabilities filter each historical reference by its exact admitted media class.
     const visibleEntries = timelineEntries.map((entry) =>
-      visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess)
+      visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess),
     );
     const currentMessageEnvelope = currentTelegramMessageEnvelope(input);
     // The envelope is re-resolved below once the timeline is selected: a reply whose target did
@@ -331,15 +338,22 @@ export function createTelegramGroupTurnContextPreparer(
       currentMessageEnvelope.length,
       input.replyToSequenceId === null
         ? 0
-        : currentTelegramMessageEnvelope({ ...input, replyTargetUnavailable: true, replyToSequenceId: null }).length,
+        : currentTelegramMessageEnvelope({
+            ...input,
+            replyTargetUnavailable: true,
+            replyToSequenceId: null,
+          }).length,
     );
     const handoffBlock = fitHandoffBlock(
       handoff,
-      TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS - currentMessageCharacters - 2 - HANDOFF_TIMELINE_RESERVE,
+      TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
+        currentMessageCharacters -
+        2 -
+        HANDOFF_TIMELINE_RESERVE,
     );
     const handoffCharacters = handoffBlock === null ? 0 : handoffBlock.length + 2;
-    const timelineCharacterBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
-      currentMessageCharacters - handoffCharacters - 2;
+    const timelineCharacterBudget =
+      TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS - currentMessageCharacters - handoffCharacters - 2;
     if (timelineCharacterBudget <= 0) {
       throw new AppError(
         "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
@@ -356,7 +370,8 @@ export function createTelegramGroupTurnContextPreparer(
     );
     const timeline = selected.context;
     // A DB-resolved reply is usable only when its protected target survived model-context bounds.
-    const replyTargetIncluded = input.replyToSequenceId === null ||
+    const replyTargetIncluded =
+      input.replyToSequenceId === null ||
       timeline?.includes(`\n#${input.replyToSequenceId} [`) === true;
     const replyToSequenceId = replyTargetIncluded ? input.replyToSequenceId : null;
     const replyTargetUnavailable = input.replyTargetUnavailable || !replyTargetIncluded;
@@ -365,7 +380,11 @@ export function createTelegramGroupTurnContextPreparer(
       replyTargetUnavailable,
       replyToSequenceId,
     });
-    const durableMessage = composeTelegramTurnMessage(timeline, resolvedCurrentMessageEnvelope, handoffBlock);
+    const durableMessage = composeTelegramTurnMessage(
+      timeline,
+      resolvedCurrentMessageEnvelope,
+      handoffBlock,
+    );
     if (durableMessage.length > TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS) {
       throw new AppError(
         "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
@@ -380,7 +399,7 @@ export function createTelegramGroupTurnContextPreparer(
       omittedBeforeSequence: page.omittedBeforeSequence,
       timelineOmission: selected.omission,
       visibleEntryIds: [
-        ...selected.entries.flatMap((entry) => entry.entryId ? [entry.entryId] : []),
+        ...selected.entries.flatMap((entry) => (entry.entryId ? [entry.entryId] : [])),
         input.currentEntryId,
       ],
       visibleTimelineEntries: selected.entries,

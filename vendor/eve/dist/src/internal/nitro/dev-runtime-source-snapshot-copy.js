@@ -25,18 +25,14 @@ async function copyDevelopmentSourceSnapshot(n) {
 async function createSnapshotDependencyMounts(e) {
   for (let r of e.dependencyMounts) {
     let i = toSnapshotPathForPlan(e, r.mountPath);
-    (await mkdir(dirname(i), { recursive: !0 }),
-      await symlink(r.sourcePath, i, `junction`));
+    (await mkdir(dirname(i), { recursive: !0 }), await symlink(r.sourcePath, i, `junction`));
   }
 }
 async function ensureRuntimePackageJson(e) {
   let n = join(e.runtimeAppRoot, `package.json`);
   existsSync(n) ||
     (await mkdir(e.runtimeAppRoot, { recursive: !0 }),
-    await writeFile(
-      n,
-      `${JSON.stringify({ private: !0, type: `module` }, null, 2)}\n`,
-    ));
+    await writeFile(n, `${JSON.stringify({ private: !0, type: `module` }, null, 2)}\n`));
 }
 function toSnapshotPathForPlan(e, t) {
   return toDevelopmentSourceSnapshotPath({

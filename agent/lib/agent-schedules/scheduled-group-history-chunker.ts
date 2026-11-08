@@ -42,19 +42,15 @@ function tooLarge(): AppError {
 export function serializeScheduledGroupHistoryChunk(
   entries: readonly ScheduledGroupHistoryEntry[],
 ): string {
-  return [
-    TIMELINE_OPENING,
-    escapeUntrustedContextJson(entries),
-    TIMELINE_CLOSING,
-  ].join("\n");
+  return [TIMELINE_OPENING, escapeUntrustedContextJson(entries), TIMELINE_CLOSING].join("\n");
 }
 
 function codePointBoundary(value: string, index: number): number {
   if (index <= 0 || index >= value.length) return index;
   const previous = value.charCodeAt(index - 1);
   const current = value.charCodeAt(index);
-  const splitsPair = previous >= 0xD800 && previous <= 0xDBFF &&
-    current >= 0xDC00 && current <= 0xDFFF;
+  const splitsPair =
+    previous >= 0xd800 && previous <= 0xdbff && current >= 0xdc00 && current <= 0xdfff;
   return splitsPair ? index - 1 : index;
 }
 
@@ -130,7 +126,8 @@ export function chunkScheduledGroupHistory(
       current = [entry];
       continue;
     }
-    if (serializeScheduledGroupHistoryChunk(candidate).length > CHUNK_MAX_CHARACTERS) throw tooLarge();
+    if (serializeScheduledGroupHistoryChunk(candidate).length > CHUNK_MAX_CHARACTERS)
+      throw tooLarge();
     current = candidate;
   }
   if (current.length > 0) chunks.push(current);

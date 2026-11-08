@@ -6,11 +6,7 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
-import {
-  requireNonEmpty,
-  requireUpdateId,
-  requireUuid,
-} from "./telegram-ingress-contract.js";
+import { requireNonEmpty, requireUpdateId, requireUuid } from "./telegram-ingress-contract.js";
 
 export const telegramIngressSessionCursorRepository = {
   async completeWithSession(
@@ -19,7 +15,11 @@ export const telegramIngressSessionCursorRepository = {
     sessionId: string,
     nextEventIndex: number,
   ): Promise<void> {
-    requireNonEmpty(sessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
+    requireNonEmpty(
+      sessionId,
+      "AGENT_TELEGRAM_SESSION_INVALID",
+      "Eve не вернул идентификатор сессии",
+    );
     if (!Number.isSafeInteger(nextEventIndex) || nextEventIndex < 0) {
       throw new AppError(
         "AGENT_TELEGRAM_SESSION_CURSOR_INVALID",
@@ -70,7 +70,11 @@ export const telegramIngressSessionCursorRepository = {
   },
 
   async sessionEventStreamCursor(sessionId: string): Promise<number> {
-    requireNonEmpty(sessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
+    requireNonEmpty(
+      sessionId,
+      "AGENT_TELEGRAM_SESSION_INVALID",
+      "Eve не вернул идентификатор сессии",
+    );
     const result = await database().query<{ next_event_index: string }>(
       "SELECT next_event_index::text FROM eve_session_event_cursors WHERE eve_session_id = $1",
       [sessionId],

@@ -1,6 +1,10 @@
 import "#internal/workflow/builtins.js";
 import { type EveAttributeValue } from "#runtime/attributes/normalize.js";
-export { EVE_ATTRIBUTE_VALUE_MAX_BYTES, type EveAttributeValue, truncateForTag, } from "#runtime/attributes/normalize.js";
+export {
+  EVE_ATTRIBUTE_VALUE_MAX_BYTES,
+  type EveAttributeValue,
+  truncateForTag,
+} from "#runtime/attributes/normalize.js";
 /**
  * Writes a batch of eve-owned attributes to the active workflow run.
  *

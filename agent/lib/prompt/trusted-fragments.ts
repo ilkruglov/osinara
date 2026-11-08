@@ -20,7 +20,8 @@ const PHRASES: Readonly<Record<TrustedScope, TrustedScopePhrases>> = {
     scheduleOwnership: "Расписания создавай только для этой группы или текущей темы.",
   },
   personal: {
-    credentialIntake: "Допустимы секреты текущего авторизованного пользователя, нужные для его задачи.",
+    credentialIntake:
+      "Допустимы секреты текущего авторизованного пользователя, нужные для его задачи.",
     integrationScope: "personal scope",
     mounts:
       "Смонтированы `/workspace/personal` и `/workspace/family`; по умолчанию используй personal, family изменяй только по явной просьбе. Доступны изолированный Bash и personal tools environment.",
@@ -51,9 +52,10 @@ export const PROACTIVE_DELIVERY_RULES = `\`<recent_proactive_deliveries>\` — �
 
 export function trustedReminderRules(scope: TrustedScope): string {
   const phrases = PHRASES[scope];
-  const personalSetup = scope === "personal"
-    ? "Перед первым напоминанием получи `notification_settings`; если их нет, запроси IANA timezone и quiet hours и сохрани через set."
-    : "Используй настроенную timezone; если её нет, попроси настроить timezone и quiet hours в личном чате.";
+  const personalSetup =
+    scope === "personal"
+      ? "Перед первым напоминанием получи `notification_settings`; если их нет, запроси IANA timezone и quiet hours и сохрани через set."
+      : "Используй настроенную timezone; если её нет, попроси настроить timezone и quiet hours в личном чате.";
   return `## Напоминания и расписания
 
 Напоминание доставляет текст в назначенное время; расписание запускает автономный сценарий агента и присылает итог. Не подменяй одно другим без согласия. ${phrases.reminderOwnership} ${PHRASES[scope].scheduleOwnership} ${personalSetup} Не угадывай срок, timezone и повтор: если чего-то нет, спроси. Повтор бывает от минуты до года: minutely, hourly, daily, weekly, monthly, yearly с интервалом от 1 до 365. Минуты и часы это длительность от первого запуска, остальные периоды сохраняют местное календарное время, а отсутствующая дата переносится на последний день месяца. Перед неоднозначным изменением или удалением прочитай текущее состояние через list-инструмент. Формат payload описан в самих инструментах.`;

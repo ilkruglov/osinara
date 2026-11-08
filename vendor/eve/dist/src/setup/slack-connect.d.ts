@@ -7,33 +7,38 @@
  */
 import { z } from "zod";
 export interface VercelConnectListResponse {
-    /** `vercel connect list -F json` (current CLI). */
-    connectors?: unknown;
-    /** Older CLI builds emitted the same array under `clients`. */
-    clients?: unknown;
+  /** `vercel connect list -F json` (current CLI). */
+  connectors?: unknown;
+  /** Older CLI builds emitted the same array under `clients`. */
+  clients?: unknown;
 }
-declare const SlackConnectorRefSchema: z.ZodObject<{
+declare const SlackConnectorRefSchema: z.ZodObject<
+  {
     uid: z.ZodString;
     id: z.ZodString;
-}, z.core.$strip>;
+  },
+  z.core.$strip
+>;
 /** Identifiers returned by Vercel Connect for a Slack connector. */
 export type SlackConnectorRef = z.infer<typeof SlackConnectorRefSchema>;
 /** Slack workspace metadata exposed by a connected Slack connector. */
 export interface SlackWorkspaceConnection {
-    workspaceUrl: string;
-    workspaceName?: string;
+  workspaceUrl: string;
+  workspaceName?: string;
 }
 /** Parsed Slack connector state returned by Vercel's connector detail API. */
 export interface SlackConnectorDetails {
-    ref: SlackConnectorRef;
-    workspace?: SlackWorkspaceConnection;
+  ref: SlackConnectorRef;
+  workspace?: SlackWorkspaceConnection;
 }
 /**
  * Parses the exact connector response. Vercel reports a completed Slack
  * workspace connection in `data.slackTeam`; its installations collection can
  * remain empty even after browser setup succeeds.
  */
-export declare function parseSlackConnectorDetails(body: unknown): SlackConnectorDetails | undefined;
+export declare function parseSlackConnectorDetails(
+  body: unknown,
+): SlackConnectorDetails | undefined;
 /**
  * Reads the connector identifiers from `vercel connect create … -F json`
  * stdout, the authoritative source for the just-created connector's UID.
@@ -43,7 +48,11 @@ export declare function parseCreatedSlackConnector(stdout: string): SlackConnect
 /**
  * Finds the expected connector, or the newest Slack connector already attached to this project.
  */
-export declare function pickSlackConnector(listJson: unknown, projectId: string | undefined, expectedUid: string | undefined): SlackConnectorRef | undefined;
+export declare function pickSlackConnector(
+  listJson: unknown,
+  projectId: string | undefined,
+  expectedUid: string | undefined,
+): SlackConnectorRef | undefined;
 /**
  * Turns a Slack `app_redirect` install URL into a deep link that opens the
  * Messages tab, a DM compose with the bot, instead of the app's about page.
@@ -54,10 +63,10 @@ export declare function pickSlackConnector(listJson: unknown, projectId: string 
 export declare function slackMessageDeepLink(url: string): string;
 /** A Slack connector plus the project ids it is attached to. */
 export interface RawSlackConnector {
-    uid: string;
-    id?: string;
-    projectIds: readonly string[];
-    createdAt: number;
+  uid: string;
+  id?: string;
+  projectIds: readonly string[];
+  createdAt: number;
 }
 /** Parses Slack connectors (uid + attached project ids) from a connect-list response. */
 export declare function parseSlackConnectors(listJson: unknown): RawSlackConnector[];

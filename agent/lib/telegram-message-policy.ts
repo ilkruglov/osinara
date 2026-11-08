@@ -16,7 +16,11 @@ import type { TelegramMessage } from "eve/channels/telegram";
 
 import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
 import { isReadableTextDocumentCandidate } from "./attachments/attachment-policy.js";
-import { richMediaIsLifted, richMessageMedia, richMessagePlainText } from "./telegram-rich-message.js";
+import {
+  richMediaIsLifted,
+  richMessageMedia,
+  richMessagePlainText,
+} from "./telegram-rich-message.js";
 
 interface TelegramDispatchMessage {
   chat: {
@@ -33,8 +37,7 @@ interface TelegramDispatchMessage {
   text: string;
 }
 
-const TELEGRAM_COMMAND_PATTERN =
-  /^\/[A-Za-z0-9_]{1,32}(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u;
+const TELEGRAM_COMMAND_PATTERN = /^\/[A-Za-z0-9_]{1,32}(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u;
 const TELEGRAM_MENTION_PATTERN = /(?:^|[^A-Za-z0-9_])@(?<target>[A-Za-z0-9_]+)/gu;
 // Only this agent's own name wakes it. The upstream name "Осинара" belongs to another bot that
 // shares group chats with Mia, so its stems must not count as an address.
@@ -84,7 +87,8 @@ export type TelegramInboundMediaKind =
  */
 function conditionalFieldIsMedia(raw: Record<string, unknown>, field: string): boolean {
   if (!Object.hasOwn(raw, field)) return false;
-  if (field === "rich_message" && (richMessagePlainText(raw) !== null || richMediaIsLifted(raw))) return false;
+  if (field === "rich_message" && (richMessagePlainText(raw) !== null || richMediaIsLifted(raw)))
+    return false;
   return containsTelegramFileReference(raw[field]);
 }
 
@@ -97,8 +101,14 @@ export function hasTelegramRawMediaBesidesLifted(raw: Record<string, unknown>): 
   const lifted = richMessageMedia(raw);
   if (lifted === null) return true;
   const liftedField = lifted.kind === "photo" ? "photo" : "document";
-  return TELEGRAM_INBOUND_MEDIA_FIELDS.some((field) => field !== liftedField && Object.hasOwn(raw, field)) ||
-    TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => field !== "rich_message" && conditionalFieldIsMedia(raw, field));
+  return (
+    TELEGRAM_INBOUND_MEDIA_FIELDS.some(
+      (field) => field !== liftedField && Object.hasOwn(raw, field),
+    ) ||
+    TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some(
+      (field) => field !== "rich_message" && conditionalFieldIsMedia(raw, field),
+    )
+  );
 }
 
 function containsTelegramFileReference(value: unknown): boolean {
@@ -123,20 +133,27 @@ function containsTelegramFileReference(value: unknown): boolean {
 export function classifyTelegramInboundMedia(
   message: Pick<TelegramMessage, "attachments" | "raw">,
 ): TelegramInboundMediaKind {
-  const hasRawMedia = TELEGRAM_INBOUND_MEDIA_FIELDS.some(
-    (field) => Object.hasOwn(message.raw, field),
-  ) || TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => conditionalFieldIsMedia(message.raw, field));
+  const hasRawMedia =
+    TELEGRAM_INBOUND_MEDIA_FIELDS.some((field) => Object.hasOwn(message.raw, field)) ||
+    TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => conditionalFieldIsMedia(message.raw, field));
   if (message.attachments.length === 0 && !hasRawMedia) return "none";
 
   // The normalized attachment and raw Telegram shape must agree exactly. Documents remain only
   // candidates until downloaded magic bytes establish their authoritative image MIME.
   const rawPhoto = message.raw.photo;
-  const hasOtherRawMedia = TELEGRAM_INBOUND_MEDIA_FIELDS.some(
-    (field) => field !== "photo" && field !== "document" && Object.hasOwn(message.raw, field),
-  ) || TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => conditionalFieldIsMedia(message.raw, field));
-  if (!hasOtherRawMedia && !Object.hasOwn(message.raw, "document") &&
-    Array.isArray(rawPhoto) && rawPhoto.length > 0 &&
-    message.attachments.length === 1 && message.attachments[0]?.kind === "photo") {
+  const hasOtherRawMedia =
+    TELEGRAM_INBOUND_MEDIA_FIELDS.some(
+      (field) => field !== "photo" && field !== "document" && Object.hasOwn(message.raw, field),
+    ) ||
+    TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => conditionalFieldIsMedia(message.raw, field));
+  if (
+    !hasOtherRawMedia &&
+    !Object.hasOwn(message.raw, "document") &&
+    Array.isArray(rawPhoto) &&
+    rawPhoto.length > 0 &&
+    message.attachments.length === 1 &&
+    message.attachments[0]?.kind === "photo"
+  ) {
     const rawFileIds = new Set<string>();
     for (const size of rawPhoto) {
       if (!size || typeof size !== "object" || Array.isArray(size)) return "unsupported_media";
@@ -149,17 +166,27 @@ export function classifyTelegramInboundMedia(
 
   const rawDocument = message.raw.document;
   const attachment = message.attachments[0];
-  if (!hasOtherRawMedia && !Object.hasOwn(message.raw, "photo") &&
-    rawDocument && typeof rawDocument === "object" && !Array.isArray(rawDocument) &&
-    message.attachments.length === 1 && attachment?.kind === "document") {
+  if (
+    !hasOtherRawMedia &&
+    !Object.hasOwn(message.raw, "photo") &&
+    rawDocument &&
+    typeof rawDocument === "object" &&
+    !Array.isArray(rawDocument) &&
+    message.attachments.length === 1 &&
+    attachment?.kind === "document"
+  ) {
     const raw = rawDocument as Record<string, unknown>;
     const exactFile = raw.file_id === attachment.fileId;
     const exactMime = raw.mime_type === undefined || raw.mime_type === attachment.mediaType;
     const exactName = raw.file_name === undefined || raw.file_name === attachment.fileName;
     const candidate = {
       ...attachment,
-      ...(typeof raw.file_name === "string" ? { fileName: raw.file_name } : { fileName: undefined }),
-      ...(typeof raw.mime_type === "string" ? { mediaType: raw.mime_type } : { mediaType: undefined }),
+      ...(typeof raw.file_name === "string"
+        ? { fileName: raw.file_name }
+        : { fileName: undefined }),
+      ...(typeof raw.mime_type === "string"
+        ? { mediaType: raw.mime_type }
+        : { mediaType: undefined }),
     };
     if (!exactFile || !exactMime || !exactName) return "unsupported_media";
     if (isTelegramImageDocumentCandidate(candidate)) return "image_document_candidate";
@@ -182,7 +209,7 @@ export function isReplyToBot(
   // Telegram's verified update identifies this bot exactly; another bot must never inherit its route.
   return Boolean(
     message.replyToMessage?.from?.isBot &&
-      message.replyToMessage.from.username?.toLowerCase() === botUsername.toLowerCase(),
+    message.replyToMessage.from.username?.toLowerCase() === botUsername.toLowerCase(),
   );
 }
 

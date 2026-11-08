@@ -7,23 +7,17 @@ async function executeBashOnSandbox(e, n) {
     o = i.truncated || a.truncated,
     s = i.output;
   i.truncated &&
-    (s =
-      `[stdout truncated: showing last ${i.outputLines} of ${i.totalLines} lines]\n` +
-      s);
+    (s = `[stdout truncated: showing last ${i.outputLines} of ${i.totalLines} lines]\n` + s);
   let c = a.output;
   return (
     a.truncated &&
-      (c =
-        `[stderr truncated: showing last ${a.outputLines} of ${a.totalLines} lines]\n` +
-        c),
+      (c = `[stderr truncated: showing last ${a.outputLines} of ${a.totalLines} lines]\n` + c),
     { exitCode: r.exitCode, stderr: c, stdout: s, truncated: o }
   );
 }
 async function runWithDevelopmentSandboxProgress(t, n) {
   if (
-    (logDevelopmentSandboxCommand(
-      `eve: starting sandbox command: ${formatCommand(n)}`,
-    ),
+    (logDevelopmentSandboxCommand(`eve: starting sandbox command: ${formatCommand(n)}`),
     !isEveDevEnvironment())
   )
     return await t.run({ command: n });
@@ -43,12 +37,7 @@ async function runWithDevelopmentSandboxProgress(t, n) {
       e
     );
   } catch (e) {
-    throw (
-      logDevelopmentSandboxCommand(
-        `eve: sandbox command failed: ${formatCommand(n)}`,
-      ),
-      e
-    );
+    throw (logDevelopmentSandboxCommand(`eve: sandbox command failed: ${formatCommand(n)}`), e);
   } finally {
     clearInterval(i);
   }

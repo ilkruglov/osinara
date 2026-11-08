@@ -40,9 +40,7 @@ const log = createLogger(`teams.channel`);
 function teamsChannel(e = {}) {
   let t = normalizeTeamsFilesPolicy(e.files),
     o = e.onMessage ?? defaultOnMessage,
-    s =
-      e.onInputResponse ??
-      (e.onMessage === void 0 ? defaultOnInputResponse : rejectInput),
+    s = e.onInputResponse ?? (e.onMessage === void 0 ? defaultOnInputResponse : rejectInput),
     c = { ...defaultEvents, ...e.events };
   return defineChannel({
     kindHint: `teams`,
@@ -58,62 +56,54 @@ function teamsChannel(e = {}) {
       return rebuildTeamsContext(t, n, e);
     },
     routes: [
-      POST(
-        e.route ?? `/eve/v1/teams`,
-        async (n, { from: i, resolveSession: a, waitUntil: c }) => {
-          let l = await verifyInbound(n, e.credentials);
-          if (l === null) return new Response(`unauthorized`, { status: 401 });
-          let u;
-          try {
-            u = parseJsonObject(JSON.parse(l));
-          } catch (e) {
-            return (
-              log.warn(`inbound Teams body is not valid JSON`, { error: e }),
-              teamsOk()
-            );
-          }
-          let d = parseTeamsActivity(u);
-          return d === null
-            ? teamsOk()
-            : d.type === `message`
-              ? (c(
-                  isTeamsInputResponseActivity(d)
-                    ? dispatchInputResponses({
-                        activity: d,
-                        config: e,
-                        from: i,
-                        onInputResponse: s,
-                      })
-                    : dispatchMessage({
-                        activity: d,
-                        config: e,
-                        filesPolicy: t,
-                        onMessage: o,
-                        from: i,
-                        resolveSession: a,
-                      }),
-                ),
-                teamsOk())
-              : d.type === `invoke`
-                ? handleInvoke({
-                    activity: d,
-                    config: e,
-                    onInputResponse: s,
-                    waitUntil: c,
-                    from: i,
-                  })
-                : teamsOk();
-        },
-      ),
+      POST(e.route ?? `/eve/v1/teams`, async (n, { from: i, resolveSession: a, waitUntil: c }) => {
+        let l = await verifyInbound(n, e.credentials);
+        if (l === null) return new Response(`unauthorized`, { status: 401 });
+        let u;
+        try {
+          u = parseJsonObject(JSON.parse(l));
+        } catch (e) {
+          return (log.warn(`inbound Teams body is not valid JSON`, { error: e }), teamsOk());
+        }
+        let d = parseTeamsActivity(u);
+        return d === null
+          ? teamsOk()
+          : d.type === `message`
+            ? (c(
+                isTeamsInputResponseActivity(d)
+                  ? dispatchInputResponses({
+                      activity: d,
+                      config: e,
+                      from: i,
+                      onInputResponse: s,
+                    })
+                  : dispatchMessage({
+                      activity: d,
+                      config: e,
+                      filesPolicy: t,
+                      onMessage: o,
+                      from: i,
+                      resolveSession: a,
+                    }),
+              ),
+              teamsOk())
+            : d.type === `invoke`
+              ? handleInvoke({
+                  activity: d,
+                  config: e,
+                  onInputResponse: s,
+                  waitUntil: c,
+                  from: i,
+                })
+              : teamsOk();
+      }),
     ],
     async receive(t, { from: r }) {
       let i = t.target,
         a = readNonEmptyString(i.serviceUrl),
         o = readNonEmptyString(i.conversationId);
       if (!a || !o)
-        throw Error(
-          `teamsChannel().receive requires target.serviceUrl and target.conversationId.`,
-        );
+        throw Error(`teamsChannel().receive requires target.serviceUrl and target.conversationId.`);
       let s = readNonEmptyString(i.conversationType) ?? null,
         c = readNonEmptyString(i.replyToActivityId) ?? null,
         l = i.initialMessage;
@@ -183,14 +173,11 @@ function buildTeamsHandle(e) {
     let e = t.conversationId ?? ``,
       n = t.serviceUrl ?? ``;
     if (!e || !n)
-      throw Error(
-        `teamsChannel: missing serviceUrl or conversationId for outbound message.`,
-      );
+      throw Error(`teamsChannel: missing serviceUrl or conversationId for outbound message.`);
     return { conversationId: e, serviceUrl: n };
   }
   function anchor(n) {
-    if (!n.id || t.replyToActivityId || t.conversationType === `personal`)
-      return;
+    if (!n.id || t.replyToActivityId || t.conversationType === `personal`) return;
     t.replyToActivityId = n.id;
     let r = t.conversationId;
     r &&
@@ -320,14 +307,12 @@ async function dispatchMessage(e) {
     },
     l = a.context ?? [];
   try {
-    await e
-      .from(r)
-      .send(s, {
-        auth: a.auth,
-        context: [formatTeamsContextBlock(c), ...l],
-        state: t,
-        title: a.title,
-      });
+    await e.from(r).send(s, {
+      auth: a.auth,
+      context: [formatTeamsContextBlock(c), ...l],
+      state: t,
+      title: a.title,
+    });
   } catch (e) {
     log.error(`Teams message delivery failed`, { error: e });
   }
@@ -351,11 +336,7 @@ async function handleInvoke(e) {
       state: stateFromActivity(e.activity),
     }),
     n = await e.config.onInvoke(t, e.activity);
-  return n instanceof Response
-    ? n
-    : n && typeof n == `object`
-      ? Response.json(n)
-      : teamsOk();
+  return n instanceof Response ? n : n && typeof n == `object` ? Response.json(n) : teamsOk();
 }
 async function dispatchInputResponses(e) {
   let t = deriveTeamsInputResponses(e.activity);
@@ -371,9 +352,7 @@ async function dispatchInputResponses(e) {
   }
   if (i !== null)
     try {
-      await e
-        .from(resolveInputContinuationToken(e.activity, n))
-        .respond(t, { auth: i.auth });
+      await e.from(resolveInputContinuationToken(e.activity, n)).respond(t, { auth: i.auth });
     } catch (e) {
       log.error(`Teams input response delivery failed`, { error: e });
     }

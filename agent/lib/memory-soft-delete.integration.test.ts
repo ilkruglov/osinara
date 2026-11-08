@@ -36,17 +36,15 @@ async function insertFact(content: string): Promise<string> {
 }
 
 async function softDelete(id: string, deletedAt: Date): Promise<void> {
-  await database().query(
-    "UPDATE memory_items_all SET deleted_at = $2 WHERE id = $1",
-    [id, deletedAt],
-  );
+  await database().query("UPDATE memory_items_all SET deleted_at = $2 WHERE id = $1", [
+    id,
+    deletedAt,
+  ]);
 }
 
 describeWithDatabase("soft-deleted memory", () => {
   beforeEach(async () => {
-    await database().query(
-      "TRUNCATE memory_items_all, families CASCADE",
-    );
+    await database().query("TRUNCATE memory_items_all, families CASCADE");
   });
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => closeDatabase());
@@ -59,10 +57,14 @@ describeWithDatabase("soft-deleted memory", () => {
          FROM information_schema.columns
         WHERE table_name IN ('memory_items', 'memory_items_all')`,
     );
-    const base = columns.rows.filter((row) => row.relation === "memory_items_all")
-      .map((row) => row.column_name).sort();
-    const view = columns.rows.filter((row) => row.relation === "memory_items")
-      .map((row) => row.column_name).sort();
+    const base = columns.rows
+      .filter((row) => row.relation === "memory_items_all")
+      .map((row) => row.column_name)
+      .sort();
+    const view = columns.rows
+      .filter((row) => row.relation === "memory_items")
+      .map((row) => row.column_name)
+      .sort();
 
     expect(base.length).toBeGreaterThan(0);
     expect(view).toEqual(base);
@@ -106,7 +108,10 @@ describeWithDatabase("soft-deleted memory", () => {
 
     // Чанк остаётся ради восстановления, но соединение идёт через представление.
     expect(await ragCount()).toBe(0);
-    const chunks = await database().query("SELECT 1 FROM memory_embedding_chunks WHERE memory_item_id = $1", [id]);
+    const chunks = await database().query(
+      "SELECT 1 FROM memory_embedding_chunks WHERE memory_item_id = $1",
+      [id],
+    );
     expect(chunks.rowCount).toBe(1);
   });
 
@@ -121,11 +126,13 @@ describeWithDatabase("soft-deleted memory", () => {
     await softDelete(old, beyond);
 
     await expect(purgeSoftDeletedMemory(NOW)).resolves.toBe(1);
-    expect(info).toHaveBeenCalledWith(JSON.stringify({
-      code: "AGENT_MEMORY_PURGE_COMPLETED",
-      deletedCount: 1,
-      batchLimitReached: false,
-    }));
+    expect(info).toHaveBeenCalledWith(
+      JSON.stringify({
+        code: "AGENT_MEMORY_PURGE_COMPLETED",
+        deletedCount: 1,
+        batchLimitReached: false,
+      }),
+    );
     const remaining = await database().query<{ id: string }>("SELECT id FROM memory_items_all");
     expect(remaining.rows.map((row) => row.id)).toEqual([fresh]);
   });

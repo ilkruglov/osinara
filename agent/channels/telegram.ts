@@ -21,13 +21,19 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { telegramChannel } from "eve/channels/telegram";
 
 import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js";
-import { formatTelegramTurnFailure, isUnrecoverableHistoryFailure } from "../lib/telegram-interface.js";
+import {
+  formatTelegramTurnFailure,
+  isUnrecoverableHistoryFailure,
+} from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput, TELEGRAM_SILENT_DIRECTIVE } from "../lib/telegram-progress.js";
 import { observeTurnExchange, recordTurnResponseKind } from "../lib/turn-quality/turn-exchange.js";
 import { deliverTelegramProgressNotice } from "../lib/telegram-progress-notice.js";
-import { progressNoticeKey, telegramProgressNoticeDeferral } from "../lib/telegram-progress-deferral.js";
+import {
+  progressNoticeKey,
+  telegramProgressNoticeDeferral,
+} from "../lib/telegram-progress-deferral.js";
 import { refreshTelegramReactionPolicy } from "../lib/telegram-reaction-policy.js";
 import { asidePauseMilliseconds } from "../lib/telegram-aside-pacing.js";
 import { stripTelegramAsideDirectives } from "../lib/telegram-authored-split.js";
@@ -44,9 +50,7 @@ import { groupTimelineCursorRepository } from "../lib/sessions/group-timeline-cu
 import { authorizeTelegramHitlCallback } from "../lib/telegram-hitl/callback-authorization.js";
 import { handleTelegramInputRequested } from "../lib/telegram-hitl/input-request.js";
 import { telegramHitlApprovalRepository } from "../lib/telegram-hitl/approval-repository.js";
-import {
-  handleTelegramSessionFailure,
-} from "../lib/telegram-session-failure.js";
+import { handleTelegramSessionFailure } from "../lib/telegram-session-failure.js";
 import { telegramTurnReplyParameters } from "../lib/telegram-reply.js";
 import { agentScheduleDispatchRepository } from "../lib/agent-schedules/agent-schedule-dispatch-repository.js";
 import {
@@ -65,10 +69,7 @@ import { shouldNotifyTelegramFailure } from "../lib/telegram-failure-notificatio
 import { AppError, isAppError } from "../lib/app-error.js";
 import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
-import {
-  bindMemoryTurnSources,
-  releaseMemoryTurnSources,
-} from "../lib/memory-turn-source.js";
+import { bindMemoryTurnSources, releaseMemoryTurnSources } from "../lib/memory-turn-source.js";
 import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.js";
 import { resolveMemoryReviewBatch } from "../lib/memory-review/memory-review-turn-binding.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
@@ -110,7 +111,9 @@ export default telegramChannel({
       }
       // The confirmation prompt is this step's visible reply; text the model wrote next to the
       // gated call would otherwise follow the prompt and repeat what the resumed turn says.
-      telegramProgressNoticeDeferral.discard(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
+      telegramProgressNoticeDeferral.discard(
+        progressNoticeKey(ctx.session.id, ctx.session.turn.id),
+      );
       if (isTelegramChannelSession(ctx.session.auth)) {
         throw new AppError(
           "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
@@ -131,26 +134,31 @@ export default telegramChannel({
       const output = completedTelegramOutput(data);
       if (!output) {
         // Declining to answer is a decision of the turn too: the silence directive is measured.
-        if (data.finishReason === "stop" && typeof data.message === "string" && data.message.includes(TELEGRAM_SILENT_DIRECTIVE)) {
+        if (
+          data.finishReason === "stop" &&
+          typeof data.message === "string" &&
+          data.message.includes(TELEGRAM_SILENT_DIRECTIVE)
+        ) {
           await recordTurnResponseKind(ctx, "silent");
         }
         return;
       }
       const sessionId = applicationSessionId(ctx);
-      if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
+      if (!(await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id))) return;
       const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
       if (output.kind === "progress") {
         // Held until the step names its tools: an answer written beside `remember` must not go
         // out twice, while text before a slow tool still reaches the person at once.
         telegramProgressNoticeDeferral.hold(noticeKey, {
-          send: () => deliverTelegramProgressNotice({
-            applicationSessionId: sessionId,
-            channel,
-            eveSessionId: ctx.session.id,
-            eveTurnId: ctx.session.turn.id,
-            message: output.message,
-            stepIndex: data.stepIndex,
-          }),
+          send: () =>
+            deliverTelegramProgressNotice({
+              applicationSessionId: sessionId,
+              channel,
+              eveSessionId: ctx.session.id,
+              eveTurnId: ctx.session.turn.id,
+              message: output.message,
+              stepIndex: data.stepIndex,
+            }),
           stepIndex: data.stepIndex,
         });
         return;
@@ -167,7 +175,11 @@ export default telegramChannel({
           );
         }
         // A declined reaction stays silent: a text emoji is not a reaction (owner's decision).
-        const reaction = await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        const reaction = await setTelegramMessageReaction(
+          channel.telegram,
+          telegramMessageId,
+          output.emoji,
+        );
         await recordTurnResponseKind(ctx, reaction === "applied" ? "reaction" : "reaction_failed");
         return;
       }
@@ -225,15 +237,15 @@ export default telegramChannel({
         });
       } catch (error) {
         if (scheduledDelivery) {
-          const errorCode = isAppError(error)
-            ? error.code
-            : "AGENT_TELEGRAM_FINAL_DELIVERY_FAILED";
-          console.error(JSON.stringify({
-            code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILED",
-            deliveryErrorCode: errorCode,
-            errorName: error instanceof Error ? error.name : "UnknownError",
-            runId: scheduledDelivery.runId,
-          }));
+          const errorCode = isAppError(error) ? error.code : "AGENT_TELEGRAM_FINAL_DELIVERY_FAILED";
+          console.error(
+            JSON.stringify({
+              code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILED",
+              deliveryErrorCode: errorCode,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+              runId: scheduledDelivery.runId,
+            }),
+          );
           try {
             await agentScheduleDispatchRepository.failRun(
               sessionId,
@@ -243,18 +255,22 @@ export default telegramChannel({
             );
           } catch (persistenceError) {
             // Terminal persistence is secondary: log it without replacing the actionable delivery error.
-            console.error(JSON.stringify({
-              code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILURE_PERSISTENCE_FAILED",
-              deliveryErrorCode: errorCode,
-              errorName: persistenceError instanceof Error ? persistenceError.name : "UnknownError",
-              runId: scheduledDelivery.runId,
-            }));
+            console.error(
+              JSON.stringify({
+                code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILURE_PERSISTENCE_FAILED",
+                deliveryErrorCode: errorCode,
+                errorName:
+                  persistenceError instanceof Error ? persistenceError.name : "UnknownError",
+                runId: scheduledDelivery.runId,
+              }),
+            );
           }
         }
         throw error;
       }
       const deliveredAt = new Date();
-      const groupId = scheduledDelivery?.groupId ??
+      const groupId =
+        scheduledDelivery?.groupId ??
         (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
       if (scheduledDelivery) {
         const firstMessage = sentMessages[0];
@@ -280,14 +296,17 @@ export default telegramChannel({
           title: scheduledDelivery.title,
         });
       }
-      const conversationId = typeof currentAttributes?.telegramConversationId === "string"
-        ? currentAttributes.telegramConversationId
-        : null;
-      if ((conversationId || groupId) && data.finishReason === "stop") {
-        const replyToEntryId = typeof currentAttributes?.telegramTimelineEntryId === "string"
-          ? currentAttributes.telegramTimelineEntryId
+      const conversationId =
+        typeof currentAttributes?.telegramConversationId === "string"
+          ? currentAttributes.telegramConversationId
           : null;
-        const forumTopicId = scheduledDelivery?.forumTopicId ??
+      if ((conversationId || groupId) && data.finishReason === "stop") {
+        const replyToEntryId =
+          typeof currentAttributes?.telegramTimelineEntryId === "string"
+            ? currentAttributes.telegramTimelineEntryId
+            : null;
+        const forumTopicId =
+          scheduledDelivery?.forumTopicId ??
           (typeof currentAttributes?.telegramForumTopicId === "string"
             ? currentAttributes.telegramForumTopicId
             : null);
@@ -314,11 +333,19 @@ export default telegramChannel({
           });
         }
         // Reactions and replies to these messages are the turn's satisfaction signal.
-        await recordTurnDelivery(ctx, sentMessages.map((sent) => sent.messageId), deliveredAt);
+        await recordTurnDelivery(
+          ctx,
+          sentMessages.map((sent) => sent.messageId),
+          deliveredAt,
+        );
         await recordTurnResponseKind(ctx, "text");
         if (groupId) {
           // Who Mia keeps answering and how deep the reply chain goes: counted from the journal, no model.
-          await observeTurnExchange(ctx, { forumTopicId, groupId, ownMessageIds: sentMessages.map((sent) => sent.messageId) });
+          await observeTurnExchange(ctx, {
+            forumTopicId,
+            groupId,
+            ownMessageIds: sentMessages.map((sent) => sent.messageId),
+          });
         }
       }
       if (!isScheduledSession(ctx)) {
@@ -333,9 +360,10 @@ export default telegramChannel({
           ctx,
           declared: output.memoryUsedDeclared ?? false,
           memoryRefs: output.memoryUsedRefs ?? [],
-          timelineEntryId: typeof currentAttributes?.telegramTimelineEntryId === "string"
-            ? currentAttributes.telegramTimelineEntryId
-            : null,
+          timelineEntryId:
+            typeof currentAttributes?.telegramTimelineEntryId === "string"
+              ? currentAttributes.telegramTimelineEntryId
+              : null,
         });
       }
     },
@@ -345,13 +373,16 @@ export default telegramChannel({
           continuationToken: string,
           eveSessionId: string,
         ) {
-          return await memoryReviewDispatchRepository.markInteractiveSessionAmbiguous({
-            continuationToken,
-            diagnosticCode: "AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS",
-            eveSessionId,
-          }) ?? await sessionRepository.recordSessionFailedByContinuationToken(
-            continuationToken,
-            eveSessionId,
+          return (
+            (await memoryReviewDispatchRepository.markInteractiveSessionAmbiguous({
+              continuationToken,
+              diagnosticCode: "AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS",
+              eveSessionId,
+            })) ??
+            (await sessionRepository.recordSessionFailedByContinuationToken(
+              continuationToken,
+              eveSessionId,
+            ))
           );
         },
       };
@@ -366,9 +397,13 @@ export default telegramChannel({
       await telegramProgressNoticeDeferral.release(
         progressNoticeKey(ctx.session.id, ctx.session.turn.id),
         data.stepIndex,
-        data.actions.map((action) => action.kind === "tool-call"
-          ? action.toolName
-          : action.kind === "load-skill" ? "load_skill" : action.kind),
+        data.actions.map((action) =>
+          action.kind === "tool-call"
+            ? action.toolName
+            : action.kind === "load-skill"
+              ? "load_skill"
+              : action.kind,
+        ),
       );
     },
     async "turn.failed"(data, channel, ctx) {
@@ -394,15 +429,17 @@ export default telegramChannel({
         const failedAt = new Date();
         if (!scheduledTelegramTargetMatches(channel.telegram, scheduledDelivery)) {
           // Never notify a target that was not approved for this run; close it without Telegram I/O.
-          console.error(JSON.stringify({
-            activeTelegramChatId: channel.telegram.chatId,
-            activeTelegramMessageThreadId: channel.telegram.messageThreadId ?? null,
-            code: SCHEDULED_TELEGRAM_TARGET_MISMATCH_CODE,
-            expectedTelegramChatId: scheduledDelivery.telegramChatId,
-            expectedTelegramMessageThreadId: scheduledDelivery.messageThreadId,
-            runId: scheduledDelivery.runId,
-            turnErrorCode: data.code,
-          }));
+          console.error(
+            JSON.stringify({
+              activeTelegramChatId: channel.telegram.chatId,
+              activeTelegramMessageThreadId: channel.telegram.messageThreadId ?? null,
+              code: SCHEDULED_TELEGRAM_TARGET_MISMATCH_CODE,
+              expectedTelegramChatId: scheduledDelivery.telegramChatId,
+              expectedTelegramMessageThreadId: scheduledDelivery.messageThreadId,
+              runId: scheduledDelivery.runId,
+              turnErrorCode: data.code,
+            }),
+          );
           await agentScheduleDispatchRepository.failRun(
             sessionId,
             ctx.session.id,
@@ -436,11 +473,12 @@ export default telegramChannel({
       // Terminal diagnostics are private-only even when the failed turn belonged to a shared chat.
       notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel);
       // A final send that started may already be visible; never append a second failure message.
-      const finalDeliveryMayBeVisible = notifyFailure &&
-        await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
+      const finalDeliveryMayBeVisible =
+        notifyFailure &&
+        (await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
           ctx.session.id,
           ctx.session.turn.id,
-        );
+        ));
       if (!finalDeliveryMayBeVisible && notifyFailure) {
         const replyParameters = isScheduledSession(ctx)
           ? undefined
@@ -457,12 +495,14 @@ export default telegramChannel({
       // The next message would fail the same way on the same history, so it starts a new session.
       if (!reviewBatchId && isUnrecoverableHistoryFailure(data)) {
         await sessionRepository.requestRotation(sessionId);
-        console.error(JSON.stringify({
-          code: "AGENT_SESSION_HISTORY_UNRECOVERABLE",
-          applicationSessionId: sessionId,
-          eveSessionId: ctx.session.id,
-          eveTurnId: ctx.session.turn.id,
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_SESSION_HISTORY_UNRECOVERABLE",
+            applicationSessionId: sessionId,
+            eveSessionId: ctx.session.id,
+            eveTurnId: ctx.session.turn.id,
+          }),
+        );
       }
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
     },
@@ -508,23 +548,17 @@ export default telegramChannel({
       const attributes = ctx.session.auth.current?.attributes;
       const timelineSequence = attributes?.telegramTimelineSequence;
       if (typeof timelineSequence === "string") {
-        await groupTimelineCursorRepository.advance(
-          sessionId,
-          ctx.session.id,
-          timelineSequence,
-        );
+        await groupTimelineCursorRepository.advance(sessionId, ctx.session.id, timelineSequence);
       }
       const proactiveDeliveryCursor = attributes?.proactiveDeliveryCursor;
       if (typeof proactiveDeliveryCursor === "string") {
-        await proactiveDeliveryRepository.advanceSessionCursor(
-          sessionId,
-          proactiveDeliveryCursor,
-        );
+        await proactiveDeliveryRepository.advanceSessionCursor(sessionId, proactiveDeliveryCursor);
       }
     },
     async "turn.completed"(_data, channel, ctx) {
       // A whisper turn that showed nothing says so in its placeholder instead of leaving «Думаю…».
-      if (isTelegramWhisperSession(ctx.session.auth)) await finishTelegramWhisperTurn(ctx.session.auth);
+      if (isTelegramWhisperSession(ctx.session.auth))
+        await finishTelegramWhisperTurn(ctx.session.auth);
       // Text still held here was the answer: the model never wrote again after its quiet tools.
       const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
       const flushed = await telegramProgressNoticeDeferral.flush(noticeKey);
@@ -532,7 +566,10 @@ export default telegramChannel({
       // Text delivered this way is the answer, so it carries the turn's satisfaction signal too.
       await recordTurnDelivery(ctx, flushed, new Date());
       const sessionId = applicationSessionId(ctx);
-      const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
+      const awaitingApproval = await sessionRepository.hasPendingOperation(
+        sessionId,
+        ctx.session.id,
+      );
       const reviewBatchId = await resolveMemoryReviewBatch(ctx);
       if (!awaitingApproval) {
         // Completion verifies review evidence before release; a parked HITL turn retains its source set.

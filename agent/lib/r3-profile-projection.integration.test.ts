@@ -18,9 +18,8 @@ import { memoryExportRepository } from "./memory-export-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 import { profileViewRepository } from "./profile-view-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const PROFILE_SESSION_ID = "r3-profile-session";
 
 function profileProvenance(turnId: string) {
@@ -87,10 +86,12 @@ async function createFixture(): Promise<Fixture> {
   return {
     externalAConversationId: externalA.id,
     externalAGroupId,
-    externalAParticipantId: participants.rows.find((row) => row.conversation_id === externalA.id)!.id,
+    externalAParticipantId: participants.rows.find((row) => row.conversation_id === externalA.id)!
+      .id,
     externalBConversationId: externalB.id,
     externalBGroupId,
-    externalBParticipantId: participants.rows.find((row) => row.conversation_id === externalB.id)!.id,
+    externalBParticipantId: participants.rows.find((row) => row.conversation_id === externalB.id)!
+      .id,
     familyConversationId: familyConversation.id,
     familyGroupId,
     familyId: family.rows[0]!.id,
@@ -130,9 +131,18 @@ async function insertClaim(input: {
                'model_high', 'normal', $7, 'evidenced', $8::uuid, $9, $10,
                CASE WHEN $10::uuid IS NULL THEN NULL ELSE $8::uuid END, true)
        RETURNING id`,
-    [input.familyId, input.ownerUserId ?? null, input.groupId ?? null, input.subjectUserId ?? null,
-      input.scope, input.content, `r3:${input.scope}:${input.content}`, input.conversationId,
-      input.subjectUserId ?? null, input.subjectParticipantId ?? null],
+    [
+      input.familyId,
+      input.ownerUserId ?? null,
+      input.groupId ?? null,
+      input.subjectUserId ?? null,
+      input.scope,
+      input.content,
+      `r3:${input.scope}:${input.content}`,
+      input.conversationId,
+      input.subjectUserId ?? null,
+      input.subjectParticipantId ?? null,
+    ],
   );
   const reference = await database().query<{ memory_ref: string }>(
     "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
@@ -140,7 +150,9 @@ async function insertClaim(input: {
   );
   if (input.evidenceKind) {
     if (input.scope !== "group" || !input.groupId || !input.subjectParticipantId) {
-      throw new Error("AGENT_TEST_EVIDENCE_FIXTURE_INVALID: evidence fixture requires a group participant");
+      throw new Error(
+        "AGENT_TEST_EVIDENCE_FIXTURE_INVALID: evidence fixture requires a group participant",
+      );
     }
     await database().query(
       `INSERT INTO claim_evidence
@@ -151,8 +163,15 @@ async function insertClaim(input: {
        VALUES ($1, $2, 'group', $3, 'primary', $4, $5, 'External source', $3,
                $6, (SELECT linked_user_id FROM conversation_participants WHERE id = $6),
                'Анна', now(), $7, 1, 1, jsonb_build_object('content', $7::text))`,
-      [result.rows[0]!.id, input.familyId, input.groupId, input.evidenceKind,
-        input.conversationId, input.subjectParticipantId, input.content],
+      [
+        result.rows[0]!.id,
+        input.familyId,
+        input.groupId,
+        input.evidenceKind,
+        input.conversationId,
+        input.subjectParticipantId,
+        input.content,
+      ],
     );
   }
   return reference.rows[0]!.memory_ref;
@@ -221,11 +240,11 @@ describeWithDatabase("R3 profile projections", () => {
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
-    expect(personalDefault.subjects.flatMap((subject) => subject.claims.map((claim) => claim.content)))
-      .toEqual(expect.arrayContaining([
-        "Личный секрет не выходит наружу",
-        "Семейный профиль виден лично",
-      ]));
+    expect(
+      personalDefault.subjects.flatMap((subject) => subject.claims.map((claim) => claim.content)),
+    ).toEqual(
+      expect.arrayContaining(["Личный секрет не выходит наружу", "Семейный профиль виден лично"]),
+    );
     expect(JSON.stringify(personalDefault)).not.toContain("Факт только из External");
 
     const policies = await profileProjectionPolicyRepository.list(fixture.ownerAuth);
@@ -267,8 +286,8 @@ describeWithDatabase("R3 profile projections", () => {
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
-    const enabledContents = personalEnabled.subjects.flatMap(
-      (subject) => subject.claims.map((claim) => claim.content),
+    const enabledContents = personalEnabled.subjects.flatMap((subject) =>
+      subject.claims.map((claim) => claim.content),
     );
     expect(JSON.stringify(personalEnabled)).not.toMatch(
       /-100930|externalAGroupId|externalAParticipantId|telegramUserId/u,
@@ -276,12 +295,14 @@ describeWithDatabase("R3 profile projections", () => {
     expect(enabledContents).toContain("Факт только из External A");
     expect(enabledContents).not.toContain("Факт только из External B");
     expect(enabledContents).not.toContain("Модель предположила секретный внешний факт");
-    const reported = personalEnabled.subjects.flatMap((subject) => subject.claims)
+    const reported = personalEnabled.subjects
+      .flatMap((subject) => subject.claims)
       .find((claim) => claim.content === "Факт только из External A");
     // Происхождение объясняется один раз в шапке выборки, в записи остаётся только evidenceKind.
     expect(reported).toMatchObject({ evidenceKind: "reported", sourceAuthorLabel: "Анна" });
-    await expect(profileViewRepository.read(fixture.ownerAuth, personalEnabled.profileViewRef))
-      .resolves.toEqual(personalEnabled);
+    await expect(
+      profileViewRepository.read(fixture.ownerAuth, personalEnabled.profileViewRef),
+    ).resolves.toEqual(personalEnabled);
 
     const externalAAuth: MemoryAuthorization = {
       ...fixture.ownerAuth,
@@ -330,16 +351,21 @@ describeWithDatabase("R3 profile projections", () => {
 
     const exported = await memoryExportRepository.begin(fixture.ownerAuth, "r3-export");
     expect(exported.map((record) => record.content)).toEqual(["Личный секрет не выходит наружу"]);
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [fixture.familyId, fixture.userId],
-    );
-    await expect(profileViewRepository.create(fixture.ownerAuth, {
-      conversationId: fixture.personalConversationId,
-      currentTelegramUserId: "9301", explicitMentionTelegramUserIds: [],
-      now: new Date(), provenance: profileProvenance("membership-revoked"),
-      replyTelegramUserId: null, retrievalClaimIds: [],
-    })).rejects.toThrowError(/AGENT_PROFILE_VIEW_MEMBERSHIP_REVOKED/u);
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.userId,
+    ]);
+    await expect(
+      profileViewRepository.create(fixture.ownerAuth, {
+        conversationId: fixture.personalConversationId,
+        currentTelegramUserId: "9301",
+        explicitMentionTelegramUserIds: [],
+        now: new Date(),
+        provenance: profileProvenance("membership-revoked"),
+        replyTelegramUserId: null,
+        retrievalClaimIds: [],
+      }),
+    ).rejects.toThrowError(/AGENT_PROFILE_VIEW_MEMBERSHIP_REVOKED/u);
   });
 
   it("excludes both sides of an unresolved profile conflict", async () => {
@@ -397,22 +423,28 @@ describeWithDatabase("R3 profile projections", () => {
       "SELECT memory_item_id FROM memory_item_refs WHERE memory_ref = $1",
       [memoryRef],
     );
-    const request = (suppressCurrentAuthor: boolean, turnId: string) => profileViewRepository.create({
-      ...fixture.ownerAuth,
-      scopes: ["personal", "family"],
-    }, {
-      conversationId: fixture.personalConversationId,
-      currentTelegramUserId: "9301",
-      explicitMentionTelegramUserIds: [],
-      now: new Date("2026-08-08T12:00:00.000Z"),
-      provenance: profileProvenance(turnId),
-      replyTelegramUserId: null,
-      retrievalClaimIds: [claim.rows[0]!.memory_item_id],
-      suppressCurrentAuthor,
-    });
+    const request = (suppressCurrentAuthor: boolean, turnId: string) =>
+      profileViewRepository.create(
+        {
+          ...fixture.ownerAuth,
+          scopes: ["personal", "family"],
+        },
+        {
+          conversationId: fixture.personalConversationId,
+          currentTelegramUserId: "9301",
+          explicitMentionTelegramUserIds: [],
+          now: new Date("2026-08-08T12:00:00.000Z"),
+          provenance: profileProvenance(turnId),
+          replyTelegramUserId: null,
+          retrievalClaimIds: [claim.rows[0]!.memory_item_id],
+          suppressCurrentAuthor,
+        },
+      );
 
     const shown = await request(false, "private-shown");
-    expect(shown?.subjects).toEqual([expect.objectContaining({ label: "Анна", priority: "current_author" })]);
+    expect(shown?.subjects).toEqual([
+      expect.objectContaining({ label: "Анна", priority: "current_author" }),
+    ]);
     // Suppressed for twenty turns: neither the direct pick nor a retrieval-related hit may bring
     // the same card back into context.
     const suppressed = await request(true, "private-suppressed");
@@ -447,28 +479,33 @@ describeWithDatabase("R3 profile projections", () => {
       [memoryRef],
     );
 
-    const view = await profileViewRepository.create({
-      ...fixture.ownerAuth,
-      groupId: fixture.familyGroupId,
-      scopes: ["family"],
-    }, {
-      conversationId: fixture.familyConversationId,
-      currentTelegramUserId: "9301",
-      explicitMentionTelegramUserIds: [],
-      now: new Date("2026-08-08T12:00:00.000Z"),
-      provenance: profileProvenance("retrieval-related"),
-      replyTelegramUserId: null,
-      retrievalClaimIds: [claim.rows[0]!.memory_item_id],
-    });
+    const view = await profileViewRepository.create(
+      {
+        ...fixture.ownerAuth,
+        groupId: fixture.familyGroupId,
+        scopes: ["family"],
+      },
+      {
+        conversationId: fixture.familyConversationId,
+        currentTelegramUserId: "9301",
+        explicitMentionTelegramUserIds: [],
+        now: new Date("2026-08-08T12:00:00.000Z"),
+        provenance: profileProvenance("retrieval-related"),
+        replyTelegramUserId: null,
+        retrievalClaimIds: [claim.rows[0]!.memory_item_id],
+      },
+    );
 
-    expect(view.subjects).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        claims: expect.arrayContaining([
-          expect.objectContaining({ content: "Пётр предпочитает улун" }),
-        ]),
-        label: "Пётр",
-        priority: "retrieval_related",
-      }),
-    ]));
+    expect(view.subjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          claims: expect.arrayContaining([
+            expect.objectContaining({ content: "Пётр предпочитает улун" }),
+          ]),
+          label: "Пётр",
+          priority: "retrieval_related",
+        }),
+      ]),
+    );
   });
 });

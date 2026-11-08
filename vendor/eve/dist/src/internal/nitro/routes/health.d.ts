@@ -9,6 +9,8 @@ export default _default;
  * channel file with the verifier helpers from
  * `eve/channels/auth`.
  */
-declare function _default(_event: H3Event<{
+declare function _default(
+  _event: H3Event<{
     body: unknown;
-}>): Promise<Response>;
+  }>,
+): Promise<Response>;

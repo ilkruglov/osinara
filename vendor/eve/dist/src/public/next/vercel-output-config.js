@@ -50,10 +50,7 @@ function createGeneratedServiceBuild(e) {
     a = resolveRelativeEntrypoint(e.agent.appRoot, n),
     u = resolveRelativeEntrypoint(e.agent.appRoot, e.hostOutputDirectory),
     d = normalizePublicRoutePrefix(e.agent.publicRoutePrefix),
-    f =
-      d === void 0
-        ? ``
-        : ` && export ${EVE_PUBLIC_ROUTE_PREFIX_ENV}=${quoteShellArgument(d)}`;
+    f = d === void 0 ? `` : ` && export ${EVE_PUBLIC_ROUTE_PREFIX_ENV}=${quoteShellArgument(d)}`;
   return {
     buildCommand: `cd ${quoteShellArgument(r)} && export ${EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY_ENV}=${quoteShellArgument(a)} && export ${EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY_ENV}=${quoteShellArgument(u)}${f} && ${e.agent.buildCommand}`,
     root: resolveRelativeEntrypoint(e.nextRoot, t),
@@ -90,24 +87,17 @@ function normalizeVercelServicesConfig(e, t) {
     !isRecord(n) &&
     !(
       Array.isArray(n) &&
-      n.every(
-        (e) =>
-          isRecord(e) && typeof e.name == `string` && e.name.trim().length > 0,
-      )
+      n.every((e) => isRecord(e) && typeof e.name == `string` && e.name.trim().length > 0)
     )
   )
     throw Error(`${t} services must be a JSON object or named service array.`);
   let r = e.routes;
-  if (r !== void 0 && !Array.isArray(r))
-    throw Error(`${t} routes must be an array.`);
+  if (r !== void 0 && !Array.isArray(r)) throw Error(`${t} routes must be an array.`);
   return e;
 }
 async function readVercelServicesConfig(e, n) {
   try {
-    return normalizeVercelServicesConfig(
-      JSON.parse(await readFile(e, `utf8`)),
-      n,
-    );
+    return normalizeVercelServicesConfig(JSON.parse(await readFile(e, `utf8`)), n);
   } catch (e) {
     if (e instanceof Error && `code` in e && e.code === `ENOENT`) return {};
     throw e;
@@ -126,13 +116,8 @@ function resolveServicePrefix(e) {
   if (e !== void 0) {
     if (typeof e.routePrefix == `string` && e.routePrefix.trim().length > 0)
       return e.routePrefix.trim();
-    if (typeof e.mount == `string` && e.mount.trim().length > 0)
-      return e.mount.trim();
-    if (
-      isRecord(e.mount) &&
-      typeof e.mount.path == `string` &&
-      e.mount.path.trim().length > 0
-    )
+    if (typeof e.mount == `string` && e.mount.trim().length > 0) return e.mount.trim();
+    if (isRecord(e.mount) && typeof e.mount.path == `string` && e.mount.path.trim().length > 0)
       return e.mount.path.trim();
   }
 }
@@ -194,9 +179,7 @@ function insertEveServiceRequestPathRoute(e, t) {
   return [createEveServiceRequestPathRoute(t), ...n];
 }
 function insertEveServiceRoutes(e, t) {
-  let n = e.filter(
-      (e) => !t.some((t) => isEveServiceRoute(e, t.serviceName, t.routeSrc)),
-    ),
+  let n = e.filter((e) => !t.some((t) => isEveServiceRoute(e, t.serviceName, t.routeSrc))),
     r = n.findIndex((e) => e.handle === `filesystem`),
     i = t.map((e) => createEveServiceRoute(e.serviceName, e.routeSrc));
   return r === -1 ? [...i, ...n] : [...n.slice(0, r), ...i, ...n.slice(r)];
@@ -207,12 +190,8 @@ async function ensureEveVercelOutputConfig(t) {
       outputConfigPath: o,
       projectRoot: s,
     } = await resolveVercelOutputConfigLocation(t.nextRoot),
-    c = (
-      await readVercelServicesConfig(
-        join(s, VERCEL_JSON_FILE_NAME),
-        VERCEL_JSON_FILE_NAME,
-      )
-    ).services;
+    c = (await readVercelServicesConfig(join(s, VERCEL_JSON_FILE_NAME), VERCEL_JSON_FILE_NAME))
+      .services;
   if (hasServices(c))
     return {
       agents: assertRootServicesIncludeEve({
@@ -247,8 +226,7 @@ async function ensureEveVercelOutputConfig(t) {
         routes: insertEveServiceRequestPathRoute(void 0, s),
         root: i.root,
       };
-      (n.publicRoutePrefix.length > 0 && (c.routePrefix = n.publicRoutePrefix),
-        (p[a] = c));
+      (n.publicRoutePrefix.length > 0 && (c.routePrefix = n.publicRoutePrefix), (p[a] = c));
     } else
       p[a] = {
         ...i.service,

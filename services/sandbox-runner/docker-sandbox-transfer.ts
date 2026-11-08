@@ -48,23 +48,36 @@ async function runWithInput(
     let timer: NodeJS.Timeout | undefined;
     const expired = new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error("AGENT_SANDBOX_RUNNER_TRANSFER_TIMED_OUT: File transfer did not finish")),
+        () =>
+          reject(
+            new Error("AGENT_SANDBOX_RUNNER_TRANSFER_TIMED_OUT: File transfer did not finish"),
+          ),
         Math.max(0, deadline - Date.now()),
       );
     });
     return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
   };
-  const exec = await within(container.exec({
-    AttachStderr: true,
-    AttachStdin: options.stdin !== undefined,
-    AttachStdout: true,
-    // TERM first, so the write script's trap removes its temporary file.
-    Cmd: ["/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", String(TRANSFER_TIMEOUT_SECONDS), ...argv],
-    Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
-    Tty: false,
-    WorkingDir: "/",
-  }));
-  const stream = (await within(exec.start({ hijack: true, stdin: options.stdin !== undefined, Tty: false }))) as Duplex;
+  const exec = await within(
+    container.exec({
+      AttachStderr: true,
+      AttachStdin: options.stdin !== undefined,
+      AttachStdout: true,
+      // TERM first, so the write script's trap removes its temporary file.
+      Cmd: [
+        "/usr/bin/timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        String(TRANSFER_TIMEOUT_SECONDS),
+        ...argv,
+      ],
+      Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
+      Tty: false,
+      WorkingDir: "/",
+    }),
+  );
+  const stream = (await within(
+    exec.start({ hijack: true, stdin: options.stdin !== undefined, Tty: false }),
+  )) as Duplex;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   stdout.on("error", () => undefined);
@@ -84,13 +97,17 @@ async function runWithInput(
     docker.modem.demuxStream(stream, stdout, stderr);
     // The whole input at once, then the write side closed so the process sees end of file.
     if (options.stdin !== undefined) stream.end(options.stdin);
-    const [out, err] = await within(Promise.all([
-      collectLimitedStream(stdout, options.maxStdoutBytes),
-      collectLimitedStream(stderr, STDERR_MAX_BYTES).catch(() => Buffer.alloc(0)),
-    ]));
+    const [out, err] = await within(
+      Promise.all([
+        collectLimitedStream(stdout, options.maxStdoutBytes),
+        collectLimitedStream(stderr, STDERR_MAX_BYTES).catch(() => Buffer.alloc(0)),
+      ]),
+    );
     const inspection = await within(exec.inspect());
     if (inspection.Running || inspection.ExitCode === null) {
-      throw new Error("AGENT_SANDBOX_RUNNER_TRANSFER_UNFINISHED: The transfer process did not exit");
+      throw new Error(
+        "AGENT_SANDBOX_RUNNER_TRANSFER_UNFINISHED: The transfer process did not exit",
+      );
     }
     return { exitCode: inspection.ExitCode, stderr: err.toString("utf8"), stdout: out };
   } finally {
@@ -105,13 +122,13 @@ async function runWithInput(
 const WRITE_SCRIPT = [
   "set -e",
   "target=$1",
-  "dir=$(dirname -- \"$target\")",
-  "mkdir -p -- \"$dir\"",
-  "tmp=$(mktemp -p \"$dir\" .osinara-write.XXXXXXXX)",
+  'dir=$(dirname -- "$target")',
+  'mkdir -p -- "$dir"',
+  'tmp=$(mktemp -p "$dir" .osinara-write.XXXXXXXX)',
   "trap 'rm -f -- \"$tmp\"' EXIT",
-  "cat > \"$tmp\"",
+  'cat > "$tmp"',
   `chmod ${FILE_MODE.toString(8)} -- "$tmp"`,
-  "mv -T -- \"$tmp\" \"$target\"",
+  'mv -T -- "$tmp" "$target"',
   "trap - EXIT",
 ].join("\n");
 
@@ -122,14 +139,23 @@ export async function writeContainerFile(
   content: Uint8Array,
 ): Promise<void> {
   if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) {
-    throw new Error(`AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: File exceeds the ${WORKSPACE_MAX_FILE_BYTES} byte limit`);
+    throw new Error(
+      `AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: File exceeds the ${WORKSPACE_MAX_FILE_BYTES} byte limit`,
+    );
   }
-  const result = await runWithInput(docker, container, ["bash", "-c", WRITE_SCRIPT, "osinara-write", path], {
-    maxStdoutBytes: STDERR_MAX_BYTES,
-    stdin: Buffer.from(content),
-  });
+  const result = await runWithInput(
+    docker,
+    container,
+    ["bash", "-c", WRITE_SCRIPT, "osinara-write", path],
+    {
+      maxStdoutBytes: STDERR_MAX_BYTES,
+      stdin: Buffer.from(content),
+    },
+  );
   if (result.exitCode !== 0) {
-    throw new Error(`AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: Не удалось записать файл в sandbox. ${result.stderr.slice(0, 400)}`);
+    throw new Error(
+      `AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: Не удалось записать файл в sandbox. ${result.stderr.slice(0, 400)}`,
+    );
   }
 }
 
@@ -144,22 +170,29 @@ export async function readContainerFile(
     "f=$1",
     `[ -f "$f" ] || exit ${FILE_MISSING_EXIT_CODE}`,
     `[ "$(stat -c %s -- "$f")" -le ${Math.floor(maxBytes)} ] || exit ${FILE_TOO_LARGE_EXIT_CODE}`,
-    "exec cat -- \"$f\"",
+    'exec cat -- "$f"',
   ].join("\n");
   let result: Awaited<ReturnType<typeof runWithInput>>;
   try {
-    result = await runWithInput(docker, container, ["bash", "-c", script, "osinara-read", path], { maxStdoutBytes: maxBytes });
+    result = await runWithInput(docker, container, ["bash", "-c", script, "osinara-read", path], {
+      maxStdoutBytes: maxBytes,
+    });
   } catch (error) {
     // The file grew past the limit between the size check and the read.
-    if (error instanceof Error && error.message.includes("AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE")) result = { exitCode: FILE_TOO_LARGE_EXIT_CODE, stderr: "", stdout: Buffer.alloc(0) };
+    if (error instanceof Error && error.message.includes("AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE"))
+      result = { exitCode: FILE_TOO_LARGE_EXIT_CODE, stderr: "", stdout: Buffer.alloc(0) };
     else throw error;
   }
   if (result.exitCode === FILE_MISSING_EXIT_CODE) return null;
   if (result.exitCode === FILE_TOO_LARGE_EXIT_CODE) {
-    throw new Error(`AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: Файл sandbox больше допустимых ${maxBytes} байт`);
+    throw new Error(
+      `AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: Файл sandbox больше допустимых ${maxBytes} байт`,
+    );
   }
   if (result.exitCode !== 0) {
-    throw new Error(`AGENT_SANDBOX_RUNNER_FILE_READ_FAILED: Не удалось прочитать файл sandbox. ${result.stderr.slice(0, 400)}`);
+    throw new Error(
+      `AGENT_SANDBOX_RUNNER_FILE_READ_FAILED: Не удалось прочитать файл sandbox. ${result.stderr.slice(0, 400)}`,
+    );
   }
   return new Uint8Array(result.stdout);
 }
@@ -174,7 +207,10 @@ async function seedArchive(files: readonly SandboxRunnerSeedFile[]): Promise<Buf
     pack.on("error", reject);
   });
   for (const file of files) {
-    pack.entry({ mode: FILE_MODE, name: file.path.slice(1), type: "file" }, Buffer.from(file.contentBase64, "base64"));
+    pack.entry(
+      { mode: FILE_MODE, name: file.path.slice(1), type: "file" },
+      Buffer.from(file.contentBase64, "base64"),
+    );
   }
   pack.finalize();
   return await done;

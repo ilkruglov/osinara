@@ -5,9 +5,7 @@ import { applyWorkflowTransform } from "#internal/workflow-bundle/workflow-build
 async function writeNitroStepEntrypoint(t) {
   let i = [...t.discoveredEntries.discoveredSteps].sort(),
     a = new Set(i),
-    o = [...t.discoveredEntries.discoveredSerdeFiles]
-      .sort()
-      .filter((e) => !a.has(e)),
+    o = [...t.discoveredEntries.discoveredSerdeFiles].sort().filter((e) => !a.has(e)),
     s = await collectNitroStepManifest({
       projectRoot: t.projectRoot,
       stepFiles: i,
@@ -38,8 +36,7 @@ async function writeNitroStepEntrypoint(t) {
 `);
   return (
     await mkdir(c, { recursive: !0 }),
-    (await readTextFileIfPresent(t.outfile)) !== l &&
-      (await writeFile(t.outfile, l)),
+    (await readTextFileIfPresent(t.outfile)) !== l && (await writeFile(t.outfile, l)),
     s
   );
 }

@@ -14,8 +14,8 @@ import type { RunMode } from "#shared/run-mode.js";
  * steps (no new `StepInput`) preserve whatever is already in effect.
  */
 export declare function resolveEffectiveOutputSchema(input: {
-    readonly agentOutputSchema: JsonObject | undefined;
-    readonly input: StepInput | undefined;
-    readonly mode: RunMode;
-    readonly session: HarnessSession;
+  readonly agentOutputSchema: JsonObject | undefined;
+  readonly input: StepInput | undefined;
+  readonly mode: RunMode;
+  readonly session: HarnessSession;
 }): HarnessSession;

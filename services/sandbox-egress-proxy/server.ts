@@ -16,7 +16,12 @@ import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
 import { createSessionClaims, handleBrowserlessUpgrade } from "./browserless-endpoint.js";
-import { createEgressLedger, type EgressLedger, type EgressMeter, type EgressTarget } from "./egress-ledger.js";
+import {
+  createEgressLedger,
+  type EgressLedger,
+  type EgressMeter,
+  type EgressTarget,
+} from "./egress-ledger.js";
 import { resolvePublicInternetAddress } from "./public-dns-resolver.js";
 
 const ALLOWED_PORTS = new Set([80, 443]);
@@ -64,9 +69,13 @@ export function connectWithDeadline(
   timeoutMilliseconds: number,
 ): Socket {
   const socket = createSocket();
-  const deadline = setTimeout(() => socket.destroy(
-    new Error("AGENT_SANDBOX_EGRESS_TIMEOUT: CONNECT timed out before establishment"),
-  ), timeoutMilliseconds);
+  const deadline = setTimeout(
+    () =>
+      socket.destroy(
+        new Error("AGENT_SANDBOX_EGRESS_TIMEOUT: CONNECT timed out before establishment"),
+      ),
+    timeoutMilliseconds,
+  );
   deadline.unref();
   const clearDeadline = () => clearTimeout(deadline);
   socket.once("connect", clearDeadline);
@@ -119,7 +128,11 @@ function guardClientSocket(socket: Duplex, phase: () => ConnectPhase): () => boo
 }
 
 /** Counts each chunk as it passes; past the day's budget every stream of the connection closes. */
-function meterChunks(meter: EgressMeter, direction: "down" | "up", streams: readonly { destroy(): unknown }[]) {
+function meterChunks(
+  meter: EgressMeter,
+  direction: "down" | "up",
+  streams: readonly { destroy(): unknown }[],
+) {
   return (chunk: Buffer) => {
     if (!meter.add(direction, chunk.byteLength)) for (const stream of streams) stream.destroy();
   };
@@ -141,12 +154,14 @@ function clientAddress(socket: Duplex | Socket): string {
   return ((socket as Socket).remoteAddress ?? "unknown").replace(/^::ffff:/u, "");
 }
 
-export function createSandboxEgressProxy(options: {
-  browserlessApiKey?: string;
-  ledger?: EgressLedger;
-  /** The public-only resolver; a test points it at a local server. */
-  resolveTarget?: (hostname: string, port: number) => Promise<ResolvedTarget>;
-} = {}) {
+export function createSandboxEgressProxy(
+  options: {
+    browserlessApiKey?: string;
+    ledger?: EgressLedger;
+    /** The public-only resolver; a test points it at a local server. */
+    resolveTarget?: (hostname: string, port: number) => Promise<ResolvedTarget>;
+  } = {},
+) {
   const ledger = options.ledger ?? createEgressLedger();
   const resolveTarget = options.resolveTarget ?? resolvePublicTarget;
   const server = createServer((incoming, outgoing) => {
@@ -160,7 +175,15 @@ export function createSandboxEgressProxy(options: {
     outgoing.once("close", () => {
       if (logged) meter.close(logged);
     });
-    if (!meter.add("up", headBytes(`${incoming.method} ${incoming.url} HTTP/${incoming.httpVersion}`, incoming.rawHeaders))) {
+    if (
+      !meter.add(
+        "up",
+        headBytes(
+          `${incoming.method} ${incoming.url} HTTP/${incoming.httpVersion}`,
+          incoming.rawHeaders,
+        ),
+      )
+    ) {
       outgoing.writeHead(429);
       outgoing.end("AGENT_SANDBOX_EGRESS_DAILY_LIMIT: Daily egress volume reached\n");
       return;
@@ -168,36 +191,41 @@ export function createSandboxEgressProxy(options: {
     void (async () => {
       const targetUrl = new URL(incoming.url ?? "");
       if (targetUrl.protocol !== "http:" || targetUrl.username || targetUrl.password) {
-        throw new Error("AGENT_SANDBOX_EGRESS_URL_FORBIDDEN: Only credential-free HTTP URLs are allowed");
+        throw new Error(
+          "AGENT_SANDBOX_EGRESS_URL_FORBIDDEN: Only credential-free HTTP URLs are allowed",
+        );
       }
       const port = parsePort(targetUrl.port || "80");
       const target = await resolveTarget(targetUrl.hostname, port);
       logged = { host: target.hostname, kind: "http", port };
-      const upstream = httpRequest({
-        family: target.family,
-        headers: { ...filteredHeaders(incoming.headers), host: targetUrl.host },
-        host: target.address,
-        method: incoming.method,
-        path: `${targetUrl.pathname}${targetUrl.search}`,
-        port: target.port,
-        timeout: CONNECT_TIMEOUT_MS,
-      }, (upstreamResponse) => {
-        const statusLine = `HTTP/${upstreamResponse.httpVersion} ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}`;
-        if (!meter.add("down", headBytes(statusLine, upstreamResponse.rawHeaders))) {
-          upstream.destroy();
-          outgoing.destroy();
-          return;
-        }
-        outgoing.writeHead(
-          upstreamResponse.statusCode ?? 502,
-          filteredHeaders(upstreamResponse.headers),
-        );
-        upstreamResponse.on("data", meterChunks(meter, "down", [upstream, outgoing]));
-        upstreamResponse.pipe(outgoing);
-      });
-      upstream.on("timeout", () => upstream.destroy(
-        new Error("AGENT_SANDBOX_EGRESS_TIMEOUT: Upstream connection timed out"),
-      ));
+      const upstream = httpRequest(
+        {
+          family: target.family,
+          headers: { ...filteredHeaders(incoming.headers), host: targetUrl.host },
+          host: target.address,
+          method: incoming.method,
+          path: `${targetUrl.pathname}${targetUrl.search}`,
+          port: target.port,
+          timeout: CONNECT_TIMEOUT_MS,
+        },
+        (upstreamResponse) => {
+          const statusLine = `HTTP/${upstreamResponse.httpVersion} ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}`;
+          if (!meter.add("down", headBytes(statusLine, upstreamResponse.rawHeaders))) {
+            upstream.destroy();
+            outgoing.destroy();
+            return;
+          }
+          outgoing.writeHead(
+            upstreamResponse.statusCode ?? 502,
+            filteredHeaders(upstreamResponse.headers),
+          );
+          upstreamResponse.on("data", meterChunks(meter, "down", [upstream, outgoing]));
+          upstreamResponse.pipe(outgoing);
+        },
+      );
+      upstream.on("timeout", () =>
+        upstream.destroy(new Error("AGENT_SANDBOX_EGRESS_TIMEOUT: Upstream connection timed out")),
+      );
       upstream.on("error", (error) => {
         console.error("Sandbox HTTP egress failed", { error, hostname: target.hostname, port });
         if (!outgoing.headersSent) outgoing.writeHead(502);
@@ -262,11 +290,15 @@ export function createSandboxEgressProxy(options: {
       const target = await resolveTarget(match[1]!, port);
       if (clientUnavailable()) return;
       phase = "connect";
-      const upstream = connectWithDeadline(() => connect({
-        family: target.family,
-        host: target.address,
-        port: target.port,
-      }), CONNECT_TIMEOUT_MS);
+      const upstream = connectWithDeadline(
+        () =>
+          connect({
+            family: target.family,
+            host: target.address,
+            port: target.port,
+          }),
+        CONNECT_TIMEOUT_MS,
+      );
       bindTunnelLifecycle(clientSocket, upstream);
       if (clientUnavailable()) {
         upstream.destroy();

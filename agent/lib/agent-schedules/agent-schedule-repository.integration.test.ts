@@ -61,7 +61,7 @@ function privateAuth(fixture: Fixture, user: "member" | "owner") {
     groupId: null,
     groupType: null,
     messageThreadId: null,
-    role: owner ? "owner" as const : "member" as const,
+    role: owner ? ("owner" as const) : ("member" as const),
     telegramChatId: owner ? "schedule-owner" : "schedule-member",
     telegramChatType: "private" as const,
     telegramUserId: owner ? "schedule-owner" : "schedule-member",
@@ -139,37 +139,48 @@ describeWithDatabase("agent schedule repositories", () => {
     const group = familyAuth(fixture, "member");
 
     // The scenario prompt and request are private text: the family group must not receive them.
-    await expect(agentScheduleRepository.list(group, { limit: 100 })).resolves.toEqual({ items: [], nextCursor: null });
+    await expect(agentScheduleRepository.list(group, { limit: 100 })).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
     await expect(agentScheduleRepository.findById(group, personal.id)).resolves.toBeNull();
-    await expect(agentScheduleRepository.update(group, personal.id, { enabled: false, operationKey: "pause-from-group" }))
-      .rejects.toThrowError(/AGENT_SCHEDULE_NOT_FOUND/);
+    await expect(
+      agentScheduleRepository.update(group, personal.id, {
+        enabled: false,
+        operationKey: "pause-from-group",
+      }),
+    ).rejects.toThrowError(/AGENT_SCHEDULE_NOT_FOUND/);
     await expect(agentScheduleRepository.findById(auth, personal.id)).resolves.toEqual(personal);
   });
 
   it("requires a verified family group destination for family schedules", async () => {
     const fixture = await createFixture();
 
-    await expect(agentScheduleRepository.create(privateAuth(fixture, "owner"), {
-      firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
-      operationKey: "bad-family-destination",
-      recurrence: { interval: 1, kind: "daily" },
-      scenarioPrompt: "Собрать семейную сводку.",
-      scope: "family",
-      timezone: "Europe/Moscow",
-      title: "Семейная сводка",
-      userRequest: "Присылай семье сводку",
-    })).rejects.toThrowError(/AGENT_SCHEDULE_DESTINATION_INVALID/);
+    await expect(
+      agentScheduleRepository.create(privateAuth(fixture, "owner"), {
+        firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
+        operationKey: "bad-family-destination",
+        recurrence: { interval: 1, kind: "daily" },
+        scenarioPrompt: "Собрать семейную сводку.",
+        scope: "family",
+        timezone: "Europe/Moscow",
+        title: "Семейная сводка",
+        userRequest: "Присылай семье сводку",
+      }),
+    ).rejects.toThrowError(/AGENT_SCHEDULE_DESTINATION_INVALID/);
 
-    await expect(agentScheduleRepository.create(familyAuth(fixture, "owner"), {
-      firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
-      operationKey: "good-family-destination",
-      recurrence: { interval: 1, kind: "daily" },
-      scenarioPrompt: "Собрать семейную сводку.",
-      scope: "family",
-      timezone: "Europe/Moscow",
-      title: "Семейная сводка",
-      userRequest: "Присылай семье сводку",
-    })).resolves.toMatchObject({ scope: "family" });
+    await expect(
+      agentScheduleRepository.create(familyAuth(fixture, "owner"), {
+        firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
+        operationKey: "good-family-destination",
+        recurrence: { interval: 1, kind: "daily" },
+        scenarioPrompt: "Собрать семейную сводку.",
+        scope: "family",
+        timezone: "Europe/Moscow",
+        title: "Семейная сводка",
+        userRequest: "Присылай семье сводку",
+      }),
+    ).resolves.toMatchObject({ scope: "family" });
   });
 
   it("rejects history configuration for a non-group schedule before SQL mutation", async () => {
@@ -186,10 +197,12 @@ describeWithDatabase("agent schedule repositories", () => {
       userRequest: "Присылай личную сводку",
     });
 
-    await expect(agentScheduleRepository.update(auth, schedule.id, {
-      historyWindowDays: 7,
-      operationKey: "invalid-personal-history",
-    })).rejects.toMatchObject({
+    await expect(
+      agentScheduleRepository.update(auth, schedule.id, {
+        historyWindowDays: 7,
+        operationKey: "invalid-personal-history",
+      }),
+    ).rejects.toMatchObject({
       code: "AGENT_EXTERNAL_SCHEDULE_HISTORY_WINDOW_INVALID",
     });
     const persisted = await database().query<{ history_window_days: number | null }>(
@@ -219,11 +232,13 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:01.000Z"),
     });
     expect(claimed).toMatchObject({ telegramChatId: "schedule-member", title: "Будничная сводка" });
-    await expect(agentScheduleDispatchRepository.claimDue({
-      leaseMilliseconds: 300_000,
-      limit: 10,
-      now: new Date("2026-07-17T09:00:02.000Z"),
-    })).resolves.toEqual([]);
+    await expect(
+      agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 300_000,
+        limit: 10,
+        now: new Date("2026-07-17T09:00:02.000Z"),
+      }),
+    ).resolves.toEqual([]);
 
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:test-run",
@@ -260,33 +275,43 @@ describeWithDatabase("agent schedule repositories", () => {
     } as const;
 
     // An unknown run cannot create an orphan receipt or finalize another schedule.
-    await expect(agentScheduleDispatchRepository.completeDeliveredRun({
-      ...delivery,
-      runId: "00000000-0000-4000-8000-000000000999",
-    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
+    await expect(
+      agentScheduleDispatchRepository.completeDeliveredRun({
+        ...delivery,
+        runId: "00000000-0000-4000-8000-000000000999",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
     await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
       rowCount: 0,
     });
 
     // Once Telegram delivery belongs to a durable run, retain the receipt despite identity conflict.
-    await expect(agentScheduleDispatchRepository.completeDeliveredRun({
-      ...delivery,
-      eveSessionId: "eve-schedule-conflict",
-    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
+    await expect(
+      agentScheduleDispatchRepository.completeDeliveredRun({
+        ...delivery,
+        eveSessionId: "eve-schedule-conflict",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
     await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
       rowCount: 1,
     });
 
-    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(true);
-    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(false);
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(
+      true,
+    );
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(
+      false,
+    );
 
     await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
       items: [expect.objectContaining({ nextRunAt: "2026-07-20T09:00:00.000Z", status: "active" })],
       nextCursor: null,
     });
-    await expect(database().query(
-      "SELECT source_id::text, telegram_message_id::text FROM proactive_deliveries",
-    )).resolves.toMatchObject({
+    await expect(
+      database().query(
+        "SELECT source_id::text, telegram_message_id::text FROM proactive_deliveries",
+      ),
+    ).resolves.toMatchObject({
       rows: [{ source_id: claimed!.runId, telegram_message_id: "501" }],
     });
   });
@@ -395,15 +420,16 @@ describeWithDatabase("agent schedule repositories", () => {
       eveSessionId: "eve-schedule-long-running",
     });
 
-    await expect(agentScheduleDispatchRepository.claimDue({
-      leaseMilliseconds: 1_000,
-      limit: 1,
-      now: new Date("2026-07-17T09:00:02.000Z"),
-    })).resolves.toEqual([]);
-    await expect(agentScheduleRepository.list(
-      privateAuth(fixture, "member"),
-      { limit: 100 },
-    )).resolves.toMatchObject({
+    await expect(
+      agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 1_000,
+        limit: 1,
+        now: new Date("2026-07-17T09:00:02.000Z"),
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      agentScheduleRepository.list(privateAuth(fixture, "member"), { limit: 100 }),
+    ).resolves.toMatchObject({
       items: [expect.objectContaining({ lastErrorCode: null, status: "leased" })],
       nextCursor: null,
     });
@@ -441,14 +467,19 @@ describeWithDatabase("agent schedule repositories", () => {
       applicationSessionId: prepared.id,
     });
 
-    await expect(agentScheduleDispatchRepository.claimDue({
-      leaseMilliseconds: 1_000,
-      limit: 1,
-      now: new Date("2026-07-17T09:00:02.000Z"),
-    })).resolves.toEqual([]);
+    await expect(
+      agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 1_000,
+        limit: 1,
+        now: new Date("2026-07-17T09:00:02.000Z"),
+      }),
+    ).resolves.toEqual([]);
     await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
       items: [
-        expect.objectContaining({ lastErrorCode: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", status: "failed" }),
+        expect.objectContaining({
+          lastErrorCode: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS",
+          status: "failed",
+        }),
       ],
       nextCursor: null,
     });
@@ -490,7 +521,8 @@ describeWithDatabase("agent schedule repositories", () => {
     expect(ids).toHaveLength(102);
     expect(new Set(ids)).toHaveLength(102);
     expect(new Set(ids)).toEqual(new Set(inserted.rows.map((row) => row.id)));
-    await expect(agentScheduleRepository.list(auth, { cursor: "invalid", limit: 100 }))
-      .rejects.toMatchObject({ code: "AGENT_SCHEDULE_CURSOR_INVALID" });
+    await expect(
+      agentScheduleRepository.list(auth, { cursor: "invalid", limit: 100 }),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_CURSOR_INVALID" });
   });
 });

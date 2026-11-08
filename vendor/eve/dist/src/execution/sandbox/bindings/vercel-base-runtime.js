@@ -18,9 +18,7 @@ async function runSandboxBootstrapStep(e, t) {
   throw Error(`${t.failureMessage}${i ? `\n${i}` : ``}`);
 }
 async function runBootstrapCommand(e, t) {
-  return await readBootstrapFailure(
-    await e.runCommand({ args: [`-lc`, t], cmd: `bash` }),
-  );
+  return await readBootstrapFailure(await e.runCommand({ args: [`-lc`, t], cmd: `bash` }));
 }
 async function runBootstrapCommandWithSudo(e, t) {
   return await readBootstrapFailure(

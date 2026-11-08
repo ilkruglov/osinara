@@ -8,10 +8,7 @@ import {
   resolveSlackBotToken as resolveSlackBotToken$1,
   uploadSlackFiles,
 } from "#compiled/@chat-adapter/slack/api.js";
-import {
-  cardToBlocks,
-  cardToFallbackText,
-} from "#public/channels/slack/blocks.js";
+import { cardToBlocks, cardToFallbackText } from "#public/channels/slack/blocks.js";
 import { truncateTypingStatus } from "#public/channels/slack/limits.js";
 import { slackMrkdwnToGfm } from "#public/channels/slack/mrkdwn.js";
 const log = createLogger(`slack.api`);
@@ -69,9 +66,7 @@ function buildSlackBinding(e) {
             limit: 50,
             ts: s,
           })
-        ).messages.map((t) =>
-          parseThreadMessage(t, s, { appId: e.appId, botUserId: e.botUserId }),
-        );
+        ).messages.map((t) => parseThreadMessage(t, s, { appId: e.appId, botUserId: e.botUserId }));
       } catch (n) {
         logError(log, `refresh threw — swallowed`, n, {
           channelId: e.channelId,
@@ -109,9 +104,7 @@ function buildSlackBinding(e) {
           raw: e.raw,
         };
       }
-      let a = await postSlackMessage(
-          buildPostMessageOptions(n, e.channelId, s, e.botToken),
-        ),
+      let a = await postSlackMessage(buildPostMessageOptions(n, e.channelId, s, e.botToken)),
         c = a.id;
       if ((handleMessageTs(c), r.length > 0 && i))
         try {
@@ -123,12 +116,7 @@ function buildSlackBinding(e) {
     },
     async postEphemeral(t, n) {
       let r = await postSlackEphemeral({
-        ...buildPostMessageOptions(
-          normalizePostInput(n),
-          e.channelId,
-          s,
-          e.botToken,
-        ),
+        ...buildPostMessageOptions(normalizePostInput(n), e.channelId, s, e.botToken),
         user: t,
       });
       return { id: r.id, raw: r.raw };
@@ -137,9 +125,7 @@ function buildSlackBinding(e) {
       let i = await n(`conversations.open`, { users: t }),
         a = i.ok === !0 ? i.channel?.id : void 0;
       if (typeof a != `string` || a.length === 0)
-        throw Error(
-          `Slack conversations.open failed: ${i.error ?? `unknown_error`}`,
-        );
+        throw Error(`Slack conversations.open failed: ${i.error ?? `unknown_error`}`);
       let s = await postSlackMessage(
         buildPostMessageOptions(normalizePostInput(r), a, ``, e.botToken),
       );
@@ -183,11 +169,7 @@ function buildSlackBinding(e) {
   };
 }
 function normalizePostInput(e) {
-  return typeof e == `string`
-    ? { markdown: e }
-    : isCardElement(e)
-      ? { card: e }
-      : e;
+  return typeof e == `string` ? { markdown: e } : isCardElement(e) ? { card: e } : e;
 }
 function buildPostMessageOptions(e, t, n, r) {
   let i = {
@@ -217,8 +199,7 @@ function toSlackFileUpload(e) {
   return { data: normalizeFileData(e.data), filename: e.filename };
 }
 function normalizeFileData(e) {
-  if (e instanceof ArrayBuffer || (typeof Blob < `u` && e instanceof Blob))
-    return e;
+  if (e instanceof ArrayBuffer || (typeof Blob < `u` && e instanceof Blob)) return e;
   if (ArrayBuffer.isView(e)) {
     let t = e;
     return new Uint8Array(t.buffer, t.byteOffset, t.byteLength);
@@ -232,9 +213,7 @@ function parseThreadMessage(e, t, n) {
     o = typeof e.user == `string` ? e.user : void 0,
     s = typeof e.bot_id == `string` ? e.bot_id : void 0,
     c = typeof e.app_id == `string` ? e.app_id : void 0,
-    l =
-      (n.botUserId !== void 0 && o === n.botUserId) ||
-      (n.appId !== void 0 && c === n.appId);
+    l = (n.botUserId !== void 0 && o === n.botUserId) || (n.appId !== void 0 && c === n.appId);
   return {
     text: r,
     markdown: slackMrkdwnToGfm(r),

@@ -26,15 +26,24 @@ export interface IndexedMemoryEmbeddingChunk {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  return memoryVectorLiteral(vector, () => new AppError(
-    "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
-    "Локальный сервис памяти вернул вектор неверного формата",
-  ));
+  return memoryVectorLiteral(
+    vector,
+    () =>
+      new AppError(
+        "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+        "Локальный сервис памяти вернул вектор неверного формата",
+      ),
+  );
 }
 
 export const memoryIndexRepository = {
   async claim(limit: number, leaseMilliseconds: number): Promise<MemoryEmbeddingJob[]> {
-    if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(leaseMilliseconds) || leaseMilliseconds < 1) {
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      !Number.isInteger(leaseMilliseconds) ||
+      leaseMilliseconds < 1
+    ) {
       throw new Error("AGENT_MEMORY_EMBEDDING_CLAIM_INVALID: Некорректные параметры lease");
     }
     const client = await database().connect();
@@ -143,29 +152,43 @@ export const memoryIndexRepository = {
         return false;
       }
       const sourceContent = job.rows[0]!.content;
-      if (validatedChunks.some((chunk) =>
-        chunk.endOffset > sourceContent.length ||
-        sourceContent.slice(chunk.startOffset, chunk.endOffset) !== chunk.content
-      )) {
+      if (
+        validatedChunks.some(
+          (chunk) =>
+            chunk.endOffset > sourceContent.length ||
+            sourceContent.slice(chunk.startOffset, chunk.endOffset) !== chunk.content,
+        )
+      ) {
         throw new AppError(
           "AGENT_MEMORY_EMBEDDING_CHUNKS_INVALID",
           "Фрагменты смыслового индекса не соответствуют актуальному тексту памяти",
         );
       }
-      await client.query("DELETE FROM memory_embedding_chunks WHERE memory_item_id = $1", [memoryItemId]);
+      await client.query("DELETE FROM memory_embedding_chunks WHERE memory_item_id = $1", [
+        memoryItemId,
+      ]);
       for (const chunk of validatedChunks) {
         await client.query(
           `INSERT INTO memory_embedding_chunks
              (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
            VALUES ($1, $2, $3, $4, $5, $6::vector, $7)`,
-          [memoryItemId, chunk.chunkIndex, chunk.content, chunk.startOffset, chunk.endOffset, chunk.vector, modelVersion],
+          [
+            memoryItemId,
+            chunk.chunkIndex,
+            chunk.content,
+            chunk.startOffset,
+            chunk.endOffset,
+            chunk.vector,
+            modelVersion,
+          ],
         );
       }
-      await client.query(
-        "UPDATE memory_items SET embedding_status = 'indexed' WHERE id = $1",
-        [memoryItemId],
-      );
-      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [memoryItemId]);
+      await client.query("UPDATE memory_items SET embedding_status = 'indexed' WHERE id = $1", [
+        memoryItemId,
+      ]);
+      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [
+        memoryItemId,
+      ]);
       await client.query("COMMIT");
       return true;
     } catch (error) {
@@ -193,11 +216,12 @@ export const memoryIndexRepository = {
           "Ошибка относится к неактуальной задаче индексации",
         );
       }
-      await client.query(
-        "UPDATE memory_items SET embedding_status = 'failed' WHERE id = $1",
-        [memoryItemId],
-      );
-      await client.query("DELETE FROM memory_embedding_chunks WHERE memory_item_id = $1", [memoryItemId]);
+      await client.query("UPDATE memory_items SET embedding_status = 'failed' WHERE id = $1", [
+        memoryItemId,
+      ]);
+      await client.query("DELETE FROM memory_embedding_chunks WHERE memory_item_id = $1", [
+        memoryItemId,
+      ]);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

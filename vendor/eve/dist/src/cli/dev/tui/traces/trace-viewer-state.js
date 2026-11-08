@@ -33,18 +33,14 @@ function traceViewerItemCount(e) {
 }
 function applyTraceList(e, t, n = {}) {
   let r = e.traces[e.traceIndex]?.traceId,
-    i =
-      n.preferTraceId === void 0
-        ? -1
-        : t.findIndex((e) => e.traceId === n.preferTraceId);
+    i = n.preferTraceId === void 0 ? -1 : t.findIndex((e) => e.traceId === n.preferTraceId);
   (i === -1 && (i = r === void 0 ? -1 : t.findIndex((e) => e.traceId === r)),
     i === -1 && (i = t.length === 0 ? 0 : Math.max(0, e.traceIndex)),
     i >= t.length && (i = Math.max(0, t.length - 1)));
   let a = t[i]?.traceId !== r,
     o =
       t.length === 0
-        ? (e.notice ??
-          `No local traces yet — chat with your agent and spans stream in live.`)
+        ? (e.notice ?? `No local traces yet — chat with your agent and spans stream in live.`)
         : e.notice?.startsWith(`No local traces`)
           ? void 0
           : e.notice;
@@ -150,9 +146,7 @@ function reduceTraceViewerKey(e, n, r) {
       let l = o.conversationItems[c],
         u = new Set(o.expandedItems);
       return (
-        l !== void 0 &&
-        !u.has(c) &&
-        conversationItemExpandable(l, r.contentWidth)
+        l !== void 0 && !u.has(c) && conversationItemExpandable(l, r.contentWidth)
           ? u.add(c)
           : u.delete(c),
         { state: { ...o, selectedRow: c, expandedItems: u } }
@@ -165,9 +159,7 @@ function reduceTraceViewerKey(e, n, r) {
           ? { state: { ...a, panelOpen: !1, panelFocus: !1 } }
           : { state: { ...a, panelOpen: !0, panelScroll: 0 } };
     case `tab`:
-      return a.panelOpen
-        ? { state: { ...a, panelFocus: !a.panelFocus } }
-        : { state: a };
+      return a.panelOpen ? { state: { ...a, panelFocus: !a.panelFocus } } : { state: a };
     case `up`:
     case `ctrl-p`:
       return a.panelFocus
@@ -186,11 +178,7 @@ function reduceTraceViewerKey(e, n, r) {
       return a.panelFocus
         ? { state: { ...a, panelScroll: i } }
         : {
-            state: moveSelection(
-              a,
-              traceViewerItemCount(a) - 1 - a.selectedRow,
-              r,
-            ),
+            state: moveSelection(a, traceViewerItemCount(a) - 1 - a.selectedRow, r),
           };
     case `left`:
     case `right`: {
@@ -198,8 +186,7 @@ function reduceTraceViewerKey(e, n, r) {
       let e = a.conversationItems[a.selectedRow];
       if (
         e === void 0 ||
-        (!a.expandedItems.has(a.selectedRow) &&
-          !conversationItemExpandable(e, r.contentWidth))
+        (!a.expandedItems.has(a.selectedRow) && !conversationItemExpandable(e, r.contentWidth))
       )
         return { state: a };
       let n = new Set(a.expandedItems);
@@ -222,9 +209,7 @@ function reduceTraceViewerKey(e, n, r) {
 function switchTrace(e, t) {
   if (e.traces.length === 0) return e;
   let n = Math.min(Math.max(0, e.traceIndex + t), e.traces.length - 1);
-  return n === e.traceIndex
-    ? e
-    : { ...e, ...clearedTraceView(), traceIndex: n };
+  return n === e.traceIndex ? e : { ...e, ...clearedTraceView(), traceIndex: n };
 }
 function moveSelection(e, t, n) {
   let r = traceViewerItemCount(e);
@@ -239,8 +224,7 @@ function moveSelection(e, t, n) {
 }
 function cardLineOffsets(e, t) {
   let n = [0];
-  for (let r = 0; r < e.conversationItems.length; r += 1)
-    n.push(n[r] + (t[r] ?? 1) + 1);
+  for (let r = 0; r < e.conversationItems.length; r += 1) n.push(n[r] + (t[r] ?? 1) + 1);
   return n;
 }
 function conversationLineTotal(e, t) {
@@ -254,11 +238,7 @@ function conversationScrollRow(e, t) {
     i = cardLineOffsets(e, n)[e.selectedRow] ?? 0,
     a = n[e.selectedRow] ?? 1,
     o = i + a;
-  return e.scrollRow <= i && o <= e.scrollRow + r
-    ? e.scrollRow
-    : a > r
-      ? i
-      : Math.max(0, o - r);
+  return e.scrollRow <= i && o <= e.scrollRow + r ? e.scrollRow : a > r ? i : Math.max(0, o - r);
 }
 function conversationCellAt(e, t, n, r) {
   let i = t.conversationLineCounts;
@@ -291,8 +271,7 @@ function conversationItemAtBodyRow(e, t, n) {
   if (r === void 0) return;
   let i = e.scrollRow + n,
     a = cardLineOffsets(e, r);
-  for (let t = 0; t < e.conversationItems.length; t += 1)
-    if (i < a[t + 1]) return t;
+  for (let t = 0; t < e.conversationItems.length; t += 1) if (i < a[t + 1]) return t;
 }
 function scrollConversation(e, t, n) {
   let r = n.conversationLineCounts;

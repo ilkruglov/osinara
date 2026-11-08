@@ -15,16 +15,16 @@ export declare const DISCOVER_SCHEDULE_FILE_UNSUPPORTED = "discover/schedule-fil
  * Input for discovering authored schedules under `schedules/`.
  */
 interface DiscoverScheduleSourcesInput {
-    agentRoot: string;
-    rootEntries: readonly ProjectSourceEntry[];
-    source: ProjectSource;
+  agentRoot: string;
+  rootEntries: readonly ProjectSourceEntry[];
+  source: ProjectSource;
 }
 /**
  * Result of discovering authored schedules under `schedules/`.
  */
 interface DiscoverScheduleSourcesResult {
-    diagnostics: DiscoverDiagnostic[];
-    schedules: ScheduleSourceRef[];
+  diagnostics: DiscoverDiagnostic[];
+  schedules: ScheduleSourceRef[];
 }
 /**
  * Discovers authored schedule sources under `schedules/`. Schedules are
@@ -34,5 +34,7 @@ interface DiscoverScheduleSourcesResult {
  * relative path under `schedules/` minus the file extension
  * (`schedules/billing/invoice-sweep.ts` → `billing/invoice-sweep`).
  */
-export declare function discoverScheduleSources(input: DiscoverScheduleSourcesInput): Promise<DiscoverScheduleSourcesResult>;
+export declare function discoverScheduleSources(
+  input: DiscoverScheduleSourcesInput,
+): Promise<DiscoverScheduleSourcesResult>;
 export {};

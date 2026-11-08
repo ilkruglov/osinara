@@ -32,28 +32,44 @@ const TOP_LEVEL_FIELDS = [
   "invitationId",
 ] as const;
 
-const manageFamilyInvitationSchema = z.object({
-  action: z.enum(TOOL_ACTIONS).describe("Обязательный action: create или approve."),
-  candidateDisplayName: z.string().optional().describe("Обязательно только для action=approve."),
-  candidateTelegramUserId: z.string().optional().describe("Обязательно только для action=approve."),
-  invitationId: z.string().optional().describe("UUID обязателен только для action=approve."),
-}).strict();
+const manageFamilyInvitationSchema = z
+  .object({
+    action: z.enum(TOOL_ACTIONS).describe("Обязательный action: create или approve."),
+    candidateDisplayName: z.string().optional().describe("Обязательно только для action=approve."),
+    candidateTelegramUserId: z
+      .string()
+      .optional()
+      .describe("Обязательно только для action=approve."),
+    invitationId: z.string().optional().describe("UUID обязателен только для action=approve."),
+  })
+  .strict();
 
 function requireApproveInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, [
-    "action",
-    "candidateDisplayName",
-    "candidateTelegramUserId",
-    "invitationId",
-  ], "action=approve", INPUT_ERROR_CODE);
+  requireOnlyFields(
+    input,
+    ["action", "candidateDisplayName", "candidateTelegramUserId", "invitationId"],
+    "action=approve",
+    INPUT_ERROR_CODE,
+  );
   return {
     candidateDisplayName: requiredString(input, "candidateDisplayName", INPUT_ERROR_CODE, "Анна", {
       maxLength: 200,
     }),
-    candidateTelegramUserId: requiredString(input, "candidateTelegramUserId", INPUT_ERROR_CODE, "123456789", {
-      maxLength: 64,
-    }),
-    invitationId: requiredUuid(input, "invitationId", INPUT_ERROR_CODE, "приглашение из list_pending_family_invitations"),
+    candidateTelegramUserId: requiredString(
+      input,
+      "candidateTelegramUserId",
+      INPUT_ERROR_CODE,
+      "123456789",
+      {
+        maxLength: 64,
+      },
+    ),
+    invitationId: requiredUuid(
+      input,
+      "invitationId",
+      INPUT_ERROR_CODE,
+      "приглашение из list_pending_family_invitations",
+    ),
   };
 }
 
@@ -69,8 +85,8 @@ function requireManageFamilyInvitationInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Создать одноразовое семейное приглашение или подтвердить кандидата; оба action требуют подтверждения. Create: {\"action\":\"create\"} без полей кандидата.",
-  "Approve: {\"action\":\"approve\",\"invitationId\":\"<UUID из list_pending_family_invitations>\",\"candidateTelegramUserId\":\"123456789\",\"candidateDisplayName\":\"Анна\"}; все три значения берутся точно из list_pending_family_invitations, иначе запроси список снова или спроси владельца.",
+  'Создать одноразовое семейное приглашение или подтвердить кандидата; оба action требуют подтверждения. Create: {"action":"create"} без полей кандидата.',
+  'Approve: {"action":"approve","invitationId":"<UUID из list_pending_family_invitations>","candidateTelegramUserId":"123456789","candidateDisplayName":"Анна"}; все три значения берутся точно из list_pending_family_invitations, иначе запроси список снова или спроси владельца.',
 ].join(" ");
 
 export default defineTool({

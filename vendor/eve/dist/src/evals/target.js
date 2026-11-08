@@ -9,8 +9,7 @@ async function resolveEvalTargetHandle(e) {
   let t = await e.client.info();
   if (
     (assertAgentInfoShape(t, e.url),
-    e.expectedAgentName !== void 0 &&
-      !matchesExpectedAgentName(e.expectedAgentName, t.agent.name))
+    e.expectedAgentName !== void 0 && !matchesExpectedAgentName(e.expectedAgentName, t.agent.name))
   )
     throw Error(
       `Expected eval target ${JSON.stringify(e.expectedAgentName)} at ${e.url}, but ${JSON.stringify(t.agent.name)} is responding there.`,
@@ -46,8 +45,7 @@ function createHandle(t) {
     i = t.client,
     fetchTarget = async (e, t) => {
       if (n !== void 0) return await n.fetch(e, t);
-      if (i === void 0)
-        throw Error(`Eval target cannot fetch without a client.`);
+      if (i === void 0) throw Error(`Eval target cannot fetch without a client.`);
       return await i.fetch(e, t);
     };
   return {
@@ -57,30 +55,25 @@ function createHandle(t) {
     async attachSession(e, a) {
       if (t.sessions !== void 0) return await t.sessions.attachSession(e, a);
       if (n !== void 0) return await n.attachSession(e, a);
-      if (i === void 0)
-        throw Error(`Eval target cannot attach sessions without a client.`);
+      if (i === void 0) throw Error(`Eval target cannot attach sessions without a client.`);
       return await new EvalSessionManager({ client: i }).attachSession(e, a);
     },
     watchTurn(e, a) {
       if (t.sessions !== void 0) return t.sessions.watchTurn(e, a);
       if (n !== void 0) return n.watchTurn(e, a);
-      if (i === void 0)
-        throw Error(`Eval target cannot watch sessions without a client.`);
+      if (i === void 0) throw Error(`Eval target cannot watch sessions without a client.`);
       return new EvalSessionManager({ client: i }).watchTurn(e, a);
     },
     async dispatchSchedule(n) {
       if (!t.capabilities.devRoutes)
-        throw Error(
-          `target.dispatchSchedule() requires a target with dev routes enabled.`,
-        );
+        throw Error(`target.dispatchSchedule() requires a target with dev routes enabled.`);
       let r = await fetchTarget(createEveDevDispatchSchedulePath(n), {
         method: `POST`,
       });
       if (!r.ok) {
         let e = await readResponseBodySafely(r);
         throw Error(
-          `Schedule dispatch failed: ${r.status} ${r.statusText}` +
-            (e.length > 0 ? `, ${e}` : ``),
+          `Schedule dispatch failed: ${r.status} ${r.statusText}` + (e.length > 0 ? `, ${e}` : ``),
         );
       }
       return parseScheduleDispatchResult(await r.json());
@@ -99,7 +92,7 @@ function matchesExpectedAgentName(e, t) {
 async function waitForTargetHealth(e, n) {
   let r = Date.now() + 6e4,
     a;
-  for (; Date.now() < r; )
+  for (; Date.now() < r;)
     try {
       await e.health();
       return;
@@ -107,15 +100,12 @@ async function waitForTargetHealth(e, n) {
       ((a = toErrorMessage(e)), await setTimeout(250));
     }
   throw Error(
-    `Timed out waiting for eval target health at ${n}.` +
-      (a === void 0 ? `` : ` Last error: ${a}`),
+    `Timed out waiting for eval target health at ${n}.` + (a === void 0 ? `` : ` Last error: ${a}`),
   );
 }
 function assertAgentInfoShape(e, t) {
   if (e.kind !== `eve-agent-info` || e.version !== 2)
-    throw Error(
-      `Eval target ${t} returned an unrecognized /eve/v1/info payload.`,
-    );
+    throw Error(`Eval target ${t} returned an unrecognized /eve/v1/info payload.`);
 }
 function parseScheduleDispatchResult(e) {
   if (
@@ -127,9 +117,7 @@ function parseScheduleDispatchResult(e) {
     !Array.isArray(e.sessionIds) ||
     e.sessionIds.some((e) => typeof e != `string`)
   )
-    throw Error(
-      `Schedule dispatch returned an unexpected response shape: ${JSON.stringify(e)}`,
-    );
+    throw Error(`Schedule dispatch returned an unexpected response shape: ${JSON.stringify(e)}`);
   return { scheduleId: e.scheduleId, sessionIds: [...e.sessionIds] };
 }
 async function readResponseBodySafely(e) {
@@ -139,8 +127,4 @@ async function readResponseBodySafely(e) {
     return ``;
   }
 }
-export {
-  createEvalTargetHandle,
-  resolveEvalTargetHandle,
-  scopeEvalTargetHandle,
-};
+export { createEvalTargetHandle, resolveEvalTargetHandle, scopeEvalTargetHandle };

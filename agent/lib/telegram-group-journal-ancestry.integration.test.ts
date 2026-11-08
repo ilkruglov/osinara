@@ -61,11 +61,7 @@ async function createOwnedFamily(suffix: string): Promise<{ familyId: string; ow
   return { familyId, ownerId };
 }
 
-function message(input: {
-  id: string;
-  text?: string;
-  withPhoto?: boolean;
-}): TelegramMessage {
+function message(input: { id: string; text?: string; withPhoto?: boolean }): TelegramMessage {
   return {
     attachments: input.withPhoto ? [{ fileId: "photo-file", kind: "photo" }] : [],
     caption: "",
@@ -123,7 +119,10 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
         messageId: parent.messageId,
       },
     });
-    await telegramGroupJournalRepository.record(group.groupId, message({ id: "84", text: "cursor" }));
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "84", text: "cursor" }),
+    );
     const current = await telegramGroupJournalRepository.record(group.groupId, {
       ...message({ id: "85", text: "Ты видишь, на что я ответил?" }),
       replyToMessage: {
@@ -181,22 +180,32 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
 
     expect(reference).toMatchObject({ kind: "photo", telegramMessageId: "61" });
     expect(count.rows[0]?.count).toBe("1");
-    await expect(telegramGroupAttachmentRepository.find({
-      familyId,
-      groupId: group.groupId,
-      groupType: "family_private",
-      role: "owner",
-      telegramChatType: "supergroup",
-      userId: ownerId,
-    }, reference!.attachmentId)).resolves.toMatchObject({ messageId: "61" });
-    await expect(telegramGroupAttachmentRepository.list({
-      familyId,
-      groupId: group.groupId,
-      groupType: "family_private",
-      role: "owner",
-      telegramChatType: "supergroup",
-      userId: ownerId,
-    }, { limit: 50, messageThreadId: null })).resolves.toMatchObject({
+    await expect(
+      telegramGroupAttachmentRepository.find(
+        {
+          familyId,
+          groupId: group.groupId,
+          groupType: "family_private",
+          role: "owner",
+          telegramChatType: "supergroup",
+          userId: ownerId,
+        },
+        reference!.attachmentId,
+      ),
+    ).resolves.toMatchObject({ messageId: "61" });
+    await expect(
+      telegramGroupAttachmentRepository.list(
+        {
+          familyId,
+          groupId: group.groupId,
+          groupType: "family_private",
+          role: "owner",
+          telegramChatType: "supergroup",
+          userId: ownerId,
+        },
+        { limit: 50, messageThreadId: null },
+      ),
+    ).resolves.toMatchObject({
       items: [{ telegramMessageId: "61" }],
       nextCursor: null,
     });
@@ -315,7 +324,10 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
       toolAllowlist: [],
       type: "external",
     });
-    await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", text: "данные" }));
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "1", text: "данные" }),
+    );
     await database().query(
       `INSERT INTO memory_items
          (family_id, group_id, scope, author_telegram_user_id, kind, content, source,
@@ -337,11 +349,7 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
       telegramChatId: "-1001",
     });
 
-    for (const table of [
-      "telegram_groups",
-      "telegram_group_messages",
-      "memory_items",
-    ]) {
+    for (const table of ["telegram_groups", "telegram_group_messages", "memory_items"]) {
       const result = await database().query<{ count: string }>(
         `SELECT count(*)::text AS count FROM ${table}`,
       );

@@ -13,10 +13,6 @@ async function renameWithTransientBusyRetry(t, n) {
   await rename(t, n);
 }
 function isTransientRenameError(e) {
-  return (
-    isErrnoCode(e, `EPERM`) ||
-    isErrnoCode(e, `EACCES`) ||
-    isErrnoCode(e, `EBUSY`)
-  );
+  return isErrnoCode(e, `EPERM`) || isErrnoCode(e, `EACCES`) || isErrnoCode(e, `EBUSY`);
 }
 export { renameWithTransientBusyRetry };

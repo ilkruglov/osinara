@@ -1,21 +1,10 @@
 import { hasInteractiveTerminal } from "./preconditions.js";
-import {
-  headlessSetupContinuation,
-  serializeHeadlessSetupEvent,
-} from "./setup-headless.js";
+import { headlessSetupContinuation, serializeHeadlessSetupEvent } from "./setup-headless.js";
 import { z } from "#compiled/zod/index.js";
 import { createPrompter } from "#setup/prompter.js";
-import {
-  headlessAsker,
-  interactiveAsker,
-  withAnswers,
-  withPolicy,
-} from "#setup/ask.js";
+import { headlessAsker, interactiveAsker, withAnswers, withPolicy } from "#setup/ask.js";
 import { mergeRegistrySetupCompletions } from "#setup/registry-setup-completion.js";
-import {
-  addRegistryItems,
-  getRegistryItems,
-} from "#compiled/shadcn-registry/index.js";
+import { addRegistryItems, getRegistryItems } from "#compiled/shadcn-registry/index.js";
 const RegistryPackageComponentSchema = z.object({
   item: z.string().min(1),
   label: z.string().min(1),
@@ -45,16 +34,9 @@ async function selectComponents(e, r, i, l, u, d) {
   try {
     return await p.askMany(f);
   } catch (i) {
-    if (
-      !l.nonInteractive ||
-      !(i instanceof Error) ||
-      i.name !== `InteractionRequired`
-    )
-      throw i;
+    if (!l.nonInteractive || !(i instanceof Error) || i.name !== `InteractionRequired`) throw i;
     let a = i.question,
-      { setupQuestionToWire: o } = await import(
-        `#setup/setup-question-wire.js`
-      ),
+      { setupQuestionToWire: o } = await import(`#setup/setup-question-wire.js`),
       s = o(a);
     (e.error(
       serializeHeadlessSetupEvent({
@@ -95,9 +77,7 @@ async function runRegistryPackage(t) {
   let _ = g.map((e) => p.itemAddress(e.item)),
     v = await getRegistryItems(_, { config: s });
   if (v.length !== g.length)
-    throw Error(
-      `Registry package "${a}" could not resolve all selected components.`,
-    );
+    throw Error(`Registry package "${a}" could not resolve all selected components.`);
   let y = v.map((e) => {
     let t = p.metadata(e);
     return (p.assertCompatibleVersion(t?.requires), t);

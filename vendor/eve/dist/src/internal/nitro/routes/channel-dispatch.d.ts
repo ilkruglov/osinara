@@ -15,5 +15,13 @@ import type { NitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifa
  * Authored channels receive `RouteHandlerArgs`; framework-internal channels
  * receive the smaller `RouteContext` used by callback routes.
  */
-export declare function dispatchChannelRequest(event: H3Event, routeKey: string, config: NitroArtifactsConfig): Promise<Response>;
-export declare function dispatchChannelWebSocketRequest(event: H3Event, routeKey: string, config: NitroArtifactsConfig): Promise<WebSocketRouteHooks>;
+export declare function dispatchChannelRequest(
+  event: H3Event,
+  routeKey: string,
+  config: NitroArtifactsConfig,
+): Promise<Response>;
+export declare function dispatchChannelWebSocketRequest(
+  event: H3Event,
+  routeKey: string,
+  config: NitroArtifactsConfig,
+): Promise<WebSocketRouteHooks>;

@@ -1,4 +1,7 @@
-import type { DevelopmentNitroArtifactsConfig, ProductionNitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifacts.js";
+import type {
+  DevelopmentNitroArtifactsConfig,
+  ProductionNitroArtifactsConfig,
+} from "#internal/nitro/routes/runtime-artifacts.js";
 import type { AgentWorkflowWorldDefinition } from "#shared/agent-definition.js";
 /**
  * Runtime-artifacts wiring for the dev server: routes read compiled
@@ -6,8 +9,8 @@ import type { AgentWorkflowWorldDefinition } from "#shared/agent-definition.js";
  * reload can swap them.
  */
 export declare function createDevelopmentNitroArtifactsConfig(input: {
-    readonly appRoot: string;
-    readonly configuredWorld?: AgentWorkflowWorldDefinition;
+  readonly appRoot: string;
+  readonly configuredWorld?: AgentWorkflowWorldDefinition;
 }): DevelopmentNitroArtifactsConfig;
 /**
  * Runtime-artifacts wiring for built output: routes require the artifacts

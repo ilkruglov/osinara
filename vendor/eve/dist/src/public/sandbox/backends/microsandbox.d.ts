@@ -1,5 +1,9 @@
 import type { SandboxBackend } from "#public/definitions/sandbox-backend.js";
-import type { MicrosandboxBootstrapUseOptions, MicrosandboxSandboxCreateOptions, MicrosandboxSessionUseOptions } from "#public/sandbox/microsandbox-sandbox.js";
+import type {
+  MicrosandboxBootstrapUseOptions,
+  MicrosandboxSandboxCreateOptions,
+  MicrosandboxSessionUseOptions,
+} from "#public/sandbox/microsandbox-sandbox.js";
 /**
  * Constructs the microsandbox sandbox backend: lightweight local VMs
  * via [microsandbox](https://www.npmjs.com/package/microsandbox) with
@@ -14,4 +18,6 @@ import type { MicrosandboxBootstrapUseOptions, MicrosandboxSandboxCreateOptions,
  * Configuring this backend pins it unconditionally — when you want
  * fallback behavior, use `defaultBackend()` instead.
  */
-export declare function microsandbox(opts?: MicrosandboxSandboxCreateOptions): SandboxBackend<MicrosandboxBootstrapUseOptions, MicrosandboxSessionUseOptions>;
+export declare function microsandbox(
+  opts?: MicrosandboxSandboxCreateOptions,
+): SandboxBackend<MicrosandboxBootstrapUseOptions, MicrosandboxSessionUseOptions>;

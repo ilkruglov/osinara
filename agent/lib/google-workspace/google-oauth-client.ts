@@ -16,7 +16,10 @@ import {
   missingGoogleWorkspaceScopes,
 } from "./google-workspace-config.js";
 
-export { GOOGLE_WORKSPACE_SCOPES, missingGoogleWorkspaceScopes } from "./google-workspace-config.js";
+export {
+  GOOGLE_WORKSPACE_SCOPES,
+  missingGoogleWorkspaceScopes,
+} from "./google-workspace-config.js";
 
 export interface GoogleOAuthClientConfig {
   clientId: string;
@@ -76,10 +79,12 @@ async function requestToken(body: URLSearchParams): Promise<z.infer<typeof token
       signal: AbortSignal.timeout(GOOGLE_PROVIDER_REQUEST_TIMEOUT_MILLISECONDS),
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_GOOGLE_OAUTH_NETWORK_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GOOGLE_OAUTH_NETWORK_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     if (error instanceof Error) {
       error.message = "AGENT_GOOGLE_OAUTH_NETWORK_FAILED: Не удалось связаться с Google OAuth";
     }
@@ -91,10 +96,12 @@ async function requestToken(body: URLSearchParams): Promise<z.infer<typeof token
   try {
     payload = JSON.parse(rawBody);
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_GOOGLE_OAUTH_RESPONSE_INVALID",
-      providerStatus: response.status,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GOOGLE_OAUTH_RESPONSE_INVALID",
+        providerStatus: response.status,
+      }),
+    );
     if (error instanceof Error) {
       error.message = "AGENT_GOOGLE_OAUTH_RESPONSE_INVALID: Google OAuth вернул некорректный ответ";
     }
@@ -102,12 +109,16 @@ async function requestToken(body: URLSearchParams): Promise<z.infer<typeof token
   }
   if (!response.ok) {
     const providerError = providerErrorSchema.safeParse(payload);
-    const providerCode = providerError.success ? providerError.data.error : "unknown_provider_error";
-    console.error(JSON.stringify({
-      code: "AGENT_GOOGLE_OAUTH_PROVIDER_FAILED",
-      providerCode,
-      providerStatus: response.status,
-    }));
+    const providerCode = providerError.success
+      ? providerError.data.error
+      : "unknown_provider_error";
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GOOGLE_OAUTH_PROVIDER_FAILED",
+        providerCode,
+        providerStatus: response.status,
+      }),
+    );
     if (providerCode === "invalid_grant") {
       throw new AppError(
         "AGENT_GOOGLE_AUTH_EXPIRED",
@@ -145,13 +156,15 @@ export async function exchangeGoogleAuthorizationCode(
   if (!code) {
     throw new AppError("AGENT_GOOGLE_AUTH_CODE_MISSING", "Google не вернул код авторизации");
   }
-  const token = await requestToken(new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    code,
-    grant_type: "authorization_code",
-    redirect_uri: config.redirectUri,
-  }));
+  const token = await requestToken(
+    new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: config.redirectUri,
+    }),
+  );
   if (!token.refresh_token) {
     throw new AppError(
       "AGENT_GOOGLE_REFRESH_TOKEN_MISSING",
@@ -170,12 +183,14 @@ export async function refreshGoogleAccessToken(
   config: GoogleOAuthClientConfig,
   refreshToken: string,
 ): Promise<GoogleAccessTokenResult> {
-  const token = await requestToken(new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-  }));
+  const token = await requestToken(
+    new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  );
   return {
     accessToken: token.access_token,
     expiresInSeconds: token.expires_in,

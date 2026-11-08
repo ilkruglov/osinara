@@ -267,16 +267,10 @@ const STRUCTURED_APPLICATION_ROUTES: Readonly<Record<string, string>> = {
   "gmail users threads delete": "manage_gmail_message по одному вызову на каждый messageId цепочки",
   "gmail users threads modify": "manage_gmail_message по одному вызову на каждый messageId цепочки",
   "gmail users threads trash": "manage_gmail_message по одному вызову на каждый messageId цепочки",
-  "gmail users threads untrash": "manage_gmail_message по одному вызову на каждый messageId цепочки",
+  "gmail users threads untrash":
+    "manage_gmail_message по одному вызову на каждый messageId цепочки",
 };
-const FILE_PATH_FLAGS = new Set([
-  "-a",
-  "-o",
-  "--attach",
-  "--output",
-  "--output-dir",
-  "--upload",
-]);
+const FILE_PATH_FLAGS = new Set(["-a", "-o", "--attach", "--output", "--output-dir", "--upload"]);
 type FlagArity = "boolean" | "value";
 
 const API_FLAGS: Readonly<Record<string, FlagArity>> = {
@@ -290,47 +284,93 @@ const API_FLAGS: Readonly<Record<string, FlagArity>> = {
 
 const HELPER_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagArity>>>> = {
   "calendar +agenda": {
-    "--calendar": "value", "--days": "value", "--today": "boolean",
-    "--tomorrow": "boolean", "--timezone": "value", "--week": "boolean",
+    "--calendar": "value",
+    "--days": "value",
+    "--today": "boolean",
+    "--tomorrow": "boolean",
+    "--timezone": "value",
+    "--week": "boolean",
   },
   "calendar +insert": {
-    "--attendee": "value", "--calendar": "value", "--description": "value",
-    "--end": "value", "--location": "value", "--meet": "boolean", "--start": "value",
+    "--attendee": "value",
+    "--calendar": "value",
+    "--description": "value",
+    "--end": "value",
+    "--location": "value",
+    "--meet": "boolean",
+    "--start": "value",
     "--summary": "value",
   },
   "docs +write": { "--document": "value", "--text": "value" },
   "gmail +forward": {
-    "--bcc": "value", "--body": "value", "--cc": "value", "--draft": "boolean",
-    "--dry-run": "boolean", "--from": "value", "--html": "boolean",
-    "--message-id": "value", "--no-original-attachments": "boolean", "--to": "value",
+    "--bcc": "value",
+    "--body": "value",
+    "--cc": "value",
+    "--draft": "boolean",
+    "--dry-run": "boolean",
+    "--from": "value",
+    "--html": "boolean",
+    "--message-id": "value",
+    "--no-original-attachments": "boolean",
+    "--to": "value",
   },
   "gmail +read": {
-    "--dry-run": "boolean", "--format": "value", "--headers": "boolean",
-    "--html": "boolean", "--id": "value",
+    "--dry-run": "boolean",
+    "--format": "value",
+    "--headers": "boolean",
+    "--html": "boolean",
+    "--id": "value",
   },
   "gmail +reply": {
-    "--bcc": "value", "--body": "value", "--cc": "value", "--draft": "boolean",
-    "--dry-run": "boolean", "--from": "value", "--html": "boolean",
-    "--message-id": "value", "--to": "value",
+    "--bcc": "value",
+    "--body": "value",
+    "--cc": "value",
+    "--draft": "boolean",
+    "--dry-run": "boolean",
+    "--from": "value",
+    "--html": "boolean",
+    "--message-id": "value",
+    "--to": "value",
   },
   "gmail +reply-all": {
-    "--bcc": "value", "--body": "value", "--cc": "value", "--draft": "boolean",
-    "--dry-run": "boolean", "--from": "value", "--html": "boolean",
-    "--message-id": "value", "--remove": "value", "--to": "value",
+    "--bcc": "value",
+    "--body": "value",
+    "--cc": "value",
+    "--draft": "boolean",
+    "--dry-run": "boolean",
+    "--from": "value",
+    "--html": "boolean",
+    "--message-id": "value",
+    "--remove": "value",
+    "--to": "value",
   },
   "gmail +send": {
-    "--bcc": "value", "--body": "value", "--cc": "value", "--draft": "boolean",
-    "--dry-run": "boolean", "--from": "value", "--html": "boolean",
-    "--subject": "value", "--to": "value",
+    "--bcc": "value",
+    "--body": "value",
+    "--cc": "value",
+    "--draft": "boolean",
+    "--dry-run": "boolean",
+    "--from": "value",
+    "--html": "boolean",
+    "--subject": "value",
+    "--to": "value",
   },
   "gmail +triage": { "--labels": "boolean", "--max": "value", "--query": "value" },
   "gmail +watch": {
-    "--cleanup": "boolean", "--label-ids": "value", "--max-messages": "value",
-    "--msg-format": "value", "--once": "boolean", "--poll-interval": "value",
-    "--project": "value", "--subscription": "value", "--topic": "value",
+    "--cleanup": "boolean",
+    "--label-ids": "value",
+    "--max-messages": "value",
+    "--msg-format": "value",
+    "--once": "boolean",
+    "--poll-interval": "value",
+    "--project": "value",
+    "--subscription": "value",
+    "--topic": "value",
   },
   "sheets +append": {
-    "--json-values": "value", "--range": "value", "--spreadsheet": "value",
+    "--json-values": "value",
+    "--range": "value",
+    "--spreadsheet": "value",
     "--values": "value",
   },
   "sheets +read": { "--range": "value", "--spreadsheet": "value" },
@@ -344,8 +384,10 @@ function classifyRoute(route: string): GoogleWorkspaceCommandKind {
 
 function isFilePathFlag(argument: string): boolean {
   const flag = argument.split("=", 1)[0]!;
-  return FILE_PATH_FLAGS.has(flag) ||
-    (argument.length > 2 && (argument.startsWith("-a") || argument.startsWith("-o")));
+  return (
+    FILE_PATH_FLAGS.has(flag) ||
+    (argument.length > 2 && (argument.startsWith("-a") || argument.startsWith("-o")))
+  );
 }
 
 function resolveReviewedRoute(argv: readonly string[]): {
@@ -354,7 +396,7 @@ function resolveReviewedRoute(argv: readonly string[]): {
   route: string;
 } {
   const match = REVIEWED_ROUTES.find(({ segments }) =>
-    segments.every((segment, index) => argv[index] === segment)
+    segments.every((segment, index) => argv[index] === segment),
   );
   if (!match) {
     const dotted = argv.some((argument) => argument.includes("."));
@@ -395,7 +437,10 @@ function validateRouteArguments(route: string, argv: readonly string[]): void {
     }
     if (separator !== -1) {
       if (arity !== "value" || separator === argument.length - 1) {
-        throw forbidden(`Flag ${flag} получил неверную inline-форму.`, "Передайте непустое значение отдельным argv элементом.");
+        throw forbidden(
+          `Flag ${flag} получил неверную inline-форму.`,
+          "Передайте непустое значение отдельным argv элементом.",
+        );
       }
       if (argument.slice(separator + 1).startsWith("-")) {
         throw forbidden(
@@ -408,7 +453,10 @@ function validateRouteArguments(route: string, argv: readonly string[]): void {
     if (arity === "boolean") continue;
     const value = argv[index + 1];
     if (value === undefined) {
-      throw forbidden(`Для flag ${flag} отсутствует значение.`, `Добавьте значение сразу после ${flag}.`);
+      throw forbidden(
+        `Для flag ${flag} отсутствует значение.`,
+        `Добавьте значение сразу после ${flag}.`,
+      );
     }
     if (value.startsWith("-")) {
       throw forbidden(

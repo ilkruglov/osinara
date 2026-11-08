@@ -10,9 +10,7 @@ const sessionCursorSchema = z
     z.object({ kind: z.literal(`local`) }).strict(),
     z.object({ kind: z.literal(`remote`), serverUrl: z.url() }).strict(),
   ]),
-  invokeResumeSchema = z
-    .object({ session: sessionCursorSchema, target: targetSchema })
-    .strict(),
+  invokeResumeSchema = z.object({ session: sessionCursorSchema, target: targetSchema }).strict(),
   invocationInputRequestSchema = inputRequestSchema
     .omit({ action: !0, display: !0, options: !0 })
     .extend({
@@ -45,9 +43,7 @@ const sessionCursorSchema = z
     z.object({ message: z.string(), status: z.literal(`failed`) }).strict(),
   ]),
   invokeResultSchema = z.discriminatedUnion(`status`, [
-    z
-      .object({ resume: invokeResumeSchema, status: z.literal(`running`) })
-      .strict(),
+    z.object({ resume: invokeResumeSchema, status: z.literal(`running`) }).strict(),
     z
       .object({
         requests: z.array(invocationInputRequestSchema).readonly(),
@@ -95,8 +91,7 @@ function projectInvocationInputRequest(e) {
 }
 function parseInvokeResumeInput(e) {
   let t = invokeResultSchema.safeParse(e);
-  if (t.success && `resume` in t.data && t.data.resume !== void 0)
-    return t.data;
+  if (t.success && `resume` in t.data && t.data.resume !== void 0) return t.data;
   throw Error(`Resume JSON is not a valid resumable eve invoke result.`);
 }
 const invokeResultJsonSchema = {
@@ -108,8 +103,4 @@ const invokeResultJsonSchema = {
   $id: `https://eve.dev/schemas/invoke-result.json`,
   title: `eve invoke result`,
 };
-export {
-  invokeResultJsonSchema,
-  parseInvokeResumeInput,
-  projectInvocationInputRequest,
-};
+export { invokeResultJsonSchema, parseInvokeResumeInput, projectInvocationInputRequest };

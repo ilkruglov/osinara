@@ -3,17 +3,17 @@ import type { SandboxSession } from "#shared/sandbox-session.js";
  * Typed input accepted by {@link executeBashOnSandbox}.
  */
 export interface BashInput {
-    readonly command: string;
+  readonly command: string;
 }
 /**
  * Structured result returned from {@link executeBashOnSandbox}.
  */
 export interface BashResult {
-    readonly exitCode: number;
-    readonly stderr: string;
-    readonly stdout: string;
-    /** True when stdout or stderr was shortened to fit within output limits. */
-    readonly truncated: boolean;
+  readonly exitCode: number;
+  readonly stderr: string;
+  readonly stdout: string;
+  /** True when stdout or stderr was shortened to fit within output limits. */
+  readonly truncated: boolean;
 }
 /**
  * Executes one shell command inside the agent's sandbox via `SandboxKey`
@@ -27,4 +27,7 @@ export interface BashResult {
  * `defineBashTool`. Centralizing the executor here keeps the error
  * messages and result shape identical across all bash-style tools.
  */
-export declare function executeBashOnSandbox(sandbox: SandboxSession, args: BashInput): Promise<BashResult>;
+export declare function executeBashOnSandbox(
+  sandbox: SandboxSession,
+  args: BashInput,
+): Promise<BashResult>;

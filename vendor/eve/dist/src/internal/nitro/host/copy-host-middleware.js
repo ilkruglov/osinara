@@ -34,13 +34,8 @@ async function copyHostMiddlewareFunctions(o) {
   let l = new Set();
   if (Array.isArray(c.routes))
     for (let e of c.routes)
-      isRecord(e) &&
-        typeof e.middlewarePath == `string` &&
-        l.add(e.middlewarePath);
-  let u = resolveMiddlewareFunctionDirectory(
-    o.hostOutputDirectory,
-    NEXT_MIDDLEWARE_PATH,
-  );
+      isRecord(e) && typeof e.middlewarePath == `string` && l.add(e.middlewarePath);
+  let u = resolveMiddlewareFunctionDirectory(o.hostOutputDirectory, NEXT_MIDDLEWARE_PATH);
   try {
     (await access(u), l.add(NEXT_MIDDLEWARE_PATH));
   } catch (e) {
@@ -49,8 +44,7 @@ async function copyHostMiddlewareFunctions(o) {
   for (let e of l) {
     let r = resolveMiddlewareFunctionDirectory(o.hostOutputDirectory, e),
       a = resolveMiddlewareFunctionDirectory(o.serviceOutputDirectory, e);
-    (await mkdir(dirname(a), { recursive: !0 }),
-      await cp(r, a, { force: !0, recursive: !0 }));
+    (await mkdir(dirname(a), { recursive: !0 }), await cp(r, a, { force: !0, recursive: !0 }));
   }
 }
 export { copyHostMiddlewareFunctions };

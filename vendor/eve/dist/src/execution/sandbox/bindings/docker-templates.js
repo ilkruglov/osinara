@@ -35,16 +35,12 @@ async function pruneDockerSandboxTemplates(e) {
     ),
     {
       now: e.now ?? Date.now(),
-      recentWindowMs:
-        e.recentWindowMs ?? LOCAL_SANDBOX_TEMPLATE_RECENT_WINDOW_MS,
+      recentWindowMs: e.recentWindowMs ?? LOCAL_SANDBOX_TEMPLATE_RECENT_WINDOW_MS,
       retainCount: e.retainCount ?? LOCAL_SANDBOX_TEMPLATE_RETAIN_COUNT,
     },
   );
   for (let e of s) {
-    let t = await i.run([
-        `rmi`,
-        dockerTemplateImageReferenceFromTag(e.imageTag),
-      ]),
+    let t = await i.run([`rmi`, dockerTemplateImageReferenceFromTag(e.imageTag)]),
       r = t.exitCode !== 0 && /no such image/i.test(t.stderr);
     (t.exitCode === 0 || r) && (await rm(e.path, { force: !0 }));
   }
@@ -59,10 +55,7 @@ function dockerTemplateImageTag(e) {
   return `${e.templateKey.toLowerCase()}-${e.optionsHash}`;
 }
 function resolveDockerTemplateMarkerPath(e, t) {
-  return join(
-    resolveDockerTemplateMarkersDirectory(e),
-    dockerTemplateImageTag(t),
-  );
+  return join(resolveDockerTemplateMarkersDirectory(e), dockerTemplateImageTag(t));
 }
 async function touchDockerTemplateMarker(t, n) {
   await mkdir(dirname(t), { recursive: !0 });
@@ -74,16 +67,11 @@ async function touchDockerTemplateMarker(t, n) {
   }
 }
 async function dockerImageExists(e, t) {
-  return (
-    (await e.run([`image`, `inspect`, `--format`, `{{.Id}}`, t])).exitCode === 0
-  );
+  return (await e.run([`image`, `inspect`, `--format`, `{{.Id}}`, t])).exitCode === 0;
 }
 async function ensureDockerBaseImage(e, t) {
   if (t.pullPolicy === `always`) {
-    expectDockerSuccess(
-      await e.run([`pull`, t.image]),
-      `pull base image "${t.image}"`,
-    );
+    expectDockerSuccess(await e.run([`pull`, t.image]), `pull base image "${t.image}"`);
     return;
   }
   if (!(await dockerImageExists(e, t.image))) {
@@ -91,10 +79,7 @@ async function ensureDockerBaseImage(e, t) {
       throw Error(
         `The local sandbox base image "${t.image}" is not present locally and pullPolicy is "never". Pull the image manually or relax the pull policy.`,
       );
-    expectDockerSuccess(
-      await e.run([`pull`, t.image]),
-      `pull base image "${t.image}"`,
-    );
+    expectDockerSuccess(await e.run([`pull`, t.image]), `pull base image "${t.image}"`);
   }
 }
 function resolveDockerTemplateMarkersDirectory(e) {

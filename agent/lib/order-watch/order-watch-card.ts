@@ -21,7 +21,10 @@ import type { OrderObservation } from "./order-watch-dispatcher.js";
 
 // Control and format characters carry nothing to read and grow six-fold in JSON (`\u0001`).
 const clip = (value: string | null | undefined, max: number): string | null => {
-  const flat = (value ?? "").replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/gu, " ").trim();
+  const flat = (value ?? "")
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
   return flat ? Array.from(flat).slice(0, max).join("") : null;
 };
 
@@ -33,14 +36,24 @@ function orderCardFields(observation: OrderObservation): Record<string, unknown>
   if (observation.service === "yandex_taxi") {
     const taxi = observation.taxi;
     return {
-      c: clip(taxi.car, 60), d: clip(taxi.driver, 40), ...(taxi.finalCost ? { f: clip(taxi.finalCost, 30) } : {}),
-      k: "taxi", m: taxi.minutesLeft, p: clip(taxi.plates, 20), s: clip(taxi.status, 30),
+      c: clip(taxi.car, 60),
+      d: clip(taxi.driver, 40),
+      ...(taxi.finalCost ? { f: clip(taxi.finalCost, 30) } : {}),
+      k: "taxi",
+      m: taxi.minutesLeft,
+      p: clip(taxi.plates, 20),
+      s: clip(taxi.status, 30),
     };
   }
   const lavka = observation.lavka;
   return lavka === null
     ? { k: "lavka", s: "gone" }
-    : { k: "lavka", s: clip(lavka.status, 30), su: clip(lavka.subtitle, 160), ti: clip(lavka.title, 120) };
+    : {
+        k: "lavka",
+        s: clip(lavka.status, 30),
+        su: clip(lavka.subtitle, 160),
+        ti: clip(lavka.title, 120),
+      };
 }
 
 /** What the card shows, without the time of the look: the card is edited only when this changes. */
@@ -51,7 +64,8 @@ export function orderCardKey(observation: OrderObservation): string {
 /** The fields within the byte limit: the shop's long lines are shortened first, the subtitle before the title. */
 function fittedFields(observation: OrderObservation): Record<string, unknown> {
   const fields = orderCardFields(observation);
-  const fits = () => Buffer.byteLength(JSON.stringify(fields)) + TIME_FIELD_BYTES <= CHAT_DATA_MAX_BYTES;
+  const fits = () =>
+    Buffer.byteLength(JSON.stringify(fields)) + TIME_FIELD_BYTES <= CHAT_DATA_MAX_BYTES;
   for (const name of ["su", "ti", "s"] as const) {
     while (!fits() && typeof fields[name] === "string" && (fields[name] as string).length > 0) {
       const characters = Array.from(fields[name] as string);

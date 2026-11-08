@@ -6,13 +6,13 @@ import type { SandboxAccess, SandboxState } from "#sandbox/state.js";
  * Input for creating or reattaching the live sandbox for one step execution.
  */
 export interface EnsureSandboxAccessInput {
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly nodeId: string;
-    readonly registry: RuntimeSandboxRegistry;
-    readonly sessionId: string;
-    readonly runOnSession?: (callback: () => Promise<void>) => Promise<void>;
-    readonly state: SandboxState | null;
-    readonly tags?: SandboxBackendTags;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly nodeId: string;
+  readonly registry: RuntimeSandboxRegistry;
+  readonly sessionId: string;
+  readonly runOnSession?: (callback: () => Promise<void>) => Promise<void>;
+  readonly state: SandboxState | null;
+  readonly tags?: SandboxBackendTags;
 }
 /**
  * Creates or reattaches the live sandbox from the compiled agent bundle's
@@ -24,4 +24,6 @@ export interface EnsureSandboxAccessInput {
  * substituted with `defaultSandbox()` when omitted), and the runtime
  * simply calls `backend.create(...)`.
  */
-export declare function ensureSandboxAccess(input: EnsureSandboxAccessInput): Promise<SandboxAccess>;
+export declare function ensureSandboxAccess(
+  input: EnsureSandboxAccessInput,
+): Promise<SandboxAccess>;

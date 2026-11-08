@@ -5,10 +5,7 @@ import { loadResolvedCompiledScheduleByTaskName } from "#runtime/schedules/resol
 import { ScheduleDispatcher, expectScheduleRun } from "#channel/schedule.js";
 import { loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
 async function dispatchScheduleTask(e, t) {
-  return await dispatchScheduleTaskFromArtifacts(
-    e,
-    resolveNitroCompiledArtifactsSource(t),
-  );
+  return await dispatchScheduleTaskFromArtifacts(e, resolveNitroCompiledArtifactsSource(t));
 }
 async function dispatchScheduleTaskFromArtifacts(n, r) {
   let i = await loadResolvedCompiledScheduleByTaskName(n, {
@@ -30,9 +27,7 @@ async function dispatchScheduleTaskFromArtifacts(n, r) {
 }
 async function loadScheduleRun(e, t) {
   if (e.sourceKind !== `module`)
-    throw Error(
-      `Schedule "${e.name}" claims hasRun but is not a module-backed schedule.`,
-    );
+    throw Error(`Schedule "${e.name}" claims hasRun but is not a module-backed schedule.`);
   let n = e;
   return expectScheduleRun(
     await loadResolvedModuleExport({

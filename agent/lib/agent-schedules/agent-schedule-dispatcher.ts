@@ -12,30 +12,55 @@ import { telegramContinuationToken } from "eve/channels/telegram";
 import type { ScheduleToFn } from "eve/schedules";
 
 import telegram from "../../channels/telegram.js";
-import { AGENT_SCHEDULE_DISPATCH_BATCH_SIZE, AGENT_SCHEDULE_DISPATCH_LEASE_MILLISECONDS } from "./agent-schedule-config.js";
-import { type ClaimedAgentSchedule, agentScheduleDispatchRepository } from "./agent-schedule-dispatch-repository.js";
+import {
+  AGENT_SCHEDULE_DISPATCH_BATCH_SIZE,
+  AGENT_SCHEDULE_DISPATCH_LEASE_MILLISECONDS,
+} from "./agent-schedule-config.js";
+import {
+  type ClaimedAgentSchedule,
+  agentScheduleDispatchRepository,
+} from "./agent-schedule-dispatch-repository.js";
 import { scheduledGroupHistorySnapshotRepository } from "./scheduled-group-history-snapshot-repository.js";
 import { numericMessageThreadId } from "./agent-schedule-validation.js";
 import { sessionRepository, type PreparedSession } from "../sessions/session-repository.js";
-import { TELEGRAM_RECIPIENT_UNREACHABLE_CODE, type TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
+import {
+  TELEGRAM_RECIPIENT_UNREACHABLE_CODE,
+  type TelegramRecipientUnreachableReason,
+} from "../telegram-reachability/recipient-failure.js";
 import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
 import { isTurnStartPaused } from "../deploy/turn-start-pause.js";
 
 interface AgentScheduleDispatcherRepository {
-  claimDue(options: { leaseMilliseconds: number; limit: number; now: Date }): Promise<ClaimedAgentSchedule[]>;
+  claimDue(options: {
+    leaseMilliseconds: number;
+    limit: number;
+    now: Date;
+  }): Promise<ClaimedAgentSchedule[]>;
   failClaim(job: ClaimedAgentSchedule, errorCode: string): Promise<void>;
-  markDispatchStarted(job: ClaimedAgentSchedule, input: { applicationSessionId: string }): Promise<boolean>;
-  markRunning(job: ClaimedAgentSchedule, input: { applicationSessionId: string; eveSessionId: string }): Promise<void>;
+  markDispatchStarted(
+    job: ClaimedAgentSchedule,
+    input: { applicationSessionId: string },
+  ): Promise<boolean>;
+  markRunning(
+    job: ClaimedAgentSchedule,
+    input: { applicationSessionId: string; eveSessionId: string },
+  ): Promise<void>;
 }
 
 interface AgentScheduleDispatcherDependencies {
   discardSession(applicationSessionId: string): Promise<void>;
   prepareHistory(job: ClaimedAgentSchedule): Promise<unknown>;
-  prepareSession(job: ClaimedAgentSchedule, baseContinuationToken: string, now: Date): Promise<PreparedSession>;
+  prepareSession(
+    job: ClaimedAgentSchedule,
+    baseContinuationToken: string,
+    now: Date,
+  ): Promise<PreparedSession>;
   repository: AgentScheduleDispatcherRepository;
   to: ScheduleToFn;
   /** The reason the run's chat cannot receive its answer; absent in tests that do not need it. */
-  unreachableRecipient?(job: ClaimedAgentSchedule): Promise<TelegramRecipientUnreachableReason | null>;
+  unreachableRecipient?(
+    job: ClaimedAgentSchedule,
+  ): Promise<TelegramRecipientUnreachableReason | null>;
   /** A deploy is waiting for the running turns: no new run starts until it is over. */
   turnStartsPaused?(): Promise<boolean>;
 }
@@ -53,7 +78,9 @@ function baseContinuationToken(job: ClaimedAgentSchedule): string {
   return telegramContinuationToken({
     chatId: job.telegramChatId,
     conversationId: scheduledConversationId(job),
-    ...(job.messageThreadId === null ? {} : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
+    ...(job.messageThreadId === null
+      ? {}
+      : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
   });
 }
 
@@ -115,8 +142,12 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
   };
 }
 
-async function dispatchOne(dependencies: AgentScheduleDispatcherDependencies, job: ClaimedAgentSchedule, now: Date): Promise<void> {
-  if (await dependencies.unreachableRecipient?.(job) != null) {
+async function dispatchOne(
+  dependencies: AgentScheduleDispatcherDependencies,
+  job: ClaimedAgentSchedule,
+  now: Date,
+): Promise<void> {
+  if ((await dependencies.unreachableRecipient?.(job)) != null) {
     await dependencies.repository.failClaim(job, TELEGRAM_RECIPIENT_UNREACHABLE_CODE);
     return;
   }
@@ -165,7 +196,9 @@ async function dispatchOne(dependencies: AgentScheduleDispatcherDependencies, jo
       .to(telegram, {
         chatId: job.telegramChatId,
         conversationId: scheduledConversationId(job),
-        ...(job.messageThreadId === null ? {} : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
+        ...(job.messageThreadId === null
+          ? {}
+          : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
       })
       .send(scheduledRunPrompt(job), { auth: scheduledAuth(job, prepared) });
     await dependencies.repository.markRunning(job, {
@@ -219,7 +252,8 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
 
 export function dispatchDueAgentSchedules(to: ScheduleToFn): Promise<number> {
   return createAgentScheduleDispatcher({
-    discardSession: (applicationSessionId) => sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
+    discardSession: (applicationSessionId) =>
+      sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
     prepareHistory: (job) =>
       scheduledGroupHistorySnapshotRepository.prepare({
         groupId: job.groupId!,
@@ -234,12 +268,14 @@ export function dispatchDueAgentSchedules(to: ScheduleToFn): Promise<number> {
         kind: "scheduled",
         now: currentTime,
         scope: job.scope,
-        telegramForumTopicId: job.forumTopicId === null ? null : numericMessageThreadId(job.forumTopicId)!,
+        telegramForumTopicId:
+          job.forumTopicId === null ? null : numericMessageThreadId(job.forumTopicId)!,
         userId: job.scope === "personal" ? job.authorUserId : null,
       }),
     repository: agentScheduleDispatchRepository,
     to,
     turnStartsPaused: () => isTurnStartPaused(),
-    unreachableRecipient: (job) => unreachableTelegramRecipient(job.telegramChatId, "agent_schedule"),
+    unreachableRecipient: (job) =>
+      unreachableTelegramRecipient(job.telegramChatId, "agent_schedule"),
   })();
 }

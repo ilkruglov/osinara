@@ -23,20 +23,15 @@ import {
   resolveSessionLimitInput,
 } from "#harness/hitl/session-limit-input-requests.js";
 function hasStepInput(e) {
-  return e === void 0
-    ? !1
-    : e.message !== void 0 || (e.inputResponses?.length ?? 0) > 0;
+  return e === void 0 ? !1 : e.message !== void 0 || (e.inputResponses?.length ?? 0) > 0;
 }
 function hasPendingApprovalBatch(e) {
-  return getPendingInputBatches(e.state).some((e) =>
-    e.requests.some((e) => isApprovalRequest(e)),
-  );
+  return getPendingInputBatches(e.state).some((e) => e.requests.some((e) => isApprovalRequest(e)));
 }
 function resolvePendingInput(e) {
   let t = [...(e.history ?? e.session.history)],
     n = getPendingInputBatches(e.session.state);
-  if (n.length === 0)
-    return { outcome: `continue`, messages: t, session: e.session };
+  if (n.length === 0) return { outcome: `continue`, messages: t, session: e.session };
   let r = routePendingInput(n),
     i = hasTailApprovalResponse(t),
     o = r.kind === `session-limit` ? r.batch : n.length === 1 ? n[0] : void 0,
@@ -91,9 +86,7 @@ function routePendingInput(e) {
   let t = e.map((e) => ({ batch: e, domain: classifyPendingInputBatch(e) })),
     n = t.find(({ domain: e }) => e === `session-limit`)?.batch;
   if (n !== void 0) return { batch: n, kind: `session-limit` };
-  let r = t
-    .filter(({ domain: e }) => e === `approval`)
-    .map(({ batch: e }) => e);
+  let r = t.filter(({ domain: e }) => e === `approval`).map(({ batch: e }) => e);
   if (r.length > 0) {
     let t = new Set(r);
     return {
@@ -129,10 +122,7 @@ function canonicalizeInputResponses(e) {
 }
 function hasTailApprovalResponse(e) {
   let t = e.at(-1);
-  return (
-    t?.role === `tool` &&
-    t.content.some((e) => e.type === `tool-approval-response`)
-  );
+  return t?.role === `tool` && t.content.some((e) => e.type === `tool-approval-response`);
 }
 function resolveTextMessageInput(t, n) {
   if (typeof n?.message != `string`) return n;

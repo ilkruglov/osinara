@@ -33,22 +33,25 @@ const TELEGRAM_CHAT_ID_PATTERN = /^-\d+$/u;
 const HISTORY_WINDOW_MAX_DAYS = 365;
 const TIMEZONE_MAX_LENGTH = 100;
 
-const toolSchema = z.object({
-  action: z.enum(ACTIONS),
-  capabilityAllowlist: z.array(z.enum(EXTERNAL_SCHEDULE_CAPABILITIES)).max(
-    EXTERNAL_SCHEDULE_CAPABILITIES.length,
-  ).optional(),
-  firstRunAt: z.string().optional(),
-  historyWindowDays: z.number().int().min(1).max(HISTORY_WINDOW_MAX_DAYS).nullable().optional(),
-  id: z.string().optional(),
-  nextRunAt: z.string().optional(),
-  recurrence: agentScheduleRecurrenceSchema.optional(),
-  scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
-  telegramChatId: z.string().optional(),
-  timezone: z.string().max(TIMEZONE_MAX_LENGTH).optional(),
-  title: z.string().max(AGENT_SCHEDULE_TITLE_MAX_LENGTH).optional(),
-  userRequest: z.string().max(AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH).optional(),
-}).strict();
+const toolSchema = z
+  .object({
+    action: z.enum(ACTIONS),
+    capabilityAllowlist: z
+      .array(z.enum(EXTERNAL_SCHEDULE_CAPABILITIES))
+      .max(EXTERNAL_SCHEDULE_CAPABILITIES.length)
+      .optional(),
+    firstRunAt: z.string().optional(),
+    historyWindowDays: z.number().int().min(1).max(HISTORY_WINDOW_MAX_DAYS).nullable().optional(),
+    id: z.string().optional(),
+    nextRunAt: z.string().optional(),
+    recurrence: agentScheduleRecurrenceSchema.optional(),
+    scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
+    telegramChatId: z.string().optional(),
+    timezone: z.string().max(TIMEZONE_MAX_LENGTH).optional(),
+    title: z.string().max(AGENT_SCHEDULE_TITLE_MAX_LENGTH).optional(),
+    userRequest: z.string().max(AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH).optional(),
+  })
+  .strict();
 
 type ToolInput = z.infer<typeof toolSchema>;
 type ToolAction = ToolInput["action"];
@@ -172,18 +175,22 @@ function parseSemanticInput(input: ToolInput): ParseResult<ParsedInput> {
     });
   }
   if (input.action === "create") {
-    const fieldsError = exactFields(input, [
-      "action",
-      "capabilityAllowlist",
-      "firstRunAt",
-      "historyWindowDays",
-      "recurrence",
-      "scenarioPrompt",
-      "telegramChatId",
-      "timezone",
-      "title",
-      "userRequest",
-    ], input.action);
+    const fieldsError = exactFields(
+      input,
+      [
+        "action",
+        "capabilityAllowlist",
+        "firstRunAt",
+        "historyWindowDays",
+        "recurrence",
+        "scenarioPrompt",
+        "telegramChatId",
+        "timezone",
+        "title",
+        "userRequest",
+      ],
+      input.action,
+    );
     if (fieldsError) return fieldsError;
     if (!input.recurrence) return invalidInput("Для action=create обязательно поле recurrence");
     const historyWindowDays = input.historyWindowDays;
@@ -218,21 +225,26 @@ function parseSemanticInput(input: ToolInput): ParseResult<ParsedInput> {
     });
   }
   if (input.action === "update") {
-    const fieldsError = exactFields(input, [
-      "action",
-      "capabilityAllowlist",
-      "historyWindowDays",
-      "id",
-      "nextRunAt",
-      "recurrence",
-      "scenarioPrompt",
-      "title",
-      "userRequest",
-    ], input.action);
+    const fieldsError = exactFields(
+      input,
+      [
+        "action",
+        "capabilityAllowlist",
+        "historyWindowDays",
+        "id",
+        "nextRunAt",
+        "recurrence",
+        "scenarioPrompt",
+        "title",
+        "userRequest",
+      ],
+      input.action,
+    );
     if (fieldsError) return fieldsError;
-    const nextRunAt = input.nextRunAt === undefined
-      ? parsed<Date | undefined>(undefined)
-      : requiredDate(input, "nextRunAt");
+    const nextRunAt =
+      input.nextRunAt === undefined
+        ? parsed<Date | undefined>(undefined)
+        : requiredDate(input, "nextRunAt");
     if (!nextRunAt.success) return nextRunAt;
     const changes = {
       capabilityAllowlist: input.capabilityAllowlist,
@@ -246,7 +258,10 @@ function parseSemanticInput(input: ToolInput): ParseResult<ParsedInput> {
     if (Object.values(changes).every((value) => value === undefined)) {
       return invalidInput("Для action=update передайте хотя бы одно поле изменения");
     }
-    if (input.capabilityAllowlist && new Set(input.capabilityAllowlist).size !== input.capabilityAllowlist.length) {
+    if (
+      input.capabilityAllowlist &&
+      new Set(input.capabilityAllowlist).size !== input.capabilityAllowlist.length
+    ) {
       return invalidInput("capabilityAllowlist не должен содержать повторы");
     }
     const id = requiredId(input);
@@ -282,7 +297,7 @@ const TOOL_DESCRIPTION = [
   "Owner-only автоматизации, которые запускают отдельного агента и доставляют результат в зарегистрированную внешнюю Telegram-группу. Сначала manage_telegram_group status для точного telegramChatId, затем здесь action=status для существующих автоматизаций.",
   "Create требует firstRunAt с UTC offset, IANA timezone, recurrence, title, userRequest, устойчивый scenarioPrompt и минимальный capabilityAllowlist. historyWindowDays передавай только если запуск должен одним snapshot прочитать историю группы за N календарных дней до scheduled time (недельная выжимка: weekly и historyWindowDays:7); по умолчанию периода нет, история остаётся недоверенными данными.",
   "Для отправки файла добавь send_workspace_file, guarded file tools доступны без перечисления; web_fetch только если сценарию нужны публичные страницы. Update не меняет группу назначения. Pause, resume, run_now и delete принимают только id из status. Каждая mutation требует подтверждения владельца.",
-  "Повторение: {\"kind\":\"once\"} для однократного запуска; повтор {\"kind\":\"hourly\",\"interval\":1}, где kind это minutely, hourly, daily, monthly или yearly, а weekly дополнительно требует daysOfWeek с ISO-днями 1-7. interval целое от 1 до 365, минимум одна минута; минуты и часы отсчитываются как длительность, календарные периоды сохраняют местное время.",
+  'Повторение: {"kind":"once"} для однократного запуска; повтор {"kind":"hourly","interval":1}, где kind это minutely, hourly, daily, monthly или yearly, а weekly дополнительно требует daysOfWeek с ISO-днями 1-7. interval целое от 1 до 365, минимум одна минута; минуты и часы отсчитываются как длительность, календарные периоды сохраняют местное время.',
 ].join(" ");
 
 export default defineTool({
@@ -318,7 +333,9 @@ export default defineTool({
       });
     }
     if (parsed.action === "delete") {
-      return { deleted: await externalAgentScheduleRepository.delete(authorization, parsed.id, ctx.callId) };
+      return {
+        deleted: await externalAgentScheduleRepository.delete(authorization, parsed.id, ctx.callId),
+      };
     }
     if (parsed.action === "run_now") {
       return await externalAgentScheduleRepository.runNow(authorization, parsed.id, ctx.callId);

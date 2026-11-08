@@ -19,9 +19,17 @@ const id = (sequence: number) => `00000000-0000-4000-8000-${String(sequence).pad
 
 function entry(sequence: number): TelegramGroupJournalEntry {
   return {
-    actorId: `telegram:${sequence}`, actorKind: "user", contentText: `timeline-${sequence}`, entryId: id(sequence),
-    messageKind: "text", messageThreadId: null, replyToSequenceId: null, senderDisplayName: `Участник ${sequence}`,
-    senderUsername: null, sentAt: `2026-10-18T10:${String(sequence % 60).padStart(2, "0")}:00.000Z`, sequenceId: String(sequence),
+    actorId: `telegram:${sequence}`,
+    actorKind: "user",
+    contentText: `timeline-${sequence}`,
+    entryId: id(sequence),
+    messageKind: "text",
+    messageThreadId: null,
+    replyToSequenceId: null,
+    senderDisplayName: `Участник ${sequence}`,
+    senderUsername: null,
+    sentAt: `2026-10-18T10:${String(sequence % 60).padStart(2, "0")}:00.000Z`,
+    sequenceId: String(sequence),
   };
 }
 
@@ -56,11 +64,16 @@ describe("prepareTelegramMemoryReviewTurn while the interactive tail is off", ()
     });
 
     expect(result).toBe(preparedContext);
-    expect(memoryReview.observePassiveMessage).toHaveBeenCalledWith({ groupId: "group-1", timelineEntryId: id(current) });
+    expect(memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: id(current),
+    });
     expect(memoryReview.prepareInteractiveTurn).not.toHaveBeenCalled();
     const synced = syncParticipants.mock.calls.flatMap(([, ids]) => ids as string[]);
     expect(synced).toEqual(historical.map((e) => e.entryId));
     expect(synced).not.toContain(id(current));
-    expect(syncParticipants.mock.calls.map(([, ids]) => (ids as string[]).length)).toEqual([50, 10]);
+    expect(syncParticipants.mock.calls.map(([, ids]) => (ids as string[]).length)).toEqual([
+      50, 10,
+    ]);
   });
 });

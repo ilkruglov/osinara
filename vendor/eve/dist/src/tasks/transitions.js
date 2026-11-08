@@ -1,10 +1,7 @@
 import { isTerminalTaskStatus, readTaskInputRequestId } from "#tasks/types.js";
 function terminalView(e, t, n) {
   let r = {
-    executor:
-      t.lifecycle === void 0
-        ? e.executor
-        : { ...e.executor, lifecycle: t.lifecycle },
+    executor: t.lifecycle === void 0 ? e.executor : { ...e.executor, lifecycle: t.lifecycle },
     metadata: e.metadata,
     taskId: e.taskId,
   };
@@ -138,8 +135,7 @@ function applyTaskTransition(n, r) {
     }
     case `start-turn`:
       return r.taskId === n.taskId
-        ? n.executor?.childSessionId !== void 0 &&
-          n.executor.childSessionId !== r.childSessionId
+        ? n.executor?.childSessionId !== void 0 && n.executor.childSessionId !== r.childSessionId
           ? {
               outcome: `rejected`,
               reason: `Task child session "${r.childSessionId}" does not match "${n.executor.childSessionId}".`,
@@ -169,9 +165,7 @@ function applyTaskTransition(n, r) {
 function isValidInputRequestBatch(e) {
   if (e.length === 0) return !1;
   let n = e.map(readTaskInputRequestId);
-  return (
-    n.every((e) => e !== void 0 && e.length > 0) && new Set(n).size === n.length
-  );
+  return n.every((e) => e !== void 0 && e.length > 0) && new Set(n).size === n.length;
 }
 function sameUsage(e, t) {
   return e === void 0 || t === void 0

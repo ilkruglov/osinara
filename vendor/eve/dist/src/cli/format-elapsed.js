@@ -12,10 +12,6 @@ function formatElapsed(e) {
     o = Math.floor(i / 60),
     s = o % 24,
     c = Math.floor(o / 24);
-  return c > 0
-    ? `${c}d ${s}h ${a}m ${r}s`
-    : o > 0
-      ? `${o}h ${a}m ${r}s`
-      : `${i}m ${r}s`;
+  return c > 0 ? `${c}d ${s}h ${a}m ${r}s` : o > 0 ? `${o}h ${a}m ${r}s` : `${i}m ${r}s`;
 }
 export { formatElapsed };

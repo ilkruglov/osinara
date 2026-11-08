@@ -25,10 +25,7 @@ function renderSearchItem(e, t, i, a) {
     return u.join(`
 `);
   let f = wrapVisibleLine(d, o),
-    p =
-      f.length <= 2
-        ? f
-        : [f[0], `${clipVisible(f[1], Math.max(1, o - 1)).trimEnd()}…`];
+    p = f.length <= 2 ? f : [f[0], `${clipVisible(f[1], Math.max(1, o - 1)).trimEnd()}…`];
   return (
     u.push(...p.map((e) => a.muted(`    ${e}`))),
     u.join(`

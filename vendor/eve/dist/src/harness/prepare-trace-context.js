@@ -1,8 +1,5 @@
 import { createLogger, formatError } from "#internal/logging.js";
-import {
-  sessionIdempotencyKey,
-  turnIdempotencyKey,
-} from "#harness/instrumentation/lifecycle.js";
+import { sessionIdempotencyKey, turnIdempotencyKey } from "#harness/instrumentation/lifecycle.js";
 const log = createLogger(`harness.prepare-trace-context`);
 async function prepareTurnTraceContext(e) {
   let t;

@@ -1,4 +1,8 @@
-import type { DevelopmentServer, DevelopmentServerOptions, StartedDevelopmentServer } from "#internal/nitro/host/types.js";
+import type {
+  DevelopmentServer,
+  DevelopmentServerOptions,
+  StartedDevelopmentServer,
+} from "#internal/nitro/host/types.js";
 import { normalizeDevelopmentServerClientUrl } from "#internal/nitro/host/dev-server-url.js";
 export { normalizeDevelopmentServerClientUrl };
 /**
@@ -6,8 +10,8 @@ export { normalizeDevelopmentServerClientUrl };
  * server. Only that server receives the local TUI credential path.
  */
 export declare function isActiveDevelopmentServerForApp(input: {
-    readonly appRoot: string;
-    readonly serverUrl: string;
+  readonly appRoot: string;
+  readonly serverUrl: string;
 }): Promise<boolean>;
 /**
  * Creates a development server for an eve application. Call `start()` to boot an
@@ -22,7 +26,13 @@ export declare function isActiveDevelopmentServerForApp(input: {
  * `{ scheduleId, sessionIds }` so callers can subscribe to the existing
  * per-session stream route.
  */
-export declare function createDevelopmentServer(rootDir: string, options?: DevelopmentServerOptions & {
+export declare function createDevelopmentServer(
+  rootDir: string,
+  options?: DevelopmentServerOptions & {
     existing?: "reject";
-}): DevelopmentServer<StartedDevelopmentServer>;
-export declare function createDevelopmentServer(rootDir: string, options?: DevelopmentServerOptions): DevelopmentServer;
+  },
+): DevelopmentServer<StartedDevelopmentServer>;
+export declare function createDevelopmentServer(
+  rootDir: string,
+  options?: DevelopmentServerOptions,
+): DevelopmentServer;

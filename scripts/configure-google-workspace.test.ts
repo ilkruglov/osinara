@@ -20,10 +20,8 @@ import {
   syncGoogleWorkspaceEnvironment,
 } from "./configure-google-workspace.js";
 
-const localCallback =
-  "https://desktop-ukevcbh.tail245bf9.ts.net/eve/v1/google-oauth/callback";
-const productionCallback =
-  "https://sbe720bcf.fastvps-server.com/eve/v1/google-oauth/callback";
+const localCallback = "https://desktop-ukevcbh.tail245bf9.ts.net/eve/v1/google-oauth/callback";
+const productionCallback = "https://sbe720bcf.fastvps-server.com/eve/v1/google-oauth/callback";
 
 function clientJson(redirectUris = [localCallback, productionCallback]) {
   return JSON.stringify({
@@ -44,29 +42,35 @@ describe("Google Workspace configuration importer", () => {
       projectId: "nyxandro",
       redirectUris: [localCallback, productionCallback],
     });
-    expect(() => parseGoogleOAuthClient(
-      JSON.stringify({ installed: JSON.parse(clientJson()).web }),
-      [localCallback],
-    )).toThrowError(/AGENT_GOOGLE_SETUP_CLIENT_INVALID/);
-    expect(() => parseGoogleOAuthClient(clientJson([localCallback]), [productionCallback]))
-      .toThrowError(/AGENT_GOOGLE_SETUP_REDIRECT_MISSING/);
+    expect(() =>
+      parseGoogleOAuthClient(JSON.stringify({ installed: JSON.parse(clientJson()).web }), [
+        localCallback,
+      ]),
+    ).toThrowError(/AGENT_GOOGLE_SETUP_CLIENT_INVALID/);
+    expect(() =>
+      parseGoogleOAuthClient(clientJson([localCallback]), [productionCallback]),
+    ).toThrowError(/AGENT_GOOGLE_SETUP_REDIRECT_MISSING/);
   });
 
   it("preserves unrelated settings and an existing encryption key", () => {
     const existingKey = Buffer.alloc(32, 1).toString("base64");
     const generateKey = vi.fn(() => Buffer.alloc(32, 2).toString("base64"));
-    const result = buildGoogleWorkspaceEnvironment([
-      "TELEGRAM_BOT_TOKEN=secret",
-      "GOOGLE_OAUTH_CLIENT_ID=",
-      "GOOGLE_OAUTH_CLIENT_SECRET=",
-      `INTEGRATION_TOKEN_ENCRYPTION_KEY=${existingKey}`,
-      "PUBLIC_BASE_URL=",
-      "",
-    ].join("\n"), {
-      clientId: "client-id.apps.googleusercontent.com",
-      clientSecret: "client-secret",
-      publicBaseUrl: "https://agent.example",
-    }, generateKey);
+    const result = buildGoogleWorkspaceEnvironment(
+      [
+        "TELEGRAM_BOT_TOKEN=secret",
+        "GOOGLE_OAUTH_CLIENT_ID=",
+        "GOOGLE_OAUTH_CLIENT_SECRET=",
+        `INTEGRATION_TOKEN_ENCRYPTION_KEY=${existingKey}`,
+        "PUBLIC_BASE_URL=",
+        "",
+      ].join("\n"),
+      {
+        clientId: "client-id.apps.googleusercontent.com",
+        clientSecret: "client-secret",
+        publicBaseUrl: "https://agent.example",
+      },
+      generateKey,
+    );
 
     expect(result.encryptionKeyGenerated).toBe(false);
     expect(generateKey).not.toHaveBeenCalled();
@@ -77,36 +81,47 @@ describe("Google Workspace configuration importer", () => {
 
   it("generates a key on first setup and rejects duplicate environment entries", () => {
     const generatedKey = Buffer.alloc(32, 3).toString("base64");
-    const result = buildGoogleWorkspaceEnvironment("TELEGRAM_BOT_TOKEN=secret\n", {
-      clientId: "client-id.apps.googleusercontent.com",
-      clientSecret: "client-secret",
-      publicBaseUrl: "https://agent.example",
-    }, () => generatedKey);
-
-    expect(result.encryptionKeyGenerated).toBe(true);
-    expect(result.source).toContain(`INTEGRATION_TOKEN_ENCRYPTION_KEY=${generatedKey}`);
-    expect(() => buildGoogleWorkspaceEnvironment(
-      "PUBLIC_BASE_URL=https://one.example\nPUBLIC_BASE_URL=https://two.example\n",
+    const result = buildGoogleWorkspaceEnvironment(
+      "TELEGRAM_BOT_TOKEN=secret\n",
       {
         clientId: "client-id.apps.googleusercontent.com",
         clientSecret: "client-secret",
         publicBaseUrl: "https://agent.example",
       },
       () => generatedKey,
-    )).toThrowError(/AGENT_GOOGLE_SETUP_ENV_DUPLICATE/);
+    );
+
+    expect(result.encryptionKeyGenerated).toBe(true);
+    expect(result.source).toContain(`INTEGRATION_TOKEN_ENCRYPTION_KEY=${generatedKey}`);
+    expect(() =>
+      buildGoogleWorkspaceEnvironment(
+        "PUBLIC_BASE_URL=https://one.example\nPUBLIC_BASE_URL=https://two.example\n",
+        {
+          clientId: "client-id.apps.googleusercontent.com",
+          clientSecret: "client-secret",
+          publicBaseUrl: "https://agent.example",
+        },
+        () => generatedKey,
+      ),
+    ).toThrowError(/AGENT_GOOGLE_SETUP_ENV_DUPLICATE/);
   });
 
   it("reads validated credentials for a second environment without exposing the key", () => {
-    expect(readGoogleWorkspaceCredentials([
-      "GOOGLE_OAUTH_CLIENT_ID=client-id.apps.googleusercontent.com",
-      "GOOGLE_OAUTH_CLIENT_SECRET=client-secret",
-      "",
-    ].join("\n"))).toEqual({
+    expect(
+      readGoogleWorkspaceCredentials(
+        [
+          "GOOGLE_OAUTH_CLIENT_ID=client-id.apps.googleusercontent.com",
+          "GOOGLE_OAUTH_CLIENT_SECRET=client-secret",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual({
       clientId: "client-id.apps.googleusercontent.com",
       clientSecret: "client-secret",
     });
-    expect(() => readGoogleWorkspaceCredentials("GOOGLE_OAUTH_CLIENT_ID=client-id\n"))
-      .toThrowError(/AGENT_GOOGLE_SETUP_SOURCE_INCOMPLETE/);
+    expect(() => readGoogleWorkspaceCredentials("GOOGLE_OAUTH_CLIENT_ID=client-id\n")).toThrowError(
+      /AGENT_GOOGLE_SETUP_SOURCE_INCOMPLETE/,
+    );
   });
 
   it("synchronizes credentials while generating an independent environment key", async () => {
@@ -116,21 +131,29 @@ describe("Google Workspace configuration importer", () => {
     const sourceKey = Buffer.alloc(32, 4).toString("base64");
     try {
       await Promise.all([
-        writeFile(sourcePath, [
-          "GOOGLE_OAUTH_CLIENT_ID=client-id.apps.googleusercontent.com",
-          "GOOGLE_OAUTH_CLIENT_SECRET=client-secret",
-          `INTEGRATION_TOKEN_ENCRYPTION_KEY=${sourceKey}`,
-          "PUBLIC_BASE_URL=https://source.example",
-          "",
-        ].join("\n"), { mode: 0o600 }),
-        writeFile(targetPath, [
-          "TELEGRAM_BOT_TOKEN=target-secret",
-          "GOOGLE_OAUTH_CLIENT_ID=",
-          "GOOGLE_OAUTH_CLIENT_SECRET=",
-          "INTEGRATION_TOKEN_ENCRYPTION_KEY=",
-          "PUBLIC_BASE_URL=",
-          "",
-        ].join("\n"), { mode: 0o600 }),
+        writeFile(
+          sourcePath,
+          [
+            "GOOGLE_OAUTH_CLIENT_ID=client-id.apps.googleusercontent.com",
+            "GOOGLE_OAUTH_CLIENT_SECRET=client-secret",
+            `INTEGRATION_TOKEN_ENCRYPTION_KEY=${sourceKey}`,
+            "PUBLIC_BASE_URL=https://source.example",
+            "",
+          ].join("\n"),
+          { mode: 0o600 },
+        ),
+        writeFile(
+          targetPath,
+          [
+            "TELEGRAM_BOT_TOKEN=target-secret",
+            "GOOGLE_OAUTH_CLIENT_ID=",
+            "GOOGLE_OAUTH_CLIENT_SECRET=",
+            "INTEGRATION_TOKEN_ENCRYPTION_KEY=",
+            "PUBLIC_BASE_URL=",
+            "",
+          ].join("\n"),
+          { mode: 0o600 },
+        ),
       ]);
 
       const result = await syncGoogleWorkspaceEnvironment({

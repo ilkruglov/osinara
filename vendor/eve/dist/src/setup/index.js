@@ -8,11 +8,7 @@ import {
   projectProductionUrlFromResolution,
 } from "./project-resolution.js";
 import { runVercelEnvPull } from "./run-vercel-link.js";
-import {
-  createDefaultSetupState,
-  requireProjectPath,
-  snapshotSetupState,
-} from "./state.js";
+import { createDefaultSetupState, requireProjectPath, snapshotSetupState } from "./state.js";
 import { getPackageManagerStrategy } from "./primitives/pm/index.js";
 import {
   linkProject,
@@ -25,11 +21,7 @@ import "./cli/index.js";
 import { setupConnectionConnector } from "./connection-connector.js";
 import { WizardCancelledError } from "./step.js";
 import { runHeadless, runInteractive } from "./runner.js";
-import {
-  HeadlessPromptError,
-  createHeadlessPrompter,
-  formatHeadlessEvent,
-} from "./headless.js";
+import { HeadlessPromptError, createHeadlessPrompter, formatHeadlessEvent } from "./headless.js";
 import { createPrompter } from "./prompter.js";
 import {
   runPackageManagerInstall,

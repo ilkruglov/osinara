@@ -174,9 +174,7 @@ function reduceMessageData(e, c) {
             ? {
                 ...f,
                 approval: approvedApproval(a),
-                errorText:
-                  c.data.error?.message ??
-                  stringifyUnknown(c.data.result.output),
+                errorText: c.data.error?.message ?? stringifyUnknown(c.data.result.output),
                 state: `output-error`,
               }
             : {
@@ -204,10 +202,7 @@ function reduceMessageData(e, c) {
           state: `output-available`,
           stepIndex: c.data.stepIndex,
           toolCallId: c.data.result.callId,
-          toolMetadata: mergeToolMetadata(
-            t?.toolMetadata,
-            createToolMetadata(a),
-          ),
+          toolMetadata: mergeToolMetadata(t?.toolMetadata, createToolMetadata(a)),
           toolName: t?.toolName ?? a.toolName,
           type: `dynamic-tool`,
         };
@@ -219,10 +214,7 @@ function reduceMessageData(e, c) {
     }
     case `authorization.required`:
       return updateAssistantMessage(e, c.data.turnId, (e) =>
-        upsertPart(
-          ensureStepStartPart(e, c.data.stepIndex),
-          createAuthorizationRequiredPart(c),
-        ),
+        upsertPart(ensureStepStartPart(e, c.data.stepIndex), createAuthorizationRequiredPart(c)),
       );
     case `authorization.completed`:
       return completeAuthorization(e, c);
@@ -257,8 +249,7 @@ function reduceMessageData(e, c) {
         ...e,
         metadata: { ...e.metadata, status: `complete` },
         parts: e.parts.map((e) =>
-          (e.type === `text` || e.type === `reasoning`) &&
-          e.state === `streaming`
+          (e.type === `text` || e.type === `reasoning`) && e.state === `streaming`
             ? { ...e, state: `done` }
             : e,
         ),
@@ -314,9 +305,8 @@ function updateAssistantMessage(e, t, n) {
   return upsertMessage(
     e,
     n(
-      e.messages.find(
-        (e) => e.role === `assistant` && e.metadata?.turnId === t,
-      ) ?? createAssistantMessage(t),
+      e.messages.find((e) => e.role === `assistant` && e.metadata?.turnId === t) ??
+        createAssistantMessage(t),
     ),
   );
 }
@@ -340,24 +330,17 @@ function ensureStepStartPart(e, t) {
   let r = t - n + 1;
   return {
     ...e,
-    parts: [
-      ...e.parts,
-      ...Array.from({ length: r }, () => ({ type: `step-start` })),
-    ],
+    parts: [...e.parts, ...Array.from({ length: r }, () => ({ type: `step-start` }))],
   };
 }
 function upsertPart(e, t) {
   let n = e.parts.findIndex((e) => partKey(e) === partKey(t)),
-    r =
-      n === -1
-        ? [...e.parts, t]
-        : [...e.parts.slice(0, n), t, ...e.parts.slice(n + 1)];
+    r = n === -1 ? [...e.parts, t] : [...e.parts.slice(0, n), t, ...e.parts.slice(n + 1)];
   return {
     ...e,
     metadata: {
       ...e.metadata,
-      status:
-        t.type === `text` && t.state === `done` ? `complete` : `streaming`,
+      status: t.type === `text` && t.state === `done` ? `complete` : `streaming`,
     },
     parts: r,
   };
@@ -379,8 +362,7 @@ function upsertRun(e, t) {
     ...e,
     metadata: {
       ...e.metadata,
-      status:
-        t.type === `text` && t.state === `done` ? `complete` : `streaming`,
+      status: t.type === `text` && t.state === `done` ? `complete` : `streaming`,
     },
     parts: r,
   };
@@ -409,15 +391,12 @@ function completeAuthorization(t, n) {
     : updateAuthorizationPart(t, r, i);
 }
 function updateAuthorizationPart(e, t, n) {
-  let r = e.messages.find(
-    (e) => e.role === `assistant` && e.parts.some((e) => e === t),
-  );
+  let r = e.messages.find((e) => e.role === `assistant` && e.parts.some((e) => e === t));
   return r ? upsertMessage(e, upsertPart(r, n)) : e;
 }
 function findToolPart(e, t) {
   for (let n of e.messages)
-    for (let e of n.parts)
-      if (e.type === `dynamic-tool` && e.toolCallId === t) return e;
+    for (let e of n.parts) if (e.type === `dynamic-tool` && e.toolCallId === t) return e;
 }
 function isSettledToolPart(e) {
   return (
@@ -432,19 +411,13 @@ function findLatestPendingAuthorizationPart(e, t) {
     if (r?.role === `assistant`)
       for (let e = r.parts.length - 1; e >= 0; --e) {
         let n = r.parts[e];
-        if (
-          n?.type === `authorization` &&
-          n.state === `required` &&
-          n.name === t
-        )
-          return n;
+        if (n?.type === `authorization` && n.state === `required` && n.name === t) return n;
       }
   }
 }
 function findToolPartByApprovalId(e, t) {
   for (let n of e.messages)
-    for (let e of n.parts)
-      if (e.type === `dynamic-tool` && e.approval?.id === t) return e;
+    for (let e of n.parts) if (e.type === `dynamic-tool` && e.approval?.id === t) return e;
 }
 function projectReceivedParts(e, t) {
   return (

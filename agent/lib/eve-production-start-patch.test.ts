@@ -20,10 +20,7 @@ describe("Eve production startup patch", () => {
   it("allows five minutes for the built server to become healthy", async () => {
     const [evePackageSource, runtime] = await Promise.all([
       readFile("vendor/eve/package.json", "utf8"),
-      readFile(
-        "vendor/eve/dist/src/internal/nitro/host/start-production-server.js",
-        "utf8",
-      ),
+      readFile("vendor/eve/dist/src/internal/nitro/host/start-production-server.js", "utf8"),
     ]);
     const evePackage = JSON.parse(evePackageSource) as { version?: string };
 

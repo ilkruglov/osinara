@@ -39,12 +39,15 @@ export async function deliverGoogleAuthorizationLink(
       fetch: fetchWithTimeout,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_GOOGLE_OAUTH_TELEGRAM_DELIVERY_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GOOGLE_OAUTH_TELEGRAM_DELIVERY_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     if (error instanceof Error) {
-      error.message = "AGENT_GOOGLE_OAUTH_TELEGRAM_DELIVERY_FAILED: Не удалось отправить OAuth-ссылку";
+      error.message =
+        "AGENT_GOOGLE_OAUTH_TELEGRAM_DELIVERY_FAILED: Не удалось отправить OAuth-ссылку";
     }
     throw error;
   }

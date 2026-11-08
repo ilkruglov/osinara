@@ -27,8 +27,16 @@ import { isYandexTaxiNothingSent } from "./yandex-taxi-transport.js";
 export type YandexTaxiOperationAction = "cancel" | "order";
 
 export interface YandexTaxiOperationRepository {
-  begin(input: { action: YandexTaxiOperationAction; familyId: string; key: string; requestHash: string; userId: string }):
-    Promise<{ kind: "started" } | { kind: "existing"; requestHash: string; result: unknown; status: "completed" | "started" }>;
+  begin(input: {
+    action: YandexTaxiOperationAction;
+    familyId: string;
+    key: string;
+    requestHash: string;
+    userId: string;
+  }): Promise<
+    | { kind: "started" }
+    | { kind: "existing"; requestHash: string; result: unknown; status: "completed" | "started" }
+  >;
   complete(input: { key: string; result: unknown; userId: string }): Promise<void>;
   release(input: { key: string; userId: string }): Promise<void>;
 }
@@ -57,29 +65,59 @@ const DEFINITIVE_FAILURES: ReadonlySet<string> = new Set([
   "AGENT_YANDEX_TAXI_ZONE_UNAVAILABLE",
 ]);
 
-export async function requireYandexTaxiFamilyMember(familyId: string, userId: string): Promise<void> {
-  const member = await database().query("SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2", [familyId, userId]);
+export async function requireYandexTaxiFamilyMember(
+  familyId: string,
+  userId: string,
+): Promise<void> {
+  const member = await database().query(
+    "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2",
+    [familyId, userId],
+  );
   if ((member.rowCount ?? 0) === 0) {
-    throw new AppError("AGENT_YANDEX_TAXI_ACCESS_DENIED", "Такси заказывают только члены семьи в личном чате");
+    throw new AppError(
+      "AGENT_YANDEX_TAXI_ACCESS_DENIED",
+      "Такси заказывают только члены семьи в личном чате",
+    );
   }
 }
 
 function ambiguity(action: YandexTaxiOperationAction): AppError {
   return action === "order"
-    ? new AppError("AGENT_YANDEX_TAXI_ORDER_AMBIGUOUS", "Прошлая попытка заказа могла дойти до Яндекс Go. Не заказывайте снова: посмотрите status")
-    : new AppError("AGENT_YANDEX_TAXI_CANCEL_AMBIGUOUS", "Прошлая попытка отмены могла дойти до Яндекс Go. Посмотрите status, прежде чем отменять снова");
+    ? new AppError(
+        "AGENT_YANDEX_TAXI_ORDER_AMBIGUOUS",
+        "Прошлая попытка заказа могла дойти до Яндекс Go. Не заказывайте снова: посмотрите status",
+      )
+    : new AppError(
+        "AGENT_YANDEX_TAXI_CANCEL_AMBIGUOUS",
+        "Прошлая попытка отмены могла дойти до Яндекс Go. Посмотрите status, прежде чем отменять снова",
+      );
 }
 
 export async function runYandexTaxiOperation<T>(
   repository: YandexTaxiOperationRepository,
-  input: { action: YandexTaxiOperationAction; familyId: string; key: string; request: unknown; userId: string },
+  input: {
+    action: YandexTaxiOperationAction;
+    familyId: string;
+    key: string;
+    request: unknown;
+    userId: string;
+  },
   run: () => Promise<T>,
 ): Promise<{ replayed: boolean; result: T }> {
   const requestHash = sha256Json(input.request);
-  const begun = await repository.begin({ action: input.action, familyId: input.familyId, key: input.key, requestHash, userId: input.userId });
+  const begun = await repository.begin({
+    action: input.action,
+    familyId: input.familyId,
+    key: input.key,
+    requestHash,
+    userId: input.userId,
+  });
   if (begun.kind === "existing") {
     if (begun.requestHash !== requestHash) {
-      throw new AppError("AGENT_YANDEX_TAXI_OPERATION_MISMATCH", "Этот вызов уже выполнялся с другими параметрами. Сделайте новый вызов");
+      throw new AppError(
+        "AGENT_YANDEX_TAXI_OPERATION_MISMATCH",
+        "Этот вызов уже выполнялся с другими параметрами. Сделайте новый вызов",
+      );
     }
     if (begun.status === "completed") return { replayed: true, result: begun.result as T };
     throw ambiguity(input.action);
@@ -88,7 +126,10 @@ export async function runYandexTaxiOperation<T>(
   try {
     result = await run();
   } catch (error) {
-    if ((isAppError(error) && DEFINITIVE_FAILURES.has(error.code)) || isYandexTaxiNothingSent(error)) {
+    if (
+      (isAppError(error) && DEFINITIVE_FAILURES.has(error.code)) ||
+      isYandexTaxiNothingSent(error)
+    ) {
       await repository.release({ key: input.key, userId: input.userId });
     }
     throw error;
@@ -106,14 +147,23 @@ export const yandexTaxiOperationRepository: YandexTaxiOperationRepository = {
       [input.userId, input.key, input.action, input.requestHash],
     );
     if ((inserted.rowCount ?? 0) > 0) return { kind: "started" };
-    const existing = await database().query<{ request_hash: string; result: unknown; status: "completed" | "started" }>(
+    const existing = await database().query<{
+      request_hash: string;
+      result: unknown;
+      status: "completed" | "started";
+    }>(
       "SELECT request_hash, result, status FROM yandex_taxi_operations WHERE user_id = $1 AND operation_key = $2",
       [input.userId, input.key],
     );
     const row = existing.rows[0];
     // Released between the insert and the read: the earlier attempt failed definitively.
     if (!row) return await this.begin(input);
-    return { kind: "existing", requestHash: row.request_hash, result: row.result, status: row.status };
+    return {
+      kind: "existing",
+      requestHash: row.request_hash,
+      result: row.result,
+      status: row.status,
+    };
   },
   async complete(input) {
     await database().query(

@@ -1,7 +1,4 @@
-import {
-  EVE_HEALTH_ROUTE_PATH,
-  EVE_INFO_ROUTE_PATH,
-} from "#protocol/routes.js";
+import { EVE_HEALTH_ROUTE_PATH, EVE_INFO_ROUTE_PATH } from "#protocol/routes.js";
 import { encodeBasicCredentials } from "#internal/http/basic-auth.js";
 import { AgentInfoResponseError } from "#client/agent-info-error.js";
 import { AgentInfoResultSchema } from "#client/agent-info-schema.js";

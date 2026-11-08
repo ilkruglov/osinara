@@ -29,9 +29,7 @@ function createCompiledSandboxBackendPrunePlugin() {
         : null;
     },
     resolveId(t) {
-      return LOCAL_BINDING_SOURCE_RE.test(t)
-        ? PRUNED_LOCAL_SANDBOX_MODULE_ID
-        : null;
+      return LOCAL_BINDING_SOURCE_RE.test(t) ? PRUNED_LOCAL_SANDBOX_MODULE_ID : null;
     },
   };
 }

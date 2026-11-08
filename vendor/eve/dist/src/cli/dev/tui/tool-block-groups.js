@@ -16,7 +16,7 @@ function groupToolBlocksForDisplay(e, t = {}) {
 }
 function groupBlocks(e, t) {
   let n = [];
-  for (let r = 0; r < e.length; ) {
+  for (let r = 0; r < e.length;) {
     let i = e[r];
     if (isGroupableLogWrite(i)) {
       if (t !== void 0) {
@@ -25,7 +25,7 @@ function groupBlocks(e, t) {
         continue;
       }
       let a = [i];
-      for (; r + a.length < e.length && isGroupableLogWrite(e[r + a.length]); )
+      for (; r + a.length < e.length && isGroupableLogWrite(e[r + a.length]);)
         a.push(e[r + a.length]);
       (n.push(...coalesceLogWrites(a)), (r += a.length));
       continue;
@@ -37,7 +37,7 @@ function groupBlocks(e, t) {
     }
     if (isCondensableChildTool(i)) {
       let t = [i];
-      for (; r + t.length < e.length; ) {
+      for (; r + t.length < e.length;) {
         let n = e[r + t.length];
         if (
           n.subagentCallId !== i.subagentCallId ||
@@ -48,14 +48,9 @@ function groupBlocks(e, t) {
       }
       let a = e[r + t.length],
         o = t.filter(isCondensableChildTool);
-      if (
-        o.length >= 2 &&
-        a?.kind === `subagent-step` &&
-        a.subagentCallId === i.subagentCallId
-      ) {
+      if (o.length >= 2 && a?.kind === `subagent-step` && a.subagentCallId === i.subagentCallId) {
         n.push({ members: o, display: condenseChildToolRun(o) });
-        for (let e of t)
-          isCondensableChildTool(e) || n.push({ members: [e], display: e });
+        for (let e of t) isCondensableChildTool(e) || n.push({ members: [e], display: e });
         r += t.length;
         continue;
       }
@@ -65,7 +60,7 @@ function groupBlocks(e, t) {
       continue;
     }
     let a = [i];
-    for (; r + a.length < e.length; ) {
+    for (; r + a.length < e.length;) {
       let t = e[r + a.length];
       if (!isGroupable(t) || !sameRun(i, t)) break;
       a.push(t);
@@ -82,18 +77,11 @@ function isGroupable(e) {
     (e.kind === `tool` || e.kind === `subagent-tool`) &&
     e.toolGroup !== void 0 &&
     e.expanded !== !0 &&
-    (e.status === `running` ||
-      e.status === `error` ||
-      (e.status === `done` && e.result === void 0))
+    (e.status === `running` || e.status === `error` || (e.status === `done` && e.result === void 0))
   );
 }
 function sameRun(e, t) {
-  return (
-    t.kind === e.kind &&
-    t.depth === e.depth &&
-    t.live === e.live &&
-    t.toolName === e.toolName
-  );
+  return t.kind === e.kind && t.depth === e.depth && t.live === e.live && t.toolName === e.toolName;
 }
 function partitionRunByStatus(e) {
   let t = new Map();
@@ -142,13 +130,7 @@ function coalesceLogBucket(e) {
     { members: e, display: n }
   );
 }
-const RUN_PASS_THROUGH_KINDS = new Set([
-  `log`,
-  `sandbox`,
-  `error`,
-  `warning`,
-  `notice`,
-]);
+const RUN_PASS_THROUGH_KINDS = new Set([`log`, `sandbox`, `error`, `warning`, `notice`]);
 function collectSubagentRun(e, t, r) {
   let i = e[t],
     a = [i],
@@ -170,7 +152,7 @@ function collectSubagentRun(e, t, r) {
     if (i === void 0) break;
     i.push(r);
   }
-  for (; s.length > 0 && e[t + c - 1] === s.at(-1); ) (s.pop(), --c);
+  for (; s.length > 0 && e[t + c - 1] === s.at(-1);) (s.pop(), --c);
   let l = [];
   for (let e of a) {
     let t = o.get(e.subagentCallId),
@@ -191,8 +173,7 @@ function collectSubagentRun(e, t, r) {
       continue;
     }
     l.push({ members: [e], display: r });
-    let recency = (e) =>
-        e.members.reduce((e, t) => Math.max(e, updateRecency(t)), -1),
+    let recency = (e) => e.members.reduce((e, t) => Math.max(e, updateRecency(t)), -1),
       i = groupToolBlocksForDisplay(t)
         .slice()
         .sort((e, t) => recency(e) - recency(t)),
@@ -206,8 +187,7 @@ function collectSubagentRun(e, t, r) {
       }),
       l.push(...s.slice(0, -1)));
     let u = s.at(-1);
-    u !== void 0 &&
-      l.push({ members: u.members, display: { ...u.display, closesRail: !0 } });
+    u !== void 0 && l.push({ members: u.members, display: { ...u.display, closesRail: !0 } });
   }
   for (let e of s) {
     if (r !== void 0 && isGroupableLogWrite(e)) {
@@ -251,9 +231,7 @@ function isCondensableChildTool(e) {
   return e.kind === `subagent-tool` && e.status === `done` && e.expanded !== !0;
 }
 function isItemizedChildFailure(e) {
-  return (
-    e.kind === `subagent-tool` && e.status === `error` && e.expanded !== !0
-  );
+  return e.kind === `subagent-tool` && e.status === `error` && e.expanded !== !0;
 }
 function condensedRunTitle(e) {
   let t = new Map();
@@ -267,8 +245,7 @@ function condensedRunTitle(e) {
     r = n
       .slice(0, 3)
       .map(
-        ({ copy: e, count: t }) =>
-          `${e.pastVerb} ${t} ${t === 1 ? e.singularNoun : e.pluralNoun}`,
+        ({ copy: e, count: t }) => `${e.pastVerb} ${t} ${t === 1 ? e.singularNoun : e.pluralNoun}`,
       );
   return n.length > 3 ? `${r.join(`, `)}, and more` : r.join(`, `);
 }
@@ -323,9 +300,7 @@ function newestFirstItems(e) {
     .sort((e, t) => t.order - e.order || t.position - e.position)
     .map(({ member: e }) => {
       let t = { text: e.toolGroup.item };
-      return e.status === `error` && e.result !== void 0
-        ? { ...t, result: e.result }
-        : t;
+      return e.status === `error` && e.result !== void 0 ? { ...t, result: e.result } : t;
     });
 }
 export { groupToolBlocksForDisplay, maxVisibleSubagentRunChildren };

@@ -48,8 +48,7 @@ function degradeOversizedTranscript(t, n) {
     if (r === void 0 || a === void 0) continue;
     let o = renderCompactionMessageContent(a, 2e3);
     o.length >= r.content.length ||
-      ((i -= (r.content.length - o.length) / 4),
-      (n[e] = { content: o, role: r.role }));
+      ((i -= (r.content.length - o.length) / 4), (n[e] = { content: o, role: r.role }));
   }
 }
 function formatCompactionPrompt(e) {

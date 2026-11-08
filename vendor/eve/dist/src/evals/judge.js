@@ -85,8 +85,7 @@ function formatJudgeDetail(e, t, n, r) {
     [`response`, t],
   ];
   return (
-    r.metadata?.rationale !== void 0 &&
-      i.push([`rationale`, r.metadata.rationale]),
+    r.metadata?.rationale !== void 0 && i.push([`rationale`, r.metadata.rationale]),
     r.metadata?.choice !== void 0 && i.push([`choice`, r.metadata.choice]),
     r.error !== void 0 && i.push([`autoevals error`, r.error]),
     i.map(([e, t]) => `${e}: ${formatDiagnosticValue(t)}`).join(`

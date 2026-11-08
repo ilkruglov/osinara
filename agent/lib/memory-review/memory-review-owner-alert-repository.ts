@@ -50,10 +50,11 @@ export async function enqueueMemoryReviewOwnerAlert(
          AND alert.recovery_generation = batch.recovery_attempts`,
       [batchId],
     );
-    if (!existing.rows[0]) throw new AppError(
-      "AGENT_MEMORY_REVIEW_OWNER_ALERT_CREATE_FAILED",
-      "Не удалось подготовить уведомление владельца о сбое проверки памяти",
-    );
+    if (!existing.rows[0])
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_OWNER_ALERT_CREATE_FAILED",
+        "Не удалось подготовить уведомление владельца о сбое проверки памяти",
+      );
   }
 }
 
@@ -137,11 +138,13 @@ export const memoryReviewOwnerAlertRepository = {
       );
       await client.query("COMMIT");
       for (const alert of ownerless) {
-        console.error(JSON.stringify({
-          alertId: alert.id,
-          batchId: alert.batch_id,
-          code: "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
-        }));
+        console.error(
+          JSON.stringify({
+            alertId: alert.id,
+            batchId: alert.batch_id,
+            code: "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+          }),
+        );
       }
       return result.rows.map((row) => ({
         alertId: row.id,
@@ -169,10 +172,11 @@ export const memoryReviewOwnerAlertRepository = {
         WHERE id = $1 AND status = 'delivering' AND delivery_token = $2`,
       [alert.alertId, alert.deliveryToken],
     );
-    if (result.rowCount !== 1) throw new AppError(
-      "AGENT_MEMORY_REVIEW_OWNER_ALERT_DELIVERY_STATE_INVALID",
-      "Не удалось подтвердить доставку уведомления владельцу",
-    );
+    if (result.rowCount !== 1)
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_OWNER_ALERT_DELIVERY_STATE_INVALID",
+        "Не удалось подтвердить доставку уведомления владельцу",
+      );
   },
 
   async markFailed(
@@ -188,9 +192,10 @@ export const memoryReviewOwnerAlertRepository = {
         WHERE id = $1 AND status = 'delivering' AND delivery_token = $2`,
       [alert.alertId, alert.deliveryToken, input.status, input.diagnosticCode],
     );
-    if (result.rowCount !== 1) throw new AppError(
-      "AGENT_MEMORY_REVIEW_OWNER_ALERT_FAILURE_STATE_INVALID",
-      "Не удалось сохранить ошибку уведомления владельца",
-    );
+    if (result.rowCount !== 1)
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_OWNER_ALERT_FAILURE_STATE_INVALID",
+        "Не удалось сохранить ошибку уведомления владельца",
+      );
   },
 };

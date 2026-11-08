@@ -1,10 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { z } from "#compiled/zod/index.js";
 import { join } from "node:path";
-import {
-  AI_GATEWAY_MODELS_CATALOG_URL,
-  vercelGatewayFetch,
-} from "#internal/gateway.js";
+import { AI_GATEWAY_MODELS_CATALOG_URL, vercelGatewayFetch } from "#internal/gateway.js";
 import {
   catalogModelProviderSchema,
   catalogModelSchema,
@@ -31,15 +28,9 @@ const compiledRuntimeModelCatalogCacheSchema = z
     })
     .strict(),
   builtInCompiledRuntimeModelLimitsById = new Map([
-    [
-      `anthropic/claude-opus-4.7`,
-      { contextWindowTokens: 2e5, maxOutputTokens: 32e3 },
-    ],
+    [`anthropic/claude-opus-4.7`, { contextWindowTokens: 2e5, maxOutputTokens: 32e3 }],
     [`openai/gpt-5.4`, { contextWindowTokens: 4e5, maxOutputTokens: 128e3 }],
-    [
-      `openai/gpt-5.4-mini`,
-      { contextWindowTokens: 4e5, maxOutputTokens: 128e3 },
-    ],
+    [`openai/gpt-5.4-mini`, { contextWindowTokens: 4e5, maxOutputTokens: 128e3 }],
   ]);
 function resolveCompiledRuntimeModelCatalogCachePath(e) {
   return join(e, `.eve`, `cache`, `model-catalog.json`);
@@ -52,9 +43,7 @@ function createCompiledRuntimeModelCatalogLoader(e) {
     getFetchedCatalog = async () => {
       if (n !== null) throw n;
       if (r !== null) return await r;
-      r = fetchAndPersistModelCatalog(e).then(
-        (e) => ((t = Promise.resolve(e)), e),
-      );
+      r = fetchAndPersistModelCatalog(e).then((e) => ((t = Promise.resolve(e)), e));
       try {
         return await r;
       } catch (e) {
@@ -107,14 +96,10 @@ function createCompiledRuntimeModelCatalogLoader(e) {
 async function fetchAndPersistModelCatalog(t) {
   let r = await vercelGatewayFetch(AI_GATEWAY_MODELS_CATALOG_URL);
   if (!r.ok)
-    throw Error(
-      `AI Gateway model catalog request failed with HTTP ${r.status} ${r.statusText}.`,
-    );
+    throw Error(`AI Gateway model catalog request failed with HTTP ${r.status} ${r.statusText}.`);
   let i = modelCatalogResponseSchema$1.safeParse(await r.json());
   if (!i.success)
-    throw Error(
-      `AI Gateway model catalog response did not match the expected schema.`,
-    );
+    throw Error(`AI Gateway model catalog response did not match the expected schema.`);
   let a = {
     fetchedAt: new Date().toISOString(),
     kind: COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND,
@@ -131,17 +116,11 @@ async function fetchAndPersistModelCatalog(t) {
 }
 async function readModelCatalogCache(e) {
   try {
-    let n = await readFile(
-        resolveCompiledRuntimeModelCatalogCachePath(e),
-        `utf8`,
-      ),
+    let n = await readFile(resolveCompiledRuntimeModelCatalogCachePath(e), `utf8`),
       r = compiledRuntimeModelCatalogCacheSchema.safeParse(JSON.parse(n));
     return r.success ? r.data : null;
   } catch (e) {
-    return (
-      e instanceof Error && `code` in e && typeof e.code == `string` && e.code,
-      null
-    );
+    return (e instanceof Error && `code` in e && typeof e.code == `string` && e.code, null);
   }
 }
 function isCacheFresh(e) {

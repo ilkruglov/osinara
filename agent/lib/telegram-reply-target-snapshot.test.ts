@@ -29,7 +29,12 @@ function productionReply(): TelegramMessage {
         date: 1_786_542_306,
         from: { first_name: "Channel", id: 136_817_688, is_bot: true, username: "Channel_Bot" },
         message_id: 51_001,
-        sender_chat: { id: -1_001_823_620_813, title: "nlp_daily", type: "channel", username: "nlp_daily" },
+        sender_chat: {
+          id: -1_001_823_620_813,
+          title: "nlp_daily",
+          type: "channel",
+          username: "nlp_daily",
+        },
         text: "У меня настроен vless, ссылочку кинул в streisand, и орка работает на телефоне",
       },
     },
@@ -47,7 +52,8 @@ describe("telegramReplyTargetProjection", () => {
     expect(telegramReplyTargetProjection(productionReply())).toEqual({
       quotedText: "streisand",
       snapshot: {
-        contentText: "У меня настроен vless, ссылочку кинул в streisand, и орка работает на телефоне",
+        contentText:
+          "У меня настроен vless, ссылочку кинул в streisand, и орка работает на телефоне",
         senderDisplayName: "nlp_daily",
         senderUsername: "nlp_daily",
       },
@@ -66,19 +72,32 @@ describe("telegramReplyTargetProjection", () => {
     const target = message.raw.reply_to_message as Record<string, unknown>;
     const { text: _text, ...textless } = target;
 
-    expect(telegramReplyTargetProjection({
-      ...message,
-      raw: { ...message.raw, reply_to_message: textless },
-    })).toEqual({ quotedText: "streisand", snapshot: null });
+    expect(
+      telegramReplyTargetProjection({
+        ...message,
+        raw: { ...message.raw, reply_to_message: textless },
+      }),
+    ).toEqual({ quotedText: "streisand", snapshot: null });
   });
 
   it("reads the text of a rich target from its blocks when text and caption are empty", () => {
     const message = productionReply();
     const target = message.raw.reply_to_message as Record<string, unknown>;
     const { text: _text, ...textless } = target;
-    const rich = { ...textless, rich_message: { blocks: [{ photo: [{ file_id: "p" }], type: "photo" }, { text: "пост про эвалы", type: "paragraph" }] } };
+    const rich = {
+      ...textless,
+      rich_message: {
+        blocks: [
+          { photo: [{ file_id: "p" }], type: "photo" },
+          { text: "пост про эвалы", type: "paragraph" },
+        ],
+      },
+    };
 
-    const projection = telegramReplyTargetProjection({ ...message, raw: { ...message.raw, reply_to_message: rich } });
+    const projection = telegramReplyTargetProjection({
+      ...message,
+      raw: { ...message.raw, reply_to_message: rich },
+    });
     expect(projection.snapshot?.contentText).toBe("пост про эвалы");
   });
 
@@ -87,7 +106,10 @@ describe("telegramReplyTargetProjection", () => {
 
     const { quotedText } = telegramReplyTargetProjection({
       ...message,
-      raw: { ...message.raw, quote: { text: "ж".repeat(TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS + 50) } },
+      raw: {
+        ...message.raw,
+        quote: { text: "ж".repeat(TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS + 50) },
+      },
     });
 
     expect(quotedText).toHaveLength(TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS);
@@ -99,10 +121,12 @@ describe("telegramReplyTargetProjection", () => {
     const raw = message.raw.reply_to_message as Record<string, unknown>;
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(telegramReplyTargetProjection({
-      ...message,
-      raw: { ...message.raw, reply_to_message: { ...raw, message_id: 51_000 } },
-    })).toEqual({ quotedText: null, snapshot: null });
+    expect(
+      telegramReplyTargetProjection({
+        ...message,
+        raw: { ...message.raw, reply_to_message: { ...raw, message_id: 51_000 } },
+      }),
+    ).toEqual({ quotedText: null, snapshot: null });
     expect(error.mock.calls[0]?.[0]).toContain("AGENT_TELEGRAM_REPLY_TARGET_REJECTED");
     error.mockRestore();
   });
@@ -112,14 +136,19 @@ describe("telegramReplyTargetProjection", () => {
     const raw = message.raw.reply_to_message as Record<string, unknown>;
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(telegramReplyTargetProjection({
-      ...message,
-      raw: { ...message.raw, reply_to_message: { ...raw, chat: { id: -1_009, type: "supergroup" } } },
-      replyToMessage: {
-        ...message.replyToMessage!,
-        chat: { id: "-1009", type: "supergroup" },
-      },
-    })).toEqual({ quotedText: null, snapshot: null });
+    expect(
+      telegramReplyTargetProjection({
+        ...message,
+        raw: {
+          ...message.raw,
+          reply_to_message: { ...raw, chat: { id: -1_009, type: "supergroup" } },
+        },
+        replyToMessage: {
+          ...message.replyToMessage!,
+          chat: { id: "-1009", type: "supergroup" },
+        },
+      }),
+    ).toEqual({ quotedText: null, snapshot: null });
     expect(error.mock.calls[0]?.[0]).toContain("foreign_chat");
     error.mockRestore();
   });
@@ -128,10 +157,12 @@ describe("telegramReplyTargetProjection", () => {
     const message = productionReply();
     const { reply_to_message: _target, ...raw } = message.raw;
 
-    expect(telegramReplyTargetProjection({
-      ...message,
-      raw,
-      replyToMessage: undefined,
-    })).toEqual({ quotedText: null, snapshot: null });
+    expect(
+      telegramReplyTargetProjection({
+        ...message,
+        raw,
+        replyToMessage: undefined,
+      }),
+    ).toEqual({ quotedText: null, snapshot: null });
   });
 });

@@ -1,10 +1,6 @@
 import { formatValuePretty, truncate } from "./tool-format.js";
 import { elisionText } from "./rail.js";
-import {
-  clipVisible,
-  visibleLength,
-  wrapVisibleLine,
-} from "#cli/ui/terminal-text.js";
+import { clipVisible, visibleLength, wrapVisibleLine } from "#cli/ui/terminal-text.js";
 function renderTool(e, t, n, r) {
   return (e.depth ?? 0) === 0
     ? renderToolRows(e, t - 1, n, r).map((e) => ` ${e}`)
@@ -12,10 +8,7 @@ function renderTool(e, t, n, r) {
 }
 function renderToolRows(e, n, i, a) {
   let { icon: o, accent: s } = toolGlyph(e.status ?? `running`, i, a),
-    c =
-      e.status === `done` && e.doneTitle !== void 0
-        ? e.doneTitle
-        : (e.title ?? `tool`),
+    c = e.status === `done` && e.doneTitle !== void 0 ? e.doneTitle : (e.title ?? `tool`),
     l = n - 3,
     u = clipVisible(c, l),
     d = ` ${o} ${boldLeadingWord(u, i)}`,
@@ -26,9 +19,7 @@ function renderToolRows(e, n, i, a) {
     h = [];
   return (
     e.toolGroupItems === void 0
-      ? !e.expanded &&
-        showToolDetail(e) &&
-        h.push(...detailLineRows(e.detailLines ?? [], n, i))
+      ? !e.expanded && showToolDetail(e) && h.push(...detailLineRows(e.detailLines ?? [], n, i))
       : h.push(...toolGroupItemRows(e.toolGroupItems, n, i)),
     h.length > 0 && m.push(...h, ` ${i.colors.dim(i.glyph.corner)}`),
     e.expanded
@@ -44,9 +35,7 @@ function renderToolRows(e, n, i, a) {
 }
 function boldLeadingWord(e, t) {
   let n = e.indexOf(` `);
-  return n === -1
-    ? t.colors.bold(e)
-    : `${t.colors.bold(e.slice(0, n))}${t.colors.dim(e.slice(n))}`;
+  return n === -1 ? t.colors.bold(e) : `${t.colors.bold(e.slice(0, n))}${t.colors.dim(e.slice(n))}`;
 }
 function showToolDetail(e) {
   if (e.detailLines === void 0 || e.detailLines.length === 0) return !1;
@@ -81,9 +70,7 @@ function detailLineRows(e, t, n) {
         case `removed`:
           return ` ${i.dim(n.glyph.rule)}${i.red(`-`)} ${i.red(t)}`;
         default:
-          return s
-            ? ` ${i.dim(n.glyph.rule)}  ${i.gray(t)}`
-            : railRow(i.gray(t), n);
+          return s ? ` ${i.dim(n.glyph.rule)}  ${i.gray(t)}` : railRow(i.gray(t), n);
       }
     });
   return (o > 0 && l.push(elisionRow(o, n)), l);
@@ -92,20 +79,13 @@ function itemRows(e, n, r) {
   let a = Math.max(1, n - 4);
   if (!e.some((e) => e.result !== void 0 && e.result.length > 0))
     return e.map((e) => railRow(r.colors.gray(truncate(e.text, a)), r));
-  let o = Math.min(
-      Math.max(...e.map((e) => visibleLength(e.text))),
-      Math.max(8, a - 9),
-    ),
+  let o = Math.min(Math.max(...e.map((e) => visibleLength(e.text))), Math.max(8, a - 9)),
     s = Math.max(8, a - o - 1);
   return e.map((e) => {
     let n = truncate(e.text, o);
-    if (e.result === void 0 || e.result.length === 0)
-      return railRow(r.colors.gray(n), r);
+    if (e.result === void 0 || e.result.length === 0) return railRow(r.colors.gray(n), r);
     let a = n + ` `.repeat(Math.max(0, o - visibleLength(n)));
-    return railRow(
-      `${r.colors.gray(a)} ${r.colors.red(truncate(e.result, s))}`,
-      r,
-    );
+    return railRow(`${r.colors.gray(a)} ${r.colors.red(truncate(e.result, s))}`, r);
   });
 }
 function renderToolExpanded(t, n, r) {
@@ -115,8 +95,7 @@ function renderToolExpanded(t, n, r) {
         i.push(`  ${r.colors.dim(t)}`);
         for (let t of formatValuePretty(o).split(`
 `))
-          for (let e of wrapVisibleLine(t, Math.max(1, n - 4)))
-            i.push(`    ${s(e)}`);
+          for (let e of wrapVisibleLine(t, Math.max(1, n - 4))) i.push(`    ${s(e)}`);
       }
     };
   return (

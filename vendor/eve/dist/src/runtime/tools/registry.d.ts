@@ -4,27 +4,33 @@ import type { ResolvedToolDefinition } from "#runtime/types.js";
  * One executable authored tool tracked by the runtime-owned registry.
  */
 interface RuntimeRegisteredTool {
-    readonly definition: ResolvedToolDefinition;
-    readonly prepared: PreparedRuntimeAuthoredTool;
+  readonly definition: ResolvedToolDefinition;
+  readonly prepared: PreparedRuntimeAuthoredTool;
 }
 /**
  * Runtime-owned tool registry used to expose authored tools to the harness and
  * execute them later inside framework-owned steps.
  */
 export interface RuntimeToolRegistry {
-    readonly preparedTools: readonly PreparedRuntimeAuthoredTool[];
-    readonly toolsByName: ReadonlyMap<string, RuntimeRegisteredTool>;
+  readonly preparedTools: readonly PreparedRuntimeAuthoredTool[];
+  readonly toolsByName: ReadonlyMap<string, RuntimeRegisteredTool>;
 }
 /**
  * Builds the runtime-owned registry for one resolved authored agent.
  */
-export declare function createRuntimeToolRegistry(definitions: {
+export declare function createRuntimeToolRegistry(
+  definitions: {
     readonly tools: readonly ResolvedToolDefinition[];
-}, input?: {
+  },
+  input?: {
     readonly reservedToolNames?: readonly string[];
-}): Promise<RuntimeToolRegistry>;
+  },
+): Promise<RuntimeToolRegistry>;
 /**
  * Looks up one authored tool by name from the runtime-owned registry.
  */
-export declare function findRegisteredRuntimeTool(registry: RuntimeToolRegistry, toolName: string): RuntimeRegisteredTool | null;
+export declare function findRegisteredRuntimeTool(
+  registry: RuntimeToolRegistry,
+  toolName: string,
+): RuntimeRegisteredTool | null;
 export {};

@@ -9,7 +9,17 @@
  * off nothing discovers that directory, so these compile but never run.
  */
 import { type ContentOptions, type OtelIntegration } from "#tracing/otel-declaration.js";
-export { isOtelDeclaration, isOtelIntegration, otel, otelIntegration, type ContentOptions, type OtelDeclaration, type OtelIntegration, type OtelIntegrationOptions, type OtelOptions, } from "#tracing/otel-declaration.js";
+export {
+  isOtelDeclaration,
+  isOtelIntegration,
+  otel,
+  otelIntegration,
+  type ContentOptions,
+  type OtelDeclaration,
+  type OtelIntegration,
+  type OtelIntegrationOptions,
+  type OtelOptions,
+} from "#tracing/otel-declaration.js";
 export type { SpanExporter, SpanProcessor } from "#compiled/@vercel/otel/index.js";
 /**
  * Vercel Agent Runs, enabled by default in production.

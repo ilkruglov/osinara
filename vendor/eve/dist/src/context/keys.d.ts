@@ -5,7 +5,16 @@
  */
 import type { LanguageModel, ModelMessage, SystemModelMessage } from "ai";
 import type { JsonObject } from "#shared/json.js";
-import type { ChannelInstrumentationProjection, ChannelDeliveryMetadata, SessionAuthContext, SessionCallback, SessionCapabilities, SessionParent, SessionTraceContext, SessionTurn } from "#channel/types.js";
+import type {
+  ChannelInstrumentationProjection,
+  ChannelDeliveryMetadata,
+  SessionAuthContext,
+  SessionCallback,
+  SessionCapabilities,
+  SessionParent,
+  SessionTraceContext,
+  SessionTurn,
+} from "#channel/types.js";
 import { ContextKey } from "#context/key.js";
 import type { InstrumentationChannelDeliveryRef } from "#harness/instrumentation/lifecycle.js";
 import type { HarnessToolDefinition } from "#harness/execute-tool.js";
@@ -23,8 +32,8 @@ export type { SessionAuthContext, SessionParent, SessionTurn } from "#channel/ty
  * `initiator` is the caller who originally created the session.
  */
 export interface SessionAuth {
-    readonly current: SessionAuthContext | null;
-    readonly initiator: SessionAuthContext | null;
+  readonly current: SessionAuthContext | null;
+  readonly initiator: SessionAuthContext | null;
 }
 /**
  * Internal session metadata seeded into the context container under
@@ -35,10 +44,10 @@ export interface SessionAuth {
  * whose session id is exposed as `id`, not `sessionId`.
  */
 export interface Session {
-    readonly auth: SessionAuth;
-    readonly parent?: SessionParent;
-    readonly sessionId: string;
-    readonly turn: SessionTurn;
+  readonly auth: SessionAuth;
+  readonly parent?: SessionParent;
+  readonly sessionId: string;
+  readonly turn: SessionTurn;
 }
 export declare const AuthKey: ContextKey<SessionAuthContext | null>;
 export declare const InitiatorAuthKey: ContextKey<SessionAuthContext | null>;
@@ -51,12 +60,12 @@ export declare const TurnOriginAuthKey: ContextKey<SessionAuthContext | null>;
 /** Whether the active turn began from a task-addressed durable delivery. */
 export declare const TurnTaskDeliveryKey: ContextKey<boolean>;
 export interface ActiveChannelDelivery {
-    readonly agentName?: string;
-    readonly delivery: InstrumentationChannelDeliveryRef;
-    readonly rootSessionId: string;
-    readonly sequence: number;
-    readonly sessionId: string;
-    readonly turnId: string;
+  readonly agentName?: string;
+  readonly delivery: InstrumentationChannelDeliveryRef;
+  readonly rootSessionId: string;
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
 }
 export declare const ActiveChannelDeliveriesKey: ContextKey<readonly ActiveChannelDelivery[]>;
 export declare const ChannelInstrumentationKey: ContextKey<ChannelInstrumentationProjection>;
@@ -78,41 +87,49 @@ export declare const SessionCallbackKey: ContextKey<SessionCallback>;
 export declare const SessionKey: ContextKey<Session>;
 export declare const SandboxKey: ContextKey<SandboxAccess>;
 /** Session-scoped dynamic model selection (from `session.started`). */
-export declare const SessionDynamicModelReferenceKey: ContextKey<Readonly<import("../shared/agent-definition.ts").InternalAgentModelDefinition> | null>;
+export declare const SessionDynamicModelReferenceKey: ContextKey<Readonly<
+  import("../shared/agent-definition.ts").InternalAgentModelDefinition
+> | null>;
 /** Turn-scoped dynamic model selection (from `turn.started`). */
-export declare const TurnDynamicModelReferenceKey: ContextKey<Readonly<import("../shared/agent-definition.ts").InternalAgentModelDefinition> | null>;
+export declare const TurnDynamicModelReferenceKey: ContextKey<Readonly<
+  import("../shared/agent-definition.ts").InternalAgentModelDefinition
+> | null>;
 export interface CachedModelMetadata {
-    readonly contextWindowTokens: number;
-    readonly expiresAt: number;
-    readonly maxOutputTokens?: number;
-    readonly resolvedModelId: string;
+  readonly contextWindowTokens: number;
+  readonly expiresAt: number;
+  readonly maxOutputTokens?: number;
+  readonly resolvedModelId: string;
 }
 /** Successful runtime catalog selections cached in durable workflow state. */
-export declare const RuntimeModelMetadataCacheKey: ContextKey<Readonly<Record<string, CachedModelMetadata>>>;
+export declare const RuntimeModelMetadataCacheKey: ContextKey<
+  Readonly<Record<string, CachedModelMetadata>>
+>;
 export interface LiveDynamicModelSelection {
-    /** Live provider instance; absent for string selections, which resolve through the reference. */
-    readonly model?: LanguageModel;
-    readonly reference: RuntimeModelReference;
+  /** Live provider instance; absent for string selections, which resolve through the reference. */
+  readonly model?: LanguageModel;
+  readonly reference: RuntimeModelReference;
 }
 /** Virtual step-scoped dynamic model selection (from `step.started`); never serialized. */
 export declare const LiveStepDynamicModelSelectionKey: ContextKey<LiveDynamicModelSelection | null>;
 export interface DurableDynamicToolMetadata {
-    readonly name: string;
-    readonly description: string;
-    readonly inputSchema: JsonObject;
-    readonly outputSchema?: JsonObject;
-    readonly resolverSlug: string;
-    readonly entryKey: string;
-    readonly executeStepFnName?: string;
-    readonly approvalStepFnName?: string;
-    readonly approvalResponseStepFnName?: string;
-    readonly closureVars?: Record<string, unknown>;
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: JsonObject;
+  readonly outputSchema?: JsonObject;
+  readonly resolverSlug: string;
+  readonly entryKey: string;
+  readonly executeStepFnName?: string;
+  readonly approvalStepFnName?: string;
+  readonly approvalResponseStepFnName?: string;
+  readonly closureVars?: Record<string, unknown>;
 }
 /**
  * Session-scoped dynamic tool metadata (from `session.started`).
  * Persists for the session lifetime.
  */
-export declare const SessionDynamicToolMetadataKey: ContextKey<readonly DurableDynamicToolMetadata[]>;
+export declare const SessionDynamicToolMetadataKey: ContextKey<
+  readonly DurableDynamicToolMetadata[]
+>;
 /**
  * Runtime revision that last resolved session-scoped dynamic tools.
  * Used to refresh their durable metadata after a deploy or development rebuild.
@@ -130,46 +147,59 @@ export declare const TurnDynamicToolMetadataKey: ContextKey<readonly DurableDyna
  * Re-resolved every step — no cross-step persistence needed.
  */
 export declare const LiveStepToolsKey: ContextKey<HarnessToolDefinition[]>;
-export type DurableDynamicSubagentSelection = {
-    readonly agentConfig: DynamicSubagentAgentConfig;
-    readonly kind: "subagent";
-    readonly prepared: PreparedRuntimeDelegationTool;
-    readonly remoteAgent?: never;
-} | {
-    readonly agentConfig?: never;
-    readonly kind: "remote";
-    readonly prepared: PreparedRuntimeDelegationTool;
-    readonly remoteAgent: DynamicRemoteAgentConfig;
-} | null;
-export declare const SessionDynamicSubagentSelectionsKey: ContextKey<Readonly<Record<string, DurableDynamicSubagentSelection>>>;
-export declare const TurnDynamicSubagentSelectionsKey: ContextKey<Readonly<Record<string, DurableDynamicSubagentSelection>>>;
+export type DurableDynamicSubagentSelection =
+  | {
+      readonly agentConfig: DynamicSubagentAgentConfig;
+      readonly kind: "subagent";
+      readonly prepared: PreparedRuntimeDelegationTool;
+      readonly remoteAgent?: never;
+    }
+  | {
+      readonly agentConfig?: never;
+      readonly kind: "remote";
+      readonly prepared: PreparedRuntimeDelegationTool;
+      readonly remoteAgent: DynamicRemoteAgentConfig;
+    }
+  | null;
+export declare const SessionDynamicSubagentSelectionsKey: ContextKey<
+  Readonly<Record<string, DurableDynamicSubagentSelection>>
+>;
+export declare const TurnDynamicSubagentSelectionsKey: ContextKey<
+  Readonly<Record<string, DurableDynamicSubagentSelection>>
+>;
 export declare const SessionDynamicSubagentRuntimeRevisionKey: ContextKey<string>;
 export declare const DynamicSubagentAgentConfigKey: ContextKey<DynamicSubagentAgentConfig>;
 /**
  * Durable metadata for one session-scoped dynamic skill.
  */
 export interface DurableDynamicSkillMetadata {
-    readonly name: string;
-    readonly description: string;
+  readonly name: string;
+  readonly description: string;
 }
 /**
  * Durable map from resolver slug to the qualified skills it last produced.
  * Used to diff on re-resolution, clean up removed skills from the sandbox,
  * and rebuild the model-visible announcement across turns.
  */
-export declare const DynamicSkillManifestKey: ContextKey<Record<string, readonly DurableDynamicSkillMetadata[]>>;
+export declare const DynamicSkillManifestKey: ContextKey<
+  Record<string, readonly DurableDynamicSkillMetadata[]>
+>;
 /** Compiled runtime revision that produced the current session dynamic skills. */
 export declare const SessionDynamicSkillRuntimeRevisionKey: ContextKey<string>;
 /**
  * Durable session-scoped instruction messages (from `session.started`
  * resolvers). Keyed by resolver slug. Persists for the session lifetime.
  */
-export declare const SessionDynamicInstructionsKey: ContextKey<Record<string, readonly SystemModelMessage[]>>;
+export declare const SessionDynamicInstructionsKey: ContextKey<
+  Record<string, readonly SystemModelMessage[]>
+>;
 /**
  * Durable turn-scoped instruction messages (from `turn.started`
  * resolvers). Keyed by resolver slug. Replaced each turn.
  */
-export declare const TurnDynamicInstructionsKey: ContextKey<Record<string, readonly SystemModelMessage[]>>;
+export declare const TurnDynamicInstructionsKey: ContextKey<
+  Record<string, readonly SystemModelMessage[]>
+>;
 /** Existing history exposed only to instructions resolvers during a preamble. */
 export declare const DynamicInstructionResolveMessagesKey: ContextKey<readonly ModelMessage[]>;
 /** User-role results waiting to be committed immediately after a preamble. */

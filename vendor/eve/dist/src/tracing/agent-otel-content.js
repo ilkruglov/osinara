@@ -18,10 +18,7 @@ function messagesContentAttribute(e) {
     r = stringifyContent(t);
   if (r !== void 0 && r.length <= 32768) return r;
   for (let e = 1; e < t.length; e += 1) {
-    let r = stringifyContent([
-      { [TRUNCATED_MESSAGES_KEY]: { omittedMessages: e } },
-      ...t.slice(e),
-    ]);
+    let r = stringifyContent([{ [TRUNCATED_MESSAGES_KEY]: { omittedMessages: e } }, ...t.slice(e)]);
     if (r !== void 0 && r.length <= 32768) return r;
   }
   return truncateSingleMessage(t);
@@ -29,8 +26,7 @@ function messagesContentAttribute(e) {
 function genAiInputMessagesAttribute(e) {
   if (!Array.isArray(e)) return;
   let t = e.flatMap((e) => {
-    if (!isRecord(e) || e.role === `system` || typeof e.role != `string`)
-      return [];
+    if (!isRecord(e) || e.role === `system` || typeof e.role != `string`) return [];
     let t = semanticParts(e.content);
     return t.length === 0 ? [] : [{ parts: t, role: e.role }];
   });
@@ -42,9 +38,7 @@ function genAiInputMessagesAttribute(e) {
 }
 function genAiSystemInstructionsAttribute(e) {
   let t = systemPromptAttribute(e);
-  return t === void 0
-    ? void 0
-    : semanticJsonAttribute([{ content: t, type: `text` }]);
+  return t === void 0 ? void 0 : semanticJsonAttribute([{ content: t, type: `text` }]);
 }
 function genAiOutputMessagesAttribute(e, t) {
   let n = semanticParts(e);
@@ -60,11 +54,7 @@ function toolResultsContentAttribute(t) {
   if (t.length === 0) return;
   let n = stringifyContent(t);
   if (n !== void 0 && n.length <= 32768) return n;
-  for (
-    let n = CONTENT_ATTRIBUTE_LIMIT;
-    n >= 0;
-    n = n >= 256 ? Math.floor(n / 2) : -1
-  ) {
+  for (let n = CONTENT_ATTRIBUTE_LIMIT; n >= 0; n = n >= 256 ? Math.floor(n / 2) : -1) {
     let e = stringifyContent(t.map((e) => cappedToolResult(e, n)));
     if (e !== void 0 && e.length <= 32768) return e;
   }
@@ -89,10 +79,7 @@ function systemPromptAttribute(e) {
       if (typeof e.content == `string`) n.push(e.content);
       else if (Array.isArray(e.content))
         for (let t of e.content)
-          isRecord(t) &&
-            t.type === `text` &&
-            typeof t.text == `string` &&
-            n.push(t.text);
+          isRecord(t) && t.type === `text` && typeof t.text == `string` && n.push(t.text);
     }
   let r = n
     .join(
@@ -105,9 +92,7 @@ function systemPromptAttribute(e) {
 }
 function textContentAttribute(t) {
   if (t.length !== 0)
-    return t.length <= 32768
-      ? t
-      : `${t.slice(0, CONTENT_ATTRIBUTE_LIMIT)}… [truncated]`;
+    return t.length <= 32768 ? t : `${t.slice(0, CONTENT_ATTRIBUTE_LIMIT)}… [truncated]`;
 }
 function stripContentNoise(e, n) {
   if (n > 32 || typeof e != `object` || !e) return e;

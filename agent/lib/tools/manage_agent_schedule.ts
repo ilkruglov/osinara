@@ -20,7 +20,10 @@ import {
 } from "../agent-schedules/agent-schedule-config.js";
 import { requireAgentScheduleAuthorization } from "../agent-schedules/agent-schedule-context.js";
 import { agentScheduleRepository } from "../agent-schedules/agent-schedule-repository.js";
-import { AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, type AgentScheduleSimpleRecurrenceKind } from "../agent-schedules/agent-schedule-record.js";
+import {
+  AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS,
+  type AgentScheduleSimpleRecurrenceKind,
+} from "../agent-schedules/agent-schedule-record.js";
 import { agentScheduleRecurrenceSchema } from "../agent-schedules/agent-schedule-recurrence-schema.js";
 import type { AgentScheduleInputRecurrence } from "../agent-schedules/agent-schedule-validation.js";
 import { AppError } from "../app-error.js";
@@ -48,18 +51,20 @@ const TOP_LEVEL_FIELDS = [
   "userRequest",
 ] as const;
 
-const manageAgentScheduleSchema = z.object({
-  action: z.enum(TOOL_ACTIONS),
-  firstRunAt: z.string().optional(),
-  id: z.string().optional(),
-  nextRunAt: z.string().optional(),
-  recurrence: agentScheduleRecurrenceSchema.optional(),
-  scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
-  scope: z.enum(SCOPES).optional(),
-  timezone: z.string().max(AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH).optional(),
-  title: z.string().max(AGENT_SCHEDULE_TITLE_MAX_LENGTH).optional(),
-  userRequest: z.string().max(AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH).optional(),
-}).strict();
+const manageAgentScheduleSchema = z
+  .object({
+    action: z.enum(TOOL_ACTIONS),
+    firstRunAt: z.string().optional(),
+    id: z.string().optional(),
+    nextRunAt: z.string().optional(),
+    recurrence: agentScheduleRecurrenceSchema.optional(),
+    scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
+    scope: z.enum(SCOPES).optional(),
+    timezone: z.string().max(AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH).optional(),
+    title: z.string().max(AGENT_SCHEDULE_TITLE_MAX_LENGTH).optional(),
+    userRequest: z.string().max(AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH).optional(),
+  })
+  .strict();
 
 function inputError(message: string): never {
   throw new AppError("AGENT_SCHEDULE_INPUT_INVALID", message);
@@ -118,13 +123,11 @@ function requireAction(input: Record<string, unknown>): ToolAction {
 }
 
 function requiredUuid(input: Record<string, unknown>): string {
-  const id = requiredString(
-    input,
-    "id",
-    "00000000-0000-4000-8000-000000000001",
-  );
+  const id = requiredString(input, "id", "00000000-0000-4000-8000-000000000001");
   if (!UUID_PATTERN.test(id)) {
-    inputError("Поле id должно быть UUID существующего агентного расписания из list_agent_schedules");
+    inputError(
+      "Поле id должно быть UUID существующего агентного расписания из list_agent_schedules",
+    );
   }
   return id;
 }
@@ -132,7 +135,9 @@ function requiredUuid(input: Record<string, unknown>): string {
 function requiredDate(input: Record<string, unknown>, key: string): Date {
   const value = requiredString(input, key, "2026-07-15T23:33:00+03:00");
   if (!ISO_OFFSET_PATTERN.test(value)) {
-    inputError(`Поле ${key} должно быть ISO datetime с UTC offset, например 2026-07-15T23:33:00+03:00`);
+    inputError(
+      `Поле ${key} должно быть ISO datetime с UTC offset, например 2026-07-15T23:33:00+03:00`,
+    );
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -158,8 +163,8 @@ function recurrenceObject(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     inputError(
       "Поле recurrence должно быть объектом. Примеры: " +
-        "{\"kind\":\"once\"}, {\"kind\":\"daily\",\"interval\":1}, " +
-        "{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]}",
+        '{"kind":"once"}, {"kind":"daily","interval":1}, ' +
+        '{"kind":"weekly","interval":1,"daysOfWeek":[1,2,3,4,5]}',
     );
   }
   const recurrence = raw as Record<string, unknown>;
@@ -177,7 +182,7 @@ function requiredInterval(raw: unknown, example: string): number {
     inputError(
       `Для ${example} recurrence передайте recurrence: ` +
         (example === "weekly"
-          ? "{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]}"
+          ? '{"kind":"weekly","interval":1,"daysOfWeek":[1,2,3,4,5]}'
           : JSON.stringify({ kind: example, interval: 1 })),
     );
   }
@@ -206,15 +211,20 @@ function requiredRecurrence(raw: unknown): AgentScheduleInputRecurrence {
   }
   if (kind === "once") {
     if (recurrence.interval !== undefined || recurrence.daysOfWeek !== undefined) {
-      inputError("Для once recurrence передайте только recurrence: {\"kind\":\"once\"}");
+      inputError('Для once recurrence передайте только recurrence: {"kind":"once"}');
     }
     return { kind: "once" };
   }
   if (kind !== "weekly") {
     if (recurrence.daysOfWeek !== undefined) {
-      inputError(`Для ${kind} recurrence не передавайте daysOfWeek; используйте recurrence: ${JSON.stringify({ kind, interval: 1 })}`);
+      inputError(
+        `Для ${kind} recurrence не передавайте daysOfWeek; используйте recurrence: ${JSON.stringify({ kind, interval: 1 })}`,
+      );
     }
-    return { interval: requiredInterval(recurrence.interval, kind), kind: kind as AgentScheduleSimpleRecurrenceKind };
+    return {
+      interval: requiredInterval(recurrence.interval, kind),
+      kind: kind as AgentScheduleSimpleRecurrenceKind,
+    };
   }
   return {
     daysOfWeek: requiredDaysOfWeek(recurrence.daysOfWeek),
@@ -228,16 +238,20 @@ function optionalRecurrence(raw: unknown): AgentScheduleInputRecurrence | undefi
 }
 
 function requireCreateInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, [
-    "action",
-    "firstRunAt",
-    "recurrence",
-    "scenarioPrompt",
-    "scope",
-    "timezone",
-    "title",
-    "userRequest",
-  ], "action=create");
+  requireOnlyFields(
+    input,
+    [
+      "action",
+      "firstRunAt",
+      "recurrence",
+      "scenarioPrompt",
+      "scope",
+      "timezone",
+      "title",
+      "userRequest",
+    ],
+    "action=create",
+  );
   return {
     firstRunAt: requiredDate(input, "firstRunAt"),
     recurrence: requiredRecurrence(input.recurrence),
@@ -270,19 +284,23 @@ function requireCreateInput(input: Record<string, unknown>) {
 }
 
 function requireUpdateInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, [
-    "action",
-    // A model may materialize these known create-only siblings from the shared root schema.
-    "firstRunAt",
-    "id",
-    "nextRunAt",
-    "recurrence",
-    "scenarioPrompt",
-    "scope",
-    "timezone",
-    "title",
-    "userRequest",
-  ], "action=update");
+  requireOnlyFields(
+    input,
+    [
+      "action",
+      // A model may materialize these known create-only siblings from the shared root schema.
+      "firstRunAt",
+      "id",
+      "nextRunAt",
+      "recurrence",
+      "scenarioPrompt",
+      "scope",
+      "timezone",
+      "title",
+      "userRequest",
+    ],
+    "action=update",
+  );
   const nextRunAt = optionalDate(input, "nextRunAt");
   const recurrence = optionalRecurrence(input.recurrence);
   const scenarioPrompt = optionalString(
@@ -310,7 +328,9 @@ function requireUpdateInput(input: Record<string, unknown>) {
     title === undefined &&
     userRequest === undefined
   ) {
-    inputError("Для action=update передайте хотя бы одно поле изменения: nextRunAt, recurrence, scenarioPrompt, title или userRequest");
+    inputError(
+      "Для action=update передайте хотя бы одно поле изменения: nextRunAt, recurrence, scenarioPrompt, title или userRequest",
+    );
   }
   return { id: requiredUuid(input), nextRunAt, recurrence, scenarioPrompt, title, userRequest };
 }
@@ -336,10 +356,10 @@ function requireManageAgentScheduleInput(input: unknown) {
 
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить, запустить сейчас или удалить агентное расписание. Это не напоминание: schedule запускает агента по сценарию и присылает итог. Существующее расписание сначала найди через list_agent_schedules; любое изменение делай через update с тем же id, не пересоздавай.",
-  "Create: {\"action\":\"create\",\"title\":\"Дайджест: новые модели ИИ\",\"firstRunAt\":\"2026-07-15T23:33:00+03:00\",\"timezone\":\"Europe/Moscow\",\"recurrence\":{\"kind\":\"daily\",\"interval\":1},\"scope\":\"personal\",\"scenarioPrompt\":\"Что собрать, источники, фильтры, формат итога и когда не присылать пустой отчёт\",\"userRequest\":\"ежедневно в 23:33 МСК получать сводку\"}.",
-  "Update: {\"action\":\"update\",\"id\":\"<id из list_agent_schedules>\",\"nextRunAt\":\"2026-07-16T23:33:00+03:00\",\"recurrence\":{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]},\"title\":\"...\",\"scenarioPrompt\":\"...\",\"userRequest\":\"...\"} только с реально изменяемыми полями; firstRunAt, timezone и scope в update не передавай. Pause, resume, run_now и delete: {\"action\":\"pause\",\"id\":\"<id>\"} без других полей.",
+  'Create: {"action":"create","title":"Дайджест: новые модели ИИ","firstRunAt":"2026-07-15T23:33:00+03:00","timezone":"Europe/Moscow","recurrence":{"kind":"daily","interval":1},"scope":"personal","scenarioPrompt":"Что собрать, источники, фильтры, формат итога и когда не присылать пустой отчёт","userRequest":"ежедневно в 23:33 МСК получать сводку"}.',
+  'Update: {"action":"update","id":"<id из list_agent_schedules>","nextRunAt":"2026-07-16T23:33:00+03:00","recurrence":{"kind":"weekly","interval":1,"daysOfWeek":[1,2,3,4,5]},"title":"...","scenarioPrompt":"...","userRequest":"..."} только с реально изменяемыми полями; firstRunAt, timezone и scope в update не передавай. Pause, resume, run_now и delete: {"action":"pause","id":"<id>"} без других полей.',
   "Запуск по расписанию идёт без человека рядом: в нём нет manage_skill, remember и manage_behavior_preference, и действия, требующие подтверждения кнопкой, в нём не завершатся. Испытания и публикацию навыков, запоминание и смену стиля в расписание не ставь, делай их в разговоре.",
-  "Recurrence: {\"kind\":\"once\"}; повтор {\"kind\":\"hourly\",\"interval\":1}, где kind это minutely, hourly, daily, monthly или yearly, interval целое от 1 до 365, минимум одна минута; для недель {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник. Минуты и часы отсчитываются от первого запуска как длительность, дни, недели, месяцы и годы сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной. Проверка минутная, пропущенные периоды не догоняются, один сценарий сам с собой параллельно не запускается. firstRunAt и nextRunAt в ISO с UTC offset, timezone IANA. scope: personal в личном чате, family в зарегистрированной семейной группе.",
+  'Recurrence: {"kind":"once"}; повтор {"kind":"hourly","interval":1}, где kind это minutely, hourly, daily, monthly или yearly, interval целое от 1 до 365, минимум одна минута; для недель {"kind":"weekly","interval":1,"daysOfWeek":[1,2,3,4,5]} где ISO 1=понедельник. Минуты и часы отсчитываются от первого запуска как длительность, дни, недели, месяцы и годы сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной. Проверка минутная, пропущенные периоды не догоняются, один сценарий сам с собой параллельно не запускается. firstRunAt и nextRunAt в ISO с UTC offset, timezone IANA. scope: personal в личном чате, family в зарегистрированной семейной группе.',
 ].join(" ");
 
 export default defineTool({

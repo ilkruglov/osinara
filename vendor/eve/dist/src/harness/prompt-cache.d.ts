@@ -2,13 +2,16 @@ import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "a
 /**
  * The caching strategy to apply for one harness step.
  */
-export type PromptCachePath = {
-    readonly kind: "gateway-auto";
-} | {
-    readonly kind: "anthropic-direct";
-} | {
-    readonly kind: "none";
-};
+export type PromptCachePath =
+  | {
+      readonly kind: "gateway-auto";
+    }
+  | {
+      readonly kind: "anthropic-direct";
+    }
+  | {
+      readonly kind: "none";
+    };
 /**
  * Cache marker injected on the Anthropic-direct path.
  *
@@ -25,16 +28,16 @@ export type PromptCachePath = {
  * every Anthropic-direct request regardless of which provider serves it.
  */
 export interface AnthropicCacheMarker {
-    readonly anthropic: {
-        readonly cacheControl: {
-            readonly type: "ephemeral";
-        };
+  readonly anthropic: {
+    readonly cacheControl: {
+      readonly type: "ephemeral";
     };
-    readonly bedrock: {
-        readonly cachePoint: {
-            readonly type: "default";
-        };
+  };
+  readonly bedrock: {
+    readonly cachePoint: {
+      readonly type: "default";
     };
+  };
 }
 /**
  * Detects which prompt caching path applies to a resolved model.
@@ -57,7 +60,9 @@ export declare function getAnthropicCacheMarker(): AnthropicCacheMarker;
  * opt out by setting `providerOptions.gateway.caching` to `false` or
  * another value.
  */
-export declare function mergeGatewayAutoCaching(base: Readonly<Record<string, unknown>> | undefined): Record<string, unknown>;
+export declare function mergeGatewayAutoCaching(
+  base: Readonly<Record<string, unknown>> | undefined,
+): Record<string, unknown>;
 /**
  * Returns a new ToolSet where the last tool entry carries the Anthropic
  * cache marker on `providerOptions`. Used on the `anthropic-direct` path
@@ -67,7 +72,10 @@ export declare function mergeGatewayAutoCaching(base: Readonly<Record<string, un
  * No-op when `tools` has no entries. Preserves existing `providerOptions`
  * on tools (merges the cache marker in via spread).
  */
-export declare function applyLastToolCacheBreakpoint(tools: ToolSet, marker: AnthropicCacheMarker): ToolSet;
+export declare function applyLastToolCacheBreakpoint(
+  tools: ToolSet,
+  marker: AnthropicCacheMarker,
+): ToolSet;
 /**
  * Marks the last system message in an instructions array with the Anthropic
  * cache marker. This creates a cache breakpoint at the end of the system
@@ -77,7 +85,10 @@ export declare function applyLastToolCacheBreakpoint(tools: ToolSet, marker: Ant
  * single-string system prompts don't support per-message providerOptions.
  * No-op when the array is empty.
  */
-export declare function applySystemCacheBreakpoint(instructions: readonly SystemModelMessage[], marker: AnthropicCacheMarker): SystemModelMessage[];
+export declare function applySystemCacheBreakpoint(
+  instructions: readonly SystemModelMessage[],
+  marker: AnthropicCacheMarker,
+): SystemModelMessage[];
 /**
  * Attaches the Anthropic cache marker to the last message in `messages`
  * (whatever its role) and, as a stable mid-history anchor, to the most
@@ -100,4 +111,7 @@ export declare function applySystemCacheBreakpoint(instructions: readonly System
  * appends more content blocks than Anthropic's backward boundary scan
  * covers.
  */
-export declare function applyConversationCacheControl(messages: readonly ModelMessage[], marker: AnthropicCacheMarker): ModelMessage[];
+export declare function applyConversationCacheControl(
+  messages: readonly ModelMessage[],
+  marker: AnthropicCacheMarker,
+): ModelMessage[];

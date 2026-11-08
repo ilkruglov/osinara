@@ -29,12 +29,10 @@ function createOrderedStreamEmitter(t, n = {}) {
     },
     pump = async () => {
       if (!(f || d)) {
-        for (f = !0; i.length > 0; ) {
+        for (f = !0; i.length > 0;) {
           let e = i.shift();
           if (e === void 0) break;
-          ((c -= e.deltaCharacters),
-            (l -= e.sourceEvents),
-            settleCapacityWaiters());
+          ((c -= e.deltaCharacters), (l -= e.sourceEvents), settleCapacityWaiters());
           try {
             await t(materializeEvent(e), e.messages);
           } catch (e) {
@@ -72,9 +70,7 @@ function createOrderedStreamEmitter(t, n = {}) {
     },
     async emit(t, n) {
       if ((throwIfFailed(), s))
-        throw TypeError(
-          `Cannot emit after the ordered stream emitter has closed.`,
-        );
+        throw TypeError(`Cannot emit after the ordered stream emitter has closed.`);
       let a = i.length - 1,
         o = i[a],
         u = appendDelta(t);
@@ -89,8 +85,7 @@ function createOrderedStreamEmitter(t, n = {}) {
         (c += u?.length ?? 0),
         (l += 1),
         pump(),
-        (l >= r || c >= MAX_PENDING_DELTA_CHARACTERS) &&
-          (await waitForCapacity()),
+        (l >= r || c >= MAX_PENDING_DELTA_CHARACTERS) && (await waitForCapacity()),
         throwIfFailed());
     },
     failureSignal: p.signal,

@@ -1,12 +1,6 @@
 import { messageToUserContent } from "#public/channels/chat-sdk/index.js";
 function photonInboundContent(e) {
   let t = messageToUserContent(e);
-  return typeof t == `string`
-    ? t.trim().length > 0
-      ? t
-      : void 0
-    : t.length > 0
-      ? t
-      : void 0;
+  return typeof t == `string` ? (t.trim().length > 0 ? t : void 0) : t.length > 0 ? t : void 0;
 }
 export { photonInboundContent };

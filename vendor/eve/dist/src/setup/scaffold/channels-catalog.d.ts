@@ -12,16 +12,16 @@
 import type { ChannelKind } from "./update/channels.js";
 /** A catalog channel the CLI can scaffold, paired with its picker presentation. */
 export interface ScaffoldableChannel {
-    /** Catalog slug. */
-    slug: string;
-    /** Internal scaffolder kind passed to `ensureChannel`. */
-    kind: ChannelKind;
-    /** Canonical item in the official eve registry. */
-    registryItem: `channel/${ChannelKind}`;
-    /** Picker label. */
-    label: string;
-    /** Optional picker hint. */
-    hint?: string;
+  /** Catalog slug. */
+  slug: string;
+  /** Internal scaffolder kind passed to `ensureChannel`. */
+  kind: ChannelKind;
+  /** Canonical item in the official eve registry. */
+  registryItem: `channel/${ChannelKind}`;
+  /** Picker label. */
+  label: string;
+  /** Optional picker hint. */
+  hint?: string;
 }
 /**
  * Channels the CLI can scaffold, in picker order. Derived from

@@ -13,7 +13,8 @@ import type { SessionContext } from "eve/context";
 import { AppError } from "../app-error.js";
 
 // Eve event contexts expose a channel-local Telegram address without the runtime namespace.
-const SCHEDULED_CONTINUATION_PATTERN = /^[^:]+:[^:]*:schedule:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+const SCHEDULED_CONTINUATION_PATTERN =
+  /^[^:]+:[^:]*:schedule:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
 export interface ScheduledDeliveryMetadata {
   applicationSessionId: string;
@@ -29,27 +30,35 @@ export interface ScheduledDeliveryMetadata {
   title: string;
 }
 
-function runIdFromAttributes(attributes: Readonly<Record<string, unknown>> | undefined): string | null {
+function runIdFromAttributes(
+  attributes: Readonly<Record<string, unknown>> | undefined,
+): string | null {
   const runId = attributes?.scheduledRunId;
   return typeof runId === "string" && runId ? runId : null;
 }
 
-function scheduledRunId(ctx: { session: { auth: SessionContext["session"]["auth"] } }): string | null {
-  return runIdFromAttributes(ctx.session.auth.current?.attributes) ??
-    runIdFromAttributes(ctx.session.auth.initiator?.attributes);
+function scheduledRunId(ctx: {
+  session: { auth: SessionContext["session"]["auth"] };
+}): string | null {
+  return (
+    runIdFromAttributes(ctx.session.auth.current?.attributes) ??
+    runIdFromAttributes(ctx.session.auth.initiator?.attributes)
+  );
 }
 
 export function scheduledRunIdFromContinuationToken(token: string): string | null {
   return SCHEDULED_CONTINUATION_PATTERN.exec(token)?.[1] ?? null;
 }
 
-export function isScheduledSession(ctx: { session: { auth: SessionContext["session"]["auth"] } }): boolean {
+export function isScheduledSession(ctx: {
+  session: { auth: SessionContext["session"]["auth"] };
+}): boolean {
   return scheduledRunId(ctx) !== null;
 }
 
-export function scheduledDeliveryMetadata(
-  ctx: { session: { auth: SessionContext["session"]["auth"] } },
-): ScheduledDeliveryMetadata | null {
+export function scheduledDeliveryMetadata(ctx: {
+  session: { auth: SessionContext["session"]["auth"] };
+}): ScheduledDeliveryMetadata | null {
   const current = ctx.session.auth.current;
   const initiator = ctx.session.auth.initiator;
   let scheduledAuth = runIdFromAttributes(current?.attributes) ? current : null;
@@ -94,13 +103,13 @@ export function scheduledDeliveryMetadata(
   return {
     applicationSessionId,
     familyId,
-    forumTopicId: typeof attributes?.telegramForumTopicId === "string"
-      ? attributes.telegramForumTopicId
-      : null,
+    forumTopicId:
+      typeof attributes?.telegramForumTopicId === "string" ? attributes.telegramForumTopicId : null,
     groupId,
-    messageThreadId: typeof attributes?.telegramMessageThreadId === "string"
-      ? attributes.telegramMessageThreadId
-      : null,
+    messageThreadId:
+      typeof attributes?.telegramMessageThreadId === "string"
+        ? attributes.telegramMessageThreadId
+        : null,
     ownerUserId: personal ? principalId : null,
     runId,
     scheduledFor,

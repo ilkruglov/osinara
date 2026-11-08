@@ -1,7 +1,4 @@
-import {
-  McpServer,
-  createMcpHandler,
-} from "#compiled/@modelcontextprotocol/server/index.js";
+import { McpServer, createMcpHandler } from "#compiled/@modelcontextprotocol/server/index.js";
 const MCP_PROTOCOL_VERSION = `2026-07-28`,
   MCP_LEGACY_PROTOCOL_VERSION = `2025-11-25`;
 function defineMcpTool(e) {
@@ -11,12 +8,8 @@ function defineMcpTool(e) {
       t.registerTool(
         e.definition.name,
         {
-          ...(e.definition.annotations === void 0
-            ? {}
-            : { annotations: e.definition.annotations }),
-          ...(e.definition.description === void 0
-            ? {}
-            : { description: e.definition.description }),
+          ...(e.definition.annotations === void 0 ? {} : { annotations: e.definition.annotations }),
+          ...(e.definition.description === void 0 ? {} : { description: e.definition.description }),
           inputSchema: e.definition.inputSchema,
           ...(e.definition.outputSchema === void 0
             ? {}
@@ -37,19 +30,12 @@ function createMcpStreamableHttpServer(e) {
     return a.response === void 0
       ? await createMcpHandler(() => createServer(e, n, i), {
           legacy: `stateless`,
-        }).fetch(
-          r,
-          a.parsedBody === void 0 ? void 0 : { parsedBody: a.parsedBody },
-        )
+        }).fetch(r, a.parsedBody === void 0 ? void 0 : { parsedBody: a.parsedBody })
       : a.response;
   };
 }
 async function preflightModernRequest(e) {
-  if (
-    e.method.toUpperCase() !== `POST` ||
-    e.headers.has(`mcp-protocol-version`)
-  )
-    return {};
+  if (e.method.toUpperCase() !== `POST` || e.headers.has(`mcp-protocol-version`)) return {};
   let t = await inspectRequestBody(e);
   if (t.tooLarge) return { response: requestBodyTooLargeResponse() };
   if (t.invalidJson) return { response: invalidJsonResponse() };
@@ -71,8 +57,7 @@ async function inspectRequestBody(e) {
     for (;;) {
       let e = await n.read();
       if (e.done) break;
-      if (((i += e.value.byteLength), i > 4194304))
-        return (await n.cancel(), { tooLarge: !0 });
+      if (((i += e.value.byteLength), i > 4194304)) return (await n.cancel(), { tooLarge: !0 });
       r.push(e.value);
     }
     let e = new Uint8Array(i),
@@ -122,10 +107,9 @@ async function probeEarlierValidationFailure(r, i) {
       headers: a,
       method: r.method,
     }),
-    s = createMcpHandler(
-      () => new McpServer({ name: `eve-mcp-preflight`, version: `0` }),
-      { legacy: `reject` },
-    );
+    s = createMcpHandler(() => new McpServer({ name: `eve-mcp-preflight`, version: `0` }), {
+      legacy: `reject`,
+    });
   try {
     let e = await s.fetch(o, { parsedBody: i });
     if (e.status === 406 || e.status === 415) return e;

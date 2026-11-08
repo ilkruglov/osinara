@@ -30,8 +30,8 @@ export declare const ATTACHMENT_REF_WIRE_VERSION = "1";
  * fetching the bytes.
  */
 export interface AttachmentRef<TParams = unknown> {
-    readonly params: TParams;
-    readonly size?: number;
+  readonly params: TParams;
+  readonly size?: number;
 }
 /**
  * Encodes an {@link AttachmentRef} as a URL suitable for use as

@@ -30,7 +30,8 @@ export declare const EVE_SESSION_STREAM_ROUTE_PATTERN = "/eve/v1/session/:sessio
 /**
  * Parent-origin proxy route for one remotely executed child session stream.
  */
-export declare const EVE_SUBAGENT_STREAM_ROUTE_PATTERN = "/eve/v1/session/:parentSessionId/subagents/:callId/:childSessionId/stream";
+export declare const EVE_SUBAGENT_STREAM_ROUTE_PATTERN =
+  "/eve/v1/session/:parentSessionId/subagents/:callId/:childSessionId/stream";
 /**
  * Framework-owned route pattern for dispatching one authored schedule
  * exactly once from the dev server.
@@ -58,11 +59,14 @@ export declare const EVE_DEV_RUNTIME_ARTIFACTS_ROUTE_PATH = "/eve/v1/dev/runtime
  * Dev-only route that flushes queued runtime artifact rebuilds before
  * returning the current revision.
  */
-export declare const EVE_DEV_RUNTIME_ARTIFACTS_REBUILD_ROUTE_PATH = "/eve/v1/dev/runtime-artifacts/rebuild";
+export declare const EVE_DEV_RUNTIME_ARTIFACTS_REBUILD_ROUTE_PATH =
+  "/eve/v1/dev/runtime-artifacts/rebuild";
 /** Dev-only route that pauses authored-source rebuilding while a setup subprocess owns the terminal. */
-export declare const EVE_DEV_RUNTIME_ARTIFACTS_SUSPEND_ROUTE_PATH = "/eve/v1/dev/runtime-artifacts/suspend";
+export declare const EVE_DEV_RUNTIME_ARTIFACTS_SUSPEND_ROUTE_PATH =
+  "/eve/v1/dev/runtime-artifacts/suspend";
 /** Dev-only route that resumes authored-source rebuilding after setup subprocess completion. */
-export declare const EVE_DEV_RUNTIME_ARTIFACTS_RESUME_ROUTE_PATH = "/eve/v1/dev/runtime-artifacts/resume";
+export declare const EVE_DEV_RUNTIME_ARTIFACTS_RESUME_ROUTE_PATH =
+  "/eve/v1/dev/runtime-artifacts/resume";
 /**
  * Builds the dev-only schedule dispatch URL for one named authored
  * schedule. The path encodes the schedule id so reserved characters in
@@ -83,9 +87,11 @@ export declare function createEveDevDispatchSchedulePath(scheduleId: string): st
  * resume; anyone who has it can deliver the callback payload, which is
  * exactly what the IdP needs to do.
  */
-export declare const EVE_CONNECTION_CALLBACK_ROUTE_PATTERN = "/eve/v1/connections/:name/callback/:attemptId/:token";
+export declare const EVE_CONNECTION_CALLBACK_ROUTE_PATTERN =
+  "/eve/v1/connections/:name/callback/:attemptId/:token";
 /** Callback shape minted by deployments before authorization attempt IDs. */
-export declare const EVE_LEGACY_CONNECTION_CALLBACK_ROUTE_PATTERN = "/eve/v1/connections/:name/callback/:token";
+export declare const EVE_LEGACY_CONNECTION_CALLBACK_ROUTE_PATTERN =
+  "/eve/v1/connections/:name/callback/:token";
 /**
  * Stable framework-owned route pattern for terminal session callbacks.
  *
@@ -101,9 +107,9 @@ export declare function createEveSessionRoutePath(sessionId: string): string;
 export declare function createEveSessionCancelRoutePath(sessionId: string): string;
 /** Builds the parent-origin stream path for one remote child session. */
 export declare function createEveSubagentStreamRoutePath(input: {
-    readonly callId: string;
-    readonly childSessionId: string;
-    readonly parentSessionId: string;
+  readonly callId: string;
+  readonly childSessionId: string;
+  readonly parentSessionId: string;
 }): string;
 /** Builds the ID-addressed compact route for one session. */
 export declare function createEveSessionCompactRoutePath(sessionId: string): string;
@@ -123,7 +129,11 @@ export declare function createEveSessionStreamRoutePath(sessionId: string): stri
  * pattern and forwards the projected request payload into
  * `resumeHook(token, payload)`.
  */
-export declare function createEveConnectionCallbackRoutePath(name: string, attemptId: string, token: string): string;
+export declare function createEveConnectionCallbackRoutePath(
+  name: string,
+  attemptId: string,
+  token: string,
+): string;
 /**
  * Creates the stable framework-owned terminal callback route path.
  */

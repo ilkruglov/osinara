@@ -1,8 +1,5 @@
 import { z } from "#compiled/zod/index.js";
-import {
-  inputRequestSchema,
-  inputResponseSchema,
-} from "#runtime/input/types.js";
+import { inputRequestSchema, inputResponseSchema } from "#runtime/input/types.js";
 import { formatValidationError } from "#runtime/validation.js";
 import { jsonObjectSchema, jsonValueSchema } from "#shared/json-schemas.js";
 import { coalesceDeliverPayloads } from "#execution/deliver-payloads.js";
@@ -43,13 +40,7 @@ const providerOptionsSchema = z.record(z.string(), jsonObjectSchema),
     .strict(),
   userContentSchema = z.union([
     z.string(),
-    z.array(
-      z.discriminatedUnion(`type`, [
-        textPartSchema,
-        imagePartSchema,
-        filePartSchema,
-      ]),
-    ),
+    z.array(z.discriminatedUnion(`type`, [textPartSchema, imagePartSchema, filePartSchema])),
   ]),
   eventCoordinateSchema = z.number().int().nonnegative(),
   opaqueObjectSchema = z.custom(
@@ -115,18 +106,14 @@ const providerOptionsSchema = z.record(z.string(), jsonObjectSchema),
     z
       .object({
         ...taskViewBase,
-        lastOutput: z
-          .object({ data: jsonValueSchema, type: z.literal(`result`) })
-          .strict(),
+        lastOutput: z.object({ data: jsonValueSchema, type: z.literal(`result`) }).strict(),
         status: z.literal(`completed`),
       })
       .strict(),
     z
       .object({
         ...taskViewBase,
-        lastOutput: z
-          .object({ data: jsonValueSchema, type: z.literal(`error`) })
-          .strict(),
+        lastOutput: z.object({ data: jsonValueSchema, type: z.literal(`error`) }).strict(),
         status: z.literal(`failed`),
       })
       .strict(),
@@ -168,10 +155,7 @@ const providerOptionsSchema = z.record(z.string(), jsonObjectSchema),
     .loose(),
   authSchema = z
     .object({
-      attributes: z.record(
-        z.string(),
-        z.union([z.string(), z.array(z.string())]),
-      ),
+      attributes: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
       authenticator: z.string(),
       issuer: z.string().optional(),
       principalId: z.string(),
@@ -250,10 +234,7 @@ function encodeSessionCommandV1(e) {
         ? {
             auth: e.auth,
             caller: e.caller,
-            deliveryMetadata:
-              e.delivery === void 0
-                ? void 0
-                : [{ ...e.delivery, payloadIndex: 0 }],
+            deliveryMetadata: e.delivery === void 0 ? void 0 : [{ ...e.delivery, payloadIndex: 0 }],
             kind: `deliver`,
             payload: e.payload,
             payloads: [e.payload],

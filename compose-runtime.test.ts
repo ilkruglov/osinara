@@ -20,7 +20,6 @@ import { describe, expect, it } from "vitest";
 
 import { MEMORY_EMBEDDING_MODEL } from "./agent/lib/memory-config.js";
 
-
 interface PackageManifest {
   name: string;
 }
@@ -46,9 +45,7 @@ describe("Docker Compose runtime wiring", () => {
         compose.indexOf("\n  agent:\n"),
         compose.indexOf("\n  sandbox-runtime-image:\n"),
       );
-      expect(agent).toContain(
-        "      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}\n",
-      );
+      expect(agent).toContain("      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}\n");
       expect(agent).toContain("      GROQ_API_KEY: ${GROQ_API_KEY-}\n");
     }
     expect(localCompose).not.toContain("MODEL_UPSTREAM_API_KEY");
@@ -71,8 +68,11 @@ describe("Docker Compose runtime wiring", () => {
     for (const file of ["compose.yaml", "compose.production.yaml"]) {
       const compose = readFileSync(new URL(file, projectRoot), "utf8");
       const embedder = compose.slice(compose.indexOf("\n  memory-embedding:\n"));
-      const flag = (name: string) => Number(embedder.match(new RegExp(`- ${name}\\n\\s+- "(\\d+)"`, "u"))?.[1]);
-      expect(flag("--max-concurrent-requests"), file).toBeGreaterThanOrEqual(2 * flag("--max-client-batch-size"));
+      const flag = (name: string) =>
+        Number(embedder.match(new RegExp(`- ${name}\\n\\s+- "(\\d+)"`, "u"))?.[1]);
+      expect(flag("--max-concurrent-requests"), file).toBeGreaterThanOrEqual(
+        2 * flag("--max-client-batch-size"),
+      );
     }
   });
 
@@ -100,9 +100,16 @@ describe("Docker Compose runtime wiring", () => {
       for (const [name, value] of Object.entries(tunables)) {
         expect(compose, file).toContain(`      ${name}: \${${name}-${value}}\n`);
       }
-      const runner = compose.slice(compose.indexOf("\n  sandbox-runner:\n"), compose.indexOf("\n  sandbox-egress-proxy:\n"));
-      expect(runner, file).toContain("      SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}\n");
-      expect(runner, file).toContain("      SANDBOX_MAX_RUNNING_CONTAINERS: ${SANDBOX_MAX_RUNNING_CONTAINERS-1000}\n");
+      const runner = compose.slice(
+        compose.indexOf("\n  sandbox-runner:\n"),
+        compose.indexOf("\n  sandbox-egress-proxy:\n"),
+      );
+      expect(runner, file).toContain(
+        "      SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}\n",
+      );
+      expect(runner, file).toContain(
+        "      SANDBOX_MAX_RUNNING_CONTAINERS: ${SANDBOX_MAX_RUNNING_CONTAINERS-1000}\n",
+      );
     }
   });
 
@@ -123,7 +130,9 @@ describe("Docker Compose runtime wiring", () => {
 
   it("gives the agent no reranker to call", () => {
     for (const file of ["compose.yaml", "compose.test.yaml", "compose.production.yaml"]) {
-      expect(readFileSync(new URL(file, projectRoot), "utf8"), file).not.toContain("MEMORY_RERANKER_BASE_URL");
+      expect(readFileSync(new URL(file, projectRoot), "utf8"), file).not.toContain(
+        "MEMORY_RERANKER_BASE_URL",
+      );
     }
   });
 
@@ -146,13 +155,18 @@ describe("Docker Compose runtime wiring", () => {
     const production = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
     const dockerfile = readFileSync(new URL("Dockerfile", projectRoot), "utf8");
 
-    expect(dockerfile).toContain("hf download sergeyzh/BERTA --revision 914c8c8aed14042ed890fc2c662d5e9e66b2faa7");
+    expect(dockerfile).toContain(
+      "hf download sergeyzh/BERTA --revision 914c8c8aed14042ed890fc2c662d5e9e66b2faa7",
+    );
     expect(local).toContain("      target: memory-embedding\n");
     expect(production).toContain("    image: ${OSINARA_MEMORY_EMBEDDING_IMAGE:?");
-    for (const [file, compose] of [["compose.yaml", local], ["compose.production.yaml", production]] as const) {
+    for (const [file, compose] of [
+      ["compose.yaml", local],
+      ["compose.production.yaml", production],
+    ] as const) {
       expect(compose, file).not.toContain("--model-id");
       expect(compose, file).not.toContain("sergeyzh/BERTA");
-      expect(compose, file).toContain("      - --max-batch-requests\n      - \"8\"\n");
+      expect(compose, file).toContain('      - --max-batch-requests\n      - "8"\n');
       expect(compose, file).toContain("    mem_limit: 1536m\n");
       expect(compose, file).toContain("      - --auto-truncate=false\n");
     }
@@ -234,22 +248,17 @@ describe("Docker Compose runtime wiring", () => {
 
     // An explicit target prevents a later Dockerfile stage, such as Nginx edge, from silently
     // replacing the Node runtime when stages are reordered or appended.
-    for (const serviceName of [
-      "agent", "memory-embedding-worker", "telegram-ingress-worker",
-    ]) {
+    for (const serviceName of ["agent", "memory-embedding-worker", "telegram-ingress-worker"]) {
       const serviceStart = compose.indexOf(`\n  ${serviceName}:\n`);
       const nextServiceOffset = compose.slice(serviceStart + 1).search(/\n  \S/);
-      const serviceEnd = nextServiceOffset === -1
-        ? undefined
-        : serviceStart + nextServiceOffset + 1;
+      const serviceEnd =
+        nextServiceOffset === -1 ? undefined : serviceStart + nextServiceOffset + 1;
       const service = compose.slice(serviceStart, serviceEnd);
 
       expect(service, serviceName).toContain("      target: runtime\n");
       const workerEntrypoint = workerEntrypoints.get(serviceName);
       if (workerEntrypoint) {
-        expect(service, serviceName).toContain(
-          `    entrypoint: ["node", "${workerEntrypoint}"]\n`,
-        );
+        expect(service, serviceName).toContain(`    entrypoint: ["node", "${workerEntrypoint}"]\n`);
       }
     }
   });

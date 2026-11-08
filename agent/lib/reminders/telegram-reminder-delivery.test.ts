@@ -10,7 +10,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ClaimedReminder } from "./reminder-dispatch-repository.js";
-import { deliverReachableTelegramReminder, deliverTelegramReminder } from "./telegram-reminder-delivery.js";
+import {
+  deliverReachableTelegramReminder,
+  deliverTelegramReminder,
+} from "./telegram-reminder-delivery.js";
 
 const reachability = vi.hoisted(() => ({ unreachableReason: vi.fn() }));
 vi.mock("../telegram-reachability/reachability-repository.js", () => ({
@@ -44,10 +47,15 @@ describe("deliverTelegramReminder", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      ok: true,
-      result: { chat: { id: -1001, type: "supergroup" }, message_id: 55 },
-    }), { status: 200 }));
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: { chat: { id: -1001, type: "supergroup" }, message_id: 55 },
+        }),
+        { status: 200 },
+      ),
+    );
 
     await expect(deliverTelegramReminder(delayedJob)).resolves.toEqual({
       messageId: "55",
@@ -69,32 +77,48 @@ describe("deliverTelegramReminder", () => {
     });
   });
 
-  it.each([
-    new Response("{}", { status: 503 }),
-    new DOMException("timed out", "TimeoutError"),
-  ])("propagates provider failure %s", async (failure) => {
-    vi.stubEnv("TELEGRAM_BOT_TOKEN", "telegram-bot-secret");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(() =>
-        failure instanceof Response ? Promise.resolve(failure) : Promise.reject(failure)
-      ),
-    );
+  it.each([new Response("{}", { status: 503 }), new DOMException("timed out", "TimeoutError")])(
+    "propagates provider failure %s",
+    async (failure) => {
+      vi.stubEnv("TELEGRAM_BOT_TOKEN", "telegram-bot-secret");
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockImplementation(() =>
+            failure instanceof Response ? Promise.resolve(failure) : Promise.reject(failure),
+          ),
+      );
 
-    await expect(deliverTelegramReminder(delayedJob)).rejects.toBeDefined();
-  });
+      await expect(deliverTelegramReminder(delayedJob)).rejects.toBeDefined();
+    },
+  );
 
   it("names a bot removed from the group with the stable unreachable code, without the reminder text in the log", async () => {
     vi.stubEnv("TELEGRAM_BOT_TOKEN", "telegram-bot-secret");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      description: "Forbidden: bot was kicked from the supergroup chat", error_code: 403, ok: false,
-    }), { status: 403 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            description: "Forbidden: bot was kicked from the supergroup chat",
+            error_code: 403,
+            ok: false,
+          }),
+          { status: 403 },
+        ),
+      ),
+    );
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await expect(deliverTelegramReminder(delayedJob)).rejects.toMatchObject({
-      chatId: "-1001", code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "kicked",
+      chatId: "-1001",
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+      reason: "kicked",
     });
-    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toMatchObject({ code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE" });
+    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toMatchObject({
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+    });
     expect(JSON.stringify(errors.mock.calls)).not.toContain("Собрать документы");
     errors.mockRestore();
   });
@@ -107,12 +131,16 @@ describe("deliverTelegramReminder", () => {
     reachability.unreachableReason.mockResolvedValueOnce("kicked");
 
     await expect(deliverReachableTelegramReminder(delayedJob)).rejects.toMatchObject({
-      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "kicked",
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+      reason: "kicked",
     });
     expect(reachability.unreachableReason).toHaveBeenCalledWith("-1001");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
-      chatId: "-1001", code: "AGENT_TELEGRAM_PROACTIVE_DELIVERY_SKIPPED", kind: "reminder", reason: "kicked",
+      chatId: "-1001",
+      code: "AGENT_TELEGRAM_PROACTIVE_DELIVERY_SKIPPED",
+      kind: "reminder",
+      reason: "kicked",
     });
     warn.mockRestore();
   });

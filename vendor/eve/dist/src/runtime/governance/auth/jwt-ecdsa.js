@@ -48,8 +48,6 @@ async function getImportedJwtPublicKey(e) {
 }
 async function importJwtPublicKey(n, r) {
   let i = n.trim();
-  return i.startsWith(`{`)
-    ? await importJWK(JSON.parse(i), r)
-    : await importSPKI(i, r);
+  return i.startsWith(`{`) ? await importJWK(JSON.parse(i), r) : await importSPKI(i, r);
 }
 export { authenticateJwtEcdsaStrategy };

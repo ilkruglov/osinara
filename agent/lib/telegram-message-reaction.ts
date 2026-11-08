@@ -29,14 +29,79 @@ const VARIATION_SELECTOR_PATTERN = /\uFE0F/gu;
  * the selector, so input is compared after stripping it.
  */
 export const TELEGRAM_REACTION_EMOJI: readonly string[] = [
-  "❤", "👍", "👎", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱",
-  "🤬", "😢", "🎉", "🤩", "🤮", "💩", "🙏", "👌", "🕊", "🤡",
-  "🥱", "🥴", "😍", "🐳", "❤‍🔥", "🌚", "🌭", "💯", "🤣", "⚡",
-  "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈",
-  "😴", "😭", "🤓", "👻", "👨‍💻", "👀", "🎃", "🙈", "😇", "😨",
-  "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿",
-  "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾", "🤷‍♂",
-  "🤷", "🤷‍♀", "😡",
+  "❤",
+  "👍",
+  "👎",
+  "🔥",
+  "🥰",
+  "👏",
+  "😁",
+  "🤔",
+  "🤯",
+  "😱",
+  "🤬",
+  "😢",
+  "🎉",
+  "🤩",
+  "🤮",
+  "💩",
+  "🙏",
+  "👌",
+  "🕊",
+  "🤡",
+  "🥱",
+  "🥴",
+  "😍",
+  "🐳",
+  "❤‍🔥",
+  "🌚",
+  "🌭",
+  "💯",
+  "🤣",
+  "⚡",
+  "🍌",
+  "🏆",
+  "💔",
+  "🤨",
+  "😐",
+  "🍓",
+  "🍾",
+  "💋",
+  "🖕",
+  "😈",
+  "😴",
+  "😭",
+  "🤓",
+  "👻",
+  "👨‍💻",
+  "👀",
+  "🎃",
+  "🙈",
+  "😇",
+  "😨",
+  "🤝",
+  "✍",
+  "🤗",
+  "🫡",
+  "🎅",
+  "🎄",
+  "☃",
+  "💅",
+  "🤪",
+  "🗿",
+  "🆒",
+  "💘",
+  "🙉",
+  "🦄",
+  "😘",
+  "💊",
+  "🙊",
+  "😎",
+  "👾",
+  "🤷‍♂",
+  "🤷",
+  "🤷‍♀",
+  "😡",
 ];
 
 const TELEGRAM_REACTION_EMOJI_SET = new Set(TELEGRAM_REACTION_EMOJI);
@@ -110,9 +175,13 @@ export function isTelegramMessageReactionEmoji(
   value: string,
 ): value is TelegramMessageReactionEmoji {
   const graphemes = Array.from(EMOJI_GRAPHEME_SEGMENTER.segment(value));
-  return graphemes.length === 1 && graphemes[0]?.segment === value &&
-    (EXTENDED_PICTOGRAPHIC_PATTERN.test(value) || KEYCAP_EMOJI_PATTERN.test(value) ||
-      REGIONAL_FLAG_PATTERN.test(value));
+  return (
+    graphemes.length === 1 &&
+    graphemes[0]?.segment === value &&
+    (EXTENDED_PICTOGRAPHIC_PATTERN.test(value) ||
+      KEYCAP_EMOJI_PATTERN.test(value) ||
+      REGIONAL_FLAG_PATTERN.test(value))
+  );
 }
 
 export async function setTelegramMessageReaction(
@@ -138,11 +207,13 @@ export async function setTelegramMessageReaction(
       reaction: [{ emoji: canonical, type: "emoji" }],
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      method: "setMessageReaction",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        method: "setMessageReaction",
+      }),
+    );
     if (error instanceof Error) {
       Object.defineProperty(error, "message", {
         configurable: true,
@@ -158,21 +229,25 @@ export async function setTelegramMessageReaction(
 
   // Disabled or restricted chat reactions are an expected presentation limitation, not turn failure.
   if (body?.ok === false && TELEGRAM_REACTION_DECLINED_STATUSES.has(response.status)) {
-    console.error(JSON.stringify({
-      code: "AGENT_TELEGRAM_REACTION_UNAVAILABLE",
-      emoji: canonical,
-      method: "setMessageReaction",
-      providerDescription: typeof body.description === "string" ? body.description : null,
-      providerStatus: response.status,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_REACTION_UNAVAILABLE",
+        emoji: canonical,
+        method: "setMessageReaction",
+        providerDescription: typeof body.description === "string" ? body.description : null,
+        providerStatus: response.status,
+      }),
+    );
     return "unavailable";
   }
 
-  console.error(JSON.stringify({
-    code: "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
-    method: "setMessageReaction",
-    providerStatus: response.status,
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
+      method: "setMessageReaction",
+      providerStatus: response.status,
+    }),
+  );
   throw new AppError(
     "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
     "Telegram не принял реакцию. Проверьте, разрешены ли реакции в этом чате",

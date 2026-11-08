@@ -11,11 +11,18 @@
  *   names applies to every call, the upload is tried once more after it (Telegram took nothing from
  *   the refused request), and a second 429 pauses the others as well and goes back to the caller.
  */
-import { telegramRetryAfterSeconds, telegramSendPacer, type TelegramSendPacer } from "eve/channels/telegram";
+import {
+  telegramRetryAfterSeconds,
+  telegramSendPacer,
+  type TelegramSendPacer,
+} from "eve/channels/telegram";
 
 async function requestedPause(response: Response): Promise<number | null> {
   if (response.status !== 429) return null;
-  const body: unknown = await response.clone().json().catch(() => null);
+  const body: unknown = await response
+    .clone()
+    .json()
+    .catch(() => null);
   return telegramRetryAfterSeconds(body);
 }
 
@@ -32,7 +39,11 @@ export async function postTelegramMultipart(input: {
   const url = `https://api.telegram.org/bot${input.token}/${input.method}`;
   const attempt = async (): Promise<Response> => {
     await pacer.acquire(input.method, { chat_id: input.chatId });
-    return await input.fetch(url, { body: input.form, method: "POST", signal: AbortSignal.timeout(input.timeoutMs) });
+    return await input.fetch(url, {
+      body: input.form,
+      method: "POST",
+      signal: AbortSignal.timeout(input.timeoutMs),
+    });
   };
   const first = await attempt();
   const pause = await requestedPause(first);

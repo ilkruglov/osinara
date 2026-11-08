@@ -8,9 +8,7 @@ var InMemoryAgentTraceStateStore = class {
   }
   deleteActions(e, t) {
     for (let [n, r] of this.#e)
-      r.sessionId === e &&
-        (t === void 0 || r.turnId === t) &&
-        this.#e.delete(n);
+      r.sessionId === e && (t === void 0 || r.turnId === t) && this.#e.delete(n);
   }
   deleteSession(e) {
     this.#t.delete(e);
@@ -19,9 +17,7 @@ var InMemoryAgentTraceStateStore = class {
     this.#n.delete(turnKey(e, t));
   }
   findAction(e, t) {
-    return [...this.#e.values()].find(
-      (n) => n.sessionId === e && n.callId === t,
-    );
+    return [...this.#e.values()].find((n) => n.sessionId === e && n.callId === t);
   }
   getAction(e) {
     return this.#e.get(e);

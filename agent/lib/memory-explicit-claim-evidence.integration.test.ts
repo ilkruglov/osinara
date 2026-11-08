@@ -11,9 +11,8 @@ import { closeDatabase, database } from "./database.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("explicit claim evidence", () => {
   beforeEach(async () => {
@@ -113,44 +112,50 @@ describeWithDatabase("explicit claim evidence", () => {
       source: "eve:test-explicit",
     });
 
-    await expect(database().query(
-      `SELECT item.subject_user_id, item.provenance_state::text, item.profile_eligible,
+    await expect(
+      database().query(
+        `SELECT item.subject_user_id, item.provenance_state::text, item.profile_eligible,
               evidence.evidence_kind, evidence.author_label_snapshot,
               evidence.timeline_entry_id, evidence.origin_conversation_id
        FROM memory_items AS item
        JOIN claim_evidence AS evidence ON evidence.claim_id = item.id
        WHERE item.id = $1`,
-      [memory.id],
-    )).resolves.toMatchObject({
-      rows: [{
-        author_label_snapshot: "Анна",
-        evidence_kind: "reported",
-        origin_conversation_id: conversation.rows[0]!.id,
-        profile_eligible: true,
-        provenance_state: "evidenced",
-        subject_user_id: subject.id,
-        timeline_entry_id: timeline.rows[0]!.id,
-      }],
+        [memory.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          author_label_snapshot: "Анна",
+          evidence_kind: "reported",
+          origin_conversation_id: conversation.rows[0]!.id,
+          profile_eligible: true,
+          provenance_state: "evidenced",
+          subject_user_id: subject.id,
+          timeline_entry_id: timeline.rows[0]!.id,
+        },
+      ],
     });
 
-    await expect(memoryRepository.create(auth, {
-      confirmation: "user_confirmed",
-      content: "Пётр предпочитает улун",
-      explicitSource: {
-        conversationId: conversation.rows[0]!.id,
-        subject: {
-          kind: "verified_ref",
-          subjectRef: subjectRef.rows[0]!.subject_ref,
+    await expect(
+      memoryRepository.create(auth, {
+        confirmation: "user_confirmed",
+        content: "Пётр предпочитает улун",
+        explicitSource: {
+          conversationId: conversation.rows[0]!.id,
+          subject: {
+            kind: "verified_ref",
+            subjectRef: subjectRef.rows[0]!.subject_ref,
+          },
+          timelineEntryId: timeline.rows[0]!.id,
         },
-        timelineEntryId: timeline.rows[0]!.id,
-      },
-      kind: "preference",
-      operationKey: "stale-view-reported-claim",
-      provenance: { sessionId: "explicit-session", turnId: "another-turn" },
-      scope: "family",
-      sensitivity: "normal",
-      source: "eve:test-explicit-stale",
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
+        kind: "preference",
+        operationKey: "stale-view-reported-claim",
+        provenance: { sessionId: "explicit-session", turnId: "another-turn" },
+        scope: "family",
+        sensitivity: "normal",
+        source: "eve:test-explicit-stale",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
 
     const otherViewer = await database().query<{ id: string }>(
       `INSERT INTO profile_views
@@ -166,24 +171,26 @@ describeWithDatabase("explicit claim evidence", () => {
        VALUES ($1, 0, $2, $3, 'Пётр', 'current_author', 0)`,
       [otherViewer.rows[0]!.id, subjectRef.rows[0]!.id, subjectRef.rows[0]!.subject_ref],
     );
-    await expect(memoryRepository.create(auth, {
-      confirmation: "user_confirmed",
-      content: "Пётр предпочитает улун",
-      explicitSource: {
-        conversationId: conversation.rows[0]!.id,
-        subject: {
-          kind: "verified_ref",
-          subjectRef: subjectRef.rows[0]!.subject_ref,
+    await expect(
+      memoryRepository.create(auth, {
+        confirmation: "user_confirmed",
+        content: "Пётр предпочитает улун",
+        explicitSource: {
+          conversationId: conversation.rows[0]!.id,
+          subject: {
+            kind: "verified_ref",
+            subjectRef: subjectRef.rows[0]!.subject_ref,
+          },
+          timelineEntryId: timeline.rows[0]!.id,
         },
-        timelineEntryId: timeline.rows[0]!.id,
-      },
-      kind: "preference",
-      operationKey: "other-viewer-reported-claim",
-      provenance: { sessionId: "other-viewer-session", turnId: "other-viewer-turn" },
-      scope: "family",
-      sensitivity: "normal",
-      source: "eve:test-explicit-other-viewer",
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
+        kind: "preference",
+        operationKey: "other-viewer-reported-claim",
+        provenance: { sessionId: "other-viewer-session", turnId: "other-viewer-turn" },
+        scope: "family",
+        sensitivity: "normal",
+        source: "eve:test-explicit-other-viewer",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
 
     const firstPersonSource = await database().query<{ id: string }>(
       `INSERT INTO telegram_group_messages
@@ -208,10 +215,11 @@ describeWithDatabase("explicit claim evidence", () => {
       sensitivity: "normal",
       source: "eve:test-current-author",
     });
-    await expect(database().query(
-      "SELECT subject_user_id, profile_eligible FROM memory_items WHERE id = $1",
-      [firstPerson.id],
-    )).resolves.toMatchObject({
+    await expect(
+      database().query("SELECT subject_user_id, profile_eligible FROM memory_items WHERE id = $1", [
+        firstPerson.id,
+      ]),
+    ).resolves.toMatchObject({
       rows: [{ profile_eligible: true, subject_user_id: author.id }],
     });
   });

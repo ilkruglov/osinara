@@ -7,10 +7,7 @@ import {
 } from "./agent-instructions.js";
 import { tryInitializeGit } from "./init-git.js";
 import { confirmInitInNonEmptyDirectory } from "./init-confirm.js";
-import {
-  cleanupFreshInitTarget,
-  workspaceFailureNote,
-} from "./init-recovery.js";
+import { cleanupFreshInitTarget, workspaceFailureNote } from "./init-recovery.js";
 import { selectInitHandoff, spawnCodingAgentRepl } from "./init-repl.js";
 import { resolveInitTarget } from "./init-target.js";
 import { mkdtemp, readdir, rename, rm } from "node:fs/promises";
@@ -32,10 +29,7 @@ import { EVE_WORDMARK } from "#cli/banner.js";
 import { formatElapsed } from "#cli/format-elapsed.js";
 import { startCliLiveRow } from "#cli/ui/live-row.js";
 import { formatNodeEngineOverrideWarning } from "#setup/node-engine.js";
-import {
-  detectInvokingPackageManager,
-  detectPackageManager,
-} from "#setup/package-manager.js";
+import { detectInvokingPackageManager, detectPackageManager } from "#setup/package-manager.js";
 import { pathExists } from "#setup/path-exists.js";
 import { DEFAULT_EVE_PACKAGE_CONTRACT } from "#setup/scaffold/create/project.js";
 import { addAgentToProject } from "#setup/scaffold/create/add-to-project.js";
@@ -115,9 +109,7 @@ async function addToExistingProject(e, t, n, r) {
 }
 async function resolveScaffoldPackageManager(e, t) {
   let n = await t.detectPackageManager(e);
-  return n.source === "default"
-    ? (t.detectInvokingPackageManager() ?? `pnpm`)
-    : n.kind;
+  return n.source === "default" ? (t.detectInvokingPackageManager() ?? `pnpm`) : n.kind;
 }
 async function scaffoldProject(e, t, n, r, i, a, o, s) {
   let c = resolve(e, `..`),
@@ -159,8 +151,7 @@ async function scaffoldProject(e, t, n, r, i, a, o, s) {
             d.push(e);
           },
         })),
-      u !== void 0 &&
-        (n || l ? await moveDirectoryContents(p, e) : await rename(p, e)),
+      u !== void 0 && (n || l ? await moveDirectoryContents(p, e) : await rename(p, e)),
       {
         projectPath: e,
         workspaceRootMutations: uniqueWorkspaceRootMutations(d),
@@ -195,13 +186,7 @@ function reportExistingProjectChanges(e, t) {
     );
 }
 async function runInitSteps(e) {
-  let {
-      dependencies: t,
-      logger: n,
-      options: r,
-      parentDirectory: i,
-      target: a,
-    } = e,
+  let { dependencies: t, logger: n, options: r, parentDirectory: i, target: a } = e,
     o = isLogLevelEnabled(`debug`),
     l = await t.isCodingAgentLaunch(),
     u = await resolveInitTarget({ parentDirectory: i, target: a }),
@@ -210,8 +195,7 @@ async function runInitSteps(e) {
   p.update(`Preparing project`);
   try {
     let e = u.kind === `fresh` ? `creating agent` : `adding agent`;
-    (p.update(u.kind === `fresh` ? `Creating agent` : `Adding agent`),
-      initLog.debug(e));
+    (p.update(u.kind === `fresh` ? `Creating agent` : `Adding agent`), initLog.debug(e));
     let i = t.now(),
       a;
     if (u.kind === `fresh`) {
@@ -231,11 +215,7 @@ async function runInitSteps(e) {
         );
       } catch (e) {
         if (u.failurePolicy === `clear`) {
-          let t = await cleanupFreshInitTarget(
-              u.projectPath,
-              u.failurePolicy,
-              u.preservedEntries,
-            ),
+          let t = await cleanupFreshInitTarget(u.projectPath, u.failurePolicy, u.preservedEntries),
             r = e instanceof Error ? e.message : String(e),
             i = t
               ? `eve restored "${u.projectPath}" to its original state.`
@@ -285,9 +265,7 @@ async function runInitSteps(e) {
     let d = t.now() - i;
     (initLog.debug(`${e} done`, { ms: d }),
       a.kind === `added` &&
-        (p.stop(),
-        reportExistingProjectChanges(n, a),
-        (p = startCliLiveRow(n))),
+        (p.stop(), reportExistingProjectChanges(n, a), (p = startCliLiveRow(n))),
       p.update(`Installing dependencies`, `${a.packageManager} install`),
       initLog.debug(`installing dependencies with ${a.packageManager}`));
     let m = t.now(),
@@ -317,11 +295,7 @@ async function runInitSteps(e) {
       }
       if (a.failurePolicy !== `preserve`) {
         if (
-          await cleanupFreshInitTarget(
-            a.projectPath,
-            a.failurePolicy,
-            a.preservedTargetEntries,
-          )
+          await cleanupFreshInitTarget(a.projectPath, a.failurePolicy, a.preservedTargetEntries)
         ) {
           let e =
               a.failurePolicy === `remove`
@@ -378,11 +352,7 @@ async function runInitCommand(e, t, a, o, s = defaultDependencies) {
       `${import_picocolors.default.green(`✓`)} Created an ${EVE_WORDMARK} agent in ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`,
     );
     for (let t of c.workspaceRootMutations)
-      e.log(
-        import_picocolors.default.yellow(
-          `⚠ ${formatWorkspaceRootMutationWarning(t)}`,
-        ),
-      );
+      e.log(import_picocolors.default.yellow(`⚠ ${formatWorkspaceRootMutationWarning(t)}`));
   } else
     e.log(
       `${import_picocolors.default.green(`✓`)} Added an ${EVE_WORDMARK} agent to ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`,
@@ -435,26 +405,16 @@ async function runInitCommand(e, t, a, o, s = defaultDependencies) {
         },
       })))
     )
-      throw Error(
-        `Coding-agent REPL exited unsuccessfully in "${c.projectPath}".`,
-      );
+      throw Error(`Coding-agent REPL exited unsuccessfully in "${c.projectPath}".`);
     return;
   }
   let p = c.kind === `created`,
     m = p ? [...l, `--input`, `/model`] : l;
   if (
-    (e.log(
-      import_picocolors.default.dim(
-        p ? `$ eve dev --input /model` : `$ eve dev`,
-      ),
-    ),
-    !resultSucceeded(
-      await s.spawnPackageManager(c.packageManager, c.projectPath, m),
-    ))
+    (e.log(import_picocolors.default.dim(p ? `$ eve dev --input /model` : `$ eve dev`)),
+    !resultSucceeded(await s.spawnPackageManager(c.packageManager, c.projectPath, m)))
   )
-    throw Error(
-      `Development server exited unsuccessfully in "${c.projectPath}".`,
-    );
+    throw Error(`Development server exited unsuccessfully in "${c.projectPath}".`);
 }
 function resolveInitEvePackageOverride() {
   let e = process.env[EVE_INIT_PACKAGE_SPEC_ENV]?.trim();

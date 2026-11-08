@@ -18,9 +18,8 @@ import { memoryTurnSourceRepository } from "../memory-turn-source-repository.js"
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 async function insertUserMessage(input: {
   conversationId: string;
@@ -28,17 +27,24 @@ async function insertUserMessage(input: {
   messageThreadId?: number;
   sequence: number;
 }) {
-  return (await database().query<{ id: string }>(
-    `INSERT INTO telegram_group_messages
+  return (
+    await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
        (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
         telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text,
         message_thread_id, sent_at)
      VALUES ($1, $2, $3, $3, 'user', 'telegram:agent-memory-author',
              'agent-memory-author', 'Анна', false, 'text', $4, $5, now())
      RETURNING id`,
-    [input.conversationId, input.groupId, input.sequence,
-      `Сообщение памяти ${input.sequence}`, input.messageThreadId ?? null],
-  )).rows[0]!;
+      [
+        input.conversationId,
+        input.groupId,
+        input.sequence,
+        `Сообщение памяти ${input.sequence}`,
+        input.messageThreadId ?? null,
+      ],
+    )
+  ).rows[0]!;
 }
 
 /** Eight passive messages: the shortest tail an addressed turn still reviews inline. */
@@ -86,10 +92,12 @@ describeWithDatabase("memory review repository", () => {
       status: "pending",
       throughSequence: "51",
     });
-    await expect(database().query(
-      "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
-      [created!.batchId],
-    )).resolves.toMatchObject({ rows: [{ count: 50 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
+        [created!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ count: 50 }] });
   });
 
   it("does not count agent output or another forum topic toward a lane", async () => {
@@ -114,13 +122,15 @@ describeWithDatabase("memory review repository", () => {
       sequence: 3,
     });
 
-    await expect(memoryReviewRepository.observePassiveMessage({
-      groupId: fixture.groupId,
-      timelineEntryId: otherTopic.id,
-    })).resolves.toBeNull();
-    await expect(database().query(
-      "SELECT count(*)::integer AS count FROM memory_review_batches",
-    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    await expect(
+      memoryReviewRepository.observePassiveMessage({
+        groupId: fixture.groupId,
+        timelineEntryId: otherTopic.id,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      database().query("SELECT count(*)::integer AS count FROM memory_review_batches"),
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it("materializes a committed 50-message gap before leasing after observer crash", async () => {
@@ -214,10 +224,9 @@ describeWithDatabase("memory review repository", () => {
     expect(first?.sourceEntryIds).toHaveLength(8);
     expect(first?.sourceEntryIds.at(-1)).toBe(firstSource.id);
 
-    await expect(database().query(
-      "DELETE FROM telegram_group_messages WHERE id = $1",
-      [firstSource.id],
-    )).rejects.toThrow();
+    await expect(
+      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [firstSource.id]),
+    ).rejects.toThrow();
 
     await memoryReviewRepository.bindEveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -244,14 +253,15 @@ describeWithDatabase("memory review repository", () => {
       eveTurnId: "turn-retention-complete",
     });
     await memoryTurnSourceRepository.release("eve-retention-complete", "turn-retention-complete");
-    await expect(memoryReviewRepository.getLaneCursor({
-      conversationId: fixture.conversationId,
-      messageThreadId: null,
-    })).resolves.toBe("9");
-    await expect(database().query(
-      "DELETE FROM telegram_group_messages WHERE id = $1",
-      [firstSource.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      memoryReviewRepository.getLaneCursor({
+        conversationId: fixture.conversationId,
+        messageThreadId: null,
+      }),
+    ).resolves.toBe("9");
+    await expect(
+      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [firstSource.id]),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("leaves a tail shorter than eight messages to idle review", async () => {
@@ -267,7 +277,9 @@ describeWithDatabase("memory review repository", () => {
     let source: { id: string } | null = null;
     for (const sequence of [2, 3]) {
       source = await insertUserMessage({
-        conversationId: fixture.conversationId, groupId: fixture.groupId, sequence,
+        conversationId: fixture.conversationId,
+        groupId: fixture.groupId,
+        sequence,
       });
     }
 
@@ -278,10 +290,12 @@ describeWithDatabase("memory review repository", () => {
     });
 
     expect(batch).toBeNull();
-    await expect(database().query(
-      "SELECT count(*)::text AS count FROM memory_review_batches WHERE conversation_id = $1",
-      [fixture.conversationId],
-    )).resolves.toMatchObject({ rows: [{ count: "0" }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::text AS count FROM memory_review_batches WHERE conversation_id = $1",
+        [fixture.conversationId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ count: "0" }] });
   });
 
   it("accepts replayed terminal events without changing the recorded outcome", async () => {
@@ -328,20 +342,21 @@ describeWithDatabase("memory review repository", () => {
       eveSessionId: "eve-review-replay",
       eveTurnId: "turn-review-replay",
     };
-    await expect(memoryReviewRepository.completeBatch(completion))
-      .resolves.toBe("recorded");
-    await expect(memoryReviewRepository.completeBatch(completion))
-      .resolves.toBe("replayed");
-    await expect(database().query(
-      "SELECT completed_turns FROM conversation_sessions WHERE id = $1",
-      [session.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ completed_turns: 1 }] });
-    await expect(memoryReviewRepository.failRunning({
-      batchId: batch!.batchId,
-      diagnosticCode: "AGENT_MEMORY_REVIEW_REPLAYED_FAILURE",
-      eveSessionId: "eve-review-replay",
-      eveTurnId: "turn_0",
-    })).rejects.toThrowError(/AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID/u);
+    await expect(memoryReviewRepository.completeBatch(completion)).resolves.toBe("recorded");
+    await expect(memoryReviewRepository.completeBatch(completion)).resolves.toBe("replayed");
+    await expect(
+      database().query("SELECT completed_turns FROM conversation_sessions WHERE id = $1", [
+        session.rows[0]!.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ completed_turns: 1 }] });
+    await expect(
+      memoryReviewRepository.failRunning({
+        batchId: batch!.batchId,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_REPLAYED_FAILURE",
+        eveSessionId: "eve-review-replay",
+        eveTurnId: "turn_0",
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID/u);
   });
 
   it("accepts an exact replay of a failed terminal event", async () => {
@@ -379,10 +394,11 @@ describeWithDatabase("memory review repository", () => {
     // Ход ничего не записал, поэтому батч освобождается, а повтор события идемпотентен.
     await expect(memoryReviewRepository.failRunning(failure)).resolves.toBe("released");
     await expect(memoryReviewRepository.failRunning(failure)).resolves.toBe("replayed");
-    await expect(database().query(
-      "SELECT completed_turns FROM conversation_sessions WHERE id = $1",
-      [session.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ completed_turns: 0 }] });
+    await expect(
+      database().query("SELECT completed_turns FROM conversation_sessions WHERE id = $1", [
+        session.rows[0]!.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ completed_turns: 0 }] });
   });
 
   it("counts a failed turn that already wrote memory and moves the lane on", async () => {
@@ -419,25 +435,31 @@ describeWithDatabase("memory review repository", () => {
 
     // Повтор такого хода создал бы дубликат, поэтому проход засчитывается. Прежний терминал
     // `failed` был честнее по смыслу, но занимал место на курсоре и глушил лейн навсегда.
-    await expect(memoryReviewRepository.failRunning({
-      batchId: batch!.batchId,
-      diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
-      eveSessionId: "eve-review-wrote",
-      eveTurnId: "turn-review-wrote",
-    })).resolves.toBe("recorded");
-    await expect(database().query(
-      `SELECT batch.status::text, batch.diagnostic_code,
+    await expect(
+      memoryReviewRepository.failRunning({
+        batchId: batch!.batchId,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
+        eveSessionId: "eve-review-wrote",
+        eveTurnId: "turn-review-wrote",
+      }),
+    ).resolves.toBe("recorded");
+    await expect(
+      database().query(
+        `SELECT batch.status::text, batch.diagnostic_code,
               lane.processed_through_sequence::text AS cursor
          FROM memory_review_batches AS batch
          JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
         WHERE batch.id = $1`,
-      [batch!.batchId],
-    )).resolves.toMatchObject({
-      rows: [{
-        cursor: "9",
-        diagnostic_code: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
-        status: "completed",
-      }],
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          cursor: "9",
+          diagnostic_code: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
+          status: "completed",
+        },
+      ],
     });
   });
 
@@ -475,10 +497,12 @@ describeWithDatabase("memory review repository", () => {
 
     // Без привязки к ходу пакет доказуемо ничего не записал: ждать нечего, а прежний терминал
     // `ambiguous` держал курсор занятым навсегда и в проде останавливал проверку целой группы.
-    await expect(database().query(
-      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
+        [batch!.batchId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ batches: 0 }] });
     // Источники вернулись в непроверенный хвост, и владельца незачем беспокоить.
     const repeated = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -486,9 +510,8 @@ describeWithDatabase("memory review repository", () => {
       timelineEntryId: source.id,
     });
     expect(repeated?.sourceCount).toBe(9);
-    await expect(database().query(
-      "SELECT count(*)::integer AS alerts FROM memory_review_owner_alerts",
-    )).resolves.toMatchObject({ rows: [{ alerts: 0 }] });
+    await expect(
+      database().query("SELECT count(*)::integer AS alerts FROM memory_review_owner_alerts"),
+    ).resolves.toMatchObject({ rows: [{ alerts: 0 }] });
   });
-
 });

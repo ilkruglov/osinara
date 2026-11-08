@@ -1,9 +1,5 @@
 import { EMPTY_LINE } from "./line-editor.js";
-import {
-  initialSelectState,
-  reduceSelect,
-  selectValueAtCursor,
-} from "#setup/cli/select-state.js";
+import { initialSelectState, reduceSelect, selectValueAtCursor } from "#setup/cli/select-state.js";
 function keyPhase(t, n) {
   return selectValueAtCursor(n, t.cursor) === `ai-gateway-key`
     ? { kind: `editing`, editor: EMPTY_LINE }
@@ -71,8 +67,7 @@ function transitionProviderPicker(t, i, a) {
       let e = selectValueAtCursor(a, t.select.cursor);
       if (e === `ai-gateway-project` || e === `chatgpt` || e === `external`)
         return { kind: `settle`, result: { kind: e } };
-      if (e !== `ai-gateway-key` || t.phase.kind === `inactive`)
-        return ignore(t);
+      if (e !== `ai-gateway-key` || t.phase.kind === `inactive`) return ignore(t);
       let n = t.phase.editor.text.trim();
       return n.length === 0
         ? {

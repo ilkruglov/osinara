@@ -3,11 +3,11 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * Input shape accepted by {@link defineReadFileTool}.
  */
 export interface DefineReadFileToolInput {
-    /**
-     * Optional model-facing description. Defaults to a generic
-     * "Read a file from the workspace sandbox." line.
-     */
-    readonly description?: string;
+  /**
+   * Optional model-facing description. Defaults to a generic
+   * "Read a file from the workspace sandbox." line.
+   */
+  readonly description?: string;
 }
 /**
  * Defines a model-visible file-reader tool that reads files from the

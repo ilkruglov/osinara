@@ -23,10 +23,7 @@ function getLogFilePaths(e) {
 }
 function isVendoredDependencyWarning(e) {
   let t = getLogFilePaths(e);
-  return (
-    t.length > 0 &&
-    t.every((e) => isNodeModulesPath(e) || isCompiledVendorPath(e))
-  );
+  return t.length > 0 && t.every((e) => isNodeModulesPath(e) || isCompiledVendorPath(e));
 }
 function onNitroBundlerLog(e, t, n) {
   (e === `warn` && isVendoredDependencyWarning(t)) || n(e, t);

@@ -11,8 +11,7 @@ function buildVercelAgentSummary(e) {
   return {
     kind: VERCEL_EVE_AGENT_SUMMARY_KIND,
     schemaVersion: VERCEL_EVE_AGENT_SUMMARY_VERSION,
-    generatorVersion:
-      e.generatorVersion ?? resolveInstalledPackageInfo().version,
+    generatorVersion: e.generatorVersion ?? resolveInstalledPackageInfo().version,
     agent:
       t.config.dynamicModel === void 0
         ? {

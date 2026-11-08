@@ -16,12 +16,16 @@ import type { InstrumentationChannelKind } from "#public/channels/index.js";
  * framework kind (`"http"`, `"schedule"`, `"subagent"`) or a
  * path-derived `channel:<name>` kind.
  */
-export declare function isInstrumentationChannelKind(kind: string): kind is InstrumentationChannelKind;
+export declare function isInstrumentationChannelKind(
+  kind: string,
+): kind is InstrumentationChannelKind;
 /**
  * Narrows a raw kind string to the public {@link InstrumentationChannelKind}
  * union, falling back to `"unknown"` for anything unrecognized or absent.
  */
-export declare function normalizeInstrumentationChannelKind(rawKind: string | undefined): InstrumentationChannelKind;
+export declare function normalizeInstrumentationChannelKind(
+  rawKind: string | undefined,
+): InstrumentationChannelKind;
 /**
  * Invokes a user-authored instrumentation projector defensively.
  *
@@ -34,7 +38,7 @@ export declare function normalizeInstrumentationChannelKind(rawKind: string | un
  * harness expose different value shapes.
  */
 export declare function resolveInstrumentationProjection(input: {
-    readonly invoke: () => unknown;
-    readonly log: Logger;
-    readonly source: string;
+  readonly invoke: () => unknown;
+  readonly log: Logger;
+  readonly source: string;
 }): Record<string, unknown> | undefined;

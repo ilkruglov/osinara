@@ -1,4 +1,8 @@
-import type { NamedSkillDefinition, SkillFileContent, SkillPackageDefinition } from "#shared/skill-definition.js";
+import type {
+  NamedSkillDefinition,
+  SkillFileContent,
+  SkillPackageDefinition,
+} from "#shared/skill-definition.js";
 import type { ExactDefinition } from "#public/definitions/exact.js";
 export type { NamedSkillDefinition, SkillFileContent, SkillPackageDefinition };
 /**
@@ -18,4 +22,6 @@ export type SkillDefinition = SkillPackageDefinition;
  * the brand stamp lets the lifecycle code detect single-entry vs
  * map-of-entries return shapes.
  */
-export declare function defineSkill<TSkill extends SkillDefinition>(definition: ExactDefinition<TSkill, SkillDefinition>): TSkill;
+export declare function defineSkill<TSkill extends SkillDefinition>(
+  definition: ExactDefinition<TSkill, SkillDefinition>,
+): TSkill;

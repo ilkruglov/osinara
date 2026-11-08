@@ -9,10 +9,13 @@ import { isReadableTextDocumentCandidate } from "./attachments/attachment-policy
 import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
 import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
 
-export type TelegramAttachmentReferenceAccess = "all" | "none" | {
-  images: boolean;
-  readableText: boolean;
-};
+export type TelegramAttachmentReferenceAccess =
+  | "all"
+  | "none"
+  | {
+      images: boolean;
+      readableText: boolean;
+    };
 
 export function visibleTelegramTimelineEntry(
   entry: TelegramGroupJournalEntry,
@@ -20,11 +23,10 @@ export function visibleTelegramTimelineEntry(
 ): TelegramGroupJournalEntry {
   if (!entry.attachment || access === "all") return entry;
   if (access !== "none") {
-    const imageAllowed = access.images && (
-      entry.attachment.kind === "photo" || isTelegramImageDocumentCandidate(entry.attachment)
-    );
-    const textAllowed = access.readableText &&
-      isReadableTextDocumentCandidate(entry.attachment);
+    const imageAllowed =
+      access.images &&
+      (entry.attachment.kind === "photo" || isTelegramImageDocumentCandidate(entry.attachment));
+    const textAllowed = access.readableText && isReadableTextDocumentCandidate(entry.attachment);
     if (imageAllowed || textAllowed) return entry;
   }
 

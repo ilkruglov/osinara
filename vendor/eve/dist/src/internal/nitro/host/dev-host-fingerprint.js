@@ -26,9 +26,7 @@ async function computeDevelopmentHostFingerprint(t) {
           }))
           .sort((e, t) => e.sourceRoot.localeCompare(t.sourceRoot)),
         sandboxBackends: [
-          ...new Set(
-            a.map((e) => e.sandbox?.backendName).filter((e) => e !== void 0),
-          ),
+          ...new Set(a.map((e) => e.sandbox?.backendName).filter((e) => e !== void 0)),
         ].sort((e, t) => e.localeCompare(t)),
       },
       channels: computeChannelRouteRegistrations(t),

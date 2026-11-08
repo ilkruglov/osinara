@@ -31,9 +31,7 @@ async function runVercelLoginWithControls(t, n, r, i, a) {
       l.then((e) => ({ via: `work`, ok: e })),
       c.choice.then(() => ({ via: `choice` })),
     ]);
-    return e.via === `work`
-      ? e.ok
-      : (o.abort(), await l.catch(() => {}), `cancelled`);
+    return e.via === `work` ? e.ok : (o.abort(), await l.catch(() => {}), `cancelled`);
   } finally {
     c.close();
   }

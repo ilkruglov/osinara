@@ -1,21 +1,26 @@
 import { type EditableSelectAnswer, type EditableSelectQuestion } from "./ask-editable.js";
 export type { EditableSelectAnswer, EditableSelectQuestion } from "./ask-editable.js";
-export { InteractionRequired, InvalidAnswerError, SkippedSignal, type AnyQuestion, } from "./ask-signals.js";
+export {
+  InteractionRequired,
+  InvalidAnswerError,
+  SkippedSignal,
+  type AnyQuestion,
+} from "./ask-signals.js";
 import type { Prompter } from "./prompter.js";
 /** One choice in a select question. */
 export interface SelectOption<T> {
-    /** Stable handle so external answers (flags, JSON) can address rich values. */
-    id: string;
-    label: string;
-    value: T;
-    hint?: string;
-    /**
-     * A leading run of featured options forms a searchable picker's default
-     * viewport: with no filter typed, only they are in view, and scrolling or
-     * filtering reaches the rest of the list. Featured options must be sorted
-     * to the front. Meaningless without `search`.
-     */
-    featured?: boolean;
+  /** Stable handle so external answers (flags, JSON) can address rich values. */
+  id: string;
+  label: string;
+  value: T;
+  hint?: string;
+  /**
+   * A leading run of featured options forms a searchable picker's default
+   * viewport: with no filter typed, only they are in view, and scrolling or
+   * filtering reaches the rest of the list. Featured options must be sorted
+   * to the front. Meaningless without `search`.
+   */
+  featured?: boolean;
 }
 /**
  * One choice in a multi-select question. Row availability is part of the
@@ -25,14 +30,14 @@ export interface SelectOption<T> {
  * every answer whether or not it was named).
  */
 export interface MultiSelectOption<T> extends SelectOption<T> {
-    /** Visible and explained but not pickable. Mutually exclusive with `locked`. */
-    disabled?: boolean;
-    /** Why the row is disabled; shown by pickers and quoted by answer refusals. */
-    disabledReason?: string;
-    /** Always selected and cannot be toggled off. */
-    locked?: boolean;
-    /** Why the row is locked; shown by pickers (e.g. "always available"). */
-    lockedReason?: string;
+  /** Visible and explained but not pickable. Mutually exclusive with `locked`. */
+  disabled?: boolean;
+  /** Why the row is disabled; shown by pickers and quoted by answer refusals. */
+  disabledReason?: string;
+  /** Always selected and cannot be toggled off. */
+  locked?: boolean;
+  /** Why the row is locked; shown by pickers (e.g. "always available"). */
+  lockedReason?: string;
 }
 /**
  * A keyed question a box sends through the channel. The key is the question's
@@ -40,47 +45,52 @@ export interface MultiSelectOption<T> extends SelectOption<T> {
  * opt-ins against it, and resolutions are announced under it.
  */
 export type Question<T> = {
-    key: string;
-    message: string;
-    /** Found in the world (e.g. an on-disk link). Feeds the confirm/assume rungs. */
-    detected?: T;
-    /** A safe assumption (e.g. the most popular model). Used by "assume". */
-    recommended?: T;
-    /**
-     * Questions are skippable by default; required is the opt-in. Headless and
-     * assume runs auto-skip non-required questions, and only a required question
-     * may refuse a headless run ({@link InteractionRequired}). Set by the box
-     * when intrinsic, or by the flow via {@link withRequired}.
-     */
-    required?: boolean;
-    /**
-     * Synthesized by a decorator (e.g. the confirm-detected rung): interaction
-     * mechanics, not a box value, so bases render it but do not announce it.
-     */
-    internal?: boolean;
-} & ({
-    kind: "select";
-    options: readonly SelectOption<T>[];
-    /** Offer the type-ahead filter line in interactive renderers. */
-    search?: boolean;
-    /** Placeholder for the filter line while it is empty. */
-    placeholder?: string;
-} | {
-    kind: "confirm";
-} | {
-    kind: "text";
-    validate?: (raw: string) => string | null;
-    sensitive?: false;
-    /** Presentation hint: ghost text shown while the input is empty. */
-    placeholder?: string;
-} | {
-    kind: "text";
-    validate?: (raw: string) => string | null;
-    sensitive: true;
-    environment: string;
-    /** Presentation hint: ghost text shown while the input is empty. */
-    placeholder?: string;
-});
+  key: string;
+  message: string;
+  /** Found in the world (e.g. an on-disk link). Feeds the confirm/assume rungs. */
+  detected?: T;
+  /** A safe assumption (e.g. the most popular model). Used by "assume". */
+  recommended?: T;
+  /**
+   * Questions are skippable by default; required is the opt-in. Headless and
+   * assume runs auto-skip non-required questions, and only a required question
+   * may refuse a headless run ({@link InteractionRequired}). Set by the box
+   * when intrinsic, or by the flow via {@link withRequired}.
+   */
+  required?: boolean;
+  /**
+   * Synthesized by a decorator (e.g. the confirm-detected rung): interaction
+   * mechanics, not a box value, so bases render it but do not announce it.
+   */
+  internal?: boolean;
+} & (
+  | {
+      kind: "select";
+      options: readonly SelectOption<T>[];
+      /** Offer the type-ahead filter line in interactive renderers. */
+      search?: boolean;
+      /** Placeholder for the filter line while it is empty. */
+      placeholder?: string;
+    }
+  | {
+      kind: "confirm";
+    }
+  | {
+      kind: "text";
+      validate?: (raw: string) => string | null;
+      sensitive?: false;
+      /** Presentation hint: ghost text shown while the input is empty. */
+      placeholder?: string;
+    }
+  | {
+      kind: "text";
+      validate?: (raw: string) => string | null;
+      sensitive: true;
+      environment: string;
+      /** Presentation hint: ghost text shown while the input is empty. */
+      placeholder?: string;
+    }
+);
 /**
  * A keyed multi-select question. Its answer is a set (`T[]`) while its options
  * carry single values (`T`), so it travels through the paired
@@ -88,70 +98,82 @@ export type Question<T> = {
  * through `ask<T>` would make the channel lie about the answer type.
  */
 export interface MultiSelectQuestion<T> {
-    key: string;
-    message: string;
-    options: readonly MultiSelectOption<T>[];
-    /** Found in the world. Feeds the confirm/assume rungs and pre-marks pickers. */
-    detected?: readonly T[];
-    /** A safe assumption. Used by "assume"; pre-marks pickers without a detection. */
-    recommended?: readonly T[];
-    /** Same opt-in as {@link Question.required}: only it may refuse a headless run. */
-    required?: boolean;
-    /** Same as {@link Question.internal}: rendered but never announced. */
-    internal?: boolean;
-    /**
-     * Block an empty submission in interactive pickers. Distinct from `required`,
-     * which is the headless-refusal opt-in: a question can refuse to be skipped
-     * headlessly while still accepting an empty interactive selection.
-     */
-    requireSelection?: boolean;
-    /** Offer the type-ahead filter line in interactive renderers. */
-    search?: boolean;
-    /** Placeholder for the filter line while it is empty. */
-    placeholder?: string;
+  key: string;
+  message: string;
+  options: readonly MultiSelectOption<T>[];
+  /** Found in the world. Feeds the confirm/assume rungs and pre-marks pickers. */
+  detected?: readonly T[];
+  /** A safe assumption. Used by "assume"; pre-marks pickers without a detection. */
+  recommended?: readonly T[];
+  /** Same opt-in as {@link Question.required}: only it may refuse a headless run. */
+  required?: boolean;
+  /** Same as {@link Question.internal}: rendered but never announced. */
+  internal?: boolean;
+  /**
+   * Block an empty submission in interactive pickers. Distinct from `required`,
+   * which is the headless-refusal opt-in: a question can refuse to be skipped
+   * headlessly while still accepting an empty interactive selection.
+   */
+  requireSelection?: boolean;
+  /** Offer the type-ahead filter line in interactive renderers. */
+  search?: boolean;
+  /** Placeholder for the filter line while it is empty. */
+  placeholder?: string;
 }
 /** Builds a select question without spelling the discriminant at call sites. */
-export declare const select: <T>(q: Omit<Extract<Question<T>, {
-    kind: "select";
-}>, "kind">) => Question<T>;
+export declare const select: <T>(
+  q: Omit<
+    Extract<
+      Question<T>,
+      {
+        kind: "select";
+      }
+    >,
+    "kind"
+  >,
+) => Question<T>;
 /** Builds a confirm question without spelling the discriminant at call sites. */
 export declare const confirm: (q: {
-    key: string;
-    message: string;
-    detected?: boolean;
-    recommended?: boolean;
-    required?: boolean;
-    internal?: boolean;
+  key: string;
+  message: string;
+  detected?: boolean;
+  recommended?: boolean;
+  required?: boolean;
+  internal?: boolean;
 }) => Question<boolean>;
 interface TextQuestionInput {
-    key: string;
-    message: string;
-    detected?: string;
-    recommended?: string;
-    required?: boolean;
-    validate?: (raw: string) => string | null;
-    placeholder?: string;
+  key: string;
+  message: string;
+  detected?: string;
+  recommended?: string;
+  required?: boolean;
+  validate?: (raw: string) => string | null;
+  placeholder?: string;
 }
 /** Builds a text question without spelling the discriminant at call sites. */
-export declare function text(q: TextQuestionInput & {
+export declare function text(
+  q: TextQuestionInput & {
     sensitive: true;
     environment: string;
-}): Question<string>;
-export declare function text(q: TextQuestionInput & {
+  },
+): Question<string>;
+export declare function text(
+  q: TextQuestionInput & {
     sensitive?: false;
     environment?: never;
-}): Question<string>;
+  },
+): Question<string>;
 /** The capability boxes see. Pure and flow-agnostic: Prompter's successor. */
 export interface Asker {
-    ask<T>(question: Question<T>): Promise<T>;
-    /** A single choice whose one row carries an editable string value. */
-    askEditable<T>(question: EditableSelectQuestion<T>): Promise<EditableSelectAnswer<T>>;
-    /**
-     * The multi-select channel. Paired with {@link ask} instead of being a
-     * question kind because the answer type (`T[]`) differs from the option type
-     * (`T`); every rung treats it with the same ladder semantics as `ask`.
-     */
-    askMany<T>(question: MultiSelectQuestion<T>): Promise<T[]>;
+  ask<T>(question: Question<T>): Promise<T>;
+  /** A single choice whose one row carries an editable string value. */
+  askEditable<T>(question: EditableSelectQuestion<T>): Promise<EditableSelectAnswer<T>>;
+  /**
+   * The multi-select channel. Paired with {@link ask} instead of being a
+   * question kind because the answer type (`T[]`) differs from the option type
+   * (`T`); every rung treats it with the same ladder semantics as `ask`.
+   */
+  askMany<T>(question: MultiSelectQuestion<T>): Promise<T[]>;
 }
 /** A ladder rung: wraps an asker and resolves (or rewrites) some questions. */
 export type AskerDecorator = (inner: Asker) => Asker;
@@ -159,13 +181,13 @@ export type AskerDecorator = (inner: Asker) => Asker;
 export type ResolutionSource = "answer" | "detected" | "assumed" | "asked" | "skipped";
 /** One announced question outcome. */
 export interface Resolution {
-    key: string;
-    value: unknown;
-    source: ResolutionSource;
+  key: string;
+  value: unknown;
+  source: ResolutionSource;
 }
 /** Every resolution is announced with its source: nothing is silently assumed. */
 export interface AskerEvents {
-    onResolved?: (resolution: Resolution) => void;
+  onResolved?: (resolution: Resolution) => void;
 }
 /**
  * The interactive base: renders every question through the existing
@@ -185,7 +207,10 @@ export declare function headlessAsker(events?: AskerEvents): Asker;
  * Pre-answers by question key (flags, config, agent tool args), validated
  * against the question they answer. Unmatched questions fall through.
  */
-export declare function withAnswers(answers: Record<string, unknown>, events?: AskerEvents): AskerDecorator;
+export declare function withAnswers(
+  answers: Record<string, unknown>,
+  events?: AskerEvents,
+): AskerDecorator;
 /**
  * Flow-level opt-in to requiredness by key: the flow declares which questions
  * it cannot proceed without, boxes stay oblivious. Composes with box-intrinsic

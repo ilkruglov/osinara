@@ -8,10 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AppError } from "./app-error.js";
-import {
-  ModelFacingError,
-  normalizeModelFacingError,
-} from "./model-facing-error.js";
+import { ModelFacingError, normalizeModelFacingError } from "./model-facing-error.js";
 
 describe("ModelFacingError", () => {
   it("publishes every required correction-loop field in its model-visible message", () => {
@@ -45,10 +42,9 @@ describe("ModelFacingError", () => {
       new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена"),
       { toolName: "manage_memory" },
     );
-    const unknown = normalizeModelFacingError(
-      new Error("connect ECONNREFUSED 10.0.0.4:5432"),
-      { toolName: "list_memories" },
-    );
+    const unknown = normalizeModelFacingError(new Error("connect ECONNREFUSED 10.0.0.4:5432"), {
+      toolName: "list_memories",
+    });
 
     expect(known.contract.code).toBe("AGENT_MEMORY_NOT_FOUND");
     expect(known.contract.correction).toMatch(/list_memories|search_memories/iu);

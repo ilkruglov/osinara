@@ -37,11 +37,15 @@ const STORED_PLAIN = "oblb";
 const ESCAPED = "oblr";
 const RESERVED_PREFIXES = new Set([STORED_COMPRESSED, STORED_PLAIN, ESCAPED]);
 
-const prefixOf = (bytes: Uint8Array) => bytes.length >= 4 ? Buffer.from(bytes.buffer, bytes.byteOffset, 4).toString("latin1") : "";
-const rest = (bytes: Uint8Array) => Buffer.from(bytes.buffer, bytes.byteOffset + 4, bytes.length - 4);
-const concat = (prefix: string, body: Buffer) => new Uint8Array(Buffer.concat([Buffer.from(prefix, "latin1"), body]));
+const prefixOf = (bytes: Uint8Array) =>
+  bytes.length >= 4 ? Buffer.from(bytes.buffer, bytes.byteOffset, 4).toString("latin1") : "";
+const rest = (bytes: Uint8Array) =>
+  Buffer.from(bytes.buffer, bytes.byteOffset + 4, bytes.length - 4);
+const concat = (prefix: string, body: Buffer) =>
+  new Uint8Array(Buffer.concat([Buffer.from(prefix, "latin1"), body]));
 
-export const payloadBlobHash = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
+export const payloadBlobHash = (value: string) =>
+  createHash("sha256").update(value, "utf8").digest("hex");
 
 export interface SplitPayload {
   /** Blob bytes by hash: the UTF-8 of each lifted string. */
@@ -58,7 +62,10 @@ export function hasLoneSurrogate(value: string): boolean {
   return /[\uD800-\uDFFF]/u.test(value);
 }
 
-export function splitPayload(bytes: Uint8Array, minChars = PAYLOAD_BLOB_MIN_CHARS): SplitPayload | null {
+export function splitPayload(
+  bytes: Uint8Array,
+  minChars = PAYLOAD_BLOB_MIN_CHARS,
+): SplitPayload | null {
   const prefix = prefixOf(bytes);
   if (prefix !== ZSTD && prefix !== DEVL) return null;
   const compressed = prefix === ZSTD;
@@ -81,7 +88,12 @@ export function splitPayload(bytes: Uint8Array, minChars = PAYLOAD_BLOB_MIN_CHAR
   }
   if (blobs.size === 0) return null;
   const json = Buffer.from(JSON.stringify(flat), "utf8");
-  return { blobs, stored: compressed ? concat(STORED_COMPRESSED, zstdCompressSync(json)) : concat(STORED_PLAIN, json) };
+  return {
+    blobs,
+    stored: compressed
+      ? concat(STORED_COMPRESSED, zstdCompressSync(json))
+      : concat(STORED_PLAIN, json),
+  };
 }
 
 /** Whether these stored bytes carry blob markers; a prefix check, nothing is decompressed. */
@@ -112,7 +124,10 @@ function parseStored(bytes: Uint8Array): { compressed: boolean; flat: unknown[] 
 }
 
 const markerOf = (value: unknown): string | null =>
-  value !== null && typeof value === "object" && !Array.isArray(value) && typeof (value as Record<string, unknown>)[PAYLOAD_BLOB_MARKER_KEY] === "string"
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  typeof (value as Record<string, unknown>)[PAYLOAD_BLOB_MARKER_KEY] === "string"
     ? (value as Record<string, string>)[PAYLOAD_BLOB_MARKER_KEY]!
     : null;
 
@@ -122,7 +137,10 @@ export function payloadBlobHashes(bytes: Uint8Array): string[] {
   return [...new Set(stored.flat.map(markerOf).filter((hash): hash is string => hash !== null))];
 }
 
-export function joinPayload(bytes: Uint8Array, lookup: (hash: string) => Uint8Array | undefined): Uint8Array {
+export function joinPayload(
+  bytes: Uint8Array,
+  lookup: (hash: string) => Uint8Array | undefined,
+): Uint8Array {
   const stored = parseStored(bytes);
   if (!stored) return bytes;
   const flat = stored.flat.map((value) => {
@@ -132,7 +150,10 @@ export function joinPayload(bytes: Uint8Array, lookup: (hash: string) => Uint8Ar
     if (blob === undefined) throw new Error(`AGENT_WORKFLOW_PAYLOAD_BLOB_MISSING: ${hash}`);
     return Buffer.from(blob).toString("utf8");
   });
-  const body = Buffer.concat([Buffer.from(DEVL, "latin1"), Buffer.from(JSON.stringify(flat), "utf8")]);
+  const body = Buffer.concat([
+    Buffer.from(DEVL, "latin1"),
+    Buffer.from(JSON.stringify(flat), "utf8"),
+  ]);
   return stored.compressed ? concat(ZSTD, zstdCompressSync(body)) : new Uint8Array(body);
 }
 
@@ -173,6 +194,8 @@ export function createPayloadBlobCache(maxBytes = 64 * 1024 * 1024): PayloadBlob
         bytes -= oldestValue.length;
       }
     },
-    get size() { return bytes; },
+    get size() {
+      return bytes;
+    },
   };
 }

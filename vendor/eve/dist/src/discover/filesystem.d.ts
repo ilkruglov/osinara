@@ -2,7 +2,14 @@ import type { Dirent } from "node:fs";
 /**
  * Supported authored JavaScript and TypeScript module file extensions.
  */
-export declare const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS: readonly [".cts", ".mts", ".cjs", ".mjs", ".ts", ".js"];
+export declare const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS: readonly [
+  ".cts",
+  ".mts",
+  ".cjs",
+  ".mjs",
+  ".ts",
+  ".js",
+];
 /**
  * Files that mark a surrounding directory as an application root when paired
  * with a top-level `agent/` directory.
@@ -15,23 +22,71 @@ export type DirectoryEntryType = "directory" | "file" | "other";
 /**
  * Classified root-level agent entry.
  */
-export type AgentRootEntryKind = "agent-config-module" | "channels-directory" | "connections-directory" | "extensions-directory" | "hooks-directory" | "ignored-directory" | "instrumentation-directory" | "instructions-directory" | "instructions-markdown" | "instructions-module" | "lib-directory" | "sandbox-directory" | "schedules-directory" | "skills-directory" | "system-markdown" | "system-module" | "tools-directory" | "unknown" | "subagents-directory";
+export type AgentRootEntryKind =
+  | "agent-config-module"
+  | "channels-directory"
+  | "connections-directory"
+  | "extensions-directory"
+  | "hooks-directory"
+  | "ignored-directory"
+  | "instrumentation-directory"
+  | "instructions-directory"
+  | "instructions-markdown"
+  | "instructions-module"
+  | "lib-directory"
+  | "sandbox-directory"
+  | "schedules-directory"
+  | "skills-directory"
+  | "system-markdown"
+  | "system-module"
+  | "tools-directory"
+  | "unknown"
+  | "subagents-directory";
 /**
  * Classified local-subagent root entry.
  */
-export type LocalSubagentEntryKind = "agent-config-module" | "connections-directory" | "extensions-directory" | "hooks-directory" | "ignored-directory" | "instructions-directory" | "instructions-markdown" | "instructions-module" | "invalid-schedules-directory" | "lib-directory" | "sandbox-directory" | "skills-directory" | "system-markdown" | "system-module" | "tools-directory" | "unknown" | "subagents-directory";
+export type LocalSubagentEntryKind =
+  | "agent-config-module"
+  | "connections-directory"
+  | "extensions-directory"
+  | "hooks-directory"
+  | "ignored-directory"
+  | "instructions-directory"
+  | "instructions-markdown"
+  | "instructions-module"
+  | "invalid-schedules-directory"
+  | "lib-directory"
+  | "sandbox-directory"
+  | "skills-directory"
+  | "system-markdown"
+  | "system-module"
+  | "tools-directory"
+  | "unknown"
+  | "subagents-directory";
 /**
  * Classified Agent Skills package entry.
  */
-export type SkillPackageEntryKind = "skill-assets-directory" | "skill-markdown" | "skill-references-directory" | "skill-resource" | "skill-scripts-directory";
+export type SkillPackageEntryKind =
+  | "skill-assets-directory"
+  | "skill-markdown"
+  | "skill-references-directory"
+  | "skill-resource"
+  | "skill-scripts-directory";
 /**
  * Classified top-level entry inside `skills/`.
  */
-export type SkillsDirectoryEntryKind = "flat-skill-markdown" | "flat-skill-module" | "ignored-declaration" | "skill-package-directory" | "unknown";
+export type SkillsDirectoryEntryKind =
+  | "flat-skill-markdown"
+  | "flat-skill-module"
+  | "ignored-declaration"
+  | "skill-package-directory"
+  | "unknown";
 /**
  * Returns the normalized entry type for a Node filesystem dirent.
  */
-export declare function getDirectoryEntryType(entry: Pick<Dirent, "isDirectory" | "isFile">): DirectoryEntryType;
+export declare function getDirectoryEntryType(
+  entry: Pick<Dirent, "isDirectory" | "isFile">,
+): DirectoryEntryType;
 /**
  * Returns whether an entry marks a directory as an app root for nested agents.
  */
@@ -39,19 +94,31 @@ export declare function isProjectMarkerEntry(name: string, entryType: DirectoryE
 /**
  * Classifies a top-level agent-root entry according to the spec-legal grammar.
  */
-export declare function classifyAgentRootEntry(name: string, entryType: DirectoryEntryType): AgentRootEntryKind;
+export declare function classifyAgentRootEntry(
+  name: string,
+  entryType: DirectoryEntryType,
+): AgentRootEntryKind;
 /**
  * Classifies a local-subagent package root entry according to the spec-legal grammar.
  */
-export declare function classifyLocalSubagentEntry(name: string, entryType: DirectoryEntryType): LocalSubagentEntryKind;
+export declare function classifyLocalSubagentEntry(
+  name: string,
+  entryType: DirectoryEntryType,
+): LocalSubagentEntryKind;
 /**
  * Classifies a file or directory inside an Agent Skills package.
  */
-export declare function classifySkillPackageEntry(name: string, entryType: DirectoryEntryType): SkillPackageEntryKind;
+export declare function classifySkillPackageEntry(
+  name: string,
+  entryType: DirectoryEntryType,
+): SkillPackageEntryKind;
 /**
  * Classifies one top-level entry inside the authored `skills/` directory.
  */
-export declare function classifySkillsDirectoryEntry(name: string, entryType: DirectoryEntryType): SkillsDirectoryEntryKind;
+export declare function classifySkillsDirectoryEntry(
+  name: string,
+  entryType: DirectoryEntryType,
+): SkillsDirectoryEntryKind;
 /**
  * Normalizes an agent-root-relative logical path to forward slashes.
  */

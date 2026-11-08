@@ -18,7 +18,9 @@ export interface ToolExecutionApprovalInput {
   toolName: string;
 }
 
-export async function requireToolExecutionApprovalEvidence(input: ToolExecutionApprovalInput): Promise<void> {
+export async function requireToolExecutionApprovalEvidence(
+  input: ToolExecutionApprovalInput,
+): Promise<void> {
   const result = await database().query<{ authorized: boolean }>(
     `SELECT EXISTS (
        SELECT 1
@@ -36,8 +38,14 @@ export async function requireToolExecutionApprovalEvidence(input: ToolExecutionA
          AND session.eve_session_id = approval.eve_session_id
          AND session.retired_at IS NULL
      ) AS authorized`,
-    [input.applicationSessionId, input.eveSessionId, input.telegramUserId,
-      input.toolCallId, input.toolName, input.toolInputHash],
+    [
+      input.applicationSessionId,
+      input.eveSessionId,
+      input.telegramUserId,
+      input.toolCallId,
+      input.toolName,
+      input.toolInputHash,
+    ],
   );
   if (result.rows[0]?.authorized !== true) {
     throw new AppError(

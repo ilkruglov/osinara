@@ -40,7 +40,10 @@ export declare function importEvalFile(appRoot: string, filePath: string): Promi
  * Throws when two files derive the same eval id (e.g. an array-exported
  * `evals/weather.eval.ts` colliding with `evals/weather/0000.eval.ts`).
  */
-export declare function discoverAndImportEvals(appRoot: string, evalIds?: readonly string[]): Promise<EveEval[]>;
+export declare function discoverAndImportEvals(
+  appRoot: string,
+  evalIds?: readonly string[],
+): Promise<EveEval[]>;
 /**
  * Discovers and imports the required `evals/evals.config.ts` run-wide
  * configuration (produced by `defineEvalConfig()`).

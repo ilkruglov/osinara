@@ -13,8 +13,7 @@ async function dispatchRuntimeActionsStep(n) {
     sessionState: n.sessionState,
     taskControls: !1,
   });
-  if (r === void 0)
-    return { results: [], sessionState: n.sessionState, pendingTasks: [] };
+  if (r === void 0) return { results: [], sessionState: n.sessionState, pendingTasks: [] };
   let { batch: i, bundle: a, session: o } = r,
     s = a.resolvedAgent.config?.experimental?.subagentPersistentSessions === !0,
     c = n.parentWritable.getWriter(),
@@ -85,8 +84,7 @@ async function dispatchRuntimeActionsStep(n) {
   }
   return {
     results: u,
-    sessionState:
-      l === o ? n.sessionState : createDurableSessionState({ session: l }),
+    sessionState: l === o ? n.sessionState : createDurableSessionState({ session: l }),
     pendingTasks: [],
   };
 }

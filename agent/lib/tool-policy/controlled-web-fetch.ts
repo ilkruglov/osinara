@@ -41,13 +41,18 @@ const STRUCTURED_TEXT_CONTENT_TYPES = new Set(["application/json", "application/
 const STRUCTURED_TEXT_CONTENT_TYPE_SUFFIX = /^application\/[a-z0-9!#$&^_.+-]+\+(?:json|xml)$/u;
 const MEDIA_TYPE_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/u;
 
-export const CONTROLLED_WEB_FETCH_INPUT_SCHEMA = z.object({
-  url: z.string(),
-  format: z.enum(["html", "extracted_text"])
-    .describe("html возвращает исходную HTML-разметку; extracted_text удаляет HTML-теги и возвращает обычный текст")
-    .optional(),
-  timeout: z.number().positive().max(MAX_TIMEOUT_SECONDS).optional(),
-}).strict();
+export const CONTROLLED_WEB_FETCH_INPUT_SCHEMA = z
+  .object({
+    url: z.string(),
+    format: z
+      .enum(["html", "extracted_text"])
+      .describe(
+        "html возвращает исходную HTML-разметку; extracted_text удаляет HTML-теги и возвращает обычный текст",
+      )
+      .optional(),
+    timeout: z.number().positive().max(MAX_TIMEOUT_SECONDS).optional(),
+  })
+  .strict();
 
 type ControlledWebFetchInput = z.infer<typeof CONTROLLED_WEB_FETCH_INPUT_SCHEMA>;
 
@@ -95,7 +100,12 @@ function validateUrl(value: string | URL, base?: URL): URL {
 
   // Credentials and uncommon ports must never cross the egress boundary.
   const validProtocol = url.protocol === "http:" || url.protocol === "https:";
-  if (!validProtocol || url.username !== "" || url.password !== "" || !ALLOWED_PORTS.has(url.port)) {
+  if (
+    !validProtocol ||
+    url.username !== "" ||
+    url.password !== "" ||
+    !ALLOWED_PORTS.has(url.port)
+  ) {
     throw new AppError(
       "AGENT_WEB_FETCH_URL_FORBIDDEN",
       "Этот адрес нельзя загрузить. Используйте HTTP или HTTPS без учётных данных и нестандартного порта",
@@ -106,11 +116,12 @@ function validateUrl(value: string | URL, base?: URL): URL {
 
 function textContentType(response: Response): string {
   const value = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  const supported = value !== undefined && MEDIA_TYPE_PATTERN.test(value) && (
-    value.startsWith("text/") ||
-    STRUCTURED_TEXT_CONTENT_TYPES.has(value) ||
-    STRUCTURED_TEXT_CONTENT_TYPE_SUFFIX.test(value)
-  );
+  const supported =
+    value !== undefined &&
+    MEDIA_TYPE_PATTERN.test(value) &&
+    (value.startsWith("text/") ||
+      STRUCTURED_TEXT_CONTENT_TYPES.has(value) ||
+      STRUCTURED_TEXT_CONTENT_TYPE_SUFFIX.test(value));
   if (!supported) {
     void response.body?.cancel();
     throw new AppError(
@@ -122,10 +133,15 @@ function textContentType(response: Response): string {
 }
 
 async function readPageBody(response: Response): Promise<Uint8Array> {
-  return await readBoundedBody(response, CONTROLLED_WEB_FETCH_MAX_BODY_BYTES, () => new AppError(
-    "AGENT_WEB_FETCH_BODY_TOO_LARGE",
-    "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
-  ));
+  return await readBoundedBody(
+    response,
+    CONTROLLED_WEB_FETCH_MAX_BODY_BYTES,
+    () =>
+      new AppError(
+        "AGENT_WEB_FETCH_BODY_TOO_LARGE",
+        "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
+      ),
+  );
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {
@@ -156,11 +172,18 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
     options: ExecuteOptions = {},
   ): Promise<ControlledWebFetchResult> => {
     const input = parseInput(rawInput);
-    const signal = deadlineSignal((input.timeout ?? DEFAULT_TIMEOUT_SECONDS) * MILLISECONDS_PER_SECOND, options.abortSignal);
+    const signal = deadlineSignal(
+      (input.timeout ?? DEFAULT_TIMEOUT_SECONDS) * MILLISECONDS_PER_SECOND,
+      options.abortSignal,
+    );
     let currentUrl = validateUrl(input.url);
 
     try {
-      for (let redirectCount = 0; redirectCount <= CONTROLLED_WEB_FETCH_MAX_REDIRECTS; redirectCount += 1) {
+      for (
+        let redirectCount = 0;
+        redirectCount <= CONTROLLED_WEB_FETCH_MAX_REDIRECTS;
+        redirectCount += 1
+      ) {
         // Every hop explicitly carries the same proxy dispatcher and total-deadline signal.
         const response = await dependencies.fetch(currentUrl, {
           dispatcher: dependencies.dispatcher,
@@ -198,9 +221,10 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
         const body = await readPageBody(response);
         const decoded = new TextDecoder("utf-8", { fatal: false }).decode(body);
         const requestedFormat = input.format ?? "extracted_text";
-        const formatted = responseContentType === HTML_CONTENT_TYPE && requestedFormat !== "html"
-          ? htmlToText(decoded)
-          : decoded;
+        const formatted =
+          responseContentType === HTML_CONTENT_TYPE && requestedFormat !== "html"
+            ? htmlToText(decoded)
+            : decoded;
         const bounded = boundModelContent(formatted);
         return {
           ...bounded,

@@ -30,7 +30,10 @@ import {
   type TelegramGroupJournalEntry,
 } from "../telegram-group-journal-context.js";
 import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
-import { sessionHandoffRepository, type SessionHandoffRecord } from "./session-handoff-repository.js";
+import {
+  sessionHandoffRepository,
+  type SessionHandoffRecord,
+} from "./session-handoff-repository.js";
 
 export const SESSION_HANDOFF_MAX_CHARACTERS = 2_500;
 /** The newest entries of the retired session the summary is written from; the journal reads at most this many. */
@@ -129,7 +132,8 @@ export function renderHandoffSource(
   let rendered = renderTelegramGroupJournalContext(entries, null, timezone);
   while (rendered.length > maxCharacters && entries.length > 0) {
     entries = entries.slice(1);
-    rendered = entries.length === 0 ? "" : renderTelegramGroupJournalContext(entries, null, timezone);
+    rendered =
+      entries.length === 0 ? "" : renderTelegramGroupJournalContext(entries, null, timezone);
   }
   return { entries, rendered };
 }
@@ -152,7 +156,8 @@ function defaultDependencies(): SessionHandoffDependencies {
     listGroup: (input) => telegramGroupJournalRepository.listRecent(input),
     listPrivate: (input) => conversationTimelineRepository.listRecent(input),
     now: () => performance.now(),
-    store: (applicationSessionId, record) => sessionHandoffRepository.store(applicationSessionId, record),
+    store: (applicationSessionId, record) =>
+      sessionHandoffRepository.store(applicationSessionId, record),
   };
 }
 
@@ -173,19 +178,27 @@ export async function prepareSessionHandoff(
   const line = (code: string, detail: Record<string, unknown>) =>
     JSON.stringify({ code, applicationSessionId: input.applicationSessionId, ...detail });
   try {
-    const entries = input.conversationId !== null
-      ? await dependencies.listPrivate({
-          beforeSequence: input.beforeSequence, conversationId: input.conversationId, limit: SESSION_HANDOFF_SOURCE_MAX_ENTRIES,
-        })
-      : input.groupId !== null
-        ? await dependencies.listGroup({
-            anchorEntryId: null, beforeSequence: input.beforeSequence, groupId: input.groupId,
-            limit: SESSION_HANDOFF_SOURCE_MAX_ENTRIES, messageThreadId: input.messageThreadId,
+    const entries =
+      input.conversationId !== null
+        ? await dependencies.listPrivate({
+            beforeSequence: input.beforeSequence,
+            conversationId: input.conversationId,
+            limit: SESSION_HANDOFF_SOURCE_MAX_ENTRIES,
           })
-        : [];
+        : input.groupId !== null
+          ? await dependencies.listGroup({
+              anchorEntryId: null,
+              beforeSequence: input.beforeSequence,
+              groupId: input.groupId,
+              limit: SESSION_HANDOFF_SOURCE_MAX_ENTRIES,
+              messageThreadId: input.messageThreadId,
+            })
+          : [];
     // The summary is about what was said; attachment references stay out of it, so the next session
     // meets a file only through the turn's own visibility filter, never through the summary.
-    const selected = selectHandoffSource(entries, input.retiredSessionStartedAt).map(withoutAttachment);
+    const selected = selectHandoffSource(entries, input.retiredSessionStartedAt).map(
+      withoutAttachment,
+    );
     if (selected.length === 0) {
       console.info(line("AGENT_SESSION_HANDOFF_SKIPPED", { reason: "no_entries" }));
       return;
@@ -200,16 +213,32 @@ export async function prepareSessionHandoff(
     const text = (await dependencies.generate(prompt)).trim();
     const latencyMs = Math.round(dependencies.now() - startedAt);
     if (text.length === 0) {
-      console.warn(line("AGENT_SESSION_HANDOFF_SKIPPED", { latencyMs, reason: "empty_answer", sourceEntries: source.entries.length }));
+      console.warn(
+        line("AGENT_SESSION_HANDOFF_SKIPPED", {
+          latencyMs,
+          reason: "empty_answer",
+          sourceEntries: source.entries.length,
+        }),
+      );
       return;
     }
-    const clipped = text.length > SESSION_HANDOFF_MAX_CHARACTERS
-      ? `${text.slice(0, SESSION_HANDOFF_MAX_CHARACTERS - 1)}…`
-      : text;
-    await dependencies.store(input.applicationSessionId, { latencyMs, sourceEntries: source.entries.length, text: clipped });
-    console.info(line("AGENT_SESSION_HANDOFF_GENERATED", {
-      characters: clipped.length, latencyMs, sourceCharacters: source.rendered.length, sourceEntries: source.entries.length,
-    }));
+    const clipped =
+      text.length > SESSION_HANDOFF_MAX_CHARACTERS
+        ? `${text.slice(0, SESSION_HANDOFF_MAX_CHARACTERS - 1)}…`
+        : text;
+    await dependencies.store(input.applicationSessionId, {
+      latencyMs,
+      sourceEntries: source.entries.length,
+      text: clipped,
+    });
+    console.info(
+      line("AGENT_SESSION_HANDOFF_GENERATED", {
+        characters: clipped.length,
+        latencyMs,
+        sourceCharacters: source.rendered.length,
+        sourceEntries: source.entries.length,
+      }),
+    );
   } catch (error) {
     console.error(line("AGENT_SESSION_HANDOFF_FAILED", { error: failureCode(error) }));
   }

@@ -5,11 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  groceryCartLink,
-  groceryDetails,
-  groceryItems,
-} from "./grocery-presentation.js";
+import { groceryCartLink, groceryDetails, groceryItems } from "./grocery-presentation.js";
 
 const item = {
   id: 27695,
@@ -30,23 +26,28 @@ describe("grocery presentation", () => {
     const shaped = groceryItems({ data: { items: [item], meta: { total: 167 } }, ok: true }, 10);
 
     expect(shaped).toEqual({
-      items: [{
-        name: "Творог 5%, 180 г",
-        price: 108,
-        productId: 27695,
-        rating: 4.9,
-        unit: "шт",
-        url: "https://vkusvill.ru/goods/tvorog-5-27695/",
-      }],
+      items: [
+        {
+          name: "Творог 5%, 180 г",
+          price: 108,
+          productId: 27695,
+          rating: 4.9,
+          unit: "шт",
+          url: "https://vkusvill.ru/goods/tvorog-5-27695/",
+        },
+      ],
       total: 167,
     });
   });
 
   it("drops a row without a usable identity or name instead of inventing one", () => {
-    const shaped = groceryItems({
-      data: { items: [{ name: "Без id" }, { xml_id: 0, name: "Нулевой id" }, item] },
-      ok: true,
-    }, 10);
+    const shaped = groceryItems(
+      {
+        data: { items: [{ name: "Без id" }, { xml_id: 0, name: "Нулевой id" }, item] },
+        ok: true,
+      },
+      10,
+    );
 
     expect(shaped.items.map((row) => row.productId)).toEqual([27695]);
   });
@@ -66,16 +67,31 @@ describe("grocery presentation", () => {
   });
 
   it("accepts only a cart link of the catalog itself", () => {
-    expect(groceryCartLink({ data: { link: "https://vkusvill.ru/?share_basket=2499959943" }, ok: true }))
-      .toBe("https://vkusvill.ru/?share_basket=2499959943");
-    expect(groceryCartLink({data:{link:"https://www.vkusvill.ru/?share_basket=1&source=a%2Fb"},ok:true}))
-      .toBe("https://www.vkusvill.ru/?share_basket=1&source=a%2Fb");
-    for (const link of ["http://vkusvill.ru/x", "https://evil.example/?share_basket=1",
-      "https://evilvkusvill.ru/?share_basket=1", "https:vkusvill.ru/", "https://vkusvill.ru.evil.example/",
-      "https://user:password@vkusvill.ru/", "https://vkusvill.ru:8443/",
-      "https://vkusvill.ru/\n", "https://vkusvill.ru\\@evil.example/", 42, null]) {
-      expect(() => groceryCartLink({ data: { link }, ok: true }))
-        .toThrowError(/AGENT_GROCERY_CART_LINK_INVALID/);
+    expect(
+      groceryCartLink({ data: { link: "https://vkusvill.ru/?share_basket=2499959943" }, ok: true }),
+    ).toBe("https://vkusvill.ru/?share_basket=2499959943");
+    expect(
+      groceryCartLink({
+        data: { link: "https://www.vkusvill.ru/?share_basket=1&source=a%2Fb" },
+        ok: true,
+      }),
+    ).toBe("https://www.vkusvill.ru/?share_basket=1&source=a%2Fb");
+    for (const link of [
+      "http://vkusvill.ru/x",
+      "https://evil.example/?share_basket=1",
+      "https://evilvkusvill.ru/?share_basket=1",
+      "https:vkusvill.ru/",
+      "https://vkusvill.ru.evil.example/",
+      "https://user:password@vkusvill.ru/",
+      "https://vkusvill.ru:8443/",
+      "https://vkusvill.ru/\n",
+      "https://vkusvill.ru\\@evil.example/",
+      42,
+      null,
+    ]) {
+      expect(() => groceryCartLink({ data: { link }, ok: true })).toThrowError(
+        /AGENT_GROCERY_CART_LINK_INVALID/,
+      );
     }
   });
 });

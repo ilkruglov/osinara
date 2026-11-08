@@ -9,16 +9,16 @@
  * same way.
  */
 export declare function readDevelopmentRuntimeArtifactsRevision(input: {
-    readonly serverUrl: string;
+  readonly serverUrl: string;
 }): Promise<string | undefined>;
 export declare function suspendDevelopmentRuntimeArtifacts(input: {
-    readonly serverUrl: string;
+  readonly serverUrl: string;
 }): Promise<boolean>;
 export declare function resumeDevelopmentRuntimeArtifacts(input: {
-    readonly serverUrl: string;
-    readonly silent?: boolean;
+  readonly serverUrl: string;
+  readonly silent?: boolean;
 }): Promise<string | undefined>;
 export declare function rebuildDevelopmentRuntimeArtifacts(input: {
-    readonly force?: boolean;
-    readonly serverUrl: string;
+  readonly force?: boolean;
+  readonly serverUrl: string;
 }): Promise<string | undefined>;

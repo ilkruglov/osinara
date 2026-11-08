@@ -27,9 +27,7 @@ function contentFilteringProcessor(t, n) {
       },
       shutdown: () => t.shutdown(),
     };
-  return hasSessionRelease(t)
-    ? { ...i, releaseSession: (e) => t.releaseSession(e) }
-    : i;
+  return hasSessionRelease(t) ? { ...i, releaseSession: (e) => t.releaseSession(e) } : i;
 }
 function facadeFor(e, t, n) {
   let r = n.get(e);
@@ -40,9 +38,7 @@ function facadeFor(e, t, n) {
     s = Object.create(Reflect.getPrototypeOf(e)),
     c = new Map(),
     refresh = () => {
-      (refreshAttributes(i, e, t),
-        refreshEvents(a, e, t),
-        refreshStatus(o, e, t));
+      (refreshAttributes(i, e, t), refreshEvents(a, e, t), refreshStatus(o, e, t));
     },
     l,
     readOriginal = (t) => {
@@ -81,8 +77,7 @@ function facadeFor(e, t, n) {
     });
   }
   l = new Proxy(s, {
-    get: (e, t, n) =>
-      Object.hasOwn(e, t) ? Reflect.get(e, t, n) : readOriginal(t),
+    get: (e, t, n) => (Object.hasOwn(e, t) ? Reflect.get(e, t, n) : readOriginal(t)),
   });
   let u = { refresh, value: l };
   return (u.refresh(), n.set(e, u), u);

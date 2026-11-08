@@ -1,9 +1,7 @@
 function selectStaleTemplateEntries(e, t) {
   return [...e]
     .sort((e, t) => t.mtimeMs - e.mtimeMs)
-    .filter(
-      (e, n) => n >= t.retainCount && t.now - e.mtimeMs > t.recentWindowMs,
-    );
+    .filter((e, n) => n >= t.retainCount && t.now - e.mtimeMs > t.recentWindowMs);
 }
 const LOCAL_SANDBOX_TEMPLATE_RECENT_WINDOW_MS = 900 * 1e3,
   LOCAL_SANDBOX_TEMPLATE_RETAIN_COUNT = 5;

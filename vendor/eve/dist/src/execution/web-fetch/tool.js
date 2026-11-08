@@ -1,9 +1,6 @@
 import { truncateHead } from "#execution/sandbox/truncate-output.js";
 import { EVE_PACKAGE_NAME } from "#internal/package-name.js";
-import {
-  convertHtmlToMarkdownBounded,
-  extractTextFromHtml,
-} from "#execution/web-fetch/html.js";
+import { convertHtmlToMarkdownBounded, extractTextFromHtml } from "#execution/web-fetch/html.js";
 import { requestPublicUrl } from "#execution/web-fetch/request.js";
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024;
 async function executeWebFetchTool(n, r) {

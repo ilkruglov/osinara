@@ -34,37 +34,46 @@ function resolve(
   initiatorAttributes: Record<string, unknown> | null = null,
   authenticator = "telegram",
 ) {
-  return capabilities.events["step.started"]?.({} as never, {
-    channel: { kind: "telegram" },
-    messages: [],
-    session: {
-      auth: {
-        current: attributes === null ? null : {
-          attributes: {
-            telegramActorId: "101",
-            telegramActorKind: "telegram_user",
-            telegramUserId: "101",
-            ...attributes,
-          },
-          authenticator,
-          principalId: "telegram:101",
-          principalType: "user",
+  return capabilities.events["step.started"]?.(
+    {} as never,
+    {
+      channel: { kind: "telegram" },
+      messages: [],
+      session: {
+        auth: {
+          current:
+            attributes === null
+              ? null
+              : {
+                  attributes: {
+                    telegramActorId: "101",
+                    telegramActorKind: "telegram_user",
+                    telegramUserId: "101",
+                    ...attributes,
+                  },
+                  authenticator,
+                  principalId: "telegram:101",
+                  principalType: "user",
+                },
+          initiator:
+            initiatorAttributes === null
+              ? null
+              : {
+                  attributes: {
+                    telegramActorId: "101",
+                    telegramActorKind: "telegram_user",
+                    telegramUserId: "101",
+                    ...initiatorAttributes,
+                  },
+                  authenticator: "telegram",
+                  principalId: "telegram:101",
+                  principalType: "user",
+                },
         },
-        initiator: initiatorAttributes === null ? null : {
-          attributes: {
-            telegramActorId: "101",
-            telegramActorKind: "telegram_user",
-            telegramUserId: "101",
-            ...initiatorAttributes,
-          },
-          authenticator: "telegram",
-          principalId: "telegram:101",
-          principalType: "user",
-        },
+        id: "session-1",
       },
-      id: "session-1",
-    },
-  } as never);
+    } as never,
+  );
 }
 
 describe("dynamic capability resolver", () => {
@@ -109,14 +118,31 @@ describe("dynamic capability resolver", () => {
     });
     const names = Object.keys(surface ?? {});
 
-    expect(names).toEqual(expect.arrayContaining(["list_group_history", "search_memories", "bash", "write_file", "agent"]));
-    for (const absent of ["remember", "manage_memory", "send_workspace_image", "send_widget", "generate_image", "manage_reminder"]) {
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "list_group_history",
+        "search_memories",
+        "bash",
+        "write_file",
+        "agent",
+      ]),
+    );
+    for (const absent of [
+      "remember",
+      "manage_memory",
+      "send_workspace_image",
+      "send_widget",
+      "generate_image",
+      "manage_reminder",
+    ]) {
       expect(names).not.toContain(absent);
     }
   });
 
   it("narrows a whisper in an external group to its granted reading tools", async () => {
-    loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember", "search_memories"]));
+    loadCurrentExternalGroupCapabilities.mockResolvedValue(
+      new Set(["remember", "search_memories"]),
+    );
 
     const surface = await resolve({
       familyId: "family-1",
@@ -163,18 +189,24 @@ describe("dynamic capability resolver", () => {
   });
 
   it("emits only snapshot-and-live memory grants for an external background review", async () => {
-    loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember", "search_memories"]));
+    loadCurrentExternalGroupCapabilities.mockResolvedValue(
+      new Set(["remember", "search_memories"]),
+    );
 
-    const surface = await resolve({
-      familyId: "family-1",
-      groupId: "group-1",
-      groupType: "external",
-      memoryReviewBatchId: "batch-1",
-      memoryReviewMode: "background",
-      memoryScopes: ["group"],
-      telegramChatType: "supergroup",
-      toolAllowlist: ["remember"],
-    }, null, "memory-review");
+    const surface = await resolve(
+      {
+        familyId: "family-1",
+        groupId: "group-1",
+        groupType: "external",
+        memoryReviewBatchId: "batch-1",
+        memoryReviewMode: "background",
+        memoryScopes: ["group"],
+        telegramChatType: "supergroup",
+        toolAllowlist: ["remember"],
+      },
+      null,
+      "memory-review",
+    );
 
     expect(Object.keys(surface ?? {})).toContain("remember");
     expect(Object.keys(surface ?? {})).not.toContain("search_memories");
@@ -226,32 +258,44 @@ describe("dynamic capability resolver", () => {
   });
 
   it.each([
-    ["private", {
-      memoryScopes: ["personal", "family"],
-      telegramChatType: "private",
-    }],
-    ["family", {
-      groupType: "family_private",
-      memoryScopes: ["family"],
-      telegramChatType: "supergroup",
-    }],
-    ["external denied skill", {
-      familyId: "family-1",
-      groupId: "group-1",
-      groupType: "external",
-      memoryScopes: ["group"],
-      telegramChatType: "supergroup",
-      toolAllowlist: ["remember"],
-    }],
-    ["external granted skill", {
-      familyId: "family-1",
-      groupId: "group-1",
-      groupType: "external",
-      memoryScopes: ["group"],
-      skillAllowlist: ["pohuy"],
-      telegramChatType: "supergroup",
-      toolAllowlist: ["remember"],
-    }],
+    [
+      "private",
+      {
+        memoryScopes: ["personal", "family"],
+        telegramChatType: "private",
+      },
+    ],
+    [
+      "family",
+      {
+        groupType: "family_private",
+        memoryScopes: ["family"],
+        telegramChatType: "supergroup",
+      },
+    ],
+    [
+      "external denied skill",
+      {
+        familyId: "family-1",
+        groupId: "group-1",
+        groupType: "external",
+        memoryScopes: ["group"],
+        telegramChatType: "supergroup",
+        toolAllowlist: ["remember"],
+      },
+    ],
+    [
+      "external granted skill",
+      {
+        familyId: "family-1",
+        groupId: "group-1",
+        groupType: "external",
+        memoryScopes: ["group"],
+        skillAllowlist: ["pohuy"],
+        telegramChatType: "supergroup",
+        toolAllowlist: ["remember"],
+      },
+    ],
   ] as const)("returns only Eve-branded tools for %s mode", async (_name, attributes) => {
     loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember"]));
 

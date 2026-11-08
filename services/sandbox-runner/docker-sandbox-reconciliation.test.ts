@@ -42,13 +42,15 @@ describe("sandbox warm-cache reconciliation", () => {
       listContainers: vi.fn(async () => listed),
     } as unknown as Docker;
 
-    await expect(reconcileSandboxContainers({
-      activity: createSandboxActivityRegistry(() => NOW_MS),
-      docker,
-      idleCutoffMs: NOW_MS - 30 * 60 * 1_000,
-      nowMs: NOW_MS,
-      project: "osinara",
-    })).resolves.toEqual({ removed: 2, stopped: 0 });
+    await expect(
+      reconcileSandboxContainers({
+        activity: createSandboxActivityRegistry(() => NOW_MS),
+        docker,
+        idleCutoffMs: NOW_MS - 30 * 60 * 1_000,
+        nowMs: NOW_MS,
+        project: "osinara",
+      }),
+    ).resolves.toEqual({ removed: 2, stopped: 0 });
 
     expect(removals[0]).toHaveBeenCalledOnce();
     expect(removals[1]).toHaveBeenCalledOnce();
@@ -58,26 +60,32 @@ describe("sandbox warm-cache reconciliation", () => {
 
 describe("sandbox running-container cap", () => {
   const NOW_MS = Date.parse("2026-10-05T00:00:00.000Z");
-  const running = (count: number) => Array.from({ length: count }, (_, index) => ({
-    Id: `running-${index}`,
-    Labels: { "dev.osinara.sandbox.session-id": `session-${index}` },
-    State: "running",
-  }));
-  const dockerWith = (listed: unknown[], stops: Map<string, ReturnType<typeof vi.fn>>) => ({
-    getContainer: vi.fn((id: string) => ({ stop: stops.get(id) ?? vi.fn(async () => undefined) })),
-    listContainers: vi.fn(async () => listed),
-  }) as unknown as Docker;
+  const running = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      Id: `running-${index}`,
+      Labels: { "dev.osinara.sandbox.session-id": `session-${index}` },
+      State: "running",
+    }));
+  const dockerWith = (listed: unknown[], stops: Map<string, ReturnType<typeof vi.fn>>) =>
+    ({
+      getContainer: vi.fn((id: string) => ({
+        stop: stops.get(id) ?? vi.fn(async () => undefined),
+      })),
+      listContainers: vi.fn(async () => listed),
+    }) as unknown as Docker;
 
   it("leaves room below the cap without touching anything", async () => {
     const stops = new Map([["running-0", vi.fn(async () => undefined)]]);
-    await expect(makeRoomForContainer({
-      activity: createSandboxActivityRegistry(() => NOW_MS),
-      docker: dockerWith(running(2), stops),
-      limit: 3,
-      minIdleMs: 60_000,
-      nowMs: NOW_MS,
-      project: "osinara",
-    })).resolves.toEqual({ room: true, running: 2 });
+    await expect(
+      makeRoomForContainer({
+        activity: createSandboxActivityRegistry(() => NOW_MS),
+        docker: dockerWith(running(2), stops),
+        limit: 3,
+        minIdleMs: 60_000,
+        nowMs: NOW_MS,
+        project: "osinara",
+      }),
+    ).resolves.toEqual({ room: true, running: 2 });
     expect(stops.get("running-0")).not.toHaveBeenCalled();
   });
 
@@ -88,16 +96,20 @@ describe("sandbox running-container cap", () => {
     await activity.runActive("session-1", async () => undefined);
     clock = NOW_MS;
     await activity.runActive("session-2", async () => undefined);
-    const stops = new Map(["running-0", "running-1", "running-2"].map((id) => [id, vi.fn(async () => undefined)]));
+    const stops = new Map(
+      ["running-0", "running-1", "running-2"].map((id) => [id, vi.fn(async () => undefined)]),
+    );
 
-    await expect(makeRoomForContainer({
-      activity,
-      docker: dockerWith(running(3), stops),
-      limit: 3,
-      minIdleMs: 60_000,
-      nowMs: NOW_MS,
-      project: "osinara",
-    })).resolves.toEqual({ room: true, running: 2 });
+    await expect(
+      makeRoomForContainer({
+        activity,
+        docker: dockerWith(running(3), stops),
+        limit: 3,
+        minIdleMs: 60_000,
+        nowMs: NOW_MS,
+        project: "osinara",
+      }),
+    ).resolves.toEqual({ room: true, running: 2 });
     expect(stops.get("running-0")).toHaveBeenCalledOnce();
     expect(stops.get("running-1")).not.toHaveBeenCalled();
     expect(stops.get("running-2")).not.toHaveBeenCalled();
@@ -105,32 +117,41 @@ describe("sandbox running-container cap", () => {
 
   it("counts a container the idle sweep stopped meanwhile as stopped", async () => {
     const activity = createSandboxActivityRegistry(() => NOW_MS);
-    const alreadyStopped = Object.assign(new Error("container already stopped"), { statusCode: 304 });
+    const alreadyStopped = Object.assign(new Error("container already stopped"), {
+      statusCode: 304,
+    });
     const stops = new Map([["running-0", vi.fn(async () => Promise.reject(alreadyStopped))]]);
 
-    await expect(makeRoomForContainer({
-      activity,
-      docker: dockerWith(running(1), stops),
-      limit: 1,
-      minIdleMs: 60_000,
-      nowMs: NOW_MS,
-      project: "osinara",
-    })).resolves.toEqual({ room: true, running: 0 });
+    await expect(
+      makeRoomForContainer({
+        activity,
+        docker: dockerWith(running(1), stops),
+        limit: 1,
+        minIdleMs: 60_000,
+        nowMs: NOW_MS,
+        project: "osinara",
+      }),
+    ).resolves.toEqual({ room: true, running: 0 });
   });
 
   it("finds no room when every container at the cap was used within the minute", async () => {
     const activity = createSandboxActivityRegistry(() => NOW_MS);
-    for (const session of ["session-0", "session-1"]) await activity.runActive(session, async () => undefined);
-    const stops = new Map(["running-0", "running-1"].map((id) => [id, vi.fn(async () => undefined)]));
+    for (const session of ["session-0", "session-1"])
+      await activity.runActive(session, async () => undefined);
+    const stops = new Map(
+      ["running-0", "running-1"].map((id) => [id, vi.fn(async () => undefined)]),
+    );
 
-    await expect(makeRoomForContainer({
-      activity,
-      docker: dockerWith(running(2), stops),
-      limit: 2,
-      minIdleMs: 60_000,
-      nowMs: NOW_MS,
-      project: "osinara",
-    })).resolves.toEqual({ room: false, running: 2 });
+    await expect(
+      makeRoomForContainer({
+        activity,
+        docker: dockerWith(running(2), stops),
+        limit: 2,
+        minIdleMs: 60_000,
+        nowMs: NOW_MS,
+        project: "osinara",
+      }),
+    ).resolves.toEqual({ room: false, running: 2 });
     expect([...stops.values()].every((stop) => stop.mock.calls.length === 0)).toBe(true);
   });
 });

@@ -48,20 +48,24 @@ const TOP_LEVEL_FIELDS = [
   "timezone",
 ] as const;
 
-const recurrenceSchema = z.object({
-  interval: z.number().int().min(1).max(REMINDER_RECURRENCE_INTERVAL_MAX),
-  unit: z.enum(REMINDER_RECURRENCE_UNITS),
-}).strict();
+const recurrenceSchema = z
+  .object({
+    interval: z.number().int().min(1).max(REMINDER_RECURRENCE_INTERVAL_MAX),
+    unit: z.enum(REMINDER_RECURRENCE_UNITS),
+  })
+  .strict();
 
-const manageReminderSchema = z.object({
-  action: z.enum(TOOL_ACTIONS),
-  content: z.string().optional(),
-  firstRunAt: z.string().optional(),
-  id: z.string().optional(),
-  recurrence: z.union([recurrenceSchema, z.null()]).optional(),
-  scope: z.string().optional(),
-  timezone: z.string().optional(),
-}).strict();
+const manageReminderSchema = z
+  .object({
+    action: z.enum(TOOL_ACTIONS),
+    content: z.string().optional(),
+    firstRunAt: z.string().optional(),
+    id: z.string().optional(),
+    recurrence: z.union([recurrenceSchema, z.null()]).optional(),
+    scope: z.string().optional(),
+    timezone: z.string().optional(),
+  })
+  .strict();
 
 type ReminderAction = (typeof TOOL_ACTIONS)[number];
 
@@ -70,7 +74,7 @@ function requireReminderRecurrence(raw: unknown): ReminderRecurrence | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     toolInputError(
       INPUT_ERROR_CODE,
-      "Для recurrence передайте null или объект {\"unit\":\"weekly\",\"interval\":1}",
+      'Для recurrence передайте null или объект {"unit":"weekly","interval":1}',
     );
   }
   const recurrence = raw as Record<string, unknown>;
@@ -85,7 +89,7 @@ function requireReminderRecurrence(raw: unknown): ReminderRecurrence | null {
   ) {
     toolInputError(
       INPUT_ERROR_CODE,
-      "Для recurrence передайте null или объект {\"unit\":\"weekly\",\"interval\":1}",
+      'Для recurrence передайте null или объект {"unit":"weekly","interval":1}',
     );
   }
   return { interval, unit };
@@ -100,14 +104,12 @@ function requireReminderId(input: Record<string, unknown>): string {
 }
 
 function requireCreateInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, [
-    "action",
-    "content",
-    "firstRunAt",
-    "recurrence",
-    "scope",
-    "timezone",
-  ], "action=create", INPUT_ERROR_CODE);
+  requireOnlyFields(
+    input,
+    ["action", "content", "firstRunAt", "recurrence", "scope", "timezone"],
+    "action=create",
+    INPUT_ERROR_CODE,
+  );
   return {
     content: requiredString(input, "content", INPUT_ERROR_CODE, "Позвонить врачу", {
       maxLength: REMINDER_CONTENT_MAX_LENGTH,
@@ -115,21 +117,28 @@ function requireCreateInput(input: Record<string, unknown>) {
     firstRunAt: requiredIsoDate(input, "firstRunAt", INPUT_ERROR_CODE),
     recurrence: requireReminderRecurrence(input.recurrence),
     scope: requiredEnum(input, "scope", SCOPES, INPUT_ERROR_CODE) as ReminderScope,
-    timezone: requiredString(input, "timezone", INPUT_ERROR_CODE, "Europe/Moscow", { maxLength: 100 }),
+    timezone: requiredString(input, "timezone", INPUT_ERROR_CODE, "Europe/Moscow", {
+      maxLength: 100,
+    }),
   };
 }
 
 function requireUpdateInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, [
-    "action",
-    "content",
-    "firstRunAt",
-    "id",
-    "recurrence",
-    // A model may materialize these known create-only siblings; update ignores them explicitly.
-    "scope",
-    "timezone",
-  ], "action=update", INPUT_ERROR_CODE);
+  requireOnlyFields(
+    input,
+    [
+      "action",
+      "content",
+      "firstRunAt",
+      "id",
+      "recurrence",
+      // A model may materialize these known create-only siblings; update ignores them explicitly.
+      "scope",
+      "timezone",
+    ],
+    "action=update",
+    INPUT_ERROR_CODE,
+  );
   const content = optionalString(input, "content", INPUT_ERROR_CODE, "Позвонить врачу", {
     maxLength: REMINDER_CONTENT_MAX_LENGTH,
   });
@@ -150,9 +159,15 @@ function requireIdOnlyInput(input: Record<string, unknown>, action: ReminderActi
 }
 
 // A completed reminder resumes only with a new time (the repository insists), so resume takes it.
-function requireResumeInput(input: Record<string, unknown>): { firstRunAt: Date | undefined; id: string } {
+function requireResumeInput(input: Record<string, unknown>): {
+  firstRunAt: Date | undefined;
+  id: string;
+} {
   requireOnlyFields(input, ["action", "firstRunAt", "id"], "action=resume", INPUT_ERROR_CODE);
-  return { firstRunAt: optionalIsoDate(input, "firstRunAt", INPUT_ERROR_CODE), id: requireReminderId(input) };
+  return {
+    firstRunAt: optionalIsoDate(input, "firstRunAt", INPUT_ERROR_CODE),
+    id: requireReminderId(input),
+  };
 }
 
 function requireManageReminderInput(input: unknown) {
@@ -169,7 +184,7 @@ function requireManageReminderInput(input: unknown) {
 
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления. Для автономного запуска агента с исследованием или отчётом используй manage_agent_schedule. Перед update/pause/resume/delete найди id через list_reminders; повторение меняй через update, не пересоздавай.",
-  "Create: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}. Повтор: {\"unit\":\"daily\",\"interval\":1}; unit это minutely, hourly, daily, weekly, monthly или yearly, interval целое от 1 до 365, минимум одна минута; без повтора recurrence=null. Минуты и часы отсчитываются как длительность, остальные периоды сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной для следующих повторов.",
+  'Create: {"action":"create","content":"Позвонить врачу","firstRunAt":"2026-08-01T10:00:00+03:00","timezone":"Europe/Moscow","scope":"personal","recurrence":null}. Повтор: {"unit":"daily","interval":1}; unit это minutely, hourly, daily, weekly, monthly или yearly, interval целое от 1 до 365, минимум одна минута; без повтора recurrence=null. Минуты и часы отсчитываются как длительность, остальные периоды сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной для следующих повторов.',
   "Update передаёт id и только изменяемые content, firstRunAt или recurrence; pause/delete только action и id; resume принимает необязательный firstRunAt, обязательный для завершённого напоминания. firstRunAt в ISO с UTC offset, timezone IANA.",
 ].join(" ");
 
@@ -199,7 +214,9 @@ export default defineTool({
     if (parsed.action === "pause" || parsed.action === "resume") {
       return await reminderRepository.update(authorization, parsed.id, {
         enabled: parsed.action === "resume",
-        ...(parsed.action === "resume" && parsed.firstRunAt !== undefined ? { firstRunAt: parsed.firstRunAt } : {}),
+        ...(parsed.action === "resume" && parsed.firstRunAt !== undefined
+          ? { firstRunAt: parsed.firstRunAt }
+          : {}),
         operationKey: ctx.callId,
       });
     }

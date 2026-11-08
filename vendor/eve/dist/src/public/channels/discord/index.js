@@ -1,7 +1,4 @@
-import {
-  verifyDiscordRequest,
-  verifyDiscordSignature,
-} from "#public/channels/discord/verify.js";
+import { verifyDiscordRequest, verifyDiscordSignature } from "#public/channels/discord/verify.js";
 import {
   DISCORD_MESSAGE_CONTENT_MAX_LENGTH,
   DISCORD_NO_MENTIONS,

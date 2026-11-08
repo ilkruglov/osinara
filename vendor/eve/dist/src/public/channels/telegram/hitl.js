@@ -49,10 +49,7 @@ function telegramReplyInputResponse(e) {
   };
 }
 function isTelegramSyntheticResponse(e) {
-  return (
-    e.requestId.startsWith(`telegram_callback:`) ||
-    e.requestId.startsWith(`telegram_reply:`)
-  );
+  return e.requestId.startsWith(`telegram_callback:`) || e.requestId.startsWith(`telegram_reply:`);
 }
 function resolveTelegramInputResponses(e, t) {
   let n = [];
@@ -68,8 +65,7 @@ function resolveTelegramInputResponses(e, t) {
         i = e.pendingFreeformReplies?.[t];
       i !== void 0 &&
         r.text !== void 0 &&
-        (n.push({ requestId: i, text: r.text }),
-        delete e.pendingFreeformReplies?.[t]);
+        (n.push({ requestId: i, text: r.text }), delete e.pendingFreeformReplies?.[t]);
       continue;
     }
     n.push(r);

@@ -13,4 +13,7 @@ import type { HarnessSession } from "#harness/types.js";
  * A granted continuation bumps the parent's runtime limit, so children
  * dispatched after a grant draw from the fresh window.
  */
-export declare function resolveRemainingSessionTokenLimits(session: Pick<HarnessSession, "limits" | "state">, fanoutSize?: number): RunSessionLimits;
+export declare function resolveRemainingSessionTokenLimits(
+  session: Pick<HarnessSession, "limits" | "state">,
+  fanoutSize?: number,
+): RunSessionLimits;

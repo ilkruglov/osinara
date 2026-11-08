@@ -19,9 +19,7 @@ const FALLBACK_PACKAGE_INFO = {
   version: resolveFallbackPackageVersion(),
 };
 function resolveCurrentModulePath() {
-  return typeof __filename == `string`
-    ? __filename
-    : resolveCurrentModulePathFromStack();
+  return typeof __filename == `string` ? __filename : resolveCurrentModulePathFromStack();
 }
 function resolveCurrentModulePathFromStack() {
   let e = Error.prepareStackTrace;
@@ -29,9 +27,7 @@ function resolveCurrentModulePathFromStack() {
     Error.prepareStackTrace = (e, t) => t;
     let e = Error().stack?.[0]?.getFileName();
     if (typeof e != `string` || e.length === 0)
-      throw Error(
-        `Failed to resolve the current module path from the stack trace.`,
-      );
+      throw Error(`Failed to resolve the current module path from the stack trace.`);
     return e.startsWith(`file:`) ? fileURLToPath(e) : e;
   } finally {
     Error.prepareStackTrace = e;
@@ -41,9 +37,7 @@ const require = createRequire(resolveCurrentModulePath());
 function tryResolveVerifiedPackageRoot(e) {
   try {
     let t = realpathSync.native(e);
-    return tryReadInstalledPackageInfo(t, EVE_PACKAGE_NAME) === void 0
-      ? void 0
-      : dirname(t);
+    return tryReadInstalledPackageInfo(t, EVE_PACKAGE_NAME) === void 0 ? void 0 : dirname(t);
   } catch {
     return;
   }
@@ -81,16 +75,12 @@ function tryCreatePackageLocation(e) {
 function resolveSelfPackageJsonPath(t) {
   return createRequire(t).resolve(`${EVE_PACKAGE_NAME}/package.json`);
 }
-function resolvePackageLocationFromModulePath(
-  e,
-  t = resolveSelfPackageJsonPath,
-) {
+function resolvePackageLocationFromModulePath(e, t = resolveSelfPackageJsonPath) {
   let r = realpathSync.native(e),
     i = tryResolveDirectBuildLocation(r);
   if (i !== void 0) return i;
   let a = findNearestVerifiedPackageRoot(dirname(r));
-  if (a !== void 0 && isSourceCheckout(a))
-    return { packageBuildRoot: null, packageRoot: a };
+  if (a !== void 0 && isSourceCheckout(a)) return { packageBuildRoot: null, packageRoot: a };
   try {
     let e = tryResolveVerifiedPackageRoot(t(r)),
       n = e === void 0 ? void 0 : tryCreatePackageLocation(e);
@@ -102,9 +92,7 @@ function resolvePackageLocationFromModulePath(
 }
 function resolvePackageLocation() {
   return (
-    (cachedPackageLocation ??= resolvePackageLocationFromModulePath(
-      resolveCurrentModulePath(),
-    )),
+    (cachedPackageLocation ??= resolvePackageLocationFromModulePath(resolveCurrentModulePath())),
     cachedPackageLocation
   );
 }
@@ -126,9 +114,7 @@ function rewriteSourceFilePathForBuild(e) {
 }
 function resolvePackageSourceFilePath(e) {
   let t = resolvePackageBuildRoot();
-  return t === null
-    ? join(resolvePackageRoot(), e)
-    : join(t, rewriteSourceFilePathForBuild(e));
+  return t === null ? join(resolvePackageRoot(), e) : join(t, rewriteSourceFilePathForBuild(e));
 }
 function resolvePackageSourceDirectoryPath(e) {
   let t = resolvePackageBuildRoot();
@@ -140,12 +126,7 @@ function resolvePackageDependencyPath(e) {
 function resolvePackageCompiledFilePath(e) {
   let t = resolvePackageBuildRoot();
   return t === null
-    ? join(
-        resolvePackageRoot(),
-        `.generated`,
-        `compiled`,
-        e.replace(/^src\/compiled\//, ``),
-      )
+    ? join(resolvePackageRoot(), `.generated`, `compiled`, e.replace(/^src\/compiled\//, ``))
     : join(t, e);
 }
 function normalizeInstalledPackageInfo(e) {
@@ -163,10 +144,7 @@ function resolveInstalledPackageInfo() {
     t =
       e === void 0
         ? void 0
-        : tryReadInstalledPackageInfo(
-            join(e, `package.json`),
-            EVE_PACKAGE_NAME,
-          );
+        : tryReadInstalledPackageInfo(join(e, `package.json`), EVE_PACKAGE_NAME);
   if (t) return ((cachedPackageInfo = t), cachedPackageInfo);
   try {
     let e = tryReadInstalledPackageInfo(
@@ -175,10 +153,7 @@ function resolveInstalledPackageInfo() {
     );
     if (e) return ((cachedPackageInfo = e), cachedPackageInfo);
   } catch {}
-  return (
-    (cachedPackageInfo = { ...FALLBACK_PACKAGE_INFO }),
-    cachedPackageInfo
-  );
+  return ((cachedPackageInfo = { ...FALLBACK_PACKAGE_INFO }), cachedPackageInfo);
 }
 function readWorkflowVersionFromManifest(e) {
   let t = e;
@@ -197,20 +172,14 @@ function resolveExpectedWorkflowVersion() {
     } catch {}
   try {
     return readWorkflowVersionFromManifest(
-      JSON.parse(
-        readFileSync(
-          require.resolve(`${EVE_PACKAGE_NAME}/package.json`),
-          `utf8`,
-        ),
-      ),
+      JSON.parse(readFileSync(require.resolve(`${EVE_PACKAGE_NAME}/package.json`), `utf8`)),
     );
   } catch {
     return;
   }
 }
 function resolveWorkflowModulePath(e) {
-  if (e === `workflow`)
-    return resolvePackageSourceFilePath(`src/internal/workflow/index.ts`);
+  if (e === `workflow`) return resolvePackageSourceFilePath(`src/internal/workflow/index.ts`);
   if (e === `workflow/api` || e === `workflow/runtime`)
     return resolvePackageSourceFilePath(`src/internal/workflow/runtime.ts`);
   if (e === `workflow/internal/builtins`)

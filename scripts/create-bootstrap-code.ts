@@ -30,9 +30,7 @@ try {
   const generated = createBootstrapCode(new Date());
   await client.query("BEGIN");
   try {
-    await client.query(
-      "UPDATE bootstrap_codes SET consumed_at = now() WHERE consumed_at IS NULL",
-    );
+    await client.query("UPDATE bootstrap_codes SET consumed_at = now() WHERE consumed_at IS NULL");
     await client.query(
       `INSERT INTO bootstrap_codes (code_hash, created_at, expires_at)
        VALUES ($1, $2, $3)`,
@@ -44,10 +42,12 @@ try {
     throw error;
   }
 
-  process.stdout.write(serializeBootstrapCodeOutput({
-    code: generated.code,
-    expiresAt: generated.record.expiresAt,
-  }));
+  process.stdout.write(
+    serializeBootstrapCodeOutput({
+      code: generated.code,
+      expiresAt: generated.record.expiresAt,
+    }),
+  );
 } finally {
   await client.end();
 }

@@ -12,9 +12,9 @@ import { type NitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifa
  * `fetch` with a `RouteContext` built from `runtime`.
  */
 export interface NitroChannelRuntimeBundle {
-    readonly channels: readonly ResolvedChannelDefinition[];
-    readonly resolveRemoteAgentStreamHeaders?: RemoteAgentStreamHeadersResolver;
-    readonly runtime: Runtime;
+  readonly channels: readonly ResolvedChannelDefinition[];
+  readonly resolveRemoteAgentStreamHeaders?: RemoteAgentStreamHeadersResolver;
+  readonly runtime: Runtime;
 }
 /**
  * Resolves the per-request channel bundle: the agent's resolved channels
@@ -25,4 +25,6 @@ export interface NitroChannelRuntimeBundle {
  * workflow's durable execution and the channel set is recomputed from the
  * compiled bundle on each request.
  */
-export declare function resolveNitroChannelRuntimeBundle(config: NitroArtifactsConfig): Promise<NitroChannelRuntimeBundle>;
+export declare function resolveNitroChannelRuntimeBundle(
+  config: NitroArtifactsConfig,
+): Promise<NitroChannelRuntimeBundle>;

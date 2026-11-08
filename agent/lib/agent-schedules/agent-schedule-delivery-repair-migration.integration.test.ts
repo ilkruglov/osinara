@@ -116,9 +116,11 @@ describeWithDatabase("037 delivered agent schedule repair migration", () => {
       await expect(client.query(migration)).rejects.toThrowError(
         /AGENT_SCHEDULE_DELIVERY_REPAIR_PARENT_INVALID/u,
       );
-      await expect(client.query(
-        "SELECT status::text FROM agent_schedule_runs WHERE id = '00000000-0000-4000-8000-000000000003'",
-      )).resolves.toMatchObject({ rows: [{ status: "running" }] });
+      await expect(
+        client.query(
+          "SELECT status::text FROM agent_schedule_runs WHERE id = '00000000-0000-4000-8000-000000000003'",
+        ),
+      ).resolves.toMatchObject({ rows: [{ status: "running" }] });
     } finally {
       await client.query("SET search_path TO public");
       client.release();

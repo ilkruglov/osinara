@@ -59,13 +59,23 @@ describe("authored skill contract", () => {
 
   it("publishes a thin draft but reports the checklist warnings", () => {
     const thin = [
-      "## Когда применять", "Когда просят открытку.", "",
-      "## Шаги", "1. Вызови `generate_image`.", "",
-      "## Проверка результата", "Картинка есть.",
+      "## Когда применять",
+      "Когда просят открытку.",
+      "",
+      "## Шаги",
+      "1. Вызови `generate_image`.",
+      "",
+      "## Проверка результата",
+      "Картинка есть.",
     ].join("\n");
-    const warnings = assertAuthoredSkillDraft(draft({
-      description: "Открытка", files: { "references/flux-card.md": "Prompt template." }, markdown: thin,
-    }), { knownToolNames: KNOWN });
+    const warnings = assertAuthoredSkillDraft(
+      draft({
+        description: "Открытка",
+        files: { "references/flux-card.md": "Prompt template." },
+        markdown: thin,
+      }),
+      { knownToolNames: KNOWN },
+    );
     expect(warnings).toEqual([
       expect.stringContaining("Когда не применять"),
       expect.stringContaining("меньше двух пунктов"),
@@ -84,25 +94,37 @@ describe("authored skill contract", () => {
     ["pdf", "AGENT_SKILL_NAME_RESERVED"],
     ["gws-mail", "AGENT_SKILL_NAME_RESERVED"],
   ])("rejects the name %s with %s", (name, code) => {
-    expect(() => assertAuthoredSkillDraft(draft({ name }), { knownToolNames: KNOWN }))
-      .toThrow(expect.objectContaining({ code }));
+    expect(() => assertAuthoredSkillDraft(draft({ name }), { knownToolNames: KNOWN })).toThrow(
+      expect.objectContaining({ code }),
+    );
   });
 
   it("requires a trial summary and a change note", () => {
-    expect(() => assertAuthoredSkillDraft(draft({ trialSummary: "  " }), { knownToolNames: KNOWN }))
-      .toThrow(expect.objectContaining({ code: "AGENT_SKILL_TRIAL_MISSING" }));
-    expect(() => assertAuthoredSkillDraft(draft({ changeNote: "" }), { knownToolNames: KNOWN }))
-      .toThrow(expect.objectContaining({ code: "AGENT_SKILL_CHANGE_NOTE_MISSING" }));
+    expect(() =>
+      assertAuthoredSkillDraft(draft({ trialSummary: "  " }), { knownToolNames: KNOWN }),
+    ).toThrow(expect.objectContaining({ code: "AGENT_SKILL_TRIAL_MISSING" }));
+    expect(() =>
+      assertAuthoredSkillDraft(draft({ changeNote: "" }), { knownToolNames: KNOWN }),
+    ).toThrow(expect.objectContaining({ code: "AGENT_SKILL_CHANGE_NOTE_MISSING" }));
   });
 
   it("rejects oversized content and bad file paths in one error", () => {
-    expect(() => assertAuthoredSkillDraft(draft({
-      files: { "scripts/run.sh": "x", "references/a.md": "y".repeat(6_001) },
-      markdown: GOOD_MARKDOWN + "\n" + "z".repeat(8_000),
-    }), { knownToolNames: KNOWN })).toThrow(expect.objectContaining({
-      code: "AGENT_SKILL_CONTENT_TOO_LARGE",
-      message: expect.stringMatching(/markdown длиннее.*scripts\/run\.sh.*references\/a\.md длиннее/su),
-    }));
+    expect(() =>
+      assertAuthoredSkillDraft(
+        draft({
+          files: { "scripts/run.sh": "x", "references/a.md": "y".repeat(6_001) },
+          markdown: GOOD_MARKDOWN + "\n" + "z".repeat(8_000),
+        }),
+        { knownToolNames: KNOWN },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "AGENT_SKILL_CONTENT_TOO_LARGE",
+        message: expect.stringMatching(
+          /markdown длиннее.*scripts\/run\.sh.*references\/a\.md длиннее/su,
+        ),
+      }),
+    );
   });
 
   it("lists every rubric problem at once", () => {
@@ -132,18 +154,35 @@ describe("authored skill contract", () => {
       "references/missing.md",
       "недоверенного контекста",
       "похожая на ключ",
-    ]) expect(message).toContain(fragment);
+    ])
+      expect(message).toContain(fragment);
     expect(message).not.toContain("generate_image");
   });
 
   it("requires a reference file for a skill that generates images", () => {
-    expect(() => assertAuthoredSkillDraft(draft({ files: {}, markdown: GOOD_MARKDOWN.replace("по references/flux-card.md", "по шаблону") }), { knownToolNames: KNOWN }))
-      .toThrow(expect.objectContaining({
+    expect(() =>
+      assertAuthoredSkillDraft(
+        draft({
+          files: {},
+          markdown: GOOD_MARKDOWN.replace("по references/flux-card.md", "по шаблону"),
+        }),
+        { knownToolNames: KNOWN },
+      ),
+    ).toThrow(
+      expect.objectContaining({
         code: "AGENT_SKILL_RUBRIC_FAILED",
         message: expect.stringContaining("generate_image должен нести references"),
-      }));
-    const textOnly = GOOD_MARKDOWN.replace("Вызови `generate_image`", "Вызови `web_search`").replace("по references/flux-card.md", "по запросу");
-    expect(() => assertAuthoredSkillDraft(draft({ files: {}, markdown: textOnly }), { knownToolNames: new Set([...KNOWN, "web_search"]) })).not.toThrow();
+      }),
+    );
+    const textOnly = GOOD_MARKDOWN.replace(
+      "Вызови `generate_image`",
+      "Вызови `web_search`",
+    ).replace("по references/flux-card.md", "по запросу");
+    expect(() =>
+      assertAuthoredSkillDraft(draft({ files: {}, markdown: textOnly }), {
+        knownToolNames: new Set([...KNOWN, "web_search"]),
+      }),
+    ).not.toThrow();
   });
 
   it("treats Eve built-ins and parameters in backticks as acceptable", () => {
@@ -151,32 +190,78 @@ describe("authored skill contract", () => {
       "3. Отправь файл",
       "3. Уточни `scope` и при необходимости `web_search`, затем `bash` для проверки. Отправь файл",
     );
-    expect(() => assertAuthoredSkillDraft(draft({ markdown }), { knownToolNames: KNOWN })).not.toThrow();
+    expect(() =>
+      assertAuthoredSkillDraft(draft({ markdown }), { knownToolNames: KNOWN }),
+    ).not.toThrow();
   });
 
   // Codex review, 30 September 2026: `car-diagnostics` could be published as an authored skill.
   it("reserves every built-in skill directory name", () => {
     const builtIn = readdirSync(new URL("../../skills/", import.meta.url), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
     expect(builtIn).toContain("car-diagnostics");
-    for (const name of [...builtIn, "imagegen", "telegram-widgets"]) expect(isReservedSkillName(name)).toBe(true);
+    for (const name of [...builtIn, "imagegen", "telegram-widgets"])
+      expect(isReservedSkillName(name)).toBe(true);
   });
 
   it("checks group skills against the tools the grants actually surface", () => {
-    const steps = (tools: string[]) => ["## Шаги", ...tools.map((tool, index) => `${index + 1}. Вызови \`${tool}\`.`), "## Проверка результата", "ok"].join("\n");
+    const steps = (tools: string[]) =>
+      [
+        "## Шаги",
+        ...tools.map((tool, index) => `${index + 1}. Вызови \`${tool}\`.`),
+        "## Проверка результата",
+        "ok",
+      ].join("\n");
     const on = { imageGenerationAvailable: true };
     const off = { imageGenerationAvailable: false };
-    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["manage_memory.edit"]), on)).toEqual([]);
-    expect(externalGroupMissingTools(steps(["manage_memory_thread"]), new Set(["manage_memory_thread.complete"]), on)).toEqual([]);
-    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]), on)).toEqual([]);
-    expect(externalGroupMissingTools(steps(["send_workspace_image"]), new Set(["web_search"]), on)).toEqual(["send_workspace_image"]);
-    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]), on)).toEqual(["manage_memory"]);
+    expect(
+      externalGroupMissingTools(steps(["manage_memory"]), new Set(["manage_memory.edit"]), on),
+    ).toEqual([]);
+    expect(
+      externalGroupMissingTools(
+        steps(["manage_memory_thread"]),
+        new Set(["manage_memory_thread.complete"]),
+        on,
+      ),
+    ).toEqual([]);
+    expect(
+      externalGroupMissingTools(
+        steps(["generate_image", "send_workspace_image"]),
+        new Set(["generate_image"]),
+        on,
+      ),
+    ).toEqual([]);
+    expect(
+      externalGroupMissingTools(steps(["send_workspace_image"]), new Set(["web_search"]), on),
+    ).toEqual(["send_workspace_image"]);
+    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]), on)).toEqual([
+      "manage_memory",
+    ]);
     // The application core is on every interactive external surface without a grant.
-    expect(externalGroupMissingTools(steps(["read_profile_view", "manage_behavior_preference"]), new Set(), on)).toEqual([]);
+    expect(
+      externalGroupMissingTools(
+        steps(["read_profile_view", "manage_behavior_preference"]),
+        new Set(),
+        on,
+      ),
+    ).toEqual([]);
     // `load_skill` is on every interactive external surface; a skill loading `imagegen` was refused
     // for it (Codex review, 6 November 2026).
-    expect(externalGroupMissingTools(steps(["load_skill", "generate_image"]), new Set(["generate_image"]), on)).toEqual([]);
+    expect(
+      externalGroupMissingTools(
+        steps(["load_skill", "generate_image"]),
+        new Set(["generate_image"]),
+        on,
+      ),
+    ).toEqual([]);
     // A stored drawing grant surfaces nothing while no image provider is configured.
-    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]), off)).toEqual(["generate_image", "send_workspace_image"]);
+    expect(
+      externalGroupMissingTools(
+        steps(["generate_image", "send_workspace_image"]),
+        new Set(["generate_image"]),
+        off,
+      ),
+    ).toEqual(["generate_image", "send_workspace_image"]);
   });
 });

@@ -51,8 +51,7 @@ async function changeAgentModelSettings(e) {
     r.model.kind === `set` && (o.model = r.model.value),
     r.reasoning.kind !== `keep` &&
       (o.reasoning = r.reasoning.kind === `set` ? r.reasoning.value : null),
-    r.gatewayServiceTier.kind !== `keep` &&
-      (o.fastMode = r.gatewayServiceTier.kind === `set`),
+    r.gatewayServiceTier.kind !== `keep` && (o.fastMode = r.gatewayServiceTier.kind === `set`),
     o
   );
 }

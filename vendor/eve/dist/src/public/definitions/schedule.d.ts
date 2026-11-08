@@ -1,7 +1,11 @@
 import type { CrossChannelToFn } from "#channel/cross-channel-receive.js";
 import type { SessionAuthContext } from "#channel/types.js";
 import type { ExactDefinition } from "#public/definitions/exact.js";
-import type { GenericScheduleDefinition, GenericScheduleRunHandler, GenericScheduleDefinitionFields } from "#shared/schedule-definition.js";
+import type {
+  GenericScheduleDefinition,
+  GenericScheduleRunHandler,
+  GenericScheduleDefinitionFields,
+} from "#shared/schedule-definition.js";
 export type { InferReceiveTarget, TypedReceiveTarget } from "#channel/receive-target.js";
 /** Selects a proactive target channel from a schedule handler. */
 export type ScheduleToFn = CrossChannelToFn;
@@ -11,22 +15,22 @@ export type ScheduleToFn = CrossChannelToFn;
  * extends the task lifetime.
  */
 export interface ScheduleHandlerArgs {
-    /**
-     * Selects a proactive target on another channel. Call `.send(message, options)`
-     * on the returned handle.
-     */
-    readonly to: ScheduleToFn;
-    /**
-     * Extends the cron task's lifetime past handler return so the runtime awaits
-     * background work (the parked workflow session, in-flight fetches, etc.)
-     * before the Nitro task ends.
-     */
-    readonly waitUntil: (task: Promise<unknown>) => void;
-    /**
-     * Pre-built APP auth context. Pass this to `to(channel, target).send(message, { auth })`
-     * for schedules that run on behalf of the agent itself.
-     */
-    readonly appAuth: SessionAuthContext;
+  /**
+   * Selects a proactive target on another channel. Call `.send(message, options)`
+   * on the returned handle.
+   */
+  readonly to: ScheduleToFn;
+  /**
+   * Extends the cron task's lifetime past handler return so the runtime awaits
+   * background work (the parked workflow session, in-flight fetches, etc.)
+   * before the Nitro task ends.
+   */
+  readonly waitUntil: (task: Promise<unknown>) => void;
+  /**
+   * Pre-built APP auth context. Pass this to `to(channel, target).send(message, { auth })`
+   * for schedules that run on behalf of the agent itself.
+   */
+  readonly appAuth: SessionAuthContext;
 }
 /**
  * The `run` form of {@link ScheduleDefinition} invokes this handler when a
@@ -80,4 +84,6 @@ export type ScheduleDefinition = GenericScheduleDefinition<ScheduleHandlerArgs>;
  * });
  * ```
  */
-export declare function defineSchedule<TSchedule extends ScheduleDefinition>(definition: ExactDefinition<TSchedule, GenericScheduleDefinitionFields<ScheduleHandlerArgs>>): TSchedule;
+export declare function defineSchedule<TSchedule extends ScheduleDefinition>(
+  definition: ExactDefinition<TSchedule, GenericScheduleDefinitionFields<ScheduleHandlerArgs>>,
+): TSchedule;

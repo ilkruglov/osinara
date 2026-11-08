@@ -16,12 +16,14 @@ export function logTurnTiming(
   milliseconds: number,
   detail: Record<string, unknown> = {},
 ): void {
-  console.info(JSON.stringify({
-    code: "AGENT_TURN_TIMING",
-    ms: Math.round(milliseconds),
-    stage,
-    ...detail,
-  }));
+  console.info(
+    JSON.stringify({
+      code: "AGENT_TURN_TIMING",
+      ms: Math.round(milliseconds),
+      stage,
+      ...detail,
+    }),
+  );
 }
 
 export async function timed<T>(

@@ -91,7 +91,11 @@ export function wrapModelFacingTool(
         output = await definition.execute(input, ctx);
       } catch (error) {
         // A restarted browser is a new browser: the same call may succeed once more.
-        if (turn !== null && fingerprint !== null) toolRepeatGuard.recordFailure(turn, fingerprint, { freeRetry: error instanceof ModelFacingError && error.code === "AGENT_BROWSER_RESTARTED" });
+        if (turn !== null && fingerprint !== null)
+          toolRepeatGuard.recordFailure(turn, fingerprint, {
+            freeRetry:
+              error instanceof ModelFacingError && error.code === "AGENT_BROWSER_RESTARTED",
+          });
         throw normalizeModelFacingError(error, { toolName });
       }
       if (turn !== null && fingerprint !== null) toolRepeatGuard.recordSuccess(turn, fingerprint);
@@ -121,7 +125,9 @@ export function jsonSafeToolOutput(value: unknown, seen: WeakSet<object> = new W
   }
   if (!isPlainObject(value)) return value;
   seen.add(value);
-  const mapped = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, jsonSafeToolOutput(item, seen)]));
+  const mapped = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, jsonSafeToolOutput(item, seen)]),
+  );
   seen.delete(value);
   return mapped;
 }

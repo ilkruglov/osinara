@@ -56,7 +56,13 @@ export function createGroceryCatalog(dependencies: CatalogDependencies) {
 
     const remaining = cooldownUntil - dependencies.now();
     if (remaining > 0) {
-      console.error(JSON.stringify({ code: "AGENT_GROCERY_RATE_LIMIT_COOLDOWN", remainingMs: remaining, tool: name }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_GROCERY_RATE_LIMIT_COOLDOWN",
+          remainingMs: remaining,
+          tool: name,
+        }),
+      );
       throw waitMessage(remaining);
     }
 

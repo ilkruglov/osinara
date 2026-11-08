@@ -49,7 +49,8 @@ export interface TelegramAvatarPhoto {
   width: number;
 }
 
-export type TelegramAvatarLookup = { status: "none" } | { photo: TelegramAvatarPhoto; status: "photo" };
+export type TelegramAvatarLookup =
+  { status: "none" } | { photo: TelegramAvatarPhoto; status: "photo" };
 
 export interface TelegramAvatarSourceAdapter {
   download(attachment: TelegramAttachment): Promise<Buffer>;
@@ -65,8 +66,13 @@ export interface TelegramAvatarSource {
 export function pickAvatarSize(sizes: readonly TelegramAvatarPhoto[]): TelegramAvatarPhoto {
   const fitting = sizes.filter((size) => Math.max(size.width, size.height) <= AVATAR_MAX_SIDE);
   // Nothing fits: the smallest is still a reference, the largest would be a download for nothing.
-  if (fitting.length === 0) return sizes.reduce((best, size) => (size.width * size.height < best.width * best.height ? size : best));
-  return fitting.reduce((best, size) => (size.width * size.height > best.width * best.height ? size : best));
+  if (fitting.length === 0)
+    return sizes.reduce((best, size) =>
+      size.width * size.height < best.width * best.height ? size : best,
+    );
+  return fitting.reduce((best, size) =>
+    size.width * size.height > best.width * best.height ? size : best,
+  );
 }
 
 /** Telegram serves profile photos as JPEG; anything else in the body is not the photo. */
@@ -74,7 +80,9 @@ function isJpeg(bytes: Buffer): boolean {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
-export function createTelegramAvatarSource(adapter: TelegramAvatarSourceAdapter): TelegramAvatarSource {
+export function createTelegramAvatarSource(
+  adapter: TelegramAvatarSourceAdapter,
+): TelegramAvatarSource {
   return {
     async download(photo) {
       const bytes = await adapter.download({
@@ -87,7 +95,10 @@ export function createTelegramAvatarSource(adapter: TelegramAvatarSourceAdapter)
         width: photo.width,
       });
       if (!isJpeg(bytes)) {
-        throw new AppError("AGENT_TELEGRAM_AVATAR_RESPONSE_INVALID", "Telegram отдал не JPEG вместо фото профиля");
+        throw new AppError(
+          "AGENT_TELEGRAM_AVATAR_RESPONSE_INVALID",
+          "Telegram отдал не JPEG вместо фото профиля",
+        );
       }
       return bytes;
     },
@@ -102,13 +113,15 @@ export function createTelegramAvatarSource(adapter: TelegramAvatarSourceAdapter)
       }
       const first = parsed.data.result.photos[0];
       if (first === undefined || first.length === 0) return { status: "none" };
-      const photo = pickAvatarSize(first.map((size) => ({
-        fileId: size.file_id,
-        fileUniqueId: size.file_unique_id,
-        height: size.height,
-        ...(size.file_size === undefined ? {} : { size: size.file_size }),
-        width: size.width,
-      })));
+      const photo = pickAvatarSize(
+        first.map((size) => ({
+          fileId: size.file_id,
+          fileUniqueId: size.file_unique_id,
+          height: size.height,
+          ...(size.file_size === undefined ? {} : { size: size.file_size }),
+          width: size.width,
+        })),
+      );
       return { photo, status: "photo" };
     },
   };
@@ -126,13 +139,18 @@ export const telegramAvatarSource = createTelegramAvatarSource({
     });
     // «Bad Request: user not found» for a person who posts in the group (two of eight Ft86
     // participants, 16 октября 2026): to the bot such a person has no visible photo either.
-    const rawDescription = typeof response.body === "object" && response.body !== null && "description" in response.body
-      ? (response.body as { description?: unknown }).description
-      : undefined;
+    const rawDescription =
+      typeof response.body === "object" && response.body !== null && "description" in response.body
+        ? (response.body as { description?: unknown }).description
+        : undefined;
     const description = typeof rawDescription === "string" ? rawDescription : "";
-    if (response.status === 400 && /user not found/iu.test(description)) return { ok: true, result: { photos: [], total_count: 0 } };
+    if (response.status === 400 && /user not found/iu.test(description))
+      return { ok: true, result: { photos: [], total_count: 0 } };
     if (!response.ok) {
-      throw new AppError("AGENT_TELEGRAM_AVATAR_LOOKUP_FAILED", `Telegram ответил HTTP ${response.status}`);
+      throw new AppError(
+        "AGENT_TELEGRAM_AVATAR_LOOKUP_FAILED",
+        `Telegram ответил HTTP ${response.status}`,
+      );
     }
     return response.body;
   },

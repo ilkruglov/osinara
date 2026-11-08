@@ -3,10 +3,7 @@ import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 const DEVELOPMENT_RUNTIME_ARTIFACTS_ACTIVATED_MARKER = `activated`,
   DEVELOPMENT_RUNTIME_ARTIFACTS_RETIRED_METADATA = `retired.json`;
-async function recordRetiredDevelopmentRuntimeArtifactsSnapshot(
-  e,
-  t = Date.now(),
-) {
+async function recordRetiredDevelopmentRuntimeArtifactsSnapshot(e, t = Date.now()) {
   await writeFile(
     join(e, DEVELOPMENT_RUNTIME_ARTIFACTS_RETIRED_METADATA),
     `${JSON.stringify({ retiredAt: t })}\n`,
@@ -24,24 +21,20 @@ async function pruneDevelopmentRuntimeArtifactsSnapshotDirectory(e) {
     if (e instanceof Error && `code` in e && e.code === `ENOENT`) return;
     throw e;
   }
-  let c =
-      e.activeSnapshotRoot === void 0 ? void 0 : resolve(e.activeSnapshotRoot),
+  let c = e.activeSnapshotRoot === void 0 ? void 0 : resolve(e.activeSnapshotRoot),
     l = await Promise.all(
       s
         .filter((e) => e.isDirectory())
         .map(async (t) => {
           let n = join(e.snapshotsDirectory, t.name),
             a = c === resolve(n),
-            o = existsSync(
-              join(n, DEVELOPMENT_RUNTIME_ARTIFACTS_ACTIVATED_MARKER),
-            ),
+            o = existsSync(join(n, DEVELOPMENT_RUNTIME_ARTIFACTS_ACTIVATED_MARKER)),
             s;
           if (o && !a)
             try {
               ((s = await readRetiredAt(n)),
                 s === void 0 &&
-                  (await recordRetiredDevelopmentRuntimeArtifactsSnapshot(n, i),
-                  (s = i)));
+                  (await recordRetiredDevelopmentRuntimeArtifactsSnapshot(n, i), (s = i)));
             } catch (e) {
               console.warn(
                 `[eve:dev] failed to read or initialize runtime generation retirement metadata for "${n}": ${String(e)}`,
@@ -58,11 +51,7 @@ async function pruneDevelopmentRuntimeArtifactsSnapshotDirectory(e) {
     ),
     u = new Set(
       l
-        .flatMap((e) =>
-          e.retiredAt === void 0
-            ? []
-            : [{ path: e.path, retiredAt: e.retiredAt }],
-        )
+        .flatMap((e) => (e.retiredAt === void 0 ? [] : [{ path: e.path, retiredAt: e.retiredAt }]))
         .sort((e, t) => t.retiredAt - e.retiredAt)
         .slice(0, o)
         .map((e) => e.path),
@@ -89,10 +78,7 @@ async function pruneDevelopmentRuntimeArtifactsSnapshotDirectory(e) {
 async function readRetiredAt(t) {
   let n;
   try {
-    n = await readFile(
-      join(t, DEVELOPMENT_RUNTIME_ARTIFACTS_RETIRED_METADATA),
-      `utf8`,
-    );
+    n = await readFile(join(t, DEVELOPMENT_RUNTIME_ARTIFACTS_RETIRED_METADATA), `utf8`);
   } catch (e) {
     if (e instanceof Error && `code` in e && e.code === `ENOENT`) return;
     throw e;

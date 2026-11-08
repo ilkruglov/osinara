@@ -10,10 +10,7 @@ async function verifyTelegramRequest(e, t) {
   if (t.webhookVerifier !== void 0) {
     let n = await e.text(),
       r = await t.webhookVerifier(e, n);
-    if (!r)
-      throw Error(
-        `telegramChannel: inbound webhook verifier rejected the request.`,
-      );
+    if (!r) throw Error(`telegramChannel: inbound webhook verifier rejected the request.`);
     return typeof r == `string` ? r : n;
   }
   // Osinara: the secret-token header is checked before the body is read, so an unauthenticated
@@ -21,10 +18,7 @@ async function verifyTelegramRequest(e, t) {
   // 5 October 2026).
   let r = await resolveTelegramWebhookSecretToken(t.secretToken),
     i = e.headers.get(`x-telegram-bot-api-secret-token`) ?? ``;
-  if (!i)
-    throw Error(
-      `telegramChannel: inbound request missing Telegram secret-token header.`,
-    );
+  if (!i) throw Error(`telegramChannel: inbound request missing Telegram secret-token header.`);
   if (!constantTimeCompare(r, i))
     throw Error(`telegramChannel: inbound request secret-token mismatch.`);
   return await e.text();

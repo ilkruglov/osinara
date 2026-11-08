@@ -19,12 +19,27 @@
  */
 
 const QUIET_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "get_current_time", "get_memory_source", "list_agent_schedules", "list_memories",
-  "list_memory_threads", "list_pending_family_invitations", "list_proactive_deliveries",
-  "list_reminders", "list_telegram_attachments", "load_skill", "manage_behavior_preference",
-  "manage_memory", "manage_memory_conflict", "manage_memory_thread", "manage_skill",
-  "notification_settings", "read_memory_thread", "read_profile_view", "remember",
-  "search_memories", "search_memory_threads",
+  "get_current_time",
+  "get_memory_source",
+  "list_agent_schedules",
+  "list_memories",
+  "list_memory_threads",
+  "list_pending_family_invitations",
+  "list_proactive_deliveries",
+  "list_reminders",
+  "list_telegram_attachments",
+  "load_skill",
+  "manage_behavior_preference",
+  "manage_memory",
+  "manage_memory_conflict",
+  "manage_memory_thread",
+  "manage_skill",
+  "notification_settings",
+  "read_memory_thread",
+  "read_profile_view",
+  "remember",
+  "search_memories",
+  "search_memory_threads",
 ]);
 
 export interface HeldProgressNotice {

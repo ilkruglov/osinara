@@ -26,18 +26,18 @@ export type TaskStatus = "working" | "input_required" | "completed" | "failed" |
  * the dispatch side effect runs.
  */
 export interface TaskMetadata {
-    /** Stable model-visible identity of the persistent child session. */
-    readonly agentId: string;
-    readonly kind: "subagent";
-    readonly mode: "local" | "remote";
-    /** Authored subagent name the parent dispatched. */
-    readonly name: string;
+  /** Stable model-visible identity of the persistent child session. */
+  readonly agentId: string;
+  readonly kind: "subagent";
+  readonly mode: "local" | "remote";
+  /** Authored subagent name the parent dispatched. */
+  readonly name: string;
 }
 /** Private executor state retained for cancellation and address reconciliation. */
 export interface TaskExecutorState {
-    readonly childSessionId?: string;
-    readonly childTurnId?: string;
-    readonly lifecycle?: "parked" | "terminal";
+  readonly childSessionId?: string;
+  readonly childTurnId?: string;
+  readonly lifecycle?: "parked" | "terminal";
 }
 /**
  * Terminal task output. Failure is the state (`failed`); the `error`
@@ -45,13 +45,15 @@ export interface TaskExecutorState {
  * This intentionally diverges from MCP, which reserves `failed` for
  * protocol-level errors.
  */
-export type TaskOutput = {
-    readonly type: "result";
-    readonly data: JsonValue;
-} | {
-    readonly type: "error";
-    readonly data: JsonValue;
-};
+export type TaskOutput =
+  | {
+      readonly type: "result";
+      readonly data: JsonValue;
+    }
+  | {
+      readonly type: "error";
+      readonly data: JsonValue;
+    };
 /**
  * One outstanding request forwarded from a blocked child. Carried
  * opaquely: the task layer routes the batch, the input contract owns
@@ -64,10 +66,10 @@ export type TaskInputRequest = JsonValue;
  * zod-backed module into a workflow-bundled file.
  */
 export interface TaskUsage {
-    readonly cacheReadTokens: number;
-    readonly cacheWriteTokens: number;
-    readonly inputTokens: number;
-    readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
 }
 /**
  * Validates one wire-carried usage value into {@link TaskUsage}.
@@ -81,9 +83,9 @@ export declare function readTaskUsage(value: unknown): TaskUsage | undefined;
  * zod-backed module into a workflow-bundled file.
  */
 export interface TaskInputResponse {
-    readonly optionId?: string;
-    readonly requestId: string;
-    readonly text?: string;
+  readonly optionId?: string;
+  readonly requestId: string;
+  readonly text?: string;
 }
 /** Stable task blocker id shared by one authorization attempt's events. */
 export declare function taskAuthorizationRequestId(event: SubagentAuthorizationEvent): string;
@@ -91,17 +93,17 @@ export declare function taskAuthorizationRequestId(event: SubagentAuthorizationE
 export declare function readTaskInputRequestId(request: TaskInputRequest): string | undefined;
 /** Fields shared by every durable task view. */
 interface TaskViewBase {
-    readonly taskId: string;
-    readonly metadata: TaskMetadata;
-    /** Private executor state; deliberately excluded from model-visible JSON. */
-    readonly executor?: TaskExecutorState;
-    /**
-     * Provider usage the child reported at settlement; present when the
-     * terminal command carried it. Retained for later accounting only —
-     * budgets stay best-effort until a reservation model lands — and
-     * deliberately excluded from model-visible task views (tasks/json.ts).
-     */
-    readonly usage?: TaskUsage;
+  readonly taskId: string;
+  readonly metadata: TaskMetadata;
+  /** Private executor state; deliberately excluded from model-visible JSON. */
+  readonly executor?: TaskExecutorState;
+  /**
+   * Provider usage the child reported at settlement; present when the
+   * terminal command carried it. Retained for later accounting only —
+   * budgets stay best-effort until a reservation model lands — and
+   * deliberately excluded from model-visible task views (tasks/json.ts).
+   */
+  readonly usage?: TaskUsage;
 }
 /**
  * Full durable task view discriminated by lifecycle status.
@@ -113,85 +115,105 @@ interface TaskViewBase {
  * Completed and failed tasks carry their corresponding output, cancelled
  * tasks carry no output, and only input-required tasks carry requests.
  */
-export type TaskView = TaskViewBase & ({
-    readonly status: "working";
-    readonly inputRequests?: never;
-    readonly lastOutput?: never;
-} | {
-    readonly status: "input_required";
-    readonly inputRequests: readonly TaskInputRequest[];
-    readonly lastOutput?: never;
-} | {
-    readonly status: "completed";
-    readonly inputRequests?: never;
-    readonly lastOutput: Extract<TaskOutput, {
-        type: "result";
-    }>;
-} | {
-    readonly status: "failed";
-    readonly inputRequests?: never;
-    readonly lastOutput: Extract<TaskOutput, {
-        type: "error";
-    }>;
-} | {
-    readonly status: "cancelled";
-    readonly inputRequests?: never;
-    readonly lastOutput?: never;
-});
+export type TaskView = TaskViewBase &
+  (
+    | {
+        readonly status: "working";
+        readonly inputRequests?: never;
+        readonly lastOutput?: never;
+      }
+    | {
+        readonly status: "input_required";
+        readonly inputRequests: readonly TaskInputRequest[];
+        readonly lastOutput?: never;
+      }
+    | {
+        readonly status: "completed";
+        readonly inputRequests?: never;
+        readonly lastOutput: Extract<
+          TaskOutput,
+          {
+            type: "result";
+          }
+        >;
+      }
+    | {
+        readonly status: "failed";
+        readonly inputRequests?: never;
+        readonly lastOutput: Extract<
+          TaskOutput,
+          {
+            type: "error";
+          }
+        >;
+      }
+    | {
+        readonly status: "cancelled";
+        readonly inputRequests?: never;
+        readonly lastOutput?: never;
+      }
+  );
 /** Commands accepted by the durable task run's transition function. */
-export type TaskCommand = {
-    readonly kind: "complete";
-    readonly data: JsonValue;
-    readonly lifecycle?: "parked" | "terminal";
-    readonly usage?: TaskUsage;
-} | {
-    readonly kind: "fail";
-    readonly data: JsonValue;
-    readonly lifecycle?: "parked" | "terminal";
-    readonly usage?: TaskUsage;
-}
-/** Terminal dispatch rejection for a task that was never indexed by its parent. */
- | {
-    readonly kind: "reject-dispatch";
-    readonly data: JsonValue;
-    readonly lifecycle?: never;
-    readonly usage?: never;
-} | {
-    readonly kind: "cancel";
-    readonly lifecycle?: "parked" | "terminal";
-    readonly usage?: TaskUsage;
-}
-/** Retains a late executor settlement without changing task terminal status. */
- | {
-    readonly kind: "settle-executor";
-    readonly usage?: TaskUsage;
-} | {
-    readonly kind: "require-authorization";
-    readonly requestId: string;
-} | {
-    readonly kind: "require-input";
-    readonly inputRequests: readonly TaskInputRequest[];
-} | {
-    readonly kind: "ready";
-}
-/**
- * Clears the listed requests from the outstanding batch. Bound to
- * ids rather than unbound like the former `resume`, so an answer can
- * only ever release the batch it was written against.
- */
- | {
-    readonly kind: "answered";
-    readonly requestIds: readonly string[];
-} | {
-    readonly kind: "start-turn";
-    readonly childSessionId: string;
-    readonly childTurnId: string;
-    readonly taskId: string;
-};
+export type TaskCommand =
+  | {
+      readonly kind: "complete";
+      readonly data: JsonValue;
+      readonly lifecycle?: "parked" | "terminal";
+      readonly usage?: TaskUsage;
+    }
+  | {
+      readonly kind: "fail";
+      readonly data: JsonValue;
+      readonly lifecycle?: "parked" | "terminal";
+      readonly usage?: TaskUsage;
+    }
+  /** Terminal dispatch rejection for a task that was never indexed by its parent. */
+  | {
+      readonly kind: "reject-dispatch";
+      readonly data: JsonValue;
+      readonly lifecycle?: never;
+      readonly usage?: never;
+    }
+  | {
+      readonly kind: "cancel";
+      readonly lifecycle?: "parked" | "terminal";
+      readonly usage?: TaskUsage;
+    }
+  /** Retains a late executor settlement without changing task terminal status. */
+  | {
+      readonly kind: "settle-executor";
+      readonly usage?: TaskUsage;
+    }
+  | {
+      readonly kind: "require-authorization";
+      readonly requestId: string;
+    }
+  | {
+      readonly kind: "require-input";
+      readonly inputRequests: readonly TaskInputRequest[];
+    }
+  | {
+      readonly kind: "ready";
+    }
+  /**
+   * Clears the listed requests from the outstanding batch. Bound to
+   * ids rather than unbound like the former `resume`, so an answer can
+   * only ever release the batch it was written against.
+   */
+  | {
+      readonly kind: "answered";
+      readonly requestIds: readonly string[];
+    }
+  | {
+      readonly kind: "start-turn";
+      readonly childSessionId: string;
+      readonly childTurnId: string;
+      readonly taskId: string;
+    };
 /** Hook payload envelope commanding a durable task run. */
 export interface TaskCommandHookPayload {
-    readonly kind: "task-command";
-    readonly command: TaskCommand;
+  readonly kind: "task-command";
+  readonly command: TaskCommand;
 }
 /**
  * Structural shapes of the child wire payloads a task run consumes.
@@ -204,29 +226,32 @@ export interface TaskCommandHookPayload {
  * hook instead of the parent turn's inbox.
  */
 export interface TaskInboundChildResult {
-    readonly kind: "runtime-action-result";
-    readonly results: readonly {
-        readonly isError?: boolean;
-        readonly outcome?: {
-            readonly kind: "parked" | "terminal";
-            readonly result: {
-                readonly kind: "succeeded";
-                readonly output: JsonValue;
-            } | {
-                readonly error: JsonValue;
-                readonly kind: "failed";
-            } | {
-                readonly kind: "cancelled";
-            };
-            /**
-             * Provider usage this turn added. Retained on the terminal task
-             * view ({@link TaskView.usage}); folding it into parent
-             * budgets is deferred until a reservation model lands.
-             */
-            readonly usageDelta?: unknown;
-        };
-        readonly output: JsonValue;
-    }[];
+  readonly kind: "runtime-action-result";
+  readonly results: readonly {
+    readonly isError?: boolean;
+    readonly outcome?: {
+      readonly kind: "parked" | "terminal";
+      readonly result:
+        | {
+            readonly kind: "succeeded";
+            readonly output: JsonValue;
+          }
+        | {
+            readonly error: JsonValue;
+            readonly kind: "failed";
+          }
+        | {
+            readonly kind: "cancelled";
+          };
+      /**
+       * Provider usage this turn added. Retained on the terminal task
+       * view ({@link TaskView.usage}); folding it into parent
+       * budgets is deferred until a reservation model lands.
+       */
+      readonly usageDelta?: unknown;
+    };
+    readonly output: JsonValue;
+  }[];
 }
 /**
  * Arrives when the delegated child emits `input.requested`. After dispatch is
@@ -234,17 +259,17 @@ export interface TaskInboundChildResult {
  * view and forwards the request to the parent session.
  */
 export interface TaskInboundInputRequest {
-    readonly callId: string;
-    readonly childContinuationToken: string;
-    readonly childSessionId: string;
-    readonly kind: "subagent-input-request";
-    readonly event: {
-        readonly requests: readonly TaskInputRequest[];
-        readonly sequence: number;
-        readonly stepIndex: number;
-        readonly turnId: string;
-    };
-    readonly subagentName: string;
+  readonly callId: string;
+  readonly childContinuationToken: string;
+  readonly childSessionId: string;
+  readonly kind: "subagent-input-request";
+  readonly event: {
+    readonly requests: readonly TaskInputRequest[];
+    readonly sequence: number;
+    readonly stepIndex: number;
+    readonly turnId: string;
+  };
+  readonly subagentName: string;
 }
 /**
  * Arrives when a delegated child turn starts and its session and turn ids are
@@ -252,18 +277,18 @@ export interface TaskInboundInputRequest {
  * does not itself make the task ready or wake the parent.
  */
 export interface TaskInboundTurnStarted {
-    readonly childSessionId: string;
-    readonly childTurnId: string;
-    readonly kind: "turn-started";
-    readonly taskId: string;
+  readonly childSessionId: string;
+  readonly childTurnId: string;
+  readonly kind: "turn-started";
+  readonly taskId: string;
 }
 /** Intermediate progress sent by a running child to its parent agent. */
 export interface TaskInboundUpdate {
-    readonly callId: string;
-    readonly childStepIndex: number;
-    readonly childTurnId: string;
-    readonly kind: "task-update";
-    readonly message: string;
+  readonly callId: string;
+  readonly childStepIndex: number;
+  readonly childTurnId: string;
+  readonly kind: "task-update";
+  readonly message: string;
 }
 /**
  * Arrives when the delegated child emits `authorization.required` or
@@ -272,11 +297,11 @@ export interface TaskInboundUpdate {
  * to the parent and is never copied into the view.
  */
 export interface TaskInboundAuthorizationEvent {
-    readonly callId: string;
-    readonly childSessionId: string;
-    readonly kind: "authorization-event";
-    readonly event: SubagentAuthorizationEvent;
-    readonly subagentName: string;
+  readonly callId: string;
+  readonly childSessionId: string;
+  readonly kind: "authorization-event";
+  readonly event: SubagentAuthorizationEvent;
+  readonly subagentName: string;
 }
 /**
  * Human answers routed to the task run rather than straight to the
@@ -285,15 +310,22 @@ export interface TaskInboundAuthorizationEvent {
  * longer unblock the child while the run still believes it is blocked.
  */
 export interface TaskInboundAnswerInput {
-    readonly auth?: unknown;
-    readonly childContinuationToken: string;
-    readonly childResponseUrl?: string;
-    readonly inputResponses: readonly TaskInputResponse[];
-    readonly kind: "input-response";
-    readonly taskId: string;
+  readonly auth?: unknown;
+  readonly childContinuationToken: string;
+  readonly childResponseUrl?: string;
+  readonly inputResponses: readonly TaskInputResponse[];
+  readonly kind: "input-response";
+  readonly taskId: string;
 }
 /** Everything a task run's inbound continuation hook may receive. */
-export type TaskRunInboundPayload = TaskCommandHookPayload | TaskInboundChildResult | TaskInboundInputRequest | TaskInboundTurnStarted | TaskInboundUpdate | TaskInboundAuthorizationEvent | TaskInboundAnswerInput;
+export type TaskRunInboundPayload =
+  | TaskCommandHookPayload
+  | TaskInboundChildResult
+  | TaskInboundInputRequest
+  | TaskInboundTurnStarted
+  | TaskInboundUpdate
+  | TaskInboundAuthorizationEvent
+  | TaskInboundAnswerInput;
 /** Namespaced run stream carrying appended `TaskView` records. */
 export declare const TASK_VIEW_STREAM_NAMESPACE = "eve.task";
 /** True when the status can never change again. */

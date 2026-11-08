@@ -17,10 +17,16 @@ import { createInterface } from "node:readline";
 
 import { isAddressedToMia } from "./turn-filters.js";
 
-interface TurnInput { actual: string | null; at: string; message: string; turn: string }
+interface TurnInput {
+  actual: string | null;
+  at: string;
+  message: string;
+  turn: string;
+}
 
 const [source, target, ...flags] = process.argv.slice(2);
-if (!source || !target) throw new Error("usage: extract-turns.ts <streams.hex> <inputs.json> [--addressed-only]");
+if (!source || !target)
+  throw new Error("usage: extract-turns.ts <streams.hex> <inputs.json> [--addressed-only]");
 const addressedOnly = flags.includes("--addressed-only");
 
 const turns = new Map<string, TurnInput & { completed: boolean }>();
@@ -33,8 +39,13 @@ for await (const line of lines) {
   const match = raw.match(/devl\[\["Uint8Array",1\],"([A-Za-z0-9+/=]+)"/);
   if (!match) continue;
   let event: { data?: Record<string, unknown>; type?: string };
-  try { event = JSON.parse(Buffer.from(match[1]!, "base64").toString("utf8")); } catch { continue; }
-  if (event.type === "turn.started") current = `${run!.slice(-8)}:${String(event.data?.turnId ?? "")}`;
+  try {
+    event = JSON.parse(Buffer.from(match[1]!, "base64").toString("utf8"));
+  } catch {
+    continue;
+  }
+  if (event.type === "turn.started")
+    current = `${run!.slice(-8)}:${String(event.data?.turnId ?? "")}`;
   if (current === null) continue;
   if (event.type === "message.received") {
     const message = String(event.data?.message ?? "");
@@ -44,10 +55,15 @@ for await (const line of lines) {
   }
   if (event.type === "message.completed") {
     const turn = turns.get(current);
-    if (turn) { turn.actual = String(event.data?.message ?? ""); turn.completed = true; }
+    if (turn) {
+      turn.actual = String(event.data?.message ?? "");
+      turn.completed = true;
+    }
   }
 }
-const inputs = [...turns.values()].filter((turn) => turn.completed).map(({ completed: _c, ...turn }) => turn);
+const inputs = [...turns.values()]
+  .filter((turn) => turn.completed)
+  .map(({ completed: _c, ...turn }) => turn);
 await mkdir(dirname(target), { recursive: true });
 await writeFile(target, JSON.stringify(inputs, null, 1));
 console.error(`turns ${turns.size}, with answers ${inputs.length} → ${target}`);

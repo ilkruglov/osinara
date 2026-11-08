@@ -65,8 +65,7 @@ function createAgentOtelSessionContext(n) {
     };
   return {
     ensureSessionContext,
-    prepareSessionTrace: async (e) =>
-      portableSpanContext((await ensureSessionContext(e)).context),
+    prepareSessionTrace: async (e) => portableSpanContext((await ensureSessionContext(e)).context),
     prepareTurnTrace: async (t) => {
       let r = await n.stateStore.getTurn(t.sessionId, t.turnId);
       if (r !== void 0)

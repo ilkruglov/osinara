@@ -9,19 +9,19 @@ import type { VercelSandboxCreateOptions } from "#public/sandbox/vercel-sandbox.
  * availability and passes it the matching bag; the others are ignored.
  */
 export interface DefaultSandboxOptions {
-    readonly docker?: DockerSandboxCreateOptions;
-    readonly justBash?: JustBashSandboxCreateOptions;
-    readonly microsandbox?: MicrosandboxSandboxCreateOptions;
-    readonly vercel?: VercelSandboxCreateOptions;
+  readonly docker?: DockerSandboxCreateOptions;
+  readonly justBash?: JustBashSandboxCreateOptions;
+  readonly microsandbox?: MicrosandboxSandboxCreateOptions;
+  readonly vercel?: VercelSandboxCreateOptions;
 }
 /**
  * Availability probes behind {@link defaultSandbox}'s selection chain.
  * Injectable so selection logic is testable without touching the host.
  */
 export interface DefaultSandboxProbes {
-    readonly isDeployedOnVercel: () => boolean;
-    readonly isDockerAvailable: () => boolean;
-    readonly isMicrosandboxSupported: () => boolean;
+  readonly isDeployedOnVercel: () => boolean;
+  readonly isDockerAvailable: () => boolean;
+  readonly isMicrosandboxSupported: () => boolean;
 }
 /**
  * Constructs an availability-aware sandbox backend. On first use it
@@ -46,4 +46,7 @@ export declare function defaultSandbox(opts?: DefaultSandboxOptions): SandboxBac
  * The selection chain behind {@link defaultSandbox}. Internal —
  * exported for tests, which inject probes.
  */
-export declare function selectDefaultSandbox(opts: DefaultSandboxOptions | undefined, probes: DefaultSandboxProbes): SandboxBackend;
+export declare function selectDefaultSandbox(
+  opts: DefaultSandboxOptions | undefined,
+  probes: DefaultSandboxProbes,
+): SandboxBackend;

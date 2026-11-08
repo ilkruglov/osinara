@@ -32,11 +32,7 @@ const telegramMessageResponseSchema = z.object({
 export class SoftwareUpdateTransportError extends AppError {
   readonly delivery: "ambiguous" | "failed";
 
-  constructor(
-    delivery: "ambiguous" | "failed",
-    code: string,
-    message: string,
-  ) {
+  constructor(delivery: "ambiguous" | "failed", code: string, message: string) {
     super(code, message);
     this.delivery = delivery;
     this.name = "SoftwareUpdateTransportError";
@@ -50,12 +46,7 @@ interface SoftwareUpdateTelegramTransportDependencies {
 }
 
 type TelegramJsonValue =
-  | boolean
-  | null
-  | number
-  | string
-  | TelegramJsonValue[]
-  | { [key: string]: TelegramJsonValue };
+  boolean | null | number | string | TelegramJsonValue[] | { [key: string]: TelegramJsonValue };
 type TelegramJsonObject = { [key: string]: TelegramJsonValue };
 
 function toTelegramJson(value: unknown): TelegramJsonValue {
@@ -64,7 +55,8 @@ function toTelegramJson(value: unknown): TelegramJsonValue {
     typeof value === "boolean" ||
     typeof value === "number" ||
     typeof value === "string"
-  ) return value;
+  )
+    return value;
   if (Array.isArray(value)) return value.map(toTelegramJson);
   if (typeof value !== "object") {
     throw new AppError(

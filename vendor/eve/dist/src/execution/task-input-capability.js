@@ -4,9 +4,7 @@ const OPERATION_TOKEN_PREFIX = `eve:eve:op:`,
 function createTaskInputCapabilityToken(n) {
   let r = readTokenDigest(n, OPERATION_TOKEN_PREFIX);
   if (r === void 0)
-    throw Error(
-      `Remote task input requires an eve create-once session capability.`,
-    );
+    throw Error(`Remote task input requires an eve create-once session capability.`);
   return `${TASK_INPUT_TOKEN_PREFIX}${r}`;
 }
 function readTaskInputTargetToken(n) {

@@ -2,16 +2,15 @@ const graphemeSegmenter = new Intl.Segmenter(void 0, {
   granularity: `grapheme`,
 });
 function graphemes(t) {
-  return Array.from(
-    graphemeSegmenter.segment(t),
-    ({ index: e, segment: t }) => ({ text: t, start: e, end: e + t.length }),
-  );
+  return Array.from(graphemeSegmenter.segment(t), ({ index: e, segment: t }) => ({
+    text: t,
+    start: e,
+    end: e + t.length,
+  }));
 }
 function previousGraphemeBoundary(t, n) {
   let r = Math.max(0, Math.min(n, t.length));
-  return r === 0
-    ? 0
-    : (graphemeSegmenter.segment(t).containing(r - 1)?.index ?? 0);
+  return r === 0 ? 0 : (graphemeSegmenter.segment(t).containing(r - 1)?.index ?? 0);
 }
 function nextGraphemeBoundary(t, n) {
   let r = Math.max(0, Math.min(n, t.length));
@@ -25,9 +24,4 @@ function graphemeBoundaryAtOrAfter(t, n) {
   let i = graphemeSegmenter.segment(t).containing(r);
   return i === void 0 || i.index === r ? r : i.index + i.segment.length;
 }
-export {
-  graphemeBoundaryAtOrAfter,
-  graphemes,
-  nextGraphemeBoundary,
-  previousGraphemeBoundary,
-};
+export { graphemeBoundaryAtOrAfter, graphemes, nextGraphemeBoundary, previousGraphemeBoundary };

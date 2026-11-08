@@ -14,12 +14,12 @@ import type { ToolModelOutput, ToolModelOutputPart } from "#shared/tool-definiti
  * ```
  */
 export declare const toolOutput: {
-    /** Builds a text output: the model sees `value` as the tool result. */
-    text(value: string): ToolModelOutput;
-    /** Builds a JSON output; `value` must be JSON-serializable. */
-    json(value: unknown): ToolModelOutput;
-    /** Builds a content output from ordered {@link ToolModelOutputPart} entries. */
-    content(value: readonly ToolModelOutputPart[]): ToolModelOutput;
+  /** Builds a text output: the model sees `value` as the tool result. */
+  text(value: string): ToolModelOutput;
+  /** Builds a JSON output; `value` must be JSON-serializable. */
+  json(value: unknown): ToolModelOutput;
+  /** Builds a content output from ordered {@link ToolModelOutputPart} entries. */
+  content(value: readonly ToolModelOutputPart[]): ToolModelOutput;
 };
 /**
  * Builders for `content` {@link ToolModelOutput} parts. Pure sugar over
@@ -39,15 +39,18 @@ export declare const toolOutput: {
  * ```
  */
 export declare const toolOutputPart: {
-    /** Builds a text part. */
-    text(text: string): ToolModelOutputPart;
-    /**
-     * Builds a file part from a base64 payload. Binary data must be
-     * base64-encoded by the caller; raw bytes are rejected by the harness
-     * because they do not survive the durable JSON boundary.
-     */
-    file(base64: string, options: {
-        readonly mediaType: string;
-        readonly filename?: string;
-    }): ToolModelOutputPart;
+  /** Builds a text part. */
+  text(text: string): ToolModelOutputPart;
+  /**
+   * Builds a file part from a base64 payload. Binary data must be
+   * base64-encoded by the caller; raw bytes are rejected by the harness
+   * because they do not survive the durable JSON boundary.
+   */
+  file(
+    base64: string,
+    options: {
+      readonly mediaType: string;
+      readonly filename?: string;
+    },
+  ): ToolModelOutputPart;
 };

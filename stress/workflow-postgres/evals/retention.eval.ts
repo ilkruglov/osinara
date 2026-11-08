@@ -54,9 +54,7 @@ export default defineEval({
         await t.send(`stress-turn-${ordinal}`, { turnPolicy: "queue" });
         latencies.push(performance.now() - startedAt);
         if (ordinal % LATENCY_WINDOW_TURNS === 0) {
-          t.log(
-            `progress=${ordinal}/${STRESS_TURN_COUNT} lastMs=${latencies.at(-1)?.toFixed(1)}`,
-          );
+          t.log(`progress=${ordinal}/${STRESS_TURN_COUNT} lastMs=${latencies.at(-1)?.toFixed(1)}`);
         }
       }
       t.succeeded();

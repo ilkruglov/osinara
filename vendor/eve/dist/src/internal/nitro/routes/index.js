@@ -220,8 +220,4 @@ function handleHomePageRequest(e, t) {
 function handleStaticHomePageRequest(e) {
   return buildHomePageResponse({ agentName: `eve` }, e.req);
 }
-export {
-  buildHomePageResponse,
-  handleStaticHomePageRequest as default,
-  handleHomePageRequest,
-};
+export { buildHomePageResponse, handleStaticHomePageRequest as default, handleHomePageRequest };

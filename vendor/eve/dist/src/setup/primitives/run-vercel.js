@@ -13,13 +13,11 @@ function buildSpawnEnv(t) {
   };
 }
 function commandArgs(e, t) {
-  return !t || e.includes(`--non-interactive`)
-    ? e
-    : [...e, `--non-interactive`];
+  return !t || e.includes(`--non-interactive`) ? e : [...e, `--non-interactive`];
 }
 function existingDir(e) {
   let t = resolve(e);
-  for (; !existsSync(t); ) {
+  for (; !existsSync(t);) {
     let e = dirname(t);
     if (e === t) break;
     t = e;
@@ -56,8 +54,7 @@ function ancestorDirectories(e) {
 }
 function findExecutable(e) {
   try {
-    if ((accessSync(e, constants.F_OK | constants.X_OK), statSync(e).isFile()))
-      return e;
+    if ((accessSync(e, constants.F_OK | constants.X_OK), statSync(e).isFile())) return e;
   } catch {
     return;
   }
@@ -81,16 +78,10 @@ function resolveVercelInvocation(e, t = [], n = process.platform) {
       : { command: r, commandArgs: t };
 }
 function stdinMode(e) {
-  return e.stdin === void 0
-    ? e.nonInteractive
-      ? `ignore`
-      : `inherit`
-    : `pipe`;
+  return e.stdin === void 0 ? (e.nonInteractive ? `ignore` : `inherit`) : `pipe`;
 }
 function writeStdin(e, t, n) {
-  t === void 0 ||
-    e.stdin === null ||
-    (e.stdin.once(`error`, n), e.stdin.end(t, `utf8`));
+  t === void 0 || e.stdin === null || (e.stdin.once(`error`, n), e.stdin.end(t, `utf8`));
 }
 function stdioForRun(e) {
   return e.onOutput || e.stdin !== void 0
@@ -138,8 +129,7 @@ function runVercelProcess(e, r, i) {
             t &&
               !e.ok &&
               (r.onOutput === void 0
-                ? i.reportWithoutRenderer &&
-                  process.stderr.write(`\n${e.message}\n`)
+                ? i.reportWithoutRenderer && process.stderr.write(`\n${e.message}\n`)
                 : r.onOutput({ stream: `stderr`, text: e.message })),
             a(i.result(e)));
         }
@@ -172,10 +162,7 @@ function runVercelProcess(e, r, i) {
           }),
           l.on(`close`, (t) => {
             if ((u(), m(), r.signal?.aborted === !0)) {
-              fail(
-                { code: t, errno: `ABORT_ERR`, message: abortMessage(e) },
-                !1,
-              );
+              fail({ code: t, errno: `ABORT_ERR`, message: abortMessage(e) }, !1);
               return;
             }
             if (t === 0) {
@@ -213,26 +200,14 @@ async function runVercelCaptureStdout(e, t) {
 }
 function toCaptureFailure(e) {
   let t = { stdout: e.stdout, stderr: e.stderr, message: e.message };
-  return (
-    e.code !== void 0 && (t.code = e.code),
-    e.errno !== void 0 && (t.errno = e.errno),
-    t
-  );
+  return (e.code !== void 0 && (t.code = e.code), e.errno !== void 0 && (t.errno = e.errno), t);
 }
 async function captureVercel(e, t) {
   return runVercelProcess(e, t, {
     stdio: [t.stdin === void 0 ? `ignore` : `pipe`, `pipe`, `pipe`],
     capture: !0,
     reportWithoutRenderer: !1,
-    result: (e) =>
-      e.ok
-        ? { ok: !0, stdout: e.stdout }
-        : { ok: !1, failure: toCaptureFailure(e) },
+    result: (e) => (e.ok ? { ok: !0, stdout: e.stdout } : { ok: !1, failure: toCaptureFailure(e) }),
   });
 }
-export {
-  captureVercel,
-  resolveVercelInvocation,
-  runVercel,
-  runVercelCaptureStdout,
-};
+export { captureVercel, resolveVercelInvocation, runVercel, runVercelCaptureStdout };

@@ -33,7 +33,7 @@ describe("filter-bound keyset cursors", () => {
   it("rejects an unbound cursor when the result set requires a binding", () => {
     const cursor = encodeDateUuidCursor(timestamp, id);
     expect(() =>
-      decodeDateUuidCursor(cursor, code, message, paginationFilterDigest([null]))
+      decodeDateUuidCursor(cursor, code, message, paginationFilterDigest([null])),
     ).toThrowError(/AGENT_CURSOR_INVALID/u);
   });
 

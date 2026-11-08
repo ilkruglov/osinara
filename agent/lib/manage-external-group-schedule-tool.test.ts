@@ -29,9 +29,9 @@ vi.mock("./family-context.js", () => ({
 import manageExternalGroupSchedule from "./tools/manage_external_group_schedule.js";
 
 function approvalFor(toolInput: unknown): unknown {
-  return (manageExternalGroupSchedule.approval as (context: never) => unknown)(
-    { toolInput } as never,
-  );
+  return (manageExternalGroupSchedule.approval as (context: never) => unknown)({
+    toolInput,
+  } as never);
 }
 
 const context = { callId: "call-1" } as ToolContext;
@@ -48,8 +48,7 @@ describe("manage_external_group_schedule", () => {
     dependencies.list.mockResolvedValue({ items: [], total: 0 });
     const input = { action: "status" } as const;
 
-    expect(await approvalFor(input))
-      .toBe("not-applicable");
+    expect(await approvalFor(input)).toBe("not-applicable");
     await expect(manageExternalGroupSchedule.execute(input, context)).resolves.toEqual({
       items: [],
       total: 0,
@@ -76,13 +75,15 @@ describe("manage_external_group_schedule", () => {
     } as const;
     dependencies.create.mockResolvedValue({ id: "schedule-1", scope: "group" });
 
-    expect(await approvalFor(input))
-      .toBe("user-approval");
-    await manageExternalGroupSchedule.execute({
-      ...input,
-      capabilityAllowlist: [...input.capabilityAllowlist],
-      recurrence: { ...input.recurrence, daysOfWeek: [...input.recurrence.daysOfWeek] },
-    }, context);
+    expect(await approvalFor(input)).toBe("user-approval");
+    await manageExternalGroupSchedule.execute(
+      {
+        ...input,
+        capabilityAllowlist: [...input.capabilityAllowlist],
+        recurrence: { ...input.recurrence, daysOfWeek: [...input.recurrence.daysOfWeek] },
+      },
+      context,
+    );
 
     expect(dependencies.create).toHaveBeenCalledWith(
       { familyId: "family-1", requestedBy: "owner-1" },
@@ -105,24 +106,41 @@ describe("manage_external_group_schedule", () => {
     });
   });
 
-  it.each(["minutely", "hourly", "monthly", "yearly"])("creates %s external automations", async (kind) => {
-    const input = {
-      action: "create", capabilityAllowlist: [], firstRunAt: "2026-09-12T18:00:00+03:00",
-      recurrence: { kind, interval: 1 }, scenarioPrompt: "Проверь ресурс", telegramChatId: "-1001234567890",
-      timezone: "Europe/Moscow", title: "Проверка", userRequest: "Проверяй по расписанию",
-    };
-    // Upstream dropped owner approval for schedule mutations; we keep it, so the new periods
-    // arrive with our policy intact.
-    expect(await approvalFor(input)).toBe("user-approval");
-    await manageExternalGroupSchedule.execute(input as never, context);
-    expect(dependencies.create).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ recurrence: input.recurrence }));
-    await expect(manageExternalGroupSchedule.execute({ ...input, recurrence: { kind, interval: 0 } } as never, context))
-      .rejects.toMatchObject({ code: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID" });
-  });
+  it.each(["minutely", "hourly", "monthly", "yearly"])(
+    "creates %s external automations",
+    async (kind) => {
+      const input = {
+        action: "create",
+        capabilityAllowlist: [],
+        firstRunAt: "2026-09-12T18:00:00+03:00",
+        recurrence: { kind, interval: 1 },
+        scenarioPrompt: "Проверь ресурс",
+        telegramChatId: "-1001234567890",
+        timezone: "Europe/Moscow",
+        title: "Проверка",
+        userRequest: "Проверяй по расписанию",
+      };
+      // Upstream dropped owner approval for schedule mutations; we keep it, so the new periods
+      // arrive with our policy intact.
+      expect(await approvalFor(input)).toBe("user-approval");
+      await manageExternalGroupSchedule.execute(input as never, context);
+      expect(dependencies.create).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recurrence: input.recurrence }),
+      );
+      await expect(
+        manageExternalGroupSchedule.execute(
+          { ...input, recurrence: { kind, interval: 0 } } as never,
+          context,
+        ),
+      ).rejects.toMatchObject({ code: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID" });
+    },
+  );
 
   it("returns a structured denial for semantically incomplete approval input", () => {
     expect(approvalFor({ action: "create" })).toEqual({
-      reason: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
+      reason:
+        "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
       type: "denied",
     });
   });
@@ -138,16 +156,19 @@ describe("manage_external_group_schedule", () => {
       { action: "create" } as never,
       "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
     ],
-  ])("rejects %s execution before authorization or repository access", async (_case, input, message) => {
-    await expect(manageExternalGroupSchedule.execute(input, context)).rejects.toMatchObject({
-      code: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID",
-      message,
-      name: "AppError",
-    });
-    expect(dependencies.owner).not.toHaveBeenCalled();
-    expect(dependencies.create).not.toHaveBeenCalled();
-    expect(dependencies.list).not.toHaveBeenCalled();
-  });
+  ])(
+    "rejects %s execution before authorization or repository access",
+    async (_case, input, message) => {
+      await expect(manageExternalGroupSchedule.execute(input, context)).rejects.toMatchObject({
+        code: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID",
+        message,
+        name: "AppError",
+      });
+      expect(dependencies.owner).not.toHaveBeenCalled();
+      expect(dependencies.create).not.toHaveBeenCalled();
+      expect(dependencies.list).not.toHaveBeenCalled();
+    },
+  );
 
   it("publishes no model-selectable familyId, groupId, or Telegram chat type", () => {
     const schema = JSON.stringify(manageExternalGroupSchedule.inputSchema);

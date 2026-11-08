@@ -10,28 +10,30 @@ export { EVE_WORKFLOW_FLOW_ROUTE_PATH };
  * inherited from the base server function config.
  */
 export declare function createEveVercelOptions(input: {
-    agentName: string;
-    enabled: boolean;
-    publicRoutePrefix?: string;
-}): {
-    config: {
+  agentName: string;
+  enabled: boolean;
+  publicRoutePrefix?: string;
+}):
+  | {
+      config: {
         version: 3;
         framework: {
-            slug: string;
-            version: string;
+          slug: string;
+          version: string;
         };
-    };
-    functionRules: {
+      };
+      functionRules: {
         "/.well-known/workflow/v1/flow": {
-            maxDuration: "max";
-            experimentalTriggers: {
-                type: "queue/v2beta";
-                topic: string;
-                consumer: string;
-                retryAfterSeconds: number;
-                initialDelaySeconds: number;
-            }[];
-            environment: Record<string, string>;
+          maxDuration: "max";
+          experimentalTriggers: {
+            type: "queue/v2beta";
+            topic: string;
+            consumer: string;
+            retryAfterSeconds: number;
+            initialDelaySeconds: number;
+          }[];
+          environment: Record<string, string>;
         };
-    };
-} | undefined;
+      };
+    }
+  | undefined;

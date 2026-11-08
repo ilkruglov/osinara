@@ -1,12 +1,6 @@
 import { defineSetupIntegration } from "../types.js";
-import {
-  installScaffoldDependencies,
-  reportOverwrittenFiles,
-} from "../shared/scaffold.js";
-import {
-  deriveSlackConnectorSlug,
-  ensureChannel,
-} from "#setup/scaffold/index.js";
+import { installScaffoldDependencies, reportOverwrittenFiles } from "../shared/scaffold.js";
+import { deriveSlackConnectorSlug, ensureChannel } from "#setup/scaffold/index.js";
 import { WizardCancelledError } from "#setup/step.js";
 import { select } from "#setup/ask.js";
 import {
@@ -20,8 +14,7 @@ function slackbotFailureCopy(e) {
     case `not-installed`:
       return {
         reason: `Slackbot is not connected to a Slack workspace. Slack channel was not added.`,
-        followUp:
-          "Re-run `eve add channel/slack` after the workspace install is complete.",
+        followUp: "Re-run `eve add channel/slack` after the workspace install is complete.",
       };
     case `cleanup-failed`:
       return {
@@ -31,14 +24,12 @@ function slackbotFailureCopy(e) {
     case `connector-lookup-failed`:
       return {
         reason: `Existing Slack connectors could not be inspected. Slack channel was not added.`,
-        followUp:
-          "Restore Vercel CLI access, then re-run `eve add channel/slack`.",
+        followUp: "Restore Vercel CLI access, then re-run `eve add channel/slack`.",
       };
     case `installation-check-failed`:
       return {
         reason: `Slack workspace installation could not be verified. Slack channel was not added.`,
-        followUp:
-          "Verify Vercel Connect is reachable, then re-run `eve add channel/slack`.",
+        followUp: "Verify Vercel Connect is reachable, then re-run `eve add channel/slack`.",
       };
     case `existing-not-installed`:
       return {
@@ -48,14 +39,12 @@ function slackbotFailureCopy(e) {
     case `detach-failed`:
       return {
         reason: `Slackbot provisioning could not replace the existing trigger destination. Slack channel was not added.`,
-        followUp:
-          "Run the `vercel connect detach` and `vercel connect attach` commands above.",
+        followUp: "Run the `vercel connect detach` and `vercel connect attach` commands above.",
       };
     case `attach-failed`:
       return {
         reason: `Slackbot provisioning did not attach this project. Slack channel was not added.`,
-        followUp:
-          "Finish event delivery with the `vercel connect attach` command above.",
+        followUp: "Finish event delivery with the `vercel connect attach` command above.",
       };
     case `create-failed`:
       return {
@@ -119,18 +108,13 @@ async function prepareSlackSetup(e, t = defaultDeps) {
   if (n === `environment`) return { credentials: n, slug: r };
   let i = await e.resolveVercelProject(`Slack`);
   if (i.projectId.length === 0)
-    throw Error(
-      `Slack setup with Vercel Connect requires a linked Vercel project.`,
-    );
+    throw Error(`Slack setup with Vercel Connect requires a linked Vercel project.`);
   let a = await t.inspectConnectors(e.presenter.log, e.appRoot, r, e.signal);
   return {
     credentials: n,
     slug: r,
     project: i,
-    connector:
-      a.state === `found`
-        ? await chooseConnector(e, a.connectors, a.preferred)
-        : `create`,
+    connector: a.state === `found` ? await chooseConnector(e, a.connectors, a.preferred) : `create`,
   };
 }
 async function applySlackSetup(e, r, i = defaultDeps) {
@@ -153,15 +137,11 @@ async function applySlackSetup(e, r, i = defaultDeps) {
       { facts: [], deploymentRequired: !0 }
     );
   }
-  let o = await i.provisionSlackbot(
-    r.presenter.log,
-    r.appRoot,
-    e.slug,
-    void 0,
-    { signal: r.signal, selectConnector: async () => e.connector },
-  );
-  if ((r.signal?.throwIfAborted(), o.state === `cancelled`))
-    throw new WizardCancelledError();
+  let o = await i.provisionSlackbot(r.presenter.log, r.appRoot, e.slug, void 0, {
+    signal: r.signal,
+    selectConnector: async () => e.connector,
+  });
+  if ((r.signal?.throwIfAborted(), o.state === `cancelled`)) throw new WizardCancelledError();
   if (o.state !== `attached`) {
     let e = slackbotFailureCopy(o);
     throw Error(`${e.reason} ${e.followUp}`);
@@ -177,12 +157,7 @@ async function applySlackSetup(e, r, i = defaultDeps) {
   if (
     (reportOverwrittenFiles(r.presenter.log, s.filesOverwritten),
     s.action === `skipped` &&
-      !(await i.reconcileSlackUid(
-        r.presenter.log,
-        r.appRoot,
-        o,
-        `slack/${e.slug}`,
-      )))
+      !(await i.reconcileSlackUid(r.presenter.log, r.appRoot, o, `slack/${e.slug}`)))
   )
     throw Error(`Slack connector UID update is required before deployment.`);
   return (

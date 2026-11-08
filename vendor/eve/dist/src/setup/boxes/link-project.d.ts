@@ -5,16 +5,16 @@ import type { SetupBox } from "../step.js";
 import { linkProject, unresolvedProject } from "../vercel-project.js";
 /** Injected for tests; defaults to the real Vercel project helpers. */
 export interface LinkProjectDeps {
-    linkProject: typeof linkProject;
-    detectProjectResolution: typeof detectProjectResolution;
-    unresolvedProject: typeof unresolvedProject;
+  linkProject: typeof linkProject;
+  detectProjectResolution: typeof detectProjectResolution;
+  unresolvedProject: typeof unresolvedProject;
 }
 export interface LinkProjectOptions {
-    /** Streams link progress and, in interactive runs, may confirm ambiguous framework detection. */
-    prompter: Prompter;
-    /** Headless runs must not ask follow-up questions after the plan is fixed. */
-    headless?: boolean;
-    deps?: LinkProjectDeps;
+  /** Streams link progress and, in interactive runs, may confirm ambiguous framework detection. */
+  prompter: Prompter;
+  /** Headless runs must not ask follow-up questions after the plan is fixed. */
+  headless?: boolean;
+  deps?: LinkProjectDeps;
 }
 /**
  * Executes the resolved Vercel project plan after scaffolding, once the project
@@ -28,4 +28,6 @@ export interface LinkProjectOptions {
  * identity is idempotent. The resolution read back from the link metadata lands
  * in `state.project`.
  */
-export declare function linkVercelProject(options: LinkProjectOptions): SetupBox<SetupState, null, ProjectResolution>;
+export declare function linkVercelProject(
+  options: LinkProjectOptions,
+): SetupBox<SetupState, null, ProjectResolution>;

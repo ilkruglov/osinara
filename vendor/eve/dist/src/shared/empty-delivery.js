@@ -3,8 +3,4 @@ const EMPTY_DELIVERY_SENTINEL = `<eve-empty-delivery/>`,
 function hasEmptyDeliverySentinel(e) {
   return e?.includes(`<eve-empty-delivery/>`) ?? !1;
 }
-export {
-  CONDITIONAL_DELIVERY_INSTRUCTION,
-  EMPTY_DELIVERY_SENTINEL,
-  hasEmptyDeliverySentinel,
-};
+export { CONDITIONAL_DELIVERY_INSTRUCTION, EMPTY_DELIVERY_SENTINEL, hasEmptyDeliverySentinel };

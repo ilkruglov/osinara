@@ -6,9 +6,7 @@ function clipboardSequence(e, t = process.env) {
 function clipboardCommand(e, t = process.env) {
   if (e === `darwin`) return [`pbcopy`];
   if (e === `linux`)
-    return t.WAYLAND_DISPLAY === void 0
-      ? [`xclip`, `-selection`, `clipboard`]
-      : [`wl-copy`];
+    return t.WAYLAND_DISPLAY === void 0 ? [`xclip`, `-selection`, `clipboard`] : [`wl-copy`];
   if (e === `win32`) return [`clip`];
 }
 function copyTextToClipboard(t, n) {
@@ -20,9 +18,7 @@ function copyTextToClipboard(t, n) {
         stdio: [`pipe`, `ignore`, `ignore`],
         detached: !1,
       });
-      (n.on(`error`, () => {}),
-        n.stdin?.on(`error`, () => {}),
-        n.stdin?.end(t));
+      (n.on(`error`, () => {}), n.stdin?.on(`error`, () => {}), n.stdin?.end(t));
     } catch {}
 }
 export { clipboardCommand, clipboardSequence, copyTextToClipboard };

@@ -36,9 +36,7 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
         )
       : c
         ? i.error(`No evals found matching: ${c.join(`, `)}`)
-        : i.error(
-            `No evals found. Create files under evals/ with the *.eval.ts extension.`,
-          ),
+        : i.error(`No evals found. Create files under evals/ with the *.eval.ts extension.`),
       (process.exitCode = 2));
     return;
   }
@@ -46,8 +44,7 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
     d = r.excludeTag ?? [],
     f = filterEvalsByTags({ evaluations: l, includeTags: u, excludeTags: [] });
   if (f.length === 0) {
-    (i.error(`No evals matched the provided tags (${u.join(`, `)}).`),
-      (process.exitCode = 2));
+    (i.error(`No evals matched the provided tags (${u.join(`, `)}).`), (process.exitCode = 2));
     return;
   }
   let p = filterEvalsByTags({
@@ -60,9 +57,7 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
     return;
   }
   if (p.length === 0) {
-    i.log(
-      `All ${f.length} matching evals are excluded by tags (${d.join(`, `)}); nothing to run.`,
-    );
+    i.log(`All ${f.length} matching evals are excluded by tags (${d.join(`, `)}); nothing to run.`);
     return;
   }
   let m, h;
@@ -70,25 +65,20 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
     ((m = parsePositiveInteger(r.maxConcurrency, `--max-concurrency`)),
       (h = parseNonNegativeInteger(r.timeout, `--timeout`)));
   } catch (e) {
-    (i.error(e instanceof Error ? e.message : String(e)),
-      (process.exitCode = 2));
+    (i.error(e instanceof Error ? e.message : String(e)), (process.exitCode = 2));
     return;
   }
   let g;
   try {
     g = await discoverEvalConfig(s);
   } catch (e) {
-    (i.error(e instanceof Error ? e.message : String(e)),
-      (process.exitCode = 2));
+    (i.error(e instanceof Error ? e.message : String(e)), (process.exitCode = 2));
     return;
   }
   let _, v, y;
   try {
     if (r.url)
-      ((y = await createEvalClient(
-        { kind: `remote`, url: r.url },
-        { workspaceRoot: s },
-      )),
+      ((y = await createEvalClient({ kind: `remote`, url: r.url }, { workspaceRoot: s })),
         (v = await resolveEvalTargetHandle({
           client: y,
           expectedAgentName: await readExpectedAgentName(s),
@@ -127,9 +117,7 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
       o = r.strict === !0 && n.scored > 0;
     (a || o) && (process.exitCode = 1);
   } finally {
-    _ &&
-      (await _.close(),
-      await shutdownActiveSandboxHandles({ log: (e) => i.error(e) }));
+    _ && (await _.close(), await shutdownActiveSandboxHandles({ log: (e) => i.error(e) }));
   }
   let b = typeof process.exitCode == `number` ? process.exitCode : 0;
   process.exit(b);
@@ -137,8 +125,7 @@ eve eval only scans the top-level evals/ directory (a sibling of agent/). Move t
 function parsePositiveInteger(e, t) {
   if (e === void 0) return;
   let n = Number(e);
-  if (!Number.isInteger(n) || n < 1)
-    throw Error(`${t} must be a positive integer; got "${e}".`);
+  if (!Number.isInteger(n) || n < 1) throw Error(`${t} must be a positive integer; got "${e}".`);
   return n;
 }
 function parseNonNegativeInteger(e, t) {
@@ -160,17 +147,14 @@ function printEvalList(e, t, n) {
   }
   for (let t of e) {
     let e = t.description === void 0 ? `` : ` — ${t.description}`,
-      r =
-        t.tags !== void 0 && t.tags.length > 0 ? ` [${t.tags.join(`, `)}]` : ``;
+      r = t.tags !== void 0 && t.tags.length > 0 ? ` [${t.tags.join(`, `)}]` : ``;
     n.log(`${t.id}${r}${e}`);
   }
 }
 async function readExpectedAgentName(e) {
   try {
     let n = JSON.parse(await readFile(join(e, `package.json`), `utf8`));
-    return typeof n.name == `string` && n.name.length > 0
-      ? n.name
-      : basename(e);
+    return typeof n.name == `string` && n.name.length > 0 ? n.name : basename(e);
   } catch {
     return basename(e);
   }

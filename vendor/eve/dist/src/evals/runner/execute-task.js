@@ -99,8 +99,7 @@ function selectPrimarySessionId(e) {
 }
 function extractRuntimeIdentity(e) {
   for (let t of e)
-    if (t.type === `session.started` && t.data.runtime !== void 0)
-      return t.data.runtime;
+    if (t.type === `session.started` && t.data.runtime !== void 0) return t.data.runtime;
 }
 function sum(e, t) {
   return e.reduce((e, n) => e + t(n), 0);
@@ -112,8 +111,7 @@ async function runUntilAborted(e, t) {
   t.throwIfAborted();
   let onAbort,
     n = new Promise((e, n) => {
-      ((onAbort = () => n(t.reason)),
-        t.addEventListener(`abort`, onAbort, { once: !0 }));
+      ((onAbort = () => n(t.reason)), t.addEventListener(`abort`, onAbort, { once: !0 }));
     });
   try {
     await Promise.race([e, n]);

@@ -18,11 +18,4 @@ function isPlainRecord(e) {
   let t = Object.getPrototypeOf(e);
   return t === Object.prototype || t === null;
 }
-export {
-  isErrnoCode,
-  isNonEmptyString,
-  isObject,
-  isPlainRecord,
-  isThenable,
-  readNonEmptyString,
-};
+export { isErrnoCode, isNonEmptyString, isObject, isPlainRecord, isThenable, readNonEmptyString };

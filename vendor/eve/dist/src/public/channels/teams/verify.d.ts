@@ -19,22 +19,22 @@ import { type TeamsAppId, type TeamsFetch } from "#public/channels/teams/api.js"
 export type TeamsWebhookVerifier = (request: Request, body: string) => unknown | Promise<unknown>;
 /** Options for {@link verifyTeamsRequest}. */
 export interface TeamsVerifyOptions {
-    readonly appId?: TeamsAppId;
-    readonly fetch?: TeamsFetch;
-    readonly jwksUrl?: string;
-    /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
-    readonly maxSkewSeconds?: number;
-    readonly openIdMetadataUrl?: string;
-    readonly webhookVerifier?: TeamsWebhookVerifier;
+  readonly appId?: TeamsAppId;
+  readonly fetch?: TeamsFetch;
+  readonly jwksUrl?: string;
+  /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
+  readonly maxSkewSeconds?: number;
+  readonly openIdMetadataUrl?: string;
+  readonly webhookVerifier?: TeamsWebhookVerifier;
 }
 /** Options for {@link verifyTeamsJwt}. */
 export interface TeamsJwtVerifyOptions {
-    readonly appId?: TeamsAppId;
-    readonly fetch?: TeamsFetch;
-    readonly jwksUrl?: string;
-    /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
-    readonly maxSkewSeconds?: number;
-    readonly openIdMetadataUrl?: string;
+  readonly appId?: TeamsAppId;
+  readonly fetch?: TeamsFetch;
+  readonly jwksUrl?: string;
+  /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
+  readonly maxSkewSeconds?: number;
+  readonly openIdMetadataUrl?: string;
 }
 /**
  * Verifies an inbound Teams request and returns the raw body.
@@ -45,6 +45,12 @@ export interface TeamsJwtVerifyOptions {
  * resolved (`appId` option or `MICROSOFT_APP_ID`/`TEAMS_APP_ID`), metadata or
  * keys cannot be loaded, or JWT verification fails.
  */
-export declare function verifyTeamsRequest(request: Request, options: TeamsVerifyOptions): Promise<string>;
+export declare function verifyTeamsRequest(
+  request: Request,
+  options: TeamsVerifyOptions,
+): Promise<string>;
 /** Verifies one Bot Connector JWT and returns its payload. */
-export declare function verifyTeamsJwt(token: string, options: TeamsJwtVerifyOptions): Promise<JWTPayload>;
+export declare function verifyTeamsJwt(
+  token: string,
+  options: TeamsJwtVerifyOptions,
+): Promise<JWTPayload>;

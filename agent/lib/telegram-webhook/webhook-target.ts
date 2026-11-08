@@ -35,8 +35,15 @@ export function expectedTelegramWebhookUrl(publicBaseUrl: string | undefined): s
   } catch {
     return null;
   }
-  if (url.protocol !== "https:" || url.pathname !== "/" || url.search !== "" || url.hash !== "" ||
-      url.username !== "" || url.password !== "") return null;
+  if (
+    url.protocol !== "https:" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    url.username !== "" ||
+    url.password !== ""
+  )
+    return null;
   return telegramWebhookUrl(url.origin);
 }
 
@@ -47,7 +54,8 @@ function canonical(value: string): string | null {
   } catch {
     return null;
   }
-  if (url.search !== "" || url.hash !== "" || url.username !== "" || url.password !== "") return null;
+  if (url.search !== "" || url.hash !== "" || url.username !== "" || url.password !== "")
+    return null;
   return `${url.origin}${url.pathname.replace(/\/+$/u, "")}`;
 }
 

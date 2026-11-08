@@ -49,8 +49,7 @@ function deriveRunFacts(t, n) {
         for (let t of n.data.actions)
           t.kind === `tool-call`
             ? ensureToolCall(t.callId, t.toolName, t.input)
-            : t.kind === `load-skill` &&
-              ensureToolCall(t.callId, LOAD_SKILL_TOOL_NAME, t.input);
+            : t.kind === `load-skill` && ensureToolCall(t.callId, LOAD_SKILL_TOOL_NAME, t.input);
         break;
       case `action.result`: {
         let { result: e, status: t } = n.data;
@@ -74,8 +73,7 @@ function deriveRunFacts(t, n) {
         break;
       case `subagent.completed`: {
         let e = ensureSubagentCall(n.data.callId, n.data.subagentName);
-        ((e.output = n.data.output),
-          e.status === `pending` && (e.status = `completed`));
+        ((e.output = n.data.output), e.status === `pending` && (e.status = `completed`));
         break;
       }
       case `input.requested`:

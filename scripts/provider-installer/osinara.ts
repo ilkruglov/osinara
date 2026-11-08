@@ -38,7 +38,10 @@ declare const OSINARA_INSTALL_RELEASE_VERSION: string;
 
 const install: CliOperation = async (args) => {
   if (args.length !== 0) {
-    throw new InstallerError("OSINARA_CLI_ARGUMENT_INVALID", "Команда install не принимает аргументы");
+    throw new InstallerError(
+      "OSINARA_CLI_ARGUMENT_INVALID",
+      "Команда install не принимает аргументы",
+    );
   }
   // Optional and explicit: our installers never fix the webhook IP unless this setting asks for it.
   let webhookIpAddress: string | null;
@@ -76,11 +79,12 @@ const install: CliOperation = async (args) => {
         timeoutMs: RELEASE_DOWNLOAD_TIMEOUT_MS,
         version: OSINARA_INSTALL_RELEASE_VERSION,
       }),
-      validateGroq: (apiKey) => validateGroqVoiceCredential({
-        apiKey,
-        fetch: globalThis.fetch,
-        timeoutMs: PROVIDER_CATALOG_TIMEOUT_MS,
-      }),
+      validateGroq: (apiKey) =>
+        validateGroqVoiceCredential({
+          apiKey,
+          fetch: globalThis.fetch,
+          timeoutMs: PROVIDER_CATALOG_TIMEOUT_MS,
+        }),
       validateModel: providerAdapters.validateModel,
     });
   } finally {
@@ -90,7 +94,10 @@ const install: CliOperation = async (args) => {
 
 const config: CliOperation = async (args) => {
   if (args.length !== 0) {
-    throw new InstallerError("OSINARA_CLI_ARGUMENT_INVALID", "Команда config не принимает аргументы");
+    throw new InstallerError(
+      "OSINARA_CLI_ARGUMENT_INVALID",
+      "Команда config не принимает аргументы",
+    );
   }
   const prompts = createTerminalPrompts();
   const providerAdapters = createProviderAdapters({
@@ -112,11 +119,12 @@ const config: CliOperation = async (args) => {
       },
       listModels: providerAdapters.listModels,
       prompts,
-      validateGroq: (apiKey) => validateGroqVoiceCredential({
-        apiKey,
-        fetch: globalThis.fetch,
-        timeoutMs: PROVIDER_CATALOG_TIMEOUT_MS,
-      }),
+      validateGroq: (apiKey) =>
+        validateGroqVoiceCredential({
+          apiKey,
+          fetch: globalThis.fetch,
+          timeoutMs: PROVIDER_CATALOG_TIMEOUT_MS,
+        }),
       validateModel: providerAdapters.validateModel,
     });
   } finally {
@@ -125,11 +133,13 @@ const config: CliOperation = async (args) => {
 };
 
 const operationalCommands = createOperationalCommands(createProductionOperationalCommands());
-const operations = Object.fromEntries(CLI_COMMANDS.map((command) => {
-  if (command === "install") return [command, install];
-  if (command === "config") return [command, config];
-  return [command, operationalCommands[command]];
-}));
+const operations = Object.fromEntries(
+  CLI_COMMANDS.map((command) => {
+    if (command === "install") return [command, install];
+    if (command === "config") return [command, config];
+    return [command, operationalCommands[command]];
+  }),
+);
 
 /** Keeps the source entrypoint compatible with both native ESM and the CommonJS SEA bundle. */
 async function main(): Promise<void> {

@@ -37,12 +37,14 @@ describe("Telegram R3 profile turn", () => {
       ...groupMessage(`@${BOT_USERNAME} что ты знаешь о Петре?`),
       raw: {
         date: 1_700_000_000,
-        entities: [{
-          length: 5,
-          offset: 31,
-          type: "text_mention",
-          user: { id: 202, is_bot: false },
-        }],
+        entities: [
+          {
+            length: 5,
+            offset: 31,
+            type: "text_mention",
+            user: { id: 202, is_bot: false },
+          },
+        ],
       },
     };
 
@@ -96,9 +98,12 @@ describe("Telegram R3 profile turn", () => {
     const telegram = telegramContext();
     telegram.sendMessage.mockRejectedValueOnce(new Error("Telegram unavailable"));
 
-    await expect(createTelegramMessageHandler(repository)(telegram.context, groupMessage(
-      `@${BOT_USERNAME} продолжай`,
-    ))).rejects.toThrowError("Telegram unavailable");
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegram.context,
+        groupMessage(`@${BOT_USERNAME} продолжай`),
+      ),
+    ).rejects.toThrowError("Telegram unavailable");
 
     expect(repository.profilePolicies.markGroupNoticePresented).not.toHaveBeenCalled();
   });

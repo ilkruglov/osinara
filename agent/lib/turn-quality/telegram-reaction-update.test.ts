@@ -9,14 +9,20 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { handleTelegramUnparsedUpdate, parseTelegramReactionUpdate } from "./telegram-reaction-update.js";
+import {
+  handleTelegramUnparsedUpdate,
+  parseTelegramReactionUpdate,
+} from "./telegram-reaction-update.js";
 
 const update = {
   message_reaction: {
     chat: { id: -1001787011433, type: "supergroup" },
     date: 1_791_000_000,
     message_id: 807_600,
-    new_reaction: [{ emoji: "👍️", type: "emoji" }, { custom_emoji_id: "5368324170671202286", type: "custom_emoji" }],
+    new_reaction: [
+      { emoji: "👍️", type: "emoji" },
+      { custom_emoji_id: "5368324170671202286", type: "custom_emoji" },
+    ],
     old_reaction: [],
     user: { first_name: "Илья", id: 453_059_406, is_bot: false },
   },
@@ -33,14 +39,29 @@ describe("parseTelegramReactionUpdate", () => {
       telegramUserId: "453059406",
       updateId: "85095700",
     });
-    expect(parseTelegramReactionUpdate({ ...update, message_reaction: { ...update.message_reaction, new_reaction: [] } })?.emojis).toEqual([]);
+    expect(
+      parseTelegramReactionUpdate({
+        ...update,
+        message_reaction: { ...update.message_reaction, new_reaction: [] },
+      })?.emojis,
+    ).toEqual([]);
   });
 
   it("ignores other updates, anonymous reactors and malformed payloads", () => {
     expect(parseTelegramReactionUpdate({ message: { text: "hi" }, update_id: 1 })).toBeNull();
     const { user: _user, ...anonymous } = update.message_reaction;
-    expect(parseTelegramReactionUpdate({ ...update, message_reaction: { ...anonymous, actor_chat: { id: -100 } } })).toBeNull();
-    expect(parseTelegramReactionUpdate({ ...update, message_reaction: { ...update.message_reaction, date: "soon" } })).toBeNull();
+    expect(
+      parseTelegramReactionUpdate({
+        ...update,
+        message_reaction: { ...anonymous, actor_chat: { id: -100 } },
+      }),
+    ).toBeNull();
+    expect(
+      parseTelegramReactionUpdate({
+        ...update,
+        message_reaction: { ...update.message_reaction, date: "soon" },
+      }),
+    ).toBeNull();
     expect(parseTelegramReactionUpdate(null)).toBeNull();
     const { update_id: _id, ...noUpdateId } = update;
     expect(parseTelegramReactionUpdate(noUpdateId)).toBeNull();

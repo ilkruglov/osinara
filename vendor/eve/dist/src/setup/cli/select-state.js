@@ -55,25 +55,16 @@ function reduceSelect(t, n, r) {
       return {
         ...t,
         filter: e,
-        cursor: firstFocusableIndex(
-          filterOptions(r.options, e, r.searchAction),
-          i,
-        ),
+        cursor: firstFocusableIndex(filterOptions(r.options, e, r.searchAction), i),
       };
     }
     case `backspace`: {
       if (t.filter.length === 0) return t;
-      let n = t.filter.slice(
-        0,
-        previousGraphemeBoundary(t.filter, t.filter.length),
-      );
+      let n = t.filter.slice(0, previousGraphemeBoundary(t.filter, t.filter.length));
       return {
         ...t,
         filter: n,
-        cursor: firstFocusableIndex(
-          filterOptions(r.options, n, r.searchAction),
-          i,
-        ),
+        cursor: firstFocusableIndex(filterOptions(r.options, n, r.searchAction), i),
       };
     }
     case `clear`:
@@ -82,10 +73,7 @@ function reduceSelect(t, n, r) {
         : {
             ...t,
             filter: ``,
-            cursor: firstFocusableIndex(
-              filterOptions(r.options, ``, r.searchAction),
-              i,
-            ),
+            cursor: firstFocusableIndex(filterOptions(r.options, ``, r.searchAction), i),
           };
     case `up`:
     case `down`: {
@@ -98,10 +86,7 @@ function reduceSelect(t, n, r) {
       let e = filterOptions(r.options, t.filter, r.searchAction)[t.cursor];
       if (e === void 0 || !isActionable(e)) return t;
       let n = new Set(t.selected);
-      return (
-        n.has(e.value) ? n.delete(e.value) : n.add(e.value),
-        { ...t, selected: n }
-      );
+      return (n.has(e.value) ? n.delete(e.value) : n.add(e.value), { ...t, selected: n });
     }
   }
 }

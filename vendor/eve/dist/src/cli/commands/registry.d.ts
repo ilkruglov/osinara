@@ -4,54 +4,54 @@ import { type RegistryCommandLogger } from "./registry-recovery.js";
 import type { runRegistrySetupCommand } from "./registry-setup-command.js";
 export type { RegistryCommandLogger } from "./registry-recovery.js";
 export interface AddCommandOptions {
-    skipInstall?: boolean;
-    overwrite?: boolean;
-    skipSetup?: boolean;
-    yes?: boolean;
-    nonInteractive?: boolean;
-    answers?: Record<string, unknown>;
-    /** Suppresses the registry SDK's terminal-native progress output. */
-    silent?: boolean;
+  skipInstall?: boolean;
+  overwrite?: boolean;
+  skipSetup?: boolean;
+  yes?: boolean;
+  nonInteractive?: boolean;
+  answers?: Record<string, unknown>;
+  /** Suppresses the registry SDK's terminal-native progress output. */
+  silent?: boolean;
 }
 /** Options shared by registry catalog commands. */
 export interface RegistryCommandOptions {
-    /** Emit the underlying registry result as JSON. */
-    json?: boolean;
+  /** Emit the underlying registry result as JSON. */
+  json?: boolean;
 }
 /** Options for searching registry catalogs. */
 export interface RegistrySearchCommandOptions extends RegistryCommandOptions {
-    /** Maximum number of matching items to return. */
-    limit?: number;
+  /** Maximum number of matching items to return. */
+  limit?: number;
 }
 export interface RegistrySetupDependencies {
-    loadSetupCommandRunner(): Promise<typeof runRegistrySetupCommand>;
+  loadSetupCommandRunner(): Promise<typeof runRegistrySetupCommand>;
 }
 export interface AddCommandDependencies extends RegistrySetupDependencies {
-    createPrompter?: () => Prompter;
-    hasInteractiveTerminal?: () => boolean;
+  createPrompter?: () => Prompter;
+  hasInteractiveTerminal?: () => boolean;
 }
 type RunAddCommandOptions = AddCommandOptions & {
-    prompter?: Prompter;
-    signal?: AbortSignal;
-    setupAuthorized?: boolean;
+  prompter?: Prompter;
+  signal?: AbortSignal;
+  setupAuthorized?: boolean;
 };
 /** One discoverable item from an eve-compatible registry catalog. */
 export interface RegistryCatalogItem {
-    address: string;
-    name: string;
-    title?: string;
-    type?: string;
-    description?: string;
-    source: string;
+  address: string;
+  name: string;
+  title?: string;
+  type?: string;
+  description?: string;
+  source: string;
 }
 /** Catalog items plus non-fatal failures from the registry sources queried. */
 export interface RegistryCatalogResult {
-    items: RegistryCatalogItem[];
-    total: number;
-    errors: Array<{
-        message: string;
-        registry: string;
-    }>;
+  items: RegistryCatalogItem[];
+  total: number;
+  errors: Array<{
+    message: string;
+    registry: string;
+  }>;
 }
 /**
  * Resolves the official registry URL, honoring the explicit development trust override.
@@ -61,29 +61,67 @@ export interface RegistryCatalogResult {
  */
 export declare function resolveOfficialRegistryUrl(configured?: string | undefined): string;
 /** Installs an official registry item without running its declared setup command. */
-export declare function installOfficialRegistryItem(appRoot: string, item: string, options?: AddCommandOptions): Promise<void>;
+export declare function installOfficialRegistryItem(
+  appRoot: string,
+  item: string,
+  options?: AddCommandOptions,
+): Promise<void>;
 /** Browses all configured catalogs, or one namespace or URL source. */
-export declare function browseRegistryCatalog(appRoot: string, options?: {
+export declare function browseRegistryCatalog(
+  appRoot: string,
+  options?: {
     query?: string;
     source?: string;
-}): Promise<RegistryCatalogResult>;
+  },
+): Promise<RegistryCatalogResult>;
 /** Resolves one official, configured, or URL-addressed item manifest. */
 export declare function getRegistryItemManifest(appRoot: string, item: string): Promise<unknown>;
 /** Installs an official, configured, or URL-addressed registry item. */
-export declare function installRegistryItem(appRoot: string, item: string, options?: AddCommandOptions & {
+export declare function installRegistryItem(
+  appRoot: string,
+  item: string,
+  options?: AddCommandOptions & {
     prompter?: Prompter;
     signal?: AbortSignal;
-}, dependencies?: AddCommandDependencies): Promise<{
-    output: readonly string[];
-    setup?: RegistrySetupCompletion;
+  },
+  dependencies?: AddCommandDependencies,
+): Promise<{
+  output: readonly string[];
+  setup?: RegistrySetupCompletion;
 }>;
 /** Installs an official, configured, or URL-addressed registry item. */
-export declare function runAddCommand(logger: RegistryCommandLogger, appRoot: string, item: string, options: RunAddCommandOptions, dependencies?: AddCommandDependencies): Promise<RegistrySetupCompletion | undefined>;
+export declare function runAddCommand(
+  logger: RegistryCommandLogger,
+  appRoot: string,
+  item: string,
+  options: RunAddCommandOptions,
+  dependencies?: AddCommandDependencies,
+): Promise<RegistrySetupCompletion | undefined>;
 /** Adds registry namespace mappings to the project's package.json. */
-export declare function runRegistryAddCommand(logger: RegistryCommandLogger, appRoot: string, mappings: readonly string[]): Promise<void>;
+export declare function runRegistryAddCommand(
+  logger: RegistryCommandLogger,
+  appRoot: string,
+  mappings: readonly string[],
+): Promise<void>;
 /** Lists registry items from every configured source or one selected source. */
-export declare function runRegistryListCommand(logger: RegistryCommandLogger, appRoot: string, source?: string, options?: RegistryCommandOptions): Promise<void>;
+export declare function runRegistryListCommand(
+  logger: RegistryCommandLogger,
+  appRoot: string,
+  source?: string,
+  options?: RegistryCommandOptions,
+): Promise<void>;
 /** Searches registry items across every configured source or one selected source. */
-export declare function runRegistrySearchCommand(logger: RegistryCommandLogger, appRoot: string, query: string, source?: string, options?: RegistrySearchCommandOptions): Promise<void>;
+export declare function runRegistrySearchCommand(
+  logger: RegistryCommandLogger,
+  appRoot: string,
+  query: string,
+  source?: string,
+  options?: RegistrySearchCommandOptions,
+): Promise<void>;
 /** Inspects one official, configured, or URL-addressed registry item. */
-export declare function runRegistryViewCommand(logger: RegistryCommandLogger, appRoot: string, item: string, options?: RegistryCommandOptions): Promise<void>;
+export declare function runRegistryViewCommand(
+  logger: RegistryCommandLogger,
+  appRoot: string,
+  item: string,
+  options?: RegistryCommandOptions,
+): Promise<void>;

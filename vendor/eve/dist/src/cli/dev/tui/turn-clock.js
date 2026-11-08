@@ -14,13 +14,11 @@ var TurnClock = class {
     return this.#t;
   }
   addUsage(e) {
-    ((this.#t.inputTokens += e.inputTokens ?? 0),
-      (this.#t.outputTokens += e.outputTokens ?? 0));
+    ((this.#t.inputTokens += e.inputTokens ?? 0), (this.#t.outputTokens += e.outputTokens ?? 0));
   }
   settle() {
     let e = this.#e;
-    if (e !== void 0)
-      return ((this.#e = void 0), { elapsedMs: Date.now() - e, ...this.#t });
+    if (e !== void 0) return ((this.#e = void 0), { elapsedMs: Date.now() - e, ...this.#t });
   }
   reset() {
     ((this.#e = void 0), (this.#t = { inputTokens: 0, outputTokens: 0 }));

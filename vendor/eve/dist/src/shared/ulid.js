@@ -7,15 +7,11 @@ function createUlidFactory() {
   return function () {
     let r = Date.now();
     if (!Number.isInteger(r) || r < 0 || r > TIME_MAX)
-      throw Error(
-        `Cannot mint a ULID: timestamp must be an integer from 0 to ${TIME_MAX}.`,
-      );
+      throw Error(`Cannot mint a ULID: timestamp must be an integer from 0 to ${TIME_MAX}.`);
     if (r > e) ((e = r), randomFill(n));
     else if (!incrementRandom(n)) {
       if (e === TIME_MAX)
-        throw Error(
-          `Cannot mint a ULID: random component overflowed at the maximum timestamp.`,
-        );
+        throw Error(`Cannot mint a ULID: random component overflowed at the maximum timestamp.`);
       ((e += 1), randomFill(n));
     }
     return `${encodeTime(e)}${encodeRandom(n)}`;
@@ -30,16 +26,13 @@ function isUlid(t) {
 function randomFill(e) {
   let t = globalThis.crypto;
   if (typeof t?.getRandomValues != `function`)
-    throw Error(
-      `Cannot mint a ULID: globalThis.crypto.getRandomValues is unavailable.`,
-    );
+    throw Error(`Cannot mint a ULID: globalThis.crypto.getRandomValues is unavailable.`);
   t.getRandomValues(e);
 }
 function encodeTime(t) {
   let n = t,
     r = ``;
-  for (let t = 0; t < 10; t += 1)
-    ((r = ENCODING[n % 32] + r), (n = Math.floor(n / 32)));
+  for (let t = 0; t < 10; t += 1) ((r = ENCODING[n % 32] + r), (n = Math.floor(n / 32)));
   return r;
 }
 function encodeRandom(t) {
@@ -47,8 +40,7 @@ function encodeRandom(t) {
     r = 0,
     i = ``;
   for (let a of t) {
-    for (n = (n << 8) | a, r += 8; r >= 5; )
-      ((r -= 5), (i += ENCODING[(n >>> r) & 31]));
+    for (n = (n << 8) | a, r += 8; r >= 5;) ((r -= 5), (i += ENCODING[(n >>> r) & 31]));
     n &= (1 << r) - 1;
   }
   return i;

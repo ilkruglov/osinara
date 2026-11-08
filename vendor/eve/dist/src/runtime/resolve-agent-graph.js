@@ -78,10 +78,7 @@ async function resolveRuntimeAgentNode(e) {
   let d = new Set(a.disabledFrameworkTools),
     f = await createRuntimeToolRegistry(
       {
-        tools: [
-          ...s.filter((e) => !u.has(e.name) && !d.has(e.name)),
-          ...a.tools,
-        ],
+        tools: [...s.filter((e) => !u.has(e.name) && !d.has(e.name)), ...a.tools],
       },
       {
         reservedToolNames: [
@@ -102,9 +99,7 @@ async function resolveRuntimeAgentNode(e) {
       );
   let h = new Set(a.disabledFrameworkChannels),
     g = [
-      ...getFrameworkChannelDefinitions().filter(
-        (e) => !p.has(e.name) && !h.has(e.name),
-      ),
+      ...getFrameworkChannelDefinitions().filter((e) => !p.has(e.name) && !h.has(e.name)),
       ...a.channels,
     ],
     _ = createRuntimeSandboxRegistry({
@@ -115,10 +110,7 @@ async function resolveRuntimeAgentNode(e) {
       persistentSessions:
         a.config?.experimental?.tasks === !0 ||
         a.config?.experimental?.subagentPersistentSessions === !0,
-      reservedToolNames: [
-        LOAD_SKILL_TOOL_NAME,
-        ...f.preparedTools.map((e) => e.name),
-      ],
+      reservedToolNames: [LOAD_SKILL_TOOL_NAME, ...f.preparedTools.map((e) => e.name)],
       subagents: await resolveRuntimeSubagents({
         childNodeIdsByParentNodeId: e.childNodeIdsByParentNodeId,
         manifest: e.manifest,
@@ -130,10 +122,7 @@ async function resolveRuntimeAgentNode(e) {
     }),
     y = {
       ...a,
-      dynamicToolResolvers: [
-        ...a.dynamicToolResolvers,
-        ...getFrameworkDynamicToolResolvers(),
-      ],
+      dynamicToolResolvers: [...a.dynamicToolResolvers, ...getFrameworkDynamicToolResolvers()],
     },
     b = {
       agent: y,
@@ -250,14 +239,11 @@ async function resolveRemoteAgentUrl(e) {
   if (typeof e.resolvedUrl == `function`) {
     let t = await e.resolvedUrl();
     if (typeof t != `string` || t.length === 0)
-      throw Error(
-        `Remote agent "${e.logicalPath}" url function must return a non-empty string.`,
-      );
+      throw Error(`Remote agent "${e.logicalPath}" url function must return a non-empty string.`);
     return t;
   }
   let t = e.bakedUrl ?? (typeof e.resolvedUrl == `string` ? e.resolvedUrl : ``);
-  if (t.length === 0)
-    throw Error(`Remote agent "${e.logicalPath}" is missing a url.`);
+  if (t.length === 0) throw Error(`Remote agent "${e.logicalPath}" is missing a url.`);
   return t;
 }
 function resolveRemoteAgentHeaders(e) {
@@ -269,9 +255,7 @@ function resolveRemoteAgentHeaders(e) {
   return t;
 }
 function attachInheritedSandboxWorkspaceResources(e) {
-  let t = new Map(
-    e.manifest.subagentEdges.map((e) => [e.childNodeId, e.parentNodeId]),
-  );
+  let t = new Map(e.manifest.subagentEdges.map((e) => [e.childNodeId, e.parentNodeId]));
   for (let [n, r] of e.nodesByNodeId) {
     if (r.sandboxRegistry.sandbox.definition.inheritsParent !== !0) continue;
     if (r.agent.dynamicSkillResolvers.length > 0)
@@ -296,24 +280,21 @@ function attachInheritedSandboxWorkspaceResources(e) {
       workspaceResourceRoot: a.sandboxRegistry.sandbox.workspaceResourceRoot,
     };
     let o = createWorkspacePromptSection(a.agent.workspaceSpec);
-    o !== void 0 &&
-      (r.turnAgent.instructions = [...r.turnAgent.instructions, o]);
+    o !== void 0 && (r.turnAgent.instructions = [...r.turnAgent.instructions, o]);
   }
 }
 function resolveSandboxOwnerNode(e) {
   let t = e.nodesByNodeId.get(toRuntimeNodeId(e.nodeId));
   if (t === void 0)
-    throw new ResolveRuntimeAgentGraphError(
-      `Missing parent runtime node "${e.nodeId}".`,
-      { nodeId: e.nodeId },
-    );
+    throw new ResolveRuntimeAgentGraphError(`Missing parent runtime node "${e.nodeId}".`, {
+      nodeId: e.nodeId,
+    });
   if (t.sandboxRegistry.sandbox.definition.inheritsParent !== !0) return t;
   let n = e.parentNodeIdByChildNodeId.get(e.nodeId);
   if (n === void 0)
-    throw new ResolveRuntimeAgentGraphError(
-      `Inherited sandbox node "${e.nodeId}" has no parent.`,
-      { nodeId: e.nodeId },
-    );
+    throw new ResolveRuntimeAgentGraphError(`Inherited sandbox node "${e.nodeId}" has no parent.`, {
+      nodeId: e.nodeId,
+    });
   return resolveSandboxOwnerNode({ ...e, nodeId: n });
 }
 function createChildNodeIdsByParentNodeId(e) {

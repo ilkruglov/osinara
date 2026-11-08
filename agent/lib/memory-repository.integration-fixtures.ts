@@ -49,14 +49,22 @@ export async function createMemoryFamilyFixture(suffix: string): Promise<FamilyF
   return {
     familyId: family.rows[0]!.id,
     member: {
-      familyId: family.rows[0]!.id, groupId: null, role: "member", scopes: ["personal", "family"],
-      telegramActorId: member.telegram_user_id, telegramActorKind: "telegram_user",
+      familyId: family.rows[0]!.id,
+      groupId: null,
+      role: "member",
+      scopes: ["personal", "family"],
+      telegramActorId: member.telegram_user_id,
+      telegramActorKind: "telegram_user",
       telegramUserId: member.telegram_user_id,
       userId: member.id,
     },
     owner: {
-      familyId: family.rows[0]!.id, groupId: null, role: "owner", scopes: ["personal", "family"],
-      telegramActorId: owner.telegram_user_id, telegramActorKind: "telegram_user",
+      familyId: family.rows[0]!.id,
+      groupId: null,
+      role: "owner",
+      scopes: ["personal", "family"],
+      telegramActorId: owner.telegram_user_id,
+      telegramActorKind: "telegram_user",
       telegramUserId: owner.telegram_user_id,
       userId: owner.id,
     },
@@ -87,8 +95,14 @@ export async function createMemoryCorrectionSource(
      VALUES ($1, $2, $3, $4, $5, $6, 'Автор исправления', now(), now())
      ON CONFLICT (conversation_id, telegram_user_id) DO UPDATE SET last_observed_at = now()
      RETURNING id`,
-    [current.id, auth.familyId, scope, scope === "family" ? auth.familyId : auth.userId,
-      auth.telegramUserId, auth.userId],
+    [
+      current.id,
+      auth.familyId,
+      scope,
+      scope === "family" ? auth.familyId : auth.userId,
+      auth.telegramUserId,
+      auth.userId,
+    ],
   );
   expect(participant.rows[0]).toBeDefined();
   const entry = await database().query<{ id: string }>(
@@ -97,8 +111,13 @@ export async function createMemoryCorrectionSource(
         telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
      VALUES ($1, $2, $3, $3, 'user', $4, $5, 'Автор исправления', false, 'text',
              'Исправь эту запись памяти', now()) RETURNING id`,
-    [current.id, current.telegram_group_id, current.sequence_id,
-      `telegram:${auth.telegramUserId}`, auth.telegramUserId],
+    [
+      current.id,
+      current.telegram_group_id,
+      current.sequence_id,
+      `telegram:${auth.telegramUserId}`,
+      auth.telegramUserId,
+    ],
   );
   return { conversationId: current.id, timelineEntryId: entry.rows[0]!.id };
 }

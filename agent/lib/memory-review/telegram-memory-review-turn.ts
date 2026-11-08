@@ -16,7 +16,10 @@ import {
   renderTelegramGroupJournalContext,
   type TelegramGroupJournalEntry,
 } from "../telegram-group-journal-context.js";
-import { MEMORY_REVIEW_BATCH_SIZE, MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED } from "./memory-review-config.js";
+import {
+  MEMORY_REVIEW_BATCH_SIZE,
+  MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED,
+} from "./memory-review-config.js";
 import { formatInteractiveMemoryReviewSelection } from "./memory-review-prompt.js";
 import type { memoryReviewRepository } from "./memory-review-repository.js";
 
@@ -59,11 +62,12 @@ function chronologicalUniqueEntries(
     if (!existing) byEntryId.set(entryId, entry);
   }
   return [...byEntryId.values()].sort((left, right) => {
-    const sequenceOrder = BigInt(left.sequenceId) < BigInt(right.sequenceId)
-      ? -1
-      : BigInt(left.sequenceId) > BigInt(right.sequenceId)
-        ? 1
-        : 0;
+    const sequenceOrder =
+      BigInt(left.sequenceId) < BigInt(right.sequenceId)
+        ? -1
+        : BigInt(left.sequenceId) > BigInt(right.sequenceId)
+          ? 1
+          : 0;
     return sequenceOrder || requiredEntryId(left).localeCompare(requiredEntryId(right));
   });
 }
@@ -102,7 +106,10 @@ export async function prepareTelegramMemoryReviewTurn(input: {
     await syncParticipantsInChunks(
       input.repositories,
       input.conversationId,
-      chronologicalUniqueEntries(input.preparedContext.visibleTimelineEntries, input.currentEntryId),
+      chronologicalUniqueEntries(
+        input.preparedContext.visibleTimelineEntries,
+        input.currentEntryId,
+      ),
     );
     return input.preparedContext;
   }
@@ -113,33 +120,34 @@ export async function prepareTelegramMemoryReviewTurn(input: {
   });
 
   try {
-    const combinedEntries = chronologicalUniqueEntries([
-      ...input.preparedContext.visibleTimelineEntries,
-      ...(reviewBatch?.entries ?? []),
-    ], input.currentEntryId);
-    const context = reviewBatch === null
-      ? input.preparedContext
-      : {
-          ...input.preparedContext,
-          durableMessage: [
-            formatInteractiveMemoryReviewSelection(
-              reviewBatch.entries.map((entry) => entry.sequenceId),
-            ),
-            composeTelegramTurnMessage(
-              combinedEntries.length === 0 && input.preparedContext.timelineOmission === null
-                ? null
-                : renderTelegramGroupJournalContext(
-                    combinedEntries,
-                    input.preparedContext.timelineOmission,
-                    input.preparedContext.timelineTimezone ?? null,
-                  ),
-              input.preparedContext.currentMessageEnvelope,
-              input.preparedContext.handoffBlock ?? null,
-            ),
-          ].join("\n\n"),
-          memoryReviewBatchId: reviewBatch.batchId,
-          memoryReviewSourceEntryIds: reviewBatch.sourceEntryIds,
-        };
+    const combinedEntries = chronologicalUniqueEntries(
+      [...input.preparedContext.visibleTimelineEntries, ...(reviewBatch?.entries ?? [])],
+      input.currentEntryId,
+    );
+    const context =
+      reviewBatch === null
+        ? input.preparedContext
+        : {
+            ...input.preparedContext,
+            durableMessage: [
+              formatInteractiveMemoryReviewSelection(
+                reviewBatch.entries.map((entry) => entry.sequenceId),
+              ),
+              composeTelegramTurnMessage(
+                combinedEntries.length === 0 && input.preparedContext.timelineOmission === null
+                  ? null
+                  : renderTelegramGroupJournalContext(
+                      combinedEntries,
+                      input.preparedContext.timelineOmission,
+                      input.preparedContext.timelineTimezone ?? null,
+                    ),
+                input.preparedContext.currentMessageEnvelope,
+                input.preparedContext.handoffBlock ?? null,
+              ),
+            ].join("\n\n"),
+            memoryReviewBatchId: reviewBatch.batchId,
+            memoryReviewSourceEntryIds: reviewBatch.sourceEntryIds,
+          };
 
     // The current participant was synchronized before review preparation.
     await syncParticipantsInChunks(input.repositories, input.conversationId, combinedEntries);

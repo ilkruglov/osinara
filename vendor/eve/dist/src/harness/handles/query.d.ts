@@ -2,9 +2,12 @@ import type { RuntimeActionResult, RuntimeSubagentChildResult } from "#runtime/a
 import type { AgentHandle } from "#harness/handles/store.js";
 import type { SessionStateMap } from "#harness/types.js";
 /** A handle with one outstanding operation and a confirmed child address. */
-export type RunningAgentHandle = Extract<AgentHandle, {
+export type RunningAgentHandle = Extract<
+  AgentHandle,
+  {
     phase: "running";
-}>;
+  }
+>;
 /**
  * Finds the running agent handle a child-produced result must settle: the
  * handle whose recorded operation carries the result's callId.
@@ -17,9 +20,12 @@ export type RunningAgentHandle = Extract<AgentHandle, {
  * settle the call in place of the owned child — an accepted trade-off,
  * since both children computed the same input.
  */
-export declare function findRunningAgentHandle(state: SessionStateMap | undefined, input: {
+export declare function findRunningAgentHandle(
+  state: SessionStateMap | undefined,
+  input: {
     readonly callId: string;
-}): RunningAgentHandle | undefined;
+  },
+): RunningAgentHandle | undefined;
 /**
  * A subagent result may settle a call only when a running handle records
  * its callId: a late or duplicate result for an already-settled call finds
@@ -30,7 +36,10 @@ export declare function findRunningAgentHandle(state: SessionStateMap | undefine
  * through the trusted step-result path. Untrusted channels must use
  * {@link isInboxSubagentResultFromRunningHandle} instead.
  */
-export declare function isResultBoundToRunningHandle(state: SessionStateMap | undefined, result: RuntimeActionResult): boolean;
+export declare function isResultBoundToRunningHandle(
+  state: SessionStateMap | undefined,
+  result: RuntimeActionResult,
+): boolean;
 /**
  * Strict variant of {@link isResultBoundToRunningHandle} for results arriving
  * over the shared turn inbox (child notifications and remote callbacks).
@@ -38,4 +47,7 @@ export declare function isResultBoundToRunningHandle(state: SessionStateMap | un
  * matching running handle — including one for a callId whose dispatch
  * already failed — must not overwrite the dispatch-produced error result.
  */
-export declare function isInboxSubagentResultFromRunningHandle(state: SessionStateMap | undefined, result: RuntimeSubagentChildResult): boolean;
+export declare function isInboxSubagentResultFromRunningHandle(
+  state: SessionStateMap | undefined,
+  result: RuntimeSubagentChildResult,
+): boolean;

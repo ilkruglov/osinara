@@ -14,8 +14,4 @@ function isHarnessBetweenTurns(e) {
 function setHarnessEmissionState(t, n) {
   return { ...t, state: { ...t.state, [HARNESS_EMISSION_STATE_KEY]: n } };
 }
-export {
-  getHarnessEmissionState,
-  isHarnessBetweenTurns,
-  setHarnessEmissionState,
-};
+export { getHarnessEmissionState, isHarnessBetweenTurns, setHarnessEmissionState };

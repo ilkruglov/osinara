@@ -17,49 +17,25 @@ const AuthKey = new ContextKey(`eve.auth`),
   SessionCallbackKey = new ContextKey(`eve.sessionCallback`),
   SessionKey = new ContextKey(`eve.session`),
   SandboxKey = new ContextKey(`eve.sandbox`),
-  SessionDynamicModelReferenceKey = new ContextKey(
-    `eve.sessionDynamicModelReference`,
-  ),
-  TurnDynamicModelReferenceKey = new ContextKey(
-    `eve.turnDynamicModelReference`,
-  ),
-  RuntimeModelMetadataCacheKey = new ContextKey(
-    `eve.runtimeModelMetadataCache`,
-  ),
-  LiveStepDynamicModelSelectionKey = new ContextKey(
-    `eve.liveStepDynamicModelSelection`,
-  ),
-  SessionDynamicToolMetadataKey = new ContextKey(
-    `eve.sessionDynamicToolMetadata`,
-  ),
-  SessionDynamicToolRuntimeRevisionKey = new ContextKey(
-    `eve.sessionDynamicToolRuntimeRevision`,
-  ),
-  SessionDynamicSkillRuntimeRevisionKey = new ContextKey(
-    `eve.sessionDynamicSkillRuntimeRevision`,
-  ),
+  SessionDynamicModelReferenceKey = new ContextKey(`eve.sessionDynamicModelReference`),
+  TurnDynamicModelReferenceKey = new ContextKey(`eve.turnDynamicModelReference`),
+  RuntimeModelMetadataCacheKey = new ContextKey(`eve.runtimeModelMetadataCache`),
+  LiveStepDynamicModelSelectionKey = new ContextKey(`eve.liveStepDynamicModelSelection`),
+  SessionDynamicToolMetadataKey = new ContextKey(`eve.sessionDynamicToolMetadata`),
+  SessionDynamicToolRuntimeRevisionKey = new ContextKey(`eve.sessionDynamicToolRuntimeRevision`),
+  SessionDynamicSkillRuntimeRevisionKey = new ContextKey(`eve.sessionDynamicSkillRuntimeRevision`),
   TurnDynamicToolMetadataKey = new ContextKey(`eve.turnDynamicToolMetadata`),
   LiveStepToolsKey = new ContextKey(`eve.liveStepTools`),
-  SessionDynamicSubagentSelectionsKey = new ContextKey(
-    `eve.sessionDynamicSubagentSelections`,
-  ),
-  TurnDynamicSubagentSelectionsKey = new ContextKey(
-    `eve.turnDynamicSubagentSelections`,
-  ),
+  SessionDynamicSubagentSelectionsKey = new ContextKey(`eve.sessionDynamicSubagentSelections`),
+  TurnDynamicSubagentSelectionsKey = new ContextKey(`eve.turnDynamicSubagentSelections`),
   SessionDynamicSubagentRuntimeRevisionKey = new ContextKey(
     `eve.sessionDynamicSubagentRuntimeRevision`,
   ),
-  DynamicSubagentAgentConfigKey = new ContextKey(
-    `eve.dynamicSubagentAgentConfig`,
-  ),
+  DynamicSubagentAgentConfigKey = new ContextKey(`eve.dynamicSubagentAgentConfig`),
   DynamicSkillManifestKey = new ContextKey(`eve.dynamicSkillManifest`),
-  SessionDynamicInstructionsKey = new ContextKey(
-    `eve.sessionDynamicInstructions`,
-  ),
+  SessionDynamicInstructionsKey = new ContextKey(`eve.sessionDynamicInstructions`),
   TurnDynamicInstructionsKey = new ContextKey(`eve.turnDynamicInstructions`),
-  DynamicInstructionResolveMessagesKey = new ContextKey(
-    `eve.dynamicInstructionResolveMessages`,
-  ),
+  DynamicInstructionResolveMessagesKey = new ContextKey(`eve.dynamicInstructionResolveMessages`),
   PendingDynamicInstructionUserMessagesKey = new ContextKey(
     `eve.pendingDynamicInstructionUserMessages`,
   );

@@ -1,8 +1,4 @@
-import {
-  createLogger,
-  extractErrorId,
-  formatErrorHint,
-} from "#internal/logging.js";
+import { createLogger, extractErrorId, formatErrorHint } from "#internal/logging.js";
 import { normalizeSendInput } from "#channel/send-input.js";
 import { INTERNAL_CHANNEL_DELIVER } from "#channel/channel-operations.js";
 import { GET, POST, defineChannel } from "#public/definitions/channel.js";
@@ -107,9 +103,7 @@ function defaultEvents(e) {
         await safeStartTyping(t.thread, truncate(r));
         return;
       }
-      let i = e.actions.map((e) =>
-        e.kind === `tool-call` ? e.toolName : e.kind,
-      );
+      let i = e.actions.map((e) => (e.kind === `tool-call` ? e.toolName : e.kind));
       await safeStartTyping(t.thread, truncate(`Running ${i.join(`, `)}...`));
     },
     async "message.appended"(e, t, n) {
@@ -125,8 +119,7 @@ function defaultEvents(e) {
       let i = t.state.lastEditAtMs ?? 0;
       if (!(Date.now() - i < t.streamingEditIntervalMs))
         try {
-          (await editMessage(t.thread, r, e.messageSoFar),
-            (t.state.lastEditAtMs = Date.now()));
+          (await editMessage(t.thread, r, e.messageSoFar), (t.state.lastEditAtMs = Date.now()));
         } catch (e) {
           if (!isNotImplemented(e)) throw e;
           ((t.state.editSupported = !1), clearStream(t.state));
@@ -142,9 +135,7 @@ function defaultEvents(e) {
         ((t.state.pendingToolCallMessage = e.message
           ? (firstNonEmptyLine(e.message) ?? null)
           : null),
-          e.message
-            ? await finalizeStreamedMessage(t, e.message, !1)
-            : clearStream(t.state));
+          e.message ? await finalizeStreamedMessage(t, e.message, !1) : clearStream(t.state));
         return;
       }
       if (((t.state.pendingToolCallMessage = null), !e.message)) {
@@ -154,18 +145,10 @@ function defaultEvents(e) {
       await finalizeStreamedMessage(t, e.message, !0);
     },
     async "turn.failed"(e, t, n) {
-      await postFailure(
-        t.thread,
-        `I hit an error while handling your request`,
-        e,
-      );
+      await postFailure(t.thread, `I hit an error while handling your request`, e);
     },
     async "session.failed"(e, t) {
-      await postFailure(
-        t.thread,
-        `This session could not recover from an error`,
-        e,
-      );
+      await postFailure(t.thread, `This session could not recover from an error`, e);
     },
   };
 }
@@ -201,9 +184,7 @@ function canStream(e) {
   return e.streaming && e.state.editSupported !== !1;
 }
 function clearStream(e) {
-  ((e.anchorMessageId = null),
-    (e.lastEditAtMs = null),
-    (e.streamStepIndex = null));
+  ((e.anchorMessageId = null), (e.lastEditAtMs = null), (e.streamStepIndex = null));
 }
 function firstNonEmptyLine(e) {
   for (let t of e.split(/\r?\n/u)) {
@@ -233,11 +214,7 @@ function renderInputRequest(e, t) {
         ),
       ),
       n)
-    : (n.push(
-        CardText(
-          `This request needs a freeform answer. Continue from the eve session UI.`,
-        ),
-      ),
+    : (n.push(CardText(`This request needs a freeform answer. Continue from the eve session UI.`)),
       n);
 }
 async function postFailure(e, r, i) {
@@ -290,9 +267,7 @@ function threadFromState(e, t) {
       adapter: e.getAdapter(n.adapterName),
       channelId: n.channelId,
       channelVisibility: n.channelVisibility,
-      currentMessage: n.currentMessage
-        ? Message.fromJSON(n.currentMessage)
-        : void 0,
+      currentMessage: n.currentMessage ? Message.fromJSON(n.currentMessage) : void 0,
       id: n.id,
       isDM: n.isDM,
       stateAdapter: e.getState(),
@@ -309,9 +284,7 @@ function threadFromState(e, t) {
 function serializeReceiveTarget(e, t) {
   if (t.thread) return t.thread;
   if (!t.threadId)
-    throw Error(
-      `chatSdkChannel().receive requires target.thread or target.threadId.`,
-    );
+    throw Error(`chatSdkChannel().receive requires target.thread or target.threadId.`);
   return serializeThread(e, t.threadId, t.adapterName);
 }
 function serializeThread(e, t, n) {
@@ -334,10 +307,7 @@ function isSerializedThread(e) {
 }
 function inferAdapterName(e) {
   let t = e.indexOf(`:`);
-  if (t <= 0)
-    throw Error(
-      `chatSdkChannel string thread references require options.adapterName.`,
-    );
+  if (t <= 0) throw Error(`chatSdkChannel string thread references require options.adapterName.`);
   return e.slice(0, t);
 }
 function adapterNames(e) {

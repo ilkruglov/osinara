@@ -2,14 +2,8 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join, posix } from "node:path";
 import { normalizeLogicalPath } from "#discover/filesystem.js";
-import {
-  ROOT_COMPILED_AGENT_NODE_ID,
-  deriveResourceRootEntries,
-} from "#compiler/manifest.js";
-import {
-  normalizeSkillPackage,
-  writeSkillPackageDirectory,
-} from "#shared/skill-package.js";
+import { ROOT_COMPILED_AGENT_NODE_ID, deriveResourceRootEntries } from "#compiler/manifest.js";
+import { normalizeSkillPackage, writeSkillPackageDirectory } from "#shared/skill-package.js";
 const RESOURCES_DIRECTORY = `workspace-resources`;
 async function materializeWorkspaceResources(e) {
   let t = join(e.compileDirectoryPath, RESOURCES_DIRECTORY);
@@ -66,8 +60,7 @@ async function materializeNode(e) {
   let r = join(t, `workspace`);
   for (let t of e.manifest.sandboxWorkspaces)
     await copyDirectoryContents({ sourcePath: t.sourcePath, targetPath: r });
-  for (let n of e.manifest.skills)
-    await materializeSkill({ nodeRoot: t, skill: n });
+  for (let n of e.manifest.skills) await materializeSkill({ nodeRoot: t, skill: n });
   let i = await hashWorkspaceResourceRoot(t);
   return {
     ...e.manifest,
@@ -104,11 +97,7 @@ async function hashWorkspaceResourceRoot(t) {
     logicalDirectoryPath: `.`,
     sourceDirectoryPath: t,
   });
-  if (
-    (n.sort((e, t) => e.logicalPath.localeCompare(t.logicalPath)),
-    n.length === 0)
-  )
-    return;
+  if ((n.sort((e, t) => e.logicalPath.localeCompare(t.logicalPath)), n.length === 0)) return;
   let i = createHash(`sha256`);
   i.update(`eve-workspace-resource-root-v1\0`);
   for (let e of n) {

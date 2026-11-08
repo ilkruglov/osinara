@@ -13,9 +13,9 @@ export { readTaskIdFromInboxToken } from "#tasks/task-inbox-token.js";
  * inside dispatch steps.
  */
 export declare function deriveTaskId(input: {
-    readonly callId: string;
-    readonly parentSessionId: string;
-    readonly parentTurnId: string;
+  readonly callId: string;
+  readonly parentSessionId: string;
+  readonly parentTurnId: string;
 }): string;
 /**
  * Derives the task run's private inbox token.
@@ -28,6 +28,6 @@ export declare function deriveTaskId(input: {
  * the model.
  */
 export declare function deriveTaskInboxToken(input: {
-    readonly parentContinuationToken: string;
-    readonly taskId: string;
+  readonly parentContinuationToken: string;
+  readonly taskId: string;
 }): string;

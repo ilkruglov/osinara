@@ -7,9 +7,7 @@ const RESOURCE_WORKSPACE_DIRECTORY = `workspace`,
 async function materializeWorkspaceDirectory(e) {
   let n = [],
     o = await readdir(e, { withFileTypes: !0 }),
-    s = o.find(
-      (e) => e.name === RESOURCE_WORKSPACE_DIRECTORY && e.isDirectory(),
-    ),
+    s = o.find((e) => e.name === RESOURCE_WORKSPACE_DIRECTORY && e.isDirectory()),
     c = o.find((e) => e.name === RESOURCE_SKILLS_DIRECTORY && e.isDirectory());
   return (
     s !== void 0 || c !== void 0

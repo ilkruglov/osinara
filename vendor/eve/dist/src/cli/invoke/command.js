@@ -2,28 +2,21 @@ import { invokeResultJsonSchema, parseInvokeResumeInput } from "./result.js";
 import { resolveInvokeOperation } from "./invoke.js";
 import { InvalidArgumentError } from "#compiled/commander/index.js";
 import { applicationCommand } from "#cli/application-command.js";
-import {
-  parseDevelopmentHeaderOption,
-  resolveDevelopmentUrlTarget,
-} from "#cli/dev/url-target.js";
+import { parseDevelopmentHeaderOption, resolveDevelopmentUrlTarget } from "#cli/dev/url-target.js";
 import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
 function registerRuntimeInvokeCommand(e) {
   registerInvokeCommand({
     ...e,
     deps: {
       loadEnvironment: async (e) =>
-        (
-          await import(`#cli/dev/environment.js`)
-        ).loadDevelopmentEnvironmentFiles(e),
+        (await import(`#cli/dev/environment.js`)).loadDevelopmentEnvironmentFiles(e),
       runInvoke: async (t) =>
-        await (e.runtime.runInvoke ?? (await import(`./invoke.js`)).runInvoke)(
-          t,
-        ),
+        await (e.runtime.runInvoke ?? (await import(`./invoke.js`)).runInvoke)(t),
       startHost: async (t) =>
-        (
-          e.runtime.startHost ??
-          (await import(`#internal/nitro/host.js`)).createDevelopmentServer
-        )(t, { existing: `reject` }),
+        (e.runtime.startHost ?? (await import(`#internal/nitro/host.js`)).createDevelopmentServer)(
+          t,
+          { existing: `reject` },
+        ),
     },
   });
 }
@@ -33,15 +26,8 @@ function registerInvokeCommand(e) {
     return t.url === void 0 && t.jsonSchema !== !0;
   })
     .description(`Invoke an eve agent without a terminal UI.`)
-    .argument(
-      `[prompt]`,
-      `Prompt, follow-up message, or answer to a pending input`,
-    )
-    .option(
-      `-u, --url <url>`,
-      `Invoke an existing server URL`,
-      parseDevelopmentServerUrl,
-    )
+    .argument(`[prompt]`, `Prompt, follow-up message, or answer to a pending input`)
+    .option(`-u, --url <url>`, `Invoke an existing server URL`, parseDevelopmentServerUrl)
     .option(
       `-H, --header <header>`,
       `Request header for a URL target, in "Name: value" form (repeatable)`,
@@ -55,32 +41,19 @@ function registerInvokeCommand(e) {
 async function runInvokeCommand(i) {
   let { options: a } = i;
   if (a.jsonSchema === !0) {
-    (assertSchemaOnly(i.prompt, a),
-      i.logger.log(JSON.stringify(invokeResultJsonSchema, null, 2)));
+    (assertSchemaOnly(i.prompt, a), i.logger.log(JSON.stringify(invokeResultJsonSchema, null, 2)));
     return;
   }
-  let s =
-      a.resume === !0
-        ? parseInvokeResumeInput(await readJsonFromStdin())
-        : void 0,
+  let s = a.resume === !0 ? parseInvokeResumeInput(await readJsonFromStdin()) : void 0,
     c = s?.resume.target;
   if (c?.kind === `local` && a.url !== void 0)
-    throw new InvalidArgumentError(
-      `A local invocation cannot be resumed against --url.`,
-    );
+    throw new InvalidArgumentError(`A local invocation cannot be resumed against --url.`);
   let l = a.url ?? (c?.kind === `remote` ? c.serverUrl : void 0),
     u = resolveDevelopmentUrlTarget({ header: a.header, url: l }, void 0);
   if (a.scope !== void 0 && u === void 0)
     throw new InvalidArgumentError(`The --scope option requires a URL target.`);
-  if (
-    c?.kind === `remote` &&
-    a.url !== void 0 &&
-    u !== void 0 &&
-    u.serverUrl !== c.serverUrl
-  )
-    throw new InvalidArgumentError(
-      `Session target ${c.serverUrl} does not match ${u.serverUrl}.`,
-    );
+  if (c?.kind === `remote` && a.url !== void 0 && u !== void 0 && u.serverUrl !== c.serverUrl)
+    throw new InvalidArgumentError(`Session target ${c.serverUrl} does not match ${u.serverUrl}.`);
   let d = resolveInvokeOperation({ previous: s, prompt: i.prompt });
   if ((await i.deps.loadEnvironment(i.applicationContext.root), u !== void 0)) {
     await executeWithSignals(
@@ -118,8 +91,7 @@ async function executeWithSignals(e, t, n, r, i) {
     handleSigterm = () => {
       ((o = 143), a.abort());
     };
-  (process.once(`SIGINT`, handleSigint),
-    process.once(`SIGTERM`, handleSigterm));
+  (process.once(`SIGINT`, handleSigint), process.once(`SIGTERM`, handleSigterm));
   try {
     let s =
         n === void 0
@@ -127,11 +99,9 @@ async function executeWithSignals(e, t, n, r, i) {
           : { headers: n, operation: r, signal: a.signal, target: t },
       c = i === void 0 ? s : { ...s, vercelScope: i },
       l = await e.deps.runInvoke(c);
-    (e.logger.log(JSON.stringify(l, null, 2)),
-      (process.exitCode = o ?? invokeExitCode(l)));
+    (e.logger.log(JSON.stringify(l, null, 2)), (process.exitCode = o ?? invokeExitCode(l)));
   } finally {
-    (process.off(`SIGINT`, handleSigint),
-      process.off(`SIGTERM`, handleSigterm));
+    (process.off(`SIGINT`, handleSigint), process.off(`SIGTERM`, handleSigterm));
   }
 }
 function assertSchemaOnly(e, t) {
@@ -151,9 +121,7 @@ async function readJsonFromStdin() {
   process.stdin.setEncoding(`utf8`);
   for await (let t of process.stdin) e += t;
   if (e.trim().length === 0)
-    throw new InvalidArgumentError(
-      `--resume expected a resumable eve invoke result on stdin.`,
-    );
+    throw new InvalidArgumentError(`--resume expected a resumable eve invoke result on stdin.`);
   try {
     return JSON.parse(e);
   } catch {

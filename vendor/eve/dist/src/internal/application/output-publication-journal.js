@@ -20,10 +20,7 @@ function resolveJournalFilePath(e) {
   return join(e, `owner.json`);
 }
 async function writeJournal(e, t) {
-  await atomicWriteFile(
-    resolveJournalFilePath(e),
-    `${JSON.stringify(t, null, 2)}\n`,
-  );
+  await atomicWriteFile(resolveJournalFilePath(e), `${JSON.stringify(t, null, 2)}\n`);
 }
 async function readJournal(t) {
   try {
@@ -43,9 +40,7 @@ function isOutputPublicationJournal(e) {
     typeof t.hadSummary == `boolean` &&
     (t.liveness === `active` || t.liveness === `recoverable`) &&
     typeof t.outputBackupPath == `string` &&
-    [`acquired`, `prepared`, `backed-up`, `committed`].includes(
-      t.phase ?? ``,
-    ) &&
+    [`acquired`, `prepared`, `backed-up`, `committed`].includes(t.phase ?? ``) &&
     typeof t.pid == `number` &&
     typeof t.scratchDir == `string` &&
     typeof t.stagedOutputDir == `string` &&

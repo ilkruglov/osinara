@@ -24,7 +24,9 @@ export const TOOL_REPEAT_WITHOUT_PROGRESS_CODE = "AGENT_TOOL_REPEAT_WITHOUT_PROG
 const MAX_TRACKED_TURNS = 500;
 
 export function toolCallFingerprint(toolName: string, input: unknown): string {
-  return createHash("sha256").update(`${toolName}\n${canonicalJson(input)}`).digest("hex");
+  return createHash("sha256")
+    .update(`${toolName}\n${canonicalJson(input)}`)
+    .digest("hex");
 }
 
 export interface ToolRepeatGuard {

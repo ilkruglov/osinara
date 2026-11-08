@@ -1,8 +1,5 @@
 import { contextStorage } from "#context/container.js";
-import {
-  isAuthorizationSignal,
-  isPendingAuthorizationToolOutput,
-} from "#harness/authorization.js";
+import { isAuthorizationSignal, isPendingAuthorizationToolOutput } from "#harness/authorization.js";
 import { readToolInterrupt } from "#harness/tool-interrupts.js";
 function isInlineAuthorizationToolResult(e) {
   if (isPendingAuthorizationToolOutput(e.output)) return !0;

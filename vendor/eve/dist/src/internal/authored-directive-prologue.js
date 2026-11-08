@@ -2,8 +2,7 @@ import { parseWithNitroRolldownAst } from "#internal/bundler/nitro-rolldown.js";
 const UNSUPPORTED_WORKFLOW_DIRECTIVES = new Set([`use step`, `use workflow`]);
 async function assertNoWorkflowDirectivePrologue(t) {
   let n = await parseWithNitroRolldownAst(t.filePath, t.source);
-  if (!Array.isArray(n.body))
-    throw Error(`Failed to parse authored module "${t.filePath}".`);
+  if (!Array.isArray(n.body)) throw Error(`Failed to parse authored module "${t.filePath}".`);
   for (let e of n.body) {
     if (typeof e.directive != `string`) break;
     if (UNSUPPORTED_WORKFLOW_DIRECTIVES.has(e.directive))

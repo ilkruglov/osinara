@@ -8,23 +8,12 @@
  */
 import type { PoolClient } from "pg";
 
-import {
-  SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
-  SESSION_RETENTION_DAYS,
-} from "../../config.js";
+import { SESSION_GROUP_ROTATION_LOCK_HASH_SEED, SESSION_RETENTION_DAYS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import {
-  continuationTokenForGeneration,
-  sessionRotationReason,
-} from "./session-policy.js";
-import {
-  sessionRouteRepository,
-  upsertSessionRoute,
-} from "./session-route-repository.js";
-import {
-  isCurrentEveSession,
-} from "./session-eve-event.js";
+import { continuationTokenForGeneration, sessionRotationReason } from "./session-policy.js";
+import { sessionRouteRepository, upsertSessionRoute } from "./session-route-repository.js";
+import { isCurrentEveSession } from "./session-eve-event.js";
 import { sessionLifecycleEventRepository } from "./session-lifecycle-event-repository.js";
 import { sessionRetentionRepository } from "./session-retention-repository.js";
 import { sessionTaskCleanupRepository } from "./session-task-cleanup-repository.js";
@@ -93,9 +82,9 @@ function assertSameScope(row: SessionRow, input: PrepareSessionInput): void {
     row.group_id !== input.groupId ||
     row.scope !== input.scope ||
     row.kind !== input.kind ||
-    (input.kind === "canonical" && row.telegram_forum_topic_id !== (
-      input.telegramForumTopicId === null ? null : String(input.telegramForumTopicId)
-    ))
+    (input.kind === "canonical" &&
+      row.telegram_forum_topic_id !==
+        (input.telegramForumTopicId === null ? null : String(input.telegramForumTopicId)))
   ) {
     throw new AppError(
       "AGENT_SESSION_SCOPE_MISMATCH",
@@ -217,7 +206,9 @@ async function whisperPlacement(
   const threadId = row?.group_thread ?? row?.previous_thread ?? undefined;
   const generation = Math.max(
     threadId === undefined ? 0 : await nextThreadGeneration(client, threadId),
-    row?.previous_generation === null || row?.previous_generation === undefined ? 0 : row.previous_generation + 1,
+    row?.previous_generation === null || row?.previous_generation === undefined
+      ? 0
+      : row.previous_generation + 1,
     await initialGeneration(client, input.baseContinuationToken),
   );
   return { generation, threadId };
@@ -317,16 +308,15 @@ export const sessionRepository = {
       // Group-wide rotation and per-topic preparation share this short transaction lock, so an
       // owner request cannot miss a canonical generation concurrently replacing another one.
       if (input.groupId !== null) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-          [input.groupId, SESSION_GROUP_ROTATION_LOCK_HASH_SEED],
-        );
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+          input.groupId,
+          SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
+        ]);
       }
       // Route-level advisory locking covers the first insert before a row lock exists.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-        [input.baseContinuationToken],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        input.baseContinuationToken,
+      ]);
       let current = await findSessionForUpdate(client, input);
       let trustZoneRecreated = false;
       if (!current) {
@@ -336,10 +326,16 @@ export const sessionRepository = {
             "Запрошенное действие уже завершено или больше не ожидает ответа",
           );
         }
-        const replacement = input.kind === "whisper" ? null : await canonicalReplacementSeed(client, input);
+        const replacement =
+          input.kind === "whisper" ? null : await canonicalReplacementSeed(client, input);
         if (input.kind === "whisper") {
           const placement = await whisperPlacement(client, input);
-          current = await createInitialSession(client, input, placement.generation, placement.threadId);
+          current = await createInitialSession(
+            client,
+            input,
+            placement.generation,
+            placement.threadId,
+          );
         } else {
           const generation = replacement
             ? await nextThreadGeneration(client, replacement.threadId)
@@ -361,7 +357,12 @@ export const sessionRepository = {
         trustZoneRecreated = true;
         if (input.kind === "whisper") {
           const placement = await whisperPlacement(client, input);
-          current = await createInitialSession(client, input, placement.generation, placement.threadId);
+          current = await createInitialSession(
+            client,
+            input,
+            placement.generation,
+            placement.threadId,
+          );
         } else {
           current = await createInitialSession(
             client,
@@ -372,13 +373,15 @@ export const sessionRepository = {
       }
       assertSameScope(current, input);
 
-      const rotationReason = trustZoneRecreated ? null : sessionRotationReason({
-        completedTurns: current.completed_turns,
-        lastActivityAt: current.last_activity_at,
-        now: input.now,
-        pendingOperation: current.pending_operation,
-        rotationRequestedAt: current.rotation_requested_at,
-      });
+      const rotationReason = trustZoneRecreated
+        ? null
+        : sessionRotationReason({
+            completedTurns: current.completed_turns,
+            lastActivityAt: current.last_activity_at,
+            now: input.now,
+            pendingOperation: current.pending_operation,
+            rotationRequestedAt: current.rotation_requested_at,
+          });
       const predecessor = current;
       if (rotationReason !== null) current = await rotateSession(client, current, input);
       await upsertSessionRoute(client, input.baseContinuationToken, current.id);
@@ -387,9 +390,10 @@ export const sessionRepository = {
         continuationToken: current.continuation_token,
         generation: current.generation,
         // A requested clean context and a month-old thread carry nothing over.
-        handoff: rotationReason === "turns" && predecessor.kind === "canonical"
-          ? { retiredSessionStartedAt: predecessor.started_at }
-          : null,
+        handoff:
+          rotationReason === "turns" && predecessor.kind === "canonical"
+            ? { retiredSessionStartedAt: predecessor.started_at }
+            : null,
         id: current.id,
         rotated: rotationReason !== null || trustZoneRecreated,
         sandboxSessionId: current.thread_id,
@@ -463,5 +467,4 @@ export const sessionRepository = {
       client.release();
     }
   },
-
 };

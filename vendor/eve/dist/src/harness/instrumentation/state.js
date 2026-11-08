@@ -2,18 +2,15 @@ import { ActiveChannelDeliveriesKey } from "#context/keys.js";
 import { parseJsonValue } from "#shared/json.js";
 import { contextStorage, loadContext } from "#context/container.js";
 import { ContextKey } from "#context/key.js";
-const InstrumentationStateKey = new ContextKey(
-    `eve.harness.instrumentationState`,
-    { codec: { deserialize: deserializeState, serialize: (e) => e } },
-  ),
-  InstrumentationActionScopeKey = new ContextKey(
-    `eve.harness.instrumentationActionScopes`,
-    { codec: { deserialize: deserializeScopes, serialize: (e) => e } },
-  ),
-  InstrumentationInputScopeKey = new ContextKey(
-    `eve.harness.instrumentationInputScopes`,
-    { codec: { deserialize: deserializeScopes, serialize: (e) => e } },
-  );
+const InstrumentationStateKey = new ContextKey(`eve.harness.instrumentationState`, {
+    codec: { deserialize: deserializeState, serialize: (e) => e },
+  }),
+  InstrumentationActionScopeKey = new ContextKey(`eve.harness.instrumentationActionScopes`, {
+    codec: { deserialize: deserializeScopes, serialize: (e) => e },
+  }),
+  InstrumentationInputScopeKey = new ContextKey(`eve.harness.instrumentationInputScopes`, {
+    codec: { deserialize: deserializeScopes, serialize: (e) => e },
+  });
 function preserveSerializedInstrumentationState(t, n) {
   let r = t;
   for (let t of [
@@ -33,9 +30,7 @@ function instrumentationStateSlot(e, r, i = {}) {
   return {
     get: () => {
       if (!s) return;
-      let e = contextStorage.getStore()?.get(InstrumentationStateKey)?.[
-        o
-      ]?.value;
+      let e = contextStorage.getStore()?.get(InstrumentationStateKey)?.[o]?.value;
       return e === void 0 ? void 0 : cloneAndFreezeJson(e);
     },
     revoke: () => {
@@ -48,11 +43,7 @@ function instrumentationStateSlot(e, r, i = {}) {
         if (n === void 0) return writeSlot(e, o, void 0);
         let t = e[o],
           r = { value: n };
-        return (
-          t?.abandoned === !0 && (r.abandoned = !0),
-          assignOwner(r, i),
-          writeSlot(e, o, r)
-        );
+        return (t?.abandoned === !0 && (r.abandoned = !0), assignOwner(r, i), writeSlot(e, o, r));
       });
     },
   };
@@ -67,17 +58,12 @@ function abandonInstrumentationState(e, t, n = {}) {
         turnId: n.turnId ?? t?.turnId,
       },
       a = { abandoned: !0 };
-    return (
-      assignOwner(a, i),
-      t?.value !== void 0 && (a.value = t.value),
-      writeSlot(e, r, a)
-    );
+    return (assignOwner(a, i), t?.value !== void 0 && (a.value = t.value), writeSlot(e, r, a));
   });
 }
 function isInstrumentationStateAbandoned(e, t) {
   return (
-    contextStorage.getStore()?.get(InstrumentationStateKey)?.[stateKey(e, t)]
-      ?.abandoned === !0
+    contextStorage.getStore()?.get(InstrumentationStateKey)?.[stateKey(e, t)]?.abandoned === !0
   );
 }
 function releaseAllInstrumentationState(e) {
@@ -172,8 +158,7 @@ function assignOwner(e, t) {
     t.turnId !== void 0 && (e.turnId = t.turnId));
 }
 function writeContextKey(e, t) {
-  contextStorage.getStore() !== void 0 &&
-    loadContext().set(e, (e) => t(e ?? {}));
+  contextStorage.getStore() !== void 0 && loadContext().set(e, (e) => t(e ?? {}));
 }
 function stateKey(e, t) {
   return `${e}\0${t}`;
@@ -198,8 +183,7 @@ function deserializeState(e) {
   return t;
 }
 function cloneAndFreezeJson(e) {
-  if (Array.isArray(e))
-    return Object.freeze(e.map((e) => cloneAndFreezeJson(e)));
+  if (Array.isArray(e)) return Object.freeze(e.map((e) => cloneAndFreezeJson(e)));
   if (typeof e != `object` || !e) return e;
   let t = {};
   for (let [n, r] of Object.entries(e)) t[n] = cloneAndFreezeJson(r);

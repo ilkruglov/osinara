@@ -7,5 +7,8 @@ type ResolvedAuthorization = Readonly<AuthorizationDefinition> | undefined;
  * Dynamic providers are cached for the execution step so token resolution,
  * interactive OAuth, and eviction all use the same provider instance.
  */
-export declare function resolveConnectionAuthorization(connection: ResolvedConnectionDefinition, ctx?: SessionContext): Promise<ResolvedAuthorization>;
+export declare function resolveConnectionAuthorization(
+  connection: ResolvedConnectionDefinition,
+  ctx?: SessionContext,
+): Promise<ResolvedAuthorization>;
 export {};

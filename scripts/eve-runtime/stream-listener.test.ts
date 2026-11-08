@@ -17,10 +17,19 @@ import { createStreamListener } from "./stream-listener.ts";
 class FakeClient extends EventEmitter {
   queries: string[] = [];
   ended = false;
-  constructor(private readonly failConnect = false) { super(); }
-  async connect() { if (this.failConnect) throw new Error("ECONNREFUSED"); }
-  async query(text: string) { this.queries.push(text); return undefined; }
-  async end() { this.ended = true; }
+  constructor(private readonly failConnect = false) {
+    super();
+  }
+  async connect() {
+    if (this.failConnect) throw new Error("ECONNREFUSED");
+  }
+  async query(text: string) {
+    this.queries.push(text);
+    return undefined;
+  }
+  async end() {
+    this.ended = true;
+  }
 }
 
 describe("workflow stream listener", () => {
@@ -31,11 +40,19 @@ describe("workflow stream listener", () => {
     const sleeps: number[] = [];
     const listener = await createStreamListener({
       channel: "workflow_event_chunk",
-      connect: () => { const client = new FakeClient(clients.length === 1); clients.push(client); return client; },
+      connect: () => {
+        const client = new FakeClient(clients.length === 1);
+        clients.push(client);
+        return client;
+      },
       log,
-      onPayload: async (payload) => { payloads.push(payload); },
+      onPayload: async (payload) => {
+        payloads.push(payload);
+      },
       retryDelayMs: 100,
-      sleep: async (ms) => { sleeps.push(ms); },
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
     });
     expect(clients[0]!.queries).toEqual(["LISTEN workflow_event_chunk"]);
     clients[0]!.emit("notification", { payload: "one" });
@@ -50,7 +67,9 @@ describe("workflow stream listener", () => {
     clients[0]!.emit("notification", { payload: "stale" });
     clients[2]!.emit("notification", { payload: "two" });
     expect(payloads).toEqual(["one", "two"]);
-    const codes = log.mock.calls.map(([line]) => (JSON.parse(line as string) as { code: string }).code);
+    const codes = log.mock.calls.map(
+      ([line]) => (JSON.parse(line as string) as { code: string }).code,
+    );
     expect(codes).toEqual([
       "AGENT_WORKFLOW_STREAM_LISTENER_LOST",
       "AGENT_WORKFLOW_STREAM_LISTENER_RETRY_FAILED",
@@ -58,7 +77,10 @@ describe("workflow stream listener", () => {
     ]);
 
     await listener.close();
-    expect(clients[2]!.queries).toEqual(["LISTEN workflow_event_chunk", "UNLISTEN workflow_event_chunk"]);
+    expect(clients[2]!.queries).toEqual([
+      "LISTEN workflow_event_chunk",
+      "UNLISTEN workflow_event_chunk",
+    ]);
     expect(clients[2]!.ended).toBe(true);
     clients[2]!.emit("end");
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -68,7 +90,9 @@ describe("workflow stream listener", () => {
   it("survives a second error of a lost client and a close during a reconnect", async () => {
     const clients: FakeClient[] = [];
     let release!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const listener = await createStreamListener({
       channel: "workflow_event_chunk",
       connect: () => {
@@ -98,10 +122,12 @@ describe("workflow stream listener", () => {
   });
 
   it("fails the first connection instead of retrying it in the background", async () => {
-    await expect(createStreamListener({
-      channel: "workflow_event_chunk",
-      connect: () => new FakeClient(true),
-      onPayload: async () => {},
-    })).rejects.toThrow("ECONNREFUSED");
+    await expect(
+      createStreamListener({
+        channel: "workflow_event_chunk",
+        connect: () => new FakeClient(true),
+        onPayload: async () => {},
+      }),
+    ).rejects.toThrow("ECONNREFUSED");
   });
 });

@@ -59,9 +59,7 @@ function writeRequestError(e, n) {
   }
   ((e.statusCode = 503),
     e.setHeader(`content-type`, `application/json; charset=utf-8`),
-    !e.writableEnded &&
-      !e.destroyed &&
-      e.end(JSON.stringify({ error: toErrorMessage(n) })));
+    !e.writableEnded && !e.destroyed && e.end(JSON.stringify({ error: toErrorMessage(n) })));
 }
 function closeServer(e) {
   if (!e.listening) return Promise.resolve();

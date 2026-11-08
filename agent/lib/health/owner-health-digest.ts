@@ -33,8 +33,16 @@
  *   saying the card failed and why: the digest must arrive, and the failure is reported, not hidden.
  */
 import { DEEPSEEK_BALANCE_ALERT_USD } from "../../config.js";
-import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
-import { formatStorageHeadroom, readStorageHeadroom, type StorageHeadroom } from "./storage-headroom.js";
+import {
+  type DeepSeekBalance,
+  formatDeepSeekBalance,
+  readConfiguredDeepSeekBalance,
+} from "./deepseek-balance.js";
+import {
+  formatStorageHeadroom,
+  readStorageHeadroom,
+  type StorageHeadroom,
+} from "./storage-headroom.js";
 import { TELEGRAM_MESSAGE_TEXT_MAX_LENGTH } from "eve/channels/telegram";
 
 import {
@@ -42,7 +50,11 @@ import {
   memoryReviewOwnerAlertTransport,
   TelegramRecipientUnreachableError,
 } from "../memory-review/memory-review-owner-alert-transport.js";
-import { formatTelegramWebhookHealth, readTelegramWebhookHealth, type TelegramWebhookHealth } from "./telegram-webhook-health.js";
+import {
+  formatTelegramWebhookHealth,
+  readTelegramWebhookHealth,
+  type TelegramWebhookHealth,
+} from "./telegram-webhook-health.js";
 import {
   type OwnerHealthRecipient,
   type OwnerHealthReport,
@@ -57,7 +69,11 @@ const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
 const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
 
 const MOSCOW = new Intl.DateTimeFormat("ru-RU", {
-  day: "numeric", hour: "2-digit", minute: "2-digit", month: "long", timeZone: "Europe/Moscow",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  month: "long",
+  timeZone: "Europe/Moscow",
 });
 
 function when(date: Date): string {
@@ -83,41 +99,66 @@ export interface OwnerHealthDigestSections {
   memory: string;
 }
 
-export function formatOwnerHealthDigest(report: OwnerHealthReport, extras: OwnerHealthExtras = NO_EXTRAS): string {
+export function formatOwnerHealthDigest(
+  report: OwnerHealthReport,
+  extras: OwnerHealthExtras = NO_EXTRAS,
+): string {
   return digestText(ownerHealthDigestSections(report, extras));
 }
 
 function digestText(sections: OwnerHealthDigestSections): string {
-  return [sections.header, ...sections.failures, ...sections.information, sections.memory].join("\n");
+  return [sections.header, ...sections.failures, ...sections.information, sections.memory].join(
+    "\n",
+  );
 }
 
-export function ownerHealthDigestSections(report: OwnerHealthReport, extras: OwnerHealthExtras = NO_EXTRAS): OwnerHealthDigestSections {
+export function ownerHealthDigestSections(
+  report: OwnerHealthReport,
+  extras: OwnerHealthExtras = NO_EXTRAS,
+): OwnerHealthDigestSections {
   const lines: string[] = [];
   // A spent balance means the bot is not answering: a failure, not information.
-  const change = extras.balance !== null && extras.previousBalanceUsd !== null ? extras.balance.totalUsd - extras.previousBalanceUsd : null;
+  const change =
+    extras.balance !== null && extras.previousBalanceUsd !== null
+      ? extras.balance.totalUsd - extras.previousBalanceUsd
+      : null;
   const balance = formatDeepSeekBalance(extras.balance, DEEPSEEK_BALANCE_ALERT_USD, change);
   if (balance?.warning) lines.push(balance.text);
   if (report.rotations.count > 0) {
-    lines.push(`Сессии: ${report.rotations.count} ротаций после сбоя` +
-      (report.rotations.latestAt ? `, последняя ${when(report.rotations.latestAt)}` : "") + ".");
+    lines.push(
+      `Сессии: ${report.rotations.count} ротаций после сбоя` +
+        (report.rotations.latestAt ? `, последняя ${when(report.rotations.latestAt)}` : "") +
+        ".",
+    );
   }
   // Telegram, not the agent, knows that updates stopped arriving: a deaf webhook looks like a quiet day.
-  const windowEnd = new Date(report.windowStart.getTime() + OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS);
+  const windowEnd = new Date(
+    report.windowStart.getTime() + OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS,
+  );
   const webhook = formatTelegramWebhookHealth(extras.webhook ?? null, windowEnd);
   if (webhook !== null) lines.push(webhook);
   if (report.ingressFailures.count > 0) {
-    const codes = report.ingressFailures.codes.map((entry) => `${entry.code} ×${entry.count}`).join(", ");
+    const codes = report.ingressFailures.codes
+      .map((entry) => `${entry.code} ×${entry.count}`)
+      .join(", ");
     lines.push(`Очередь Telegram: ${report.ingressFailures.count} сбоев (${codes}).`);
   }
   for (const lane of report.lanes.blocked) {
-    lines.push(`Проверка памяти «${lane.label}» стоит: голова ${lane.headStatus}` +
-      (lane.code ? ` (${lane.code})` : "") + `, ждут ${lane.waiting} сообщений.`);
+    lines.push(
+      `Проверка памяти «${lane.label}» стоит: голова ${lane.headStatus}` +
+        (lane.code ? ` (${lane.code})` : "") +
+        `, ждут ${lane.waiting} сообщений.`,
+    );
   }
   for (const lane of report.lanes.lagging) {
-    lines.push(`Проверка памяти «${lane.label}» отстаёт: ${lane.waiting} сообщений с ${when(lane.oldestAt)}.`);
+    lines.push(
+      `Проверка памяти «${lane.label}» отстаёт: ${lane.waiting} сообщений с ${when(lane.oldestAt)}.`,
+    );
   }
   if (report.reviewBatches.failed > 0 || report.reviewBatches.ambiguous > 0) {
-    lines.push(`Пакеты проверки: failed ${report.reviewBatches.failed}, ambiguous ${report.reviewBatches.ambiguous}.`);
+    lines.push(
+      `Пакеты проверки: failed ${report.reviewBatches.failed}, ambiguous ${report.reviewBatches.ambiguous}.`,
+    );
   }
   if (report.alertDeliveryFailures > 0) {
     lines.push(`Не доставлено предупреждений владельцу: ${report.alertDeliveryFailures}.`);
@@ -130,8 +171,11 @@ export function ownerHealthDigestSections(report: OwnerHealthReport, extras: Own
   const quality = formatTurnQuality(report.turnQuality);
   if (quality.warning) lines.push(quality.text);
   const written = report.memoryWritten.reduce((sum, entry) => sum + entry.count, 0);
-  const breakdown = report.memoryWritten.map((entry) => `${entry.scope} ${entry.kind} ${entry.count}`).join(", ");
-  const memory = written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`;
+  const breakdown = report.memoryWritten
+    .map((entry) => `${entry.scope} ${entry.kind} ${entry.count}`)
+    .join(", ");
+  const memory =
+    written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`;
   const header = lines.length === 0 ? "Сводка за сутки: сбоев нет." : "Сводка за сутки.";
   const information = [
     ...(balance !== null && !balance.warning ? [balance.text] : []),
@@ -144,7 +188,13 @@ interface OwnerHealthDigestDependencies {
   /** The model account balance, read once per pass; null when not DeepSeek or unreadable. */
   balance(): Promise<DeepSeekBalance | null>;
   claim(familyId: string, digestDate: string, now: Date): Promise<boolean>;
-  complete(familyId: string, digestDate: string, now: Date, textLength: number, balanceUsd: number | null): Promise<void>;
+  complete(
+    familyId: string,
+    digestDate: string,
+    now: Date,
+    textLength: number,
+    balanceUsd: number | null,
+  ): Promise<void>;
   deliver(input: { chatId: string; text: string }): Promise<void>;
   /** The digest as a widget card; absent when widgets are switched off. */
   deliverWidget?(input: { caption: string; chatId: string; html: string }): Promise<void>;
@@ -192,7 +242,9 @@ export function digestParts(text: string, limit = TELEGRAM_MESSAGE_TEXT_MAX_LENG
 /** A card whose outcome is unknown, with the failure of the text sent after it. */
 class DigestAfterAmbiguousCardError extends Error {
   constructor(readonly cause: unknown) {
-    super("AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS: the card may have arrived, the text after it failed");
+    super(
+      "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS: the card may have arrived, the text after it failed",
+    );
     this.name = "DigestAfterAmbiguousCardError";
   }
 }
@@ -203,7 +255,12 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
   }
 
   /** The card when widgets are on; the text otherwise, or with the reason when the card failed. */
-  async function deliverDigest(chatId: string, sections: OwnerHealthDigestSections, text: string, now: Date): Promise<void> {
+  async function deliverDigest(
+    chatId: string,
+    sections: OwnerHealthDigestSections,
+    text: string,
+    now: Date,
+  ): Promise<void> {
     if (!dependencies.deliverWidget) {
       await deliverText(chatId, text);
       return;
@@ -214,8 +271,13 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
     } catch (error) {
       // A chat that is gone does not take the text either: the claim logic below handles it.
       if (error instanceof TelegramRecipientUnreachableError) throw error;
-      const reason = error instanceof Error ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160) : String(error);
-      console.error(JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }));
+      const reason =
+        error instanceof Error
+          ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160)
+          : String(error);
+      console.error(
+        JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }),
+      );
       // Only Telegram's own refusal proves the card is not in the chat; a timeout may have delivered it.
       const refused = error instanceof MemoryReviewOwnerAlertTransportError;
       const note = refused
@@ -231,16 +293,19 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
         await deliverText(chatId, text);
       } catch (textError) {
         // The card may be in the chat: retrying would send it again every pass.
-        if (!refused && !(textError instanceof TelegramRecipientUnreachableError)) throw new DigestAfterAmbiguousCardError(textError);
+        if (!refused && !(textError instanceof TelegramRecipientUnreachableError))
+          throw new DigestAfterAmbiguousCardError(textError);
         throw textError;
       }
       try {
         await dependencies.deliver({ chatId, text: note });
       } catch (noteError) {
-        console.error(JSON.stringify({
-          code: "AGENT_OWNER_HEALTH_DIGEST_NOTE_FAILED",
-          error: noteError instanceof Error ? noteError.name : "UnknownError",
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_OWNER_HEALTH_DIGEST_NOTE_FAILED",
+            error: noteError instanceof Error ? noteError.name : "UnknownError",
+          }),
+        );
       }
     }
   }
@@ -249,9 +314,11 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
     const digestDate = digestDateFor(now);
     if (digestDate === null) return 0;
     let sent = 0;
-    let shared: Promise<[DeepSeekBalance | null, StorageHeadroom | null, TelegramWebhookHealth | null]> | undefined;
+    let shared:
+      | Promise<[DeepSeekBalance | null, StorageHeadroom | null, TelegramWebhookHealth | null]>
+      | undefined;
     for (const recipient of await dependencies.recipients()) {
-      if (!await dependencies.claim(recipient.familyId, digestDate, now)) continue;
+      if (!(await dependencies.claim(recipient.familyId, digestDate, now))) continue;
       try {
         const report = await dependencies.report(
           recipient.familyId,
@@ -259,42 +326,66 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
           now,
         );
         // One balance, disk and webhook reading per pass: they belong to the installation, not the family.
-        shared ??= Promise.all([dependencies.balance(), dependencies.storage(), dependencies.webhook?.() ?? null]);
+        shared ??= Promise.all([
+          dependencies.balance(),
+          dependencies.storage(),
+          dependencies.webhook?.() ?? null,
+        ]);
         const [balance, storage, webhook] = await shared;
-        const previousBalanceUsd = balance === null ? null : await dependencies.previousBalance(recipient.familyId, digestDate);
-        const sections = ownerHealthDigestSections(report, { balance, previousBalanceUsd, storage, webhook });
+        const previousBalanceUsd =
+          balance === null
+            ? null
+            : await dependencies.previousBalance(recipient.familyId, digestDate);
+        const sections = ownerHealthDigestSections(report, {
+          balance,
+          previousBalanceUsd,
+          storage,
+          webhook,
+        });
         const text = digestText(sections);
         try {
           await deliverDigest(recipient.ownerTelegramUserId, sections, text, now);
         } catch (error) {
           if (!(error instanceof DigestAfterAmbiguousCardError)) throw error;
           // The day counts as sent: the card may have arrived, and a retry would repeat it.
-          console.error(JSON.stringify({
-            code: "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS",
-            error: error.cause instanceof Error ? error.cause.name : "UnknownError",
-            familyId: recipient.familyId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS",
+              error: error.cause instanceof Error ? error.cause.name : "UnknownError",
+              familyId: recipient.familyId,
+            }),
+          );
         }
-        await dependencies.complete(recipient.familyId, digestDate, now, text.length, balance?.totalUsd ?? null);
-        console.info(JSON.stringify({
-          code: "AGENT_OWNER_HEALTH_DIGEST_SENT",
-          blockedLanes: report.lanes.blocked.length,
-          familyId: recipient.familyId,
-          ingressFailures: report.ingressFailures.count,
-          rotations: report.rotations.count,
-          scheduleFailures: report.scheduleFailures.count,
-        }));
+        await dependencies.complete(
+          recipient.familyId,
+          digestDate,
+          now,
+          text.length,
+          balance?.totalUsd ?? null,
+        );
+        console.info(
+          JSON.stringify({
+            code: "AGENT_OWNER_HEALTH_DIGEST_SENT",
+            blockedLanes: report.lanes.blocked.length,
+            familyId: recipient.familyId,
+            ingressFailures: report.ingressFailures.count,
+            rotations: report.rotations.count,
+            scheduleFailures: report.scheduleFailures.count,
+          }),
+        );
         sent += 1;
       } catch (error) {
         // The claim goes back so the next tick retries; a lost digest is exactly the silence it exists to end.
         // An unreachable owner chat keeps it: `claim` retakes it after an hour, the tick would only skip.
         const unreachable = error instanceof TelegramRecipientUnreachableError;
         if (!unreachable) await dependencies.release(recipient.familyId, digestDate);
-        console.error(JSON.stringify({
-          code: unreachable ? error.code : "AGENT_OWNER_HEALTH_DIGEST_FAILED",
-          error: error instanceof Error ? error.message : String(error),
-          familyId: recipient.familyId,
-        }));
+        console.error(
+          JSON.stringify({
+            code: unreachable ? error.code : "AGENT_OWNER_HEALTH_DIGEST_FAILED",
+            error: error instanceof Error ? error.message : String(error),
+            familyId: recipient.familyId,
+          }),
+        );
       }
     }
     return sent;
@@ -304,14 +395,23 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
 export function dispatchOwnerHealthDigests(now = new Date()): Promise<number> {
   return createOwnerHealthDigestDispatcher({
     balance: readConfiguredDeepSeekBalance,
-    claim: (familyId, digestDate, at) => ownerHealthDigestRepository.claim(familyId, digestDate, at),
-    complete: (familyId, digestDate, at, length, balanceUsd) => ownerHealthDigestRepository.complete(familyId, digestDate, at, length, balanceUsd),
+    claim: (familyId, digestDate, at) =>
+      ownerHealthDigestRepository.claim(familyId, digestDate, at),
+    complete: (familyId, digestDate, at, length, balanceUsd) =>
+      ownerHealthDigestRepository.complete(familyId, digestDate, at, length, balanceUsd),
     deliver: (input) => memoryReviewOwnerAlertTransport.deliver(input),
-    ...(TELEGRAM_WIDGETS_ENABLED ? { deliverWidget: (input: { caption: string; chatId: string; html: string }) => memoryReviewOwnerAlertTransport.deliverWidget(input) } : {}),
-    previousBalance: (familyId, digestDate) => ownerHealthDigestRepository.previousBalance(familyId, digestDate),
+    ...(TELEGRAM_WIDGETS_ENABLED
+      ? {
+          deliverWidget: (input: { caption: string; chatId: string; html: string }) =>
+            memoryReviewOwnerAlertTransport.deliverWidget(input),
+        }
+      : {}),
+    previousBalance: (familyId, digestDate) =>
+      ownerHealthDigestRepository.previousBalance(familyId, digestDate),
     recipients: () => ownerHealthDigestRepository.recipients(),
     release: (familyId, digestDate) => ownerHealthDigestRepository.release(familyId, digestDate),
-    report: (familyId, windowStart, at) => ownerHealthDigestRepository.report(familyId, windowStart, at),
+    report: (familyId, windowStart, at) =>
+      ownerHealthDigestRepository.report(familyId, windowStart, at),
     storage: () => readStorageHeadroom(() => ownerHealthDigestRepository.databaseBytes()),
     webhook: () => readTelegramWebhookHealth({ botToken: process.env.TELEGRAM_BOT_TOKEN }),
   })(now);

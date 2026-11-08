@@ -65,9 +65,9 @@ describe("production container contract", () => {
     expect(dockerfile).toContain("ARG OCI_SOURCE");
     expect(dockerfile).toContain("ARG OCI_VERSION");
     expect(dockerfile).toContain("ARG OCI_REVISION");
-    expect(dockerfile).toContain("org.opencontainers.image.source=\"${OCI_SOURCE}\"");
-    expect(dockerfile).toContain("org.opencontainers.image.version=\"${OCI_VERSION}\"");
-    expect(dockerfile).toContain("org.opencontainers.image.revision=\"${OCI_REVISION}\"");
+    expect(dockerfile).toContain('org.opencontainers.image.source="${OCI_SOURCE}"');
+    expect(dockerfile).toContain('org.opencontainers.image.version="${OCI_VERSION}"');
+    expect(dockerfile).toContain('org.opencontainers.image.revision="${OCI_REVISION}"');
     expect(dockerfile).toContain("COPY infra/nginx.conf /etc/nginx/nginx.conf");
     expect(dockerfile).toContain(
       "FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5",
@@ -82,9 +82,12 @@ describe("production container contract", () => {
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
     expect(runtime).toContain("COPY --from=build /app/.runtime ./.runtime");
     expect(runtime).toContain("COPY --from=build /app/agent ./agent");
-    const labArtifact = "COPY --from=build /app/services/skill-lab/.output ./services/skill-lab/.output";
+    const labArtifact =
+      "COPY --from=build /app/services/skill-lab/.output ./services/skill-lab/.output";
     expect(runtime).toContain(labArtifact);
-    expect(runtime.replace(labArtifact, "")).not.toMatch(/COPY --from=build \/app\/(scripts|services)\b/);
+    expect(runtime.replace(labArtifact, "")).not.toMatch(
+      /COPY --from=build \/app\/(scripts|services)\b/,
+    );
     expect(entrypoint).toContain("node .runtime/scripts/migrate.js");
     expect(entrypoint).toContain("node .runtime/scripts/validate-model-provider-config.js");
     expect(entrypoint).not.toContain("npm run migrate");
@@ -92,11 +95,17 @@ describe("production container contract", () => {
     // held half of the agent's memory. Sandboxes are prepared by a one-shot step, then the built
     // server is the container's process.
     expect(entrypoint).toContain("node .runtime/scripts/prewarm-sandboxes.js");
-    expect(entrypoint).toContain('exec node --max-old-space-size="$heap_mb" .output/server/index.mjs');
+    expect(entrypoint).toContain(
+      'exec node --max-old-space-size="$heap_mb" .output/server/index.mjs',
+    );
     expect(entrypoint).not.toContain("npm run start");
-    expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(entrypoint.indexOf('exec node --max-old-space-size="$heap_mb"'));
+    expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(
+      entrypoint.indexOf('exec node --max-old-space-size="$heap_mb"'),
+    );
     // Without `eve start` nothing else ends a server that never becomes healthy (Codex review).
-    expect(entrypoint).toMatch(/node \.runtime\/scripts\/startup-watchdog\.js &\n(?:  #[^\n]*\n)*  heap_mb=/u);
+    expect(entrypoint).toMatch(
+      /node \.runtime\/scripts\/startup-watchdog\.js &\n(?:  #[^\n]*\n)*  heap_mb=/u,
+    );
     // A bounded heap: without it V8 kept ~1 GB of garbage under the load run (3 October 2026).
     // AGENT_HEAP_MB raises it for a bigger installation; 512 stays the default.
     expect(entrypoint).toContain('heap_mb="${AGENT_HEAP_MB-512}"');
@@ -109,7 +118,9 @@ describe("production container contract", () => {
     const dockerfile = readProjectFile("Dockerfile");
 
     expect(dockerfile.match(/COPY vendor \.\/vendor\n/g)).toHaveLength(2);
-    expect(dockerfile.match(/COPY package\.json package-lock\.json \.npmrc \.\/\n/g)).toHaveLength(2);
+    expect(dockerfile.match(/COPY package\.json package-lock\.json \.npmrc \.\/\n/g)).toHaveLength(
+      2,
+    );
     expect(readProjectFile(".npmrc")).toContain("install-links=true");
     expect(dockerfile).not.toContain("postinstall");
   });
@@ -160,7 +171,9 @@ describe("production container contract", () => {
     // Only migrate holds the owner connection; the agent and the embedding worker run as the
     // DML-only application role.
     expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(1);
-    expect(service(compose, "migrate", "memory-embedding-worker")).toContain("DATABASE_URL: ${DATABASE_URL:?");
+    expect(service(compose, "migrate", "memory-embedding-worker")).toContain(
+      "DATABASE_URL: ${DATABASE_URL:?",
+    );
     expect(compose.match(/ DATABASE_URL: \$\{APP_DATABASE_URL:\?/g)).toHaveLength(2);
     expect(compose.match(/APP_DATABASE_URL: \$\{APP_DATABASE_URL:\?/g)).toHaveLength(1);
     expect(compose).not.toContain("DATABASE_URL: postgresql://");
@@ -174,7 +187,7 @@ describe("production container contract", () => {
 
     expect(agent).toContain("migrate:\n        condition: service_completed_successfully");
     expect(agent).toContain('command: ["start-after-migration"]');
-    expect(migrate).toContain("restart: \"no\"");
+    expect(migrate).toContain('restart: "no"');
     expect(migrate).toContain('entrypoint: ["npm", "run", "migrate:runtime"]');
     expect(agent).toContain("healthcheck:");
     expect(agent).toContain("retries: 72");
@@ -194,7 +207,9 @@ describe("production container contract", () => {
     }
     for (const network of ["app-network", "sandbox-control", "sandbox-egress"]) {
       expect(compose).toMatch(
-        new RegExp(`  ${network}:\\n(?:    internal: true\\n)?    name: osinara-production-${network}\\n`),
+        new RegExp(
+          `  ${network}:\\n(?:    internal: true\\n)?    name: osinara-production-${network}\\n`,
+        ),
       );
     }
   });
@@ -304,11 +319,15 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("--draft");
     expect(workflow).toContain("RELEASE_NOTES_MISSING");
     expect(workflow).toContain('RELEASE_NOTES_FILE="docs/releases/v${VERSION}.txt"');
-    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/);
+    expect(workflow).toMatch(
+      /gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/,
+    );
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
     // v1.8.52 (26 October 2026): the upload right after create did not find the new draft yet.
-    expect(workflow).toMatch(/gh release create[\s\S]*?gh release view "\$TAG"[\s\S]*?RELEASE_DRAFT_NOT_VISIBLE[\s\S]*?gh release upload/u);
+    expect(workflow).toMatch(
+      /gh release create[\s\S]*?gh release view "\$TAG"[\s\S]*?RELEASE_DRAFT_NOT_VISIBLE[\s\S]*?gh release upload/u,
+    );
     expect(workflow).toContain("--clobber");
     expect(workflow).toContain("gh release edit");
     expect(workflow).toContain("--draft=false");
@@ -322,8 +341,13 @@ describe("release workflow contract", () => {
   // version as the latest release, and the update checker reads /releases/latest.
   it("never publishes a version that is not newer than the latest release", () => {
     const workflow = readProjectFile(".github/workflows/ci-release.yaml");
-    const versionJob = workflow.slice(workflow.indexOf("  version:"), workflow.indexOf("  images:"));
-    const publish = workflow.slice(workflow.indexOf("Create or resume draft and upload exact assets"));
+    const versionJob = workflow.slice(
+      workflow.indexOf("  version:"),
+      workflow.indexOf("  images:"),
+    );
+    const publish = workflow.slice(
+      workflow.indexOf("Create or resume draft and upload exact assets"),
+    );
 
     for (const step of [versionJob, publish]) {
       expect(step).toContain('gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name');
@@ -331,7 +355,9 @@ describe("release workflow contract", () => {
       expect(step).toContain("sort -V");
     }
     // The publish re-checks right before it marks the release latest: another may have come out meanwhile.
-    expect(publish.indexOf("RELEASE_VERSION_NOT_NEWER")).toBeLessThan(publish.indexOf("--draft=false --latest"));
+    expect(publish.indexOf("RELEASE_VERSION_NOT_NEWER")).toBeLessThan(
+      publish.indexOf("--draft=false --latest"),
+    );
   });
 
   it("publishes and verifies the standalone installer CLI with its SHA-256 sidecar", () => {
@@ -359,13 +385,22 @@ describe("release workflow contract", () => {
 
 describe("server deployment contract", () => {
   it("loads every controller module in production order without global collisions", () => {
-    expect(() => execFileSync("bash", ["-c", [
-      "set -euo pipefail",
-      "source scripts/production-deploy/common.sh",
-      "source scripts/production-deploy/database.sh",
-      "source scripts/production-deploy/release.sh",
-      "source scripts/production-deploy/backup.sh",
-    ].join("; ")], { cwd: projectRoot })).not.toThrow();
+    expect(() =>
+      execFileSync(
+        "bash",
+        [
+          "-c",
+          [
+            "set -euo pipefail",
+            "source scripts/production-deploy/common.sh",
+            "source scripts/production-deploy/database.sh",
+            "source scripts/production-deploy/release.sh",
+            "source scripts/production-deploy/backup.sh",
+          ].join("; "),
+        ],
+        { cwd: projectRoot },
+      ),
+    ).not.toThrow();
   });
 
   it("is locked, source-independent, digest-strict, and backup-first", () => {
@@ -388,17 +423,27 @@ describe("server deployment contract", () => {
     expect(script).not.toMatch(/git\s+(pull|fetch|checkout)/);
     expect(script).not.toMatch(/docker\s+(compose\s+)?build/);
     const main = readProjectFile("scripts/production-deploy.sh");
-    expect(main.indexOf("prune_old_deploy_backups")).toBeGreaterThan(main.indexOf("promote_candidate_release"));
-    expect(main.indexOf("pull_release_images")).toBeLessThan(main.indexOf("create_postgres_backup"));
-    expect(main.indexOf("stop_current_services")).toBeLessThan(main.indexOf("create_postgres_backup"));
-    expect(main.indexOf("stop_current_services")).toBeLessThan(main.indexOf("snapshot_durable_volumes"));
+    expect(main.indexOf("prune_old_deploy_backups")).toBeGreaterThan(
+      main.indexOf("promote_candidate_release"),
+    );
+    expect(main.indexOf("pull_release_images")).toBeLessThan(
+      main.indexOf("create_postgres_backup"),
+    );
+    expect(main.indexOf("stop_current_services")).toBeLessThan(
+      main.indexOf("create_postgres_backup"),
+    );
+    expect(main.indexOf("stop_current_services")).toBeLessThan(
+      main.indexOf("snapshot_durable_volumes"),
+    );
     const backup = readProjectFile("scripts/production-deploy/backup.sh");
     expect(backup).toContain('compose_current stop "${service_names[@]}"');
     expect(main.lastIndexOf("record_proposal_result")).toBeLessThan(
       main.lastIndexOf("prune_retired_release_images"),
     );
     for (const file of files) {
-      expect(file.source.split("\n").length, `${file.path} exceeds 500 lines`).toBeLessThanOrEqual(500);
+      expect(file.source.split("\n").length, `${file.path} exceeds 500 lines`).toBeLessThanOrEqual(
+        500,
+      );
       expect(file.source.startsWith("#!/bin/bash"), `${file.path} has no shell header`).toBe(true);
     }
   });
@@ -456,13 +501,19 @@ describe("server deployment contract", () => {
     expect(() => executeComposeSecurityPredicate(inheritedRunnerVolumes)).toThrow();
 
     const unsafe = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
-    unsafe.services["memory-embedding-worker"]!.volumes = [{
-      source: "/", target: "/host", type: "bind",
-    }];
+    unsafe.services["memory-embedding-worker"]!.volumes = [
+      {
+        source: "/",
+        target: "/host",
+        type: "bind",
+      },
+    ];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
 
     // The reranker left in 1.8.14; a release bringing its volume back is not approved.
-    const withReranker = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
+    const withReranker = structuredClone(valid) as {
+      services: Record<string, { volumes?: unknown[] }>;
+    };
     withReranker.services["memory-reranker"] = {
       ...structuredClone(withReranker.services["memory-embedding-worker"]!),
       volumes: [{ source: "memory-reranker-model-minilm", target: "/data", type: "volume" }],

@@ -19,9 +19,7 @@ var ConnectionAuthorizationRequiredError = class extends Error {
     }
   };
 function isConnectionAuthorizationRequiredError(e) {
-  return (
-    e instanceof Error && e.name === `ConnectionAuthorizationRequiredError`
-  );
+  return e instanceof Error && e.name === `ConnectionAuthorizationRequiredError`;
 }
 function isConnectionAuthorizationFailedError(e) {
   return e instanceof Error && e.name === `ConnectionAuthorizationFailedError`;

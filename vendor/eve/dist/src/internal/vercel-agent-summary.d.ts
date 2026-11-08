@@ -58,18 +58,22 @@ export type VercelEveChannelType = "slack" | "http" | "webhook" | "unknown";
  * Top-level agent identity used to label the dashboard card.
  */
 interface VercelEveAgentEntryBase {
-    readonly name: string;
-    readonly description?: string;
+  readonly name: string;
+  readonly description?: string;
 }
-export type VercelEveAgentEntry = VercelEveAgentEntryBase & ({
-    readonly modelId: string;
-    readonly modelRouting?: never;
-} | {
-    readonly modelId?: never;
-    readonly modelRouting: {
-        readonly kind: "dynamic";
-    };
-});
+export type VercelEveAgentEntry = VercelEveAgentEntryBase &
+  (
+    | {
+        readonly modelId: string;
+        readonly modelRouting?: never;
+      }
+    | {
+        readonly modelId?: never;
+        readonly modelRouting: {
+          readonly kind: "dynamic";
+        };
+      }
+  );
 /**
  * Authored agent instructions resolved at build time from the agent's
  * `instructions.md` or `instructions.{ts,cts,mts,js,cjs,mjs}` source.
@@ -82,30 +86,30 @@ export type VercelEveAgentEntry = VercelEveAgentEntryBase & ({
  * not the module's source code.
  */
 export interface VercelEveInstructionsEntry {
-    /**
-     * Logical path of the discovered instructions source, relative to the
-     * agent root (eg. `instructions.md`).
-     */
-    readonly logicalPath: string;
-    /**
-     * How the instructions were authored. `markdown` is a literal markdown
-     * file at the agent root; `module` is a TypeScript / JavaScript module
-     * that produces the instructions at build time.
-     */
-    readonly sourceKind: "markdown" | "module";
-    /** Resolved instructions content. */
-    readonly content: string;
-    readonly role: "system" | "user";
+  /**
+   * Logical path of the discovered instructions source, relative to the
+   * agent root (eg. `instructions.md`).
+   */
+  readonly logicalPath: string;
+  /**
+   * How the instructions were authored. `markdown` is a literal markdown
+   * file at the agent root; `module` is a TypeScript / JavaScript module
+   * that produces the instructions at build time.
+   */
+  readonly sourceKind: "markdown" | "module";
+  /** Resolved instructions content. */
+  readonly content: string;
+  readonly role: "system" | "user";
 }
 export interface VercelEveScheduleEntry {
-    readonly name: string;
-    readonly cron: string;
-    readonly logicalPath: string;
+  readonly name: string;
+  readonly cron: string;
+  readonly logicalPath: string;
 }
 export interface VercelEveToolEntry {
-    readonly name: string;
-    readonly description: string;
-    readonly logicalPath: string;
+  readonly name: string;
+  readonly description: string;
+  readonly logicalPath: string;
 }
 /**
  * Wire protocol the authored connection speaks, mirrored from the
@@ -116,43 +120,43 @@ export interface VercelEveToolEntry {
  */
 export type VercelEveConnectionType = "mcp" | "openapi";
 export interface VercelEveConnectionEntry {
-    readonly name: string;
-    readonly description: string;
-    readonly url: string;
-    readonly logicalPath: string;
-    readonly type: VercelEveConnectionType;
-    /**
-     * When the connection's auth is built by `connect()` from
-     * `@vercel/connect/eve`, the connector identifier the author passed
-     * (UID like `"oauth/mcp-linear-app"` or opaque `"scl_..."` form).
-     * Dashboards use this to deep-link into the connector's settings page
-     * — typically resolving UID → `scl_...` against
-     * `GET /v6/connect/connectors` and building
-     * `/[teamSlug]/[project]/connect/<scl_...>`.
-     *
-     * Omitted for connections backed by a raw MCP server, a static
-     * token, or a custom `getToken` callback (anything not produced by
-     * the Vercel Connect helper).
-     */
-    readonly vercelConnect?: {
-        readonly connector: string;
-    };
+  readonly name: string;
+  readonly description: string;
+  readonly url: string;
+  readonly logicalPath: string;
+  readonly type: VercelEveConnectionType;
+  /**
+   * When the connection's auth is built by `connect()` from
+   * `@vercel/connect/eve`, the connector identifier the author passed
+   * (UID like `"oauth/mcp-linear-app"` or opaque `"scl_..."` form).
+   * Dashboards use this to deep-link into the connector's settings page
+   * — typically resolving UID → `scl_...` against
+   * `GET /v6/connect/connectors` and building
+   * `/[teamSlug]/[project]/connect/<scl_...>`.
+   *
+   * Omitted for connections backed by a raw MCP server, a static
+   * token, or a custom `getToken` callback (anything not produced by
+   * the Vercel Connect helper).
+   */
+  readonly vercelConnect?: {
+    readonly connector: string;
+  };
 }
 export interface VercelEveChannelEntry {
-    readonly name: string;
-    readonly method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "WEBSOCKET";
-    readonly urlPath: string;
-    readonly type: VercelEveChannelType;
-    /**
-     * The raw `ChannelAdapter.kind` reported by the route, when present.
-     * Useful when `type` is `"unknown"` and a consumer wants to render a
-     * disambiguating label.
-     */
-    readonly adapterKind?: string;
-    readonly logicalPath: string;
+  readonly name: string;
+  readonly method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "WEBSOCKET";
+  readonly urlPath: string;
+  readonly type: VercelEveChannelType;
+  /**
+   * The raw `ChannelAdapter.kind` reported by the route, when present.
+   * Useful when `type` is `"unknown"` and a consumer wants to render a
+   * disambiguating label.
+   */
+  readonly adapterKind?: string;
+  readonly logicalPath: string;
 }
 export interface VercelEveSandboxEntry {
-    readonly logicalPath: string;
+  readonly logicalPath: string;
 }
 /**
  * One authored skill exposed to the dashboard.
@@ -170,51 +174,53 @@ export interface VercelEveSandboxEntry {
  * `scripts/` directories).
  */
 export interface VercelEveSkillEntry {
-    readonly name: string;
-    readonly description: string;
-    readonly logicalPath: string;
-    readonly sourceKind: "markdown" | "module" | "skill-package";
+  readonly name: string;
+  readonly description: string;
+  readonly logicalPath: string;
+  readonly sourceKind: "markdown" | "module" | "skill-package";
 }
 export interface VercelEveSubagentEntry {
-    readonly name: string;
-    readonly description?: string;
-    readonly logicalPath: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly logicalPath: string;
 }
 export interface VercelEveDiagnosticsSummary {
-    readonly errors: number;
-    readonly warnings: number;
+  readonly errors: number;
+  readonly warnings: number;
 }
 /**
  * Versioned public summary of one eve agent, emitted into the Vercel Build
  * Output during `eve build` and ingested by Vercel as deployment metadata.
  */
 export interface VercelEveAgentSummary {
-    readonly kind: typeof VERCEL_EVE_AGENT_SUMMARY_KIND;
-    readonly schemaVersion: typeof VERCEL_EVE_AGENT_SUMMARY_VERSION;
-    /**
-     * Version of the `eve` package that produced this summary,
-     * for diagnostics. Format follows semver.
-     */
-    readonly generatorVersion: string;
-    readonly agent: VercelEveAgentEntry;
-    /**
-     * Ordered authored agent instructions. Empty when the agent relies on the
-     * framework default.
-     */
-    readonly instructions: readonly VercelEveInstructionsEntry[];
-    readonly schedules: readonly VercelEveScheduleEntry[];
-    readonly tools: readonly VercelEveToolEntry[];
-    readonly skills: readonly VercelEveSkillEntry[];
-    readonly connections: readonly VercelEveConnectionEntry[];
-    readonly channels: readonly VercelEveChannelEntry[];
-    readonly sandbox: VercelEveSandboxEntry | null;
-    readonly subagents: readonly VercelEveSubagentEntry[];
-    readonly diagnostics: VercelEveDiagnosticsSummary;
+  readonly kind: typeof VERCEL_EVE_AGENT_SUMMARY_KIND;
+  readonly schemaVersion: typeof VERCEL_EVE_AGENT_SUMMARY_VERSION;
+  /**
+   * Version of the `eve` package that produced this summary,
+   * for diagnostics. Format follows semver.
+   */
+  readonly generatorVersion: string;
+  readonly agent: VercelEveAgentEntry;
+  /**
+   * Ordered authored agent instructions. Empty when the agent relies on the
+   * framework default.
+   */
+  readonly instructions: readonly VercelEveInstructionsEntry[];
+  readonly schedules: readonly VercelEveScheduleEntry[];
+  readonly tools: readonly VercelEveToolEntry[];
+  readonly skills: readonly VercelEveSkillEntry[];
+  readonly connections: readonly VercelEveConnectionEntry[];
+  readonly channels: readonly VercelEveChannelEntry[];
+  readonly sandbox: VercelEveSandboxEntry | null;
+  readonly subagents: readonly VercelEveSubagentEntry[];
+  readonly diagnostics: VercelEveDiagnosticsSummary;
 }
 /**
  * Normalizes a channel adapter's reported `kind` string to the closed set
  * the dashboard renders. Keeps the surface stable even when authors set a
  * custom `kind` on their adapter (eg. `"weather-slack"`).
  */
-export declare function normalizeChannelKindForDisplay(adapterKind: string | undefined): VercelEveChannelType;
+export declare function normalizeChannelKindForDisplay(
+  adapterKind: string | undefined,
+): VercelEveChannelType;
 export {};

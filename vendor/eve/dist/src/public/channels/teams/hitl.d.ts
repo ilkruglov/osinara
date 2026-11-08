@@ -13,23 +13,29 @@ export declare const TEAMS_HITL_CHOICE_INPUT_ID = "eve_option";
 /** Text input id used for freeform HITL requests. */
 export declare const TEAMS_HITL_FREEFORM_INPUT_ID = "eve_freeform_text";
 /** Renders one input request as a Teams message body containing an Adaptive Card. */
-export declare function renderInputRequestMessage(request: InputRequest, options?: {
+export declare function renderInputRequestMessage(
+  request: InputRequest,
+  options?: {
     readonly adaptiveCardVersion?: string;
     readonly replyToActivityId?: string;
-}): TeamsMessageBody;
+  },
+): TeamsMessageBody;
 /**
  * Renders one input request as a Teams Adaptive Card attachment.
  * `options.adaptiveCardVersion` sets the card schema version (default "1.5").
  * Long prompt, choice, and action text is truncated to Teams card limits.
  */
-export declare function renderInputRequestAttachment(request: InputRequest, options?: {
+export declare function renderInputRequestAttachment(
+  request: InputRequest,
+  options?: {
     readonly adaptiveCardVersion?: string;
     readonly replyToActivityId?: string;
-}): TeamsAttachment;
+  },
+): TeamsAttachment;
 /** Renders an answered Teams card that replaces a pending HITL prompt. */
 export declare function renderAnsweredInputRequestMessage(input: {
-    readonly label?: string;
-    readonly prompt: string;
+  readonly label?: string;
+  readonly prompt: string;
 }): TeamsMessageBody;
 /** Returns true when a Teams activity carries an eve HITL submit payload. */
 export declare function isTeamsInputResponseActivity(activity: TeamsActivity): boolean;
@@ -39,7 +45,9 @@ export declare function isTeamsInputResponseActivity(activity: TeamsActivity): b
  * acknowledgement), or an empty array when the activity has no recognizable
  * HITL payload or requestId.
  */
-export declare function deriveTeamsInputResponses(activity: TeamsActivity): readonly InputResponse[];
+export declare function deriveTeamsInputResponses(
+  activity: TeamsActivity,
+): readonly InputResponse[];
 /**
  * Builds the HTTP body Teams expects after an Adaptive Card invoke action.
  * Defaults to statusCode 200 and message "Answer received."; `type` is always
@@ -48,6 +56,6 @@ export declare function deriveTeamsInputResponses(activity: TeamsActivity): read
 /** Reads the recorded thread root carried by an eve HITL card submission. */
 export declare function readTeamsInputReplyToActivityId(activity: TeamsActivity): string | null;
 export declare function teamsInvokeResponse(input?: {
-    readonly message?: string;
-    readonly statusCode?: number;
+  readonly message?: string;
+  readonly statusCode?: number;
 }): Record<string, unknown>;

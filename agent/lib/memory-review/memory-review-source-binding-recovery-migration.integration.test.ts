@@ -19,7 +19,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -121,8 +123,15 @@ describeWithDatabase("077 missing source-binding recovery", () => {
             $5, 'turn_0', now(), now()),
            ($6, $2, $3, 'background', 'completed', 508, 509, 558, 50,
             $7, 'turn_0', now(), now())`,
-        [PREDECESSOR_BATCH_ID, LANE_ID, conversationId, FIRST_BATCH_ID,
-          FIRST_EVE_SESSION_ID, SECOND_BATCH_ID, SECOND_EVE_SESSION_ID],
+        [
+          PREDECESSOR_BATCH_ID,
+          LANE_ID,
+          conversationId,
+          FIRST_BATCH_ID,
+          FIRST_EVE_SESSION_ID,
+          SECOND_BATCH_ID,
+          SECOND_EVE_SESSION_ID,
+        ],
       );
       const migration = await readFile(resolve("migrations", MIGRATION_NAME), "utf8");
 
@@ -141,61 +150,77 @@ describeWithDatabase("077 missing source-binding recovery", () => {
 
       await client.query(migration);
 
-      await expect(client.query(
-        `SELECT id, status::text, recovery_attempts, last_recovery_diagnostic_code,
+      await expect(
+        client.query(
+          `SELECT id, status::text, recovery_attempts, last_recovery_diagnostic_code,
                 application_session_id, eve_session_id, eve_turn_id, diagnostic_code
            FROM memory_review_batches WHERE id IN ($1, $2) ORDER BY from_sequence`,
-        [FIRST_BATCH_ID, SECOND_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [
-        {
-          application_session_id: null,
-          diagnostic_code: null,
-          eve_session_id: null,
-          eve_turn_id: null,
-          id: FIRST_BATCH_ID,
-          last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SOURCE_BINDING_REGRESSION",
-          recovery_attempts: 1,
-          status: "pending",
-        },
-        {
-          application_session_id: null,
-          diagnostic_code: null,
-          eve_session_id: null,
-          eve_turn_id: null,
-          id: SECOND_BATCH_ID,
-          last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SOURCE_BINDING_REGRESSION",
-          recovery_attempts: 1,
-          status: "pending",
-        },
-      ] });
-      await expect(client.query(
-        `SELECT batch_id, count(*)::integer AS count, min(timeline_sequence)::text AS first,
+          [FIRST_BATCH_ID, SECOND_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            application_session_id: null,
+            diagnostic_code: null,
+            eve_session_id: null,
+            eve_turn_id: null,
+            id: FIRST_BATCH_ID,
+            last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SOURCE_BINDING_REGRESSION",
+            recovery_attempts: 1,
+            status: "pending",
+          },
+          {
+            application_session_id: null,
+            diagnostic_code: null,
+            eve_session_id: null,
+            eve_turn_id: null,
+            id: SECOND_BATCH_ID,
+            last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SOURCE_BINDING_REGRESSION",
+            recovery_attempts: 1,
+            status: "pending",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT batch_id, count(*)::integer AS count, min(timeline_sequence)::text AS first,
                 max(timeline_sequence)::text AS last
            FROM memory_review_batch_sources WHERE batch_id IN ($1, $2)
           GROUP BY batch_id ORDER BY min(timeline_sequence)`,
-        [FIRST_BATCH_ID, SECOND_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [
-        { batch_id: FIRST_BATCH_ID, count: 50, first: "459", last: "508" },
-        { batch_id: SECOND_BATCH_ID, count: 50, first: "509", last: "558" },
-      ] });
-      await expect(client.query(
-        `SELECT lane.processed_through_sequence::text AS lane_cursor,
+          [FIRST_BATCH_ID, SECOND_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          { batch_id: FIRST_BATCH_ID, count: 50, first: "459", last: "508" },
+          { batch_id: SECOND_BATCH_ID, count: 50, first: "509", last: "558" },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT lane.processed_through_sequence::text AS lane_cursor,
                 array_agg(batch.id ORDER BY batch.predecessor_sequence)
                   FILTER (WHERE batch.predecessor_sequence = lane.processed_through_sequence)
                   AS claimable_batches
            FROM memory_review_lanes AS lane
            LEFT JOIN memory_review_batches AS batch ON batch.lane_id = lane.id
           WHERE lane.id = $1 GROUP BY lane.id`,
-        [LANE_ID],
-      )).resolves.toMatchObject({ rows: [{
-        claimable_batches: [FIRST_BATCH_ID],
-        lane_cursor: "458",
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS count FROM audit_events
+          [LANE_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            claimable_batches: [FIRST_BATCH_ID],
+            lane_cursor: "458",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS count FROM audit_events
           WHERE event_type = 'memory_review.operator_recovered' AND subject_id IN ($1, $2)`,
-        [FIRST_BATCH_ID, SECOND_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 2 }] });
+          [FIRST_BATCH_ID, SECOND_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 2 }] });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

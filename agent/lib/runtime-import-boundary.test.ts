@@ -16,7 +16,15 @@
  *   without its extension, fails at start); `createRequire` from node:module is refused, since
  *   what it loads is invisible to the bundle (Codex reviews, 5 October 2026).
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { builtinModules, isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
@@ -37,7 +45,9 @@ function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return entry.name === "node_modules" ? [] : sourceFiles(path);
-    return SOURCE_FILE.test(entry.name) && !/\.test\.[cm]?[jt]sx?$/u.test(entry.name) && !/\.d\.[cm]?ts$/u.test(entry.name)
+    return SOURCE_FILE.test(entry.name) &&
+      !/\.test\.[cm]?[jt]sx?$/u.test(entry.name) &&
+      !/\.d\.[cm]?ts$/u.test(entry.name)
       ? [path]
       : [];
   });
@@ -45,7 +55,17 @@ function sourceFiles(directory: string): string[] {
 
 // Eve's authored-asset plugin turns any import of a non-code file into a module (text for
 // `?raw`, a data URL otherwise); the boundary sees those files the same way.
-const CODE_EXTENSIONS = new Set([".cjs", ".cts", ".js", ".json", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
+const CODE_EXTENSIONS = new Set([
+  ".cjs",
+  ".cts",
+  ".js",
+  ".json",
+  ".jsx",
+  ".mjs",
+  ".mts",
+  ".ts",
+  ".tsx",
+]);
 const BUILTINS = new Set(builtinModules);
 
 function assetPlugin(problems: string[], root: string, imagePaths: readonly string[]): Plugin {
@@ -64,7 +84,10 @@ function assetPlugin(problems: string[], root: string, imagePaths: readonly stri
         }
         return { namespace: "eve-asset", path: absolute };
       });
-      pluginBuild.onLoad({ filter: /.*/, namespace: "eve-asset" }, () => ({ contents: "export default \"\";", loader: "js" }));
+      pluginBuild.onLoad({ filter: /.*/, namespace: "eve-asset" }, () => ({
+        contents: 'export default "";',
+        loader: "js",
+      }));
     },
   };
 }
@@ -78,10 +101,14 @@ function packagePlugin(problems: string[], root: string): Plugin {
     name: "resolve-packages",
     setup(pluginBuild) {
       pluginBuild.onResolve({ filter: /^[^./]/ }, async (args) => {
-        if ((args.pluginData as { boundaryInner?: boolean } | undefined)?.boundaryInner) return undefined;
+        if ((args.pluginData as { boundaryInner?: boolean } | undefined)?.boundaryInner)
+          return undefined;
         if (args.path.startsWith("node:") || BUILTINS.has(args.path)) {
           // `node:does-not-exist` fails at start like any missing module.
-          if (!isBuiltin(args.path)) problems.push(`${relative(root, args.importer)} imports ${args.path}, which is no Node built-in`);
+          if (!isBuiltin(args.path))
+            problems.push(
+              `${relative(root, args.importer)} imports ${args.path}, which is no Node built-in`,
+            );
           return { external: true, path: args.path };
         }
         const resolved = await pluginBuild.resolve(args.path, {
@@ -91,9 +118,13 @@ function packagePlugin(problems: string[], root: string): Plugin {
           resolveDir: args.resolveDir,
         });
         if (resolved.errors.length > 0) {
-          problems.push(`${relative(root, args.importer)} imports ${args.path}, which does not resolve`);
+          problems.push(
+            `${relative(root, args.importer)} imports ${args.path}, which does not resolve`,
+          );
         } else if (args.kind !== "require-call" && !nodeEsmResolves(args.path, resolved.path)) {
-          problems.push(`${relative(root, args.importer)} imports ${args.path}, which Node does not resolve as ESM`);
+          problems.push(
+            `${relative(root, args.importer)} imports ${args.path}, which Node does not resolve as ESM`,
+          );
         }
         return { external: true, path: args.path };
       });
@@ -119,7 +150,9 @@ function nodeEsmResolves(specifier: string, resolvedPath: string): boolean {
   const at = resolvedPath.lastIndexOf(marker);
   if (at === -1) return true;
   const packageDirectory = resolvedPath.slice(0, at + marker.length - 1);
-  const manifest = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8")) as { exports?: unknown };
+  const manifest = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8")) as {
+    exports?: unknown;
+  };
   return manifest.exports !== undefined || resolvedPath === join(packageDirectory, subpath);
 }
 
@@ -134,9 +167,18 @@ function reachesCreateRequire(statement: string): boolean {
   const clause = /^(?:import|export)\s*([^"']*?)\s*from\s*["']/u.exec(statement)?.[1];
   if (clause === undefined) return false;
   const named = /\{([^}]*)\}/u.exec(clause);
-  if (clause.replace(/\{[^}]*\}/u, "").replace(/,/gu, "").trim() !== "") return true;
+  if (
+    clause
+      .replace(/\{[^}]*\}/u, "")
+      .replace(/,/gu, "")
+      .trim() !== ""
+  )
+    return true;
   return (named?.[1] ?? "").split(",").some((binding) => {
-    const imported = binding.trim().split(/\s+as\s+/u)[0]!.trim();
+    const imported = binding
+      .trim()
+      .split(/\s+as\s+/u)[0]!
+      .trim();
     // `Module.createRequire` is the same function as `createRequire`.
     return imported === "createRequire" || imported === "default" || imported === "Module";
   });
@@ -161,14 +203,21 @@ async function boundaryProblems(
     platform: "node",
     plugins: [assetPlugin(problems, root, imagePaths), packagePlugin(problems, root)],
     write: false,
-  }).catch((error: { errors?: Array<{ location?: { file: string; line: number } | null; text: string }>; message?: string }) => {
-    // A failure without esbuild messages (a plugin or option error) must not read as a pass.
-    if (!error.errors?.length) problems.push(`bundle failed: ${error.message ?? String(error)}`);
-    for (const message of error.errors ?? []) {
-      problems.push(`${message.location?.file ?? "?"}:${message.location?.line ?? "?"} ${message.text}`);
-    }
-    return null;
-  });
+  }).catch(
+    (error: {
+      errors?: Array<{ location?: { file: string; line: number } | null; text: string }>;
+      message?: string;
+    }) => {
+      // A failure without esbuild messages (a plugin or option error) must not read as a pass.
+      if (!error.errors?.length) problems.push(`bundle failed: ${error.message ?? String(error)}`);
+      for (const message of error.errors ?? []) {
+        problems.push(
+          `${message.location?.file ?? "?"}:${message.location?.line ?? "?"} ${message.text}`,
+        );
+      }
+      return null;
+    },
+  );
   if (!result) return problems;
   for (const [input, { imports }] of Object.entries(result.metafile.inputs)) {
     if (input.startsWith("eve-asset:")) continue;
@@ -178,10 +227,16 @@ async function boundaryProblems(
     for (const imported of imports) {
       // A relative external is a type-only import esbuild erased, `<runtime>` its own helpers;
       // node: and bare builtins ship with Node.
-      if (!imported.external || /^[./<]/u.test(imported.path) || imported.path.startsWith("node:") ||
-        BUILTINS.has(imported.path)) continue;
+      if (
+        !imported.external ||
+        /^[./<]/u.test(imported.path) ||
+        imported.path.startsWith("node:") ||
+        BUILTINS.has(imported.path)
+      )
+        continue;
       const name = packageName(imported.path);
-      if (!dependencies.has(name)) problems.push(`${input} imports ${name}, which is not a production dependency`);
+      if (!dependencies.has(name))
+        problems.push(`${input} imports ${name}, which is not a production dependency`);
     }
   }
   await initLexer;
@@ -191,7 +246,9 @@ async function boundaryProblems(
     const [imports] = lexImports(output.text);
     for (const entry of imports) {
       if (entry.d > -1 && entry.n === undefined) {
-        problems.push(`${where} imports a computed specifier: ${output.text.slice(entry.ss, entry.se)}`);
+        problems.push(
+          `${where} imports a computed specifier: ${output.text.slice(entry.ss, entry.se)}`,
+        );
       }
       // `createRequire` loads whatever its argument names, unseen by the bundle; any reach for
       // it through node:module (named, namespace, default or dynamic import) is refused. Text that
@@ -206,20 +263,27 @@ async function boundaryProblems(
     // esbuild leaves a require it cannot bundle as `__require(…)`; only a lone string literal
     // closed by `)` is checkable, anything else (an expression, a call) is refused.
     for (const match of output.text.matchAll(/\b__require\b/gu)) {
-      const after = output.text.slice(match.index + match[0].length, match.index + match[0].length + 201);
+      const after = output.text.slice(
+        match.index + match[0].length,
+        match.index + match[0].length + 201,
+      );
       // The helper's own definition (`var __require = …`).
       if (/^\s*=(?!=)/u.test(after)) continue;
       // An alias or a call through an expression (`const load = require`, `(0, require)(…)`)
       // loads whatever it is later given.
       if (!after.startsWith("(")) {
-        problems.push(`${where} passes require around: ${output.text.slice(match.index, match.index + 60).split("\n", 1)[0]}`);
+        problems.push(
+          `${where} passes require around: ${output.text.slice(match.index, match.index + 60).split("\n", 1)[0]}`,
+        );
         continue;
       }
       const rest = after.slice(1);
       // The helper's own definition mentions `__require()` with no argument.
       const literal = /^\s*(?:"([^"\\\n]*)"|'([^'\\\n]*)')\s*\)/u.exec(rest);
       if (!/^\s*\)/u.test(rest) && !literal) {
-        problems.push(`${where} requires a computed specifier: ${rest.split("\n", 1)[0]!.slice(0, 80)}`);
+        problems.push(
+          `${where} requires a computed specifier: ${rest.split("\n", 1)[0]!.slice(0, 80)}`,
+        );
       } else if (literal && MODULE_LOADER.has(literal[1] ?? literal[2]!)) {
         problems.push(`${where} uses createRequire: require of node:module`);
       }
@@ -229,9 +293,15 @@ async function boundaryProblems(
   return problems;
 }
 
-const productionDependencies = new Set(Object.keys(
-  (JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies,
-));
+const productionDependencies = new Set(
+  Object.keys(
+    (
+      JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as {
+        dependencies: Record<string, string>;
+      }
+    ).dependencies,
+  ),
+);
 
 describe("agent runtime import boundary", () => {
   it("bundles no file the image does not carry", async () => {
@@ -240,13 +310,31 @@ describe("agent runtime import boundary", () => {
     // stay out.
     const entries = [
       ...["agent", "instructions", "instrumentation", "sandbox"]
-        .flatMap((name) => [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"].map((extension) => join(agentRoot, `${name}${extension}`)))
+        .flatMap((name) =>
+          [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"].map((extension) =>
+            join(agentRoot, `${name}${extension}`),
+          ),
+        )
         .filter((file) => existsSync(file)),
-      ...["channels", "connections", "extensions", "hooks", "instructions", "sandbox", "schedules", "skills", "subagents", "tools"]
-        .flatMap((directory) => existsSync(join(agentRoot, directory)) ? sourceFiles(join(agentRoot, directory)) : []),
+      ...[
+        "channels",
+        "connections",
+        "extensions",
+        "hooks",
+        "instructions",
+        "sandbox",
+        "schedules",
+        "skills",
+        "subagents",
+        "tools",
+      ].flatMap((directory) =>
+        existsSync(join(agentRoot, directory)) ? sourceFiles(join(agentRoot, directory)) : [],
+      ),
     ].map((file) => relative(projectRoot, file));
     expect(entries.length).toBeGreaterThan(20);
-    expect(await boundaryProblems(projectRoot, entries, IMAGE_PATHS, productionDependencies)).toEqual([]);
+    expect(
+      await boundaryProblems(projectRoot, entries, IMAGE_PATHS, productionDependencies),
+    ).toEqual([]);
   }, 60_000);
 
   it("sees every import form, missing files and computed specifiers", async () => {
@@ -260,30 +348,57 @@ describe("agent runtime import boundary", () => {
       write("scripts/dynamic.ts", "export const dynamic = 1;");
       write("scripts/required.cjs", "module.exports = 1;");
       write("scripts/types.ts", "export type T = number;");
-      write("agent/side-effect.ts", "import \"../scripts/side.js\";");
-      write("agent/star.ts", "export * from \"../scripts/star.js\";");
-      write("agent/dynamic.ts", "export const load = () => import(/* why */ \"../scripts/dynamic.js\");");
-      write("agent/required.ts", "export const value = require(\"../scripts/required.cjs\");");
-      write("agent/type-only.ts", "import type { T } from \"../scripts/types.js\"; export const t: T = 1;");
-      write("agent/computed.ts", [
-        "export const a = (name: string) => import(name);",
-        "export const b = (name: string) => import(`${name}`);",
-        "export const c = (name: string) => import(\"file:\" + name);",
-        "export const d = (name: string) => require(name);",
-        "export const e = (name: string) => require((0, String)(name));",
-        "const load = require;",
-        "export const f = load(\"node:module\");",
-        "export const harmless = \"use import(name) to load\";",
-      ].join("\n"));
+      write("agent/side-effect.ts", 'import "../scripts/side.js";');
+      write("agent/star.ts", 'export * from "../scripts/star.js";');
+      write(
+        "agent/dynamic.ts",
+        'export const load = () => import(/* why */ "../scripts/dynamic.js");',
+      );
+      write("agent/required.ts", 'export const value = require("../scripts/required.cjs");');
+      write(
+        "agent/type-only.ts",
+        'import type { T } from "../scripts/types.js"; export const t: T = 1;',
+      );
+      write(
+        "agent/computed.ts",
+        [
+          "export const a = (name: string) => import(name);",
+          "export const b = (name: string) => import(`${name}`);",
+          'export const c = (name: string) => import("file:" + name);',
+          "export const d = (name: string) => require(name);",
+          "export const e = (name: string) => require((0, String)(name));",
+          "const load = require;",
+          'export const f = load("node:module");',
+          'export const harmless = "use import(name) to load";',
+        ].join("\n"),
+      );
       write("scripts/notes.md", "text");
       write("agent/notes.md", "text");
-      write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md#part\"; export { inside, outside };");
-      write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\"; import \"pg/lib/client\"; import \"pg/lib/client.js\";");
-      write("agent/mentions.ts", "import { builtinModules as createRequireNames } from \"node:module\"; export const info = \"createRequire is disabled\"; export const count = createRequireNames.length;");
-      write("agent/module-class.ts", "import { Module as M } from \"node:module\"; export const load = M.createRequire(import.meta.url);");
-      write("agent/missing-builtin.ts", "import \"node:does-not-exist\";");
-      write("agent/default-loader.ts", "import mod, { builtinModules } from \"node:module\"; export const count = builtinModules.length; export const load = mod.createRequire(import.meta.url);");
-      write("agent/create-require.ts", "import { createRequire } from \"node:module\"; export const load = createRequire(import.meta.url)(\"../scripts/side.js\");");
+      write(
+        "agent/assets.ts",
+        'import outside from "../scripts/notes.md?raw"; import inside from "./notes.md#part"; export { inside, outside };',
+      );
+      write(
+        "agent/packages.ts",
+        'import "pg"; import "vitest"; import "node:fs"; import "fs"; import "pg/not-real.js"; import "pg/lib/client"; import "pg/lib/client.js";',
+      );
+      write(
+        "agent/mentions.ts",
+        'import { builtinModules as createRequireNames } from "node:module"; export const info = "createRequire is disabled"; export const count = createRequireNames.length;',
+      );
+      write(
+        "agent/module-class.ts",
+        'import { Module as M } from "node:module"; export const load = M.createRequire(import.meta.url);',
+      );
+      write("agent/missing-builtin.ts", 'import "node:does-not-exist";');
+      write(
+        "agent/default-loader.ts",
+        'import mod, { builtinModules } from "node:module"; export const count = builtinModules.length; export const load = mod.createRequire(import.meta.url);',
+      );
+      write(
+        "agent/create-require.ts",
+        'import { createRequire } from "node:module"; export const load = createRequire(import.meta.url)("../scripts/side.js");',
+      );
       for (const name of ["pg", "vitest"]) {
         mkdirSync(join(root, "node_modules", name), { recursive: true });
         write(`node_modules/${name}/package.json`, JSON.stringify({ main: "index.js", name }));
@@ -292,10 +407,16 @@ describe("agent runtime import boundary", () => {
       mkdirSync(join(root, "node_modules", "pg", "lib"));
       write("node_modules/pg/lib/client.js", "module.exports = {};");
       const problems = await boundaryProblems(
-        root, readdirSync(join(root, "agent")).filter((file) => file.endsWith(".ts")).map((file) => `agent/${file}`),
-        ["agent"], new Set(["pg"]),
+        root,
+        readdirSync(join(root, "agent"))
+          .filter((file) => file.endsWith(".ts"))
+          .map((file) => `agent/${file}`),
+        ["agent"],
+        new Set(["pg"]),
       );
-      expect(problems.filter((problem) => problem.includes("is bundled but not in the image")).sort()).toEqual([
+      expect(
+        problems.filter((problem) => problem.includes("is bundled but not in the image")).sort(),
+      ).toEqual([
         "scripts/dynamic.ts is bundled but not in the image",
         "scripts/required.cjs is bundled but not in the image",
         "scripts/side.ts is bundled but not in the image",
@@ -318,10 +439,14 @@ describe("agent runtime import boundary", () => {
         expect.stringMatching(/default-loader\.js uses createRequire/u),
         expect.stringMatching(/module-class\.js uses createRequire/u),
       ]);
-      expect(problems.some((problem) => /computed\.js passes require around/u.test(problem))).toBe(true);
-      expect(problems).toContain("agent/missing-builtin.ts imports node:does-not-exist, which is no Node built-in");
+      expect(problems.some((problem) => /computed\.js passes require around/u.test(problem))).toBe(
+        true,
+      );
+      expect(problems).toContain(
+        "agent/missing-builtin.ts imports node:does-not-exist, which is no Node built-in",
+      );
 
-      write("agent/missing.ts", "import \"./nowhere.js\";");
+      write("agent/missing.ts", 'import "./nowhere.js";');
       const missing = await boundaryProblems(root, ["agent/missing.ts"], ["agent"], new Set());
       expect(missing.join("\n")).toMatch(/nowhere\.js/u);
     } finally {

@@ -3,22 +3,15 @@ import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import {
-  EVE_DEV_ENV_FLAG,
-  isEveDevEnvironment,
-} from "#internal/application/dev-environment.js";
+import { EVE_DEV_ENV_FLAG, isEveDevEnvironment } from "#internal/application/dev-environment.js";
 import { Worker } from "node:worker_threads";
 function detectProjectPackageManager(e) {
   let t = e;
   for (;;) {
-    if (
-      existsSync(join(t, `pnpm-lock.yaml`)) ||
-      existsSync(join(t, `pnpm-workspace.yaml`))
-    )
+    if (existsSync(join(t, `pnpm-lock.yaml`)) || existsSync(join(t, `pnpm-workspace.yaml`)))
       return `pnpm`;
     if (existsSync(join(t, `yarn.lock`))) return `yarn`;
-    if (existsSync(join(t, `bun.lock`)) || existsSync(join(t, `bun.lockb`)))
-      return `bun`;
+    if (existsSync(join(t, `bun.lock`)) || existsSync(join(t, `bun.lockb`))) return `bun`;
     if (existsSync(join(t, `package-lock.json`))) return `npm`;
     let e = dirname(t);
     if (e === t) return `npm`;
@@ -45,8 +38,7 @@ async function installPackageIntoProject(e) {
       stdio: [`ignore`, `pipe`, `pipe`],
     }),
     i = [];
-  (r.stdout?.on(`data`, (e) => i.push(e)),
-    r.stderr?.on(`data`, (e) => i.push(e)));
+  (r.stdout?.on(`data`, (e) => i.push(e)), r.stderr?.on(`data`, (e) => i.push(e)));
   let a = await new Promise((e, t) => {
     (r.on(`error`, t), r.on(`close`, (t) => e(t ?? 1)));
   });
@@ -63,8 +55,7 @@ async function loadOptionalEnginePackage(e) {
   try {
     return await e.importModule();
   } catch (t) {
-    if (!e.autoInstall || !isEveDevEnvironment())
-      throw Error(e.missingMessage, { cause: t });
+    if (!e.autoInstall || !isEveDevEnvironment()) throw Error(e.missingMessage, { cause: t });
     let n =
         e.importInstalledModule ??
         (async () =>
@@ -91,10 +82,9 @@ async function loadOptionalEnginePackage(e) {
           }));
       });
     } catch (t) {
-      throw Error(
-        `${e.missingMessage} Automatic installation failed: ${toMessage(t)}`,
-        { cause: t },
-      );
+      throw Error(`${e.missingMessage} Automatic installation failed: ${toMessage(t)}`, {
+        cause: t,
+      });
     }
     try {
       return await n();
@@ -112,9 +102,7 @@ async function importInstalledEnginePackage(e) {
 async function isInstalledEnginePackageLoadable(e) {
   try {
     return (
-      await importEntrypointInWorker(
-        await resolveInstalledEnginePackageEntrypointHref(e),
-      ),
+      await importEntrypointInWorker(await resolveInstalledEnginePackageEntrypointHref(e)),
       !0
     );
   } catch {
@@ -126,9 +114,7 @@ async function resolveInstalledEnginePackageEntrypointHref(e) {
     r = join(n, `package.json`),
     i = resolvePackageEntryPoint(JSON.parse(await readFile(r, `utf8`)));
   if (i.startsWith(`/`))
-    throw Error(
-      `Invalid absolute entrypoint for optional package "${e.packageName}".`,
-    );
+    throw Error(`Invalid absolute entrypoint for optional package "${e.packageName}".`);
   return pathToFileURL(join(n, i)).href;
 }
 async function importEntrypointInWorker(e) {
@@ -165,11 +151,7 @@ const { parentPort, workerData } = require("node:worker_threads");
       handleExit = (e) => {
         e !== 0 &&
           settle(() =>
-            n(
-              Error(
-                `Optional dependency worker exited before loading module (code ${e}).`,
-              ),
-            ),
+            n(Error(`Optional dependency worker exited before loading module (code ${e}).`)),
           );
       },
       handleMessage = (t) => {
@@ -188,9 +170,7 @@ const { parentPort, workerData } = require("node:worker_threads");
           );
         });
       };
-    (t.once(`error`, handleError),
-      t.once(`exit`, handleExit),
-      t.once(`message`, handleMessage));
+    (t.once(`error`, handleError), t.once(`exit`, handleExit), t.once(`message`, handleMessage));
   });
 }
 function findInstalledPackageRoot(e) {

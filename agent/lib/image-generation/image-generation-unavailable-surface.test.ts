@@ -15,13 +15,15 @@ vi.mock("./image-generation-availability.js", () => ({
 }));
 vi.mock("../telegram-group-administration-repository.js", () => ({
   telegramGroupAdministrationRepository: {
-    listStatuses: vi.fn().mockResolvedValue([{
-      messageMode: "owner_only",
-      telegramChatId: "-1001234567890",
-      title: "Внешняя группа",
-      toolAllowlist: ["remember", "generate_image"],
-      type: "external",
-    }]),
+    listStatuses: vi.fn().mockResolvedValue([
+      {
+        messageMode: "owner_only",
+        telegramChatId: "-1001234567890",
+        title: "Внешняя группа",
+        toolAllowlist: ["remember", "generate_image"],
+        type: "external",
+      },
+    ]),
     registerGroup: vi.fn(),
     removeRegistration: vi.fn(),
     requestGroupSessionRotation: vi.fn(),
@@ -88,8 +90,9 @@ describe("unavailable image generation", () => {
     expect(buildModeToolSurface({ environment: "private" })).not.toHaveProperty("generate_image");
     expect(external).not.toHaveProperty("generate_image");
     // load_skill stays as the fail-closed wrapper for other skills; imagegen itself is refused.
-    await expect(external.load_skill!.execute({ skill: "imagegen" }, externalContext()))
-      .rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
+    await expect(
+      external.load_skill!.execute({ skill: "imagegen" }, externalContext()),
+    ).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
     expect(instructions).not.toContain("generate_image");
     expect(instructions).not.toContain("skill=imagegen");
   });
@@ -105,36 +108,41 @@ describe("unavailable image generation", () => {
     const rejected = /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*сервис генерации картинок/su;
     const approval = manageTelegramGroup.approval;
     if (typeof approval !== "function") {
-      throw new Error("AGENT_TEST_APPROVAL_CONTRACT_INVALID: manage_telegram_group approval is not callable");
+      throw new Error(
+        "AGENT_TEST_APPROVAL_CONTRACT_INVALID: manage_telegram_group approval is not callable",
+      );
     }
 
-    expect(() => approval({
-      toolInput: {
-        action: "update_policy",
-        messageMode: "owner_only",
-        telegramChatId: "-1001234567890",
-        toolAllowlist: ["remember", "generate_image"],
-      },
-    } as never)).toThrowError(rejected);
-    expect(() => approval({
-      toolInput: {
-        action: "register",
-        registration: {
+    expect(() =>
+      approval({
+        toolInput: {
+          action: "update_policy",
           messageMode: "owner_only",
           telegramChatId: "-1001234567890",
-          title: "Внешняя группа",
-          toolAllowlist: ["generate_image"],
-          type: "external",
+          toolAllowlist: ["remember", "generate_image"],
         },
-      },
-    } as never)).toThrowError(rejected);
+      } as never),
+    ).toThrowError(rejected);
+    expect(() =>
+      approval({
+        toolInput: {
+          action: "register",
+          registration: {
+            messageMode: "owner_only",
+            telegramChatId: "-1001234567890",
+            title: "Внешняя группа",
+            toolAllowlist: ["generate_image"],
+            type: "external",
+          },
+        },
+      } as never),
+    ).toThrowError(rejected);
   });
 
   it("reports a grant persisted under the previous provider as inert", async () => {
-    const status = await manageTelegramGroup.execute(
-      { action: "status" },
-      ownerContext(),
-    ) as { groups: Array<Record<string, unknown>> };
+    const status = (await manageTelegramGroup.execute({ action: "status" }, ownerContext())) as {
+      groups: Array<Record<string, unknown>>;
+    };
 
     // The model round-trips `toolAllowlist` into update_policy, so it must stay grantable.
     expect(status.groups[0]).toMatchObject({
@@ -154,8 +162,9 @@ describe("unavailable image generation", () => {
       executeNative,
     });
 
-    await expect(tool.execute({ skill: "imagegen" }, externalContext()))
-      .rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "imagegen" }, externalContext())).rejects.toThrowError(
+      /AGENT_GROUP_SKILL_FORBIDDEN/u,
+    );
     expect(authorizeImageGeneration).not.toHaveBeenCalled();
     expect(executeNative).not.toHaveBeenCalled();
   });
@@ -181,12 +190,17 @@ describe("unavailable image generation", () => {
       },
     });
 
-    await expect(tool.execute({
-      background: "auto",
-      prompt: "A clean editorial illustration",
-      quality: "auto",
-      size: "auto",
-    }, externalContext())).rejects.toThrowError(/AGENT_IMAGE_GENERATION_UNAVAILABLE/u);
+    await expect(
+      tool.execute(
+        {
+          background: "auto",
+          prompt: "A clean editorial illustration",
+          quality: "auto",
+          size: "auto",
+        },
+        externalContext(),
+      ),
+    ).rejects.toThrowError(/AGENT_IMAGE_GENERATION_UNAVAILABLE/u);
     expect(begin).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });

@@ -19,18 +19,24 @@ import { decodeHtmlEntities, htmlToText } from "./html-text.js";
 
 describe("htmlToText", () => {
   it("keeps visible text, breaks lines at block ends and joins inline elements", () => {
-    expect(htmlToText("<article><h1>Title</h1><p>Body &amp; more</p></article>")).toBe("Title\nBody & more");
+    expect(htmlToText("<article><h1>Title</h1><p>Body &amp; more</p></article>")).toBe(
+      "Title\nBody & more",
+    );
     expect(htmlToText("a<br>b<BR/>c")).toBe("a\nb\nc");
     expect(htmlToText("<p>one</p>\n\n\n\n<p>two</p>")).toBe("one\n\ntwo");
-    expect(htmlToText("x<b>y</b>z <a href=\"/u\">link</a>s")).toBe("xyz links");
+    expect(htmlToText('x<b>y</b>z <a href="/u">link</a>s')).toBe("xyz links");
     expect(htmlToText("cell<td>next")).toBe("cell next");
   });
 
   it("drops scripts, styles, templates, comments and declarations and keeps CDATA text", () => {
-    expect(htmlToText("x<script type=\"a\">var a = '<p>';</script>y<style>p{}</STYLE >z<!-- c -->w"))
-      .toBe("x y z w");
-    expect(htmlToText("<!DOCTYPE html><?xml version=\"1.0\"?>before<template><p>hidden</p></template>after"))
-      .toBe("before after");
+    expect(
+      htmlToText("x<script type=\"a\">var a = '<p>';</script>y<style>p{}</STYLE >z<!-- c -->w"),
+    ).toBe("x y z w");
+    expect(
+      htmlToText(
+        '<!DOCTYPE html><?xml version="1.0"?>before<template><p>hidden</p></template>after',
+      ),
+    ).toBe("before after");
     expect(htmlToText("a<![CDATA[raw <text>]]>b")).toBe("araw <text>b");
   });
 
@@ -42,14 +48,16 @@ describe("htmlToText", () => {
   });
 
   it("ends a tag only outside quoted attribute values", () => {
-    expect(htmlToText("<a title=\"a > b\" href=\"/r\">link</a> after")).toBe("link after");
+    expect(htmlToText('<a title="a > b" href="/r">link</a> after')).toBe("link after");
     expect(htmlToText("x<p data-x='>'>y</p>")).toBe("x y");
     // `=` before any attribute name starts a name, and its quote is part of that name.
     expect(htmlToText("before<a ='>VISIBLE</a><p>TAIL</p>")).toBe("beforeVISIBLE TAIL");
     // A quote inside an unquoted value is part of it and opens nothing.
-    expect(htmlToText("<p>before</p><a href=/x?foo='>LINK</a><p>after</p>")).toBe("before\nLINK after");
+    expect(htmlToText("<p>before</p><a href=/x?foo='>LINK</a><p>after</p>")).toBe(
+      "before\nLINK after",
+    );
     // A tag open at the end of the page (here an unclosed quote) hides the rest, as in a browser.
-    expect(htmlToText("before<a title=\"never closed>after")).toBe("before");
+    expect(htmlToText('before<a title="never closed>after')).toBe("before");
   });
 
   it("ends comments, skipped elements and tag names the way a browser does", () => {
@@ -60,7 +68,9 @@ describe("htmlToText", () => {
     expect(htmlToText("before<script>x</script/><p>TAIL</p>")).toBe("before TAIL");
     expect(htmlToText("before<script@x>VISIBLE<p>TAIL</p>")).toBe("before VISIBLE TAIL");
     // Text-only elements hold no markup: a <script> inside a textarea is its text.
-    expect(htmlToText("before<textarea><script>VISIBLE</textarea><p>TAIL</p>")).toBe("before <script>VISIBLE TAIL");
+    expect(htmlToText("before<textarea><script>VISIBLE</textarea><p>TAIL</p>")).toBe(
+      "before <script>VISIBLE TAIL",
+    );
   });
 
   it("treats a lone < as text and drops what an unterminated comment or script hides", () => {
@@ -70,11 +80,18 @@ describe("htmlToText", () => {
   });
 
   it("decodes entities and leaves invalid ones as written", () => {
-    expect(decodeHtmlEntities("&lt;b&gt; &#1055;&#x438; &quot;x&quot; &unknown;")).toBe("<b> Пи \"x\" &unknown;");
+    expect(decodeHtmlEntities("&lt;b&gt; &#1055;&#x438; &quot;x&quot; &unknown;")).toBe(
+      '<b> Пи "x" &unknown;',
+    );
     expect(decodeHtmlEntities("&#0; &#9999999; &#x110000;")).toBe("&#0; &#9999999; &#x110000;");
-    expect(decodeHtmlEntities("&eacute; &Eacute; &copy; &mdash; &NotEqualTilde; &CounterClockwiseContourIntegral; &#X41;"))
-      .toBe("é É © — \u2242\u0338 \u2233 A");
-    expect(decodeHtmlEntities("&constructor; &toString; &EACUTE;")).toBe("&constructor; &toString; &EACUTE;");
+    expect(
+      decodeHtmlEntities(
+        "&eacute; &Eacute; &copy; &mdash; &NotEqualTilde; &CounterClockwiseContourIntegral; &#X41;",
+      ),
+    ).toBe("é É © — \u2242\u0338 \u2233 A");
+    expect(decodeHtmlEntities("&constructor; &toString; &EACUTE;")).toBe(
+      "&constructor; &toString; &EACUTE;",
+    );
   });
 
   it.each([
@@ -87,8 +104,8 @@ describe("htmlToText", () => {
     ["many tags", "<p>x</p>".repeat(131_072)],
     ["entities without semicolons", "&aaaaaaaaaaa".repeat(87_381)],
     ["long entity-like names", ("&" + "a".repeat(40)).repeat(25_000)],
-    ["tags with unclosed quotes", "<a x=\"".repeat(200_000)],
-    ["tags with many quoted values", "<a" + " x=\">\"".repeat(150_000) + ">"],
+    ["tags with unclosed quotes", '<a x="'.repeat(200_000)],
+    ["tags with many quoted values", "<a" + ' x=">"'.repeat(150_000) + ">"],
     ["comments without an end", "<!-- a ".repeat(150_000)],
     // Codex security scan of 1.8.27: each comment searched for `-->` to the end of the page anew.
     ["comments closed only by --!>", "<!--x--!>".repeat(116_508)],

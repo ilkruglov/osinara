@@ -14,25 +14,30 @@ export interface MemoryExport {
 }
 
 function quoteMarkdown(value: string): string {
-  return value.split("\n").map((line) => `> ${line}`).join("\n");
+  return value
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
 }
 
 export function formatMemoryExportFiles(memoryExport: MemoryExport): {
   json: string;
   markdown: string;
 } {
-  const markdownRecords = memoryExport.records.map((record, index) => [
-    `## ${index + 1}. ${record.kind}`,
-    "",
-    `- ID: \`${record.id}\``,
-    `- Область: \`${record.scope}\``,
-    `- Создано: ${record.createdAt}`,
-    `- Обновлено: ${record.updatedAt}`,
-    `- Подтверждение: \`${record.confirmation}\``,
-    `- Чувствительность: \`${record.sensitivity}\``,
-    "",
-    quoteMarkdown(record.content),
-  ].join("\n"));
+  const markdownRecords = memoryExport.records.map((record, index) =>
+    [
+      `## ${index + 1}. ${record.kind}`,
+      "",
+      `- ID: \`${record.id}\``,
+      `- Область: \`${record.scope}\``,
+      `- Создано: ${record.createdAt}`,
+      `- Обновлено: ${record.updatedAt}`,
+      `- Подтверждение: \`${record.confirmation}\``,
+      `- Чувствительность: \`${record.sensitivity}\``,
+      "",
+      quoteMarkdown(record.content),
+    ].join("\n"),
+  );
   return {
     json: `${JSON.stringify(memoryExport, null, 2)}\n`,
     markdown: [

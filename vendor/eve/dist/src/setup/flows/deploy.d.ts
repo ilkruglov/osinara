@@ -7,25 +7,28 @@ import type { Prompter } from "../prompter.js";
 import { runLoginFlow } from "./login.js";
 /** Injected for tests; defaults to the real detection and box effects. */
 export interface DeployFlowDeps {
-    detectDeployment: typeof detectDeployment;
-    inspectApplication: typeof inspectApplication;
-    runLoginFlow: typeof runLoginFlow;
-    resolveProvisioning?: ResolveProvisioningDeps;
-    linkProject?: LinkProjectDeps;
-    deployProject?: DeployProjectDeps;
+  detectDeployment: typeof detectDeployment;
+  inspectApplication: typeof inspectApplication;
+  runLoginFlow: typeof runLoginFlow;
+  resolveProvisioning?: ResolveProvisioningDeps;
+  linkProject?: LinkProjectDeps;
+  deployProject?: DeployProjectDeps;
 }
-export type DeployFlowResult = {
-    kind: "deployed";
-    productionUrl?: string;
-} | {
-    kind: "cancelled";
-} | {
-    kind: "local-model";
-}
-/** Unlinked directory in a non-interactive run: refused before any effect. */
- | {
-    kind: "needs-link";
-};
+export type DeployFlowResult =
+  | {
+      kind: "deployed";
+      productionUrl?: string;
+    }
+  | {
+      kind: "cancelled";
+    }
+  | {
+      kind: "local-model";
+    }
+  /** Unlinked directory in a non-interactive run: refused before any effect. */
+  | {
+      kind: "needs-link";
+    };
 /**
  * THE DEPLOY FLOW, shared by `eve deploy` and the dev TUI's `/deploy`. Link
  * state is the safety-critical input for a deploy, so it is re-detected at
@@ -38,10 +41,10 @@ export type DeployFlowResult = {
  * before any side effect.
  */
 export declare function runDeployFlow(input: {
-    appRoot: string;
-    prompter: Prompter;
-    signal?: AbortSignal;
-    /** False when no TTY: an unlinked directory refuses instead of prompting. */
-    interactive: boolean;
-    deps?: Partial<DeployFlowDeps>;
+  appRoot: string;
+  prompter: Prompter;
+  signal?: AbortSignal;
+  /** False when no TTY: an unlinked directory refuses instead of prompting. */
+  interactive: boolean;
+  deps?: Partial<DeployFlowDeps>;
 }): Promise<DeployFlowResult>;

@@ -39,7 +39,10 @@ describe("Eve model retry policy patch", () => {
     expect(packageJson.overrides.ai).toBe("7.0.60");
     // Workflow step ids are `step//eve@<version>//<name>`: a changed version strands every
     // in-flight run, so the fork keeps the upstream name and version.
-    const vendored = JSON.parse(await readFile("vendor/eve/package.json", "utf8")) as { name: string; version: string };
+    const vendored = JSON.parse(await readFile("vendor/eve/package.json", "utf8")) as {
+      name: string;
+      version: string;
+    };
     expect(vendored).toMatchObject({ name: "eve", version: "0.40.0" });
   });
 
@@ -58,13 +61,19 @@ describe("Eve model retry policy patch", () => {
     // Stable function names and log messages survive Eve's package build and guard semantic reissues.
     expect(codeText(runtime)).toContain(codeText("async function runModelCallWithRetries"));
     expect(codeText(runtime)).toContain(codeText("async function attemptEmptyResponseRecovery"));
-    expect(codeText(runtime)).toContain(codeText("async function attemptUnsupportedProviderToolRecovery"));
+    expect(codeText(runtime)).toContain(
+      codeText("async function attemptUnsupportedProviderToolRecovery"),
+    );
     expect(codeShape(runtime)).not.toContain(codeShape("model call failed transiently — retrying"));
     // An empty model response has no side effect to duplicate, so Eve's single nudge-and-reissue
     // stays: without it a reasoning-only reply parks the whole session for the user.
     expect(codeText(runtime)).toContain(codeText("reissuing the model call once"));
-    expect(codeShape(runtime)).not.toContain(codeShape("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}"));
-    expect(codeShape(runtime)).not.toContain(codeShape("disabling unsupported provider tool(s); retrying step once"));
+    expect(codeShape(runtime)).not.toContain(
+      codeShape("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}"),
+    );
+    expect(codeShape(runtime)).not.toContain(
+      codeShape("disabling unsupported provider tool(s); retrying step once"),
+    );
     // Compaction never buys a second summary call: an oversized summary is returned and logged.
     expect(codeShape(compaction)).not.toContain(codeShape("||m===0)return v;--m"));
     expect(codeText(compaction)).toContain(codeText("AGENT_COMPACTION_OUTPUT_OVER_LIMIT"));

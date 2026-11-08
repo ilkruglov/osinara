@@ -1,4 +1,10 @@
-import type { PropagatorOrName, SamplerOrName, SpanExporter, SpanProcessor, SpanProcessorOrName } from "#compiled/@vercel/otel/index.js";
+import type {
+  PropagatorOrName,
+  SamplerOrName,
+  SpanExporter,
+  SpanProcessor,
+  SpanProcessorOrName,
+} from "#compiled/@vercel/otel/index.js";
 import { type InstrumentationProvider } from "#public/instrumentation/provider.js";
 import type { InstrumentationRuntimeContextInput } from "#public/instrumentation/index.js";
 import type { JsonObject } from "#shared/json.js";
@@ -17,40 +23,40 @@ import type { ResolvedContentOptions } from "#tracing/content-attributes.js";
  * to code loaded after registration.
  */
 export interface OtelOptions {
-    /**
-     * The function identifier attached to telemetry spans
-     * (`ai.telemetry.functionId`). Defaults to the agent name.
-     */
-    readonly functionId?: string;
-    /**
-     * Whether to emit the inbound HTTP `SERVER` span that wraps each channel
-     * request — the parent of the turn trace and of any `hook.resume` or
-     * outgoing HTTP spans. Defaults to `false`.
-     */
-    readonly traceChannelRequests?: boolean;
-    /**
-     * Resource attributes merged into eve's own, which already carry the
-     * service name.
-     */
-    readonly resource?: Readonly<Record<string, unknown>>;
-    /**
-     * Head sampling, and it is global: it decides whether a span is created at
-     * all, so it thins eve's own sinks and the `traceparent` eve propagates
-     * along with your exporters. To thin one backend only, drop spans in a
-     * processor.
-     */
-    readonly sampler?: SamplerOrName;
-    /** Composed into one propagator. All inject; the first to extract wins. Defaults to `auto`. */
-    readonly propagators?: readonly PropagatorOrName[];
-    /**
-     * OpenTelemetry `Instrumentation` instances passed through to
-     * `registerOTel`. Use them to patch Node.js built-ins (HTTP, DNS, fs, etc.)
-     * for automatic spans around outbound work. Disabled by default because eve
-     * already imports the model SDK before registration, so patching cannot
-     * reach it — but code loaded after registration (tool modules, connection
-     * clients) will be instrumented.
-     */
-    readonly instrumentations?: readonly unknown[];
+  /**
+   * The function identifier attached to telemetry spans
+   * (`ai.telemetry.functionId`). Defaults to the agent name.
+   */
+  readonly functionId?: string;
+  /**
+   * Whether to emit the inbound HTTP `SERVER` span that wraps each channel
+   * request — the parent of the turn trace and of any `hook.resume` or
+   * outgoing HTTP spans. Defaults to `false`.
+   */
+  readonly traceChannelRequests?: boolean;
+  /**
+   * Resource attributes merged into eve's own, which already carry the
+   * service name.
+   */
+  readonly resource?: Readonly<Record<string, unknown>>;
+  /**
+   * Head sampling, and it is global: it decides whether a span is created at
+   * all, so it thins eve's own sinks and the `traceparent` eve propagates
+   * along with your exporters. To thin one backend only, drop spans in a
+   * processor.
+   */
+  readonly sampler?: SamplerOrName;
+  /** Composed into one propagator. All inject; the first to extract wins. Defaults to `auto`. */
+  readonly propagators?: readonly PropagatorOrName[];
+  /**
+   * OpenTelemetry `Instrumentation` instances passed through to
+   * `registerOTel`. Use them to patch Node.js built-ins (HTTP, DNS, fs, etc.)
+   * for automatic spans around outbound work. Disabled by default because eve
+   * already imports the model SDK before registration, so patching cannot
+   * reach it — but code loaded after registration (tool modules, connection
+   * clients) will be instrumented.
+   */
+  readonly instrumentations?: readonly unknown[];
 }
 /**
  * What one destination records of the conversation itself.
@@ -62,28 +68,28 @@ export interface OtelOptions {
  * longer have to agree.
  */
 export interface ContentOptions {
-    /** Record model prompts and tool call inputs. Defaults to `false`. */
-    readonly recordInputs?: boolean;
-    /** Record model responses and tool call outputs. Defaults to `false`. */
-    readonly recordOutputs?: boolean;
+  /** Record model prompts and tool call inputs. Defaults to `false`. */
+  readonly recordInputs?: boolean;
+  /** Record model responses and tool call outputs. Defaults to `false`. */
+  readonly recordOutputs?: boolean;
 }
 /** Where one `otelIntegration()` sends spans, and what it records. */
 export interface OtelIntegrationOptions extends ContentOptions {
-    /** Merged into the pipeline in declaration order. */
-    readonly spanProcessors?: readonly SpanProcessor[];
-    /** Wrapped in eve's batching processor and appended after `spanProcessors`. */
-    readonly traceExporter?: SpanExporter;
-    /**
-     * Contributes runtime context that the AI SDK merges into telemetry spans
-     * for each model call. Child spans inherit the values, so a destination can
-     * stamp channel or auth identity onto every span in the turn.
-     *
-     * Synchronous: the harness collects from every destination before the model
-     * call, so a return that is not a plain object is dropped (warning-only).
-     * Keys beginning with `eve.` are reserved and dropped. Return `undefined`
-     * to contribute nothing.
-     */
-    readonly runtimeContext?: (input: InstrumentationRuntimeContextInput) => JsonObject | undefined;
+  /** Merged into the pipeline in declaration order. */
+  readonly spanProcessors?: readonly SpanProcessor[];
+  /** Wrapped in eve's batching processor and appended after `spanProcessors`. */
+  readonly traceExporter?: SpanExporter;
+  /**
+   * Contributes runtime context that the AI SDK merges into telemetry spans
+   * for each model call. Child spans inherit the values, so a destination can
+   * stamp channel or auth identity onto every span in the turn.
+   *
+   * Synchronous: the harness collects from every destination before the model
+   * call, so a return that is not a plain object is dropped (warning-only).
+   * Keys beginning with `eve.` are reserved and dropped. Return `undefined`
+   * to contribute nothing.
+   */
+  readonly runtimeContext?: (input: InstrumentationRuntimeContextInput) => JsonObject | undefined;
 }
 declare const OTEL_DECLARATION: unique symbol;
 declare const OTEL_INTEGRATION: unique symbol;
@@ -92,16 +98,16 @@ declare const OTEL_INTEGRATION: unique symbol;
  * building the tracer provider, so it is a value rather than a side effect.
  */
 export interface OtelDeclaration extends InstrumentationProvider {
-    readonly [OTEL_DECLARATION]: true;
-    readonly options: OtelOptions;
+  readonly [OTEL_DECLARATION]: true;
+  readonly options: OtelOptions;
 }
 /** One declared destination. A process may have as many as it has files. */
 export interface OtelIntegration extends InstrumentationProvider {
-    readonly [OTEL_INTEGRATION]: true;
-    /** Resolved from `ContentOptions`, so the union does not re-apply defaults. */
-    readonly content: ResolvedContentOptions;
-    readonly runtimeContext?: (input: InstrumentationRuntimeContextInput) => JsonObject | undefined;
-    readonly spanProcessors: readonly SpanProcessorOrName[];
+  readonly [OTEL_INTEGRATION]: true;
+  /** Resolved from `ContentOptions`, so the union does not re-apply defaults. */
+  readonly content: ResolvedContentOptions;
+  readonly runtimeContext?: (input: InstrumentationRuntimeContextInput) => JsonObject | undefined;
+  readonly spanProcessors: readonly SpanProcessorOrName[];
 }
 /**
  * Declares the process-wide OpenTelemetry settings.
@@ -130,36 +136,38 @@ export declare function isOtelDeclaration(value: unknown): value is OtelDeclarat
 export declare function isOtelIntegration(value: unknown): value is OtelIntegration;
 /** The one pipeline a process can register. @internal */
 export interface OtelPipeline {
-    readonly instrumentations?: readonly unknown[];
-    readonly propagators?: readonly PropagatorOrName[];
-    readonly resource?: Readonly<Record<string, unknown>>;
-    readonly sampler?: SamplerOrName;
-    readonly spanProcessors: readonly SpanProcessorOrName[];
+  readonly instrumentations?: readonly unknown[];
+  readonly propagators?: readonly PropagatorOrName[];
+  readonly resource?: Readonly<Record<string, unknown>>;
+  readonly sampler?: SamplerOrName;
+  readonly spanProcessors: readonly SpanProcessorOrName[];
 }
 /** What the harness reads at turn time, as opposed to at registration. @internal */
 export interface OtelHarnessSettings {
-    readonly functionId?: string;
-    readonly traceChannelRequests: boolean;
-    /**
-     * What to write onto a span at all, as opposed to what any one destination
-     * exports. `agent/instrumentation.ts` sets this directly; a provider
-     * directory arrives at it as the union of its destinations.
-     */
-    readonly recordInputs?: boolean;
-    readonly recordOutputs?: boolean;
+  readonly functionId?: string;
+  readonly traceChannelRequests: boolean;
+  /**
+   * What to write onto a span at all, as opposed to what any one destination
+   * exports. `agent/instrumentation.ts` sets this directly; a provider
+   * directory arrives at it as the union of its destinations.
+   */
+  readonly recordInputs?: boolean;
+  readonly recordOutputs?: boolean;
 }
 /** @internal */
-export type RuntimeContextResolver = (input: InstrumentationRuntimeContextInput) => JsonObject | undefined;
+export type RuntimeContextResolver = (
+  input: InstrumentationRuntimeContextInput,
+) => JsonObject | undefined;
 /** @internal */
 export interface CollectedOtel {
-    /**
-     * Whether anything declared OpenTelemetry. False means eve should leave the
-     * global tracer provider slot alone rather than register an empty pipeline.
-     */
-    readonly declared: boolean;
-    readonly pipeline: OtelPipeline;
-    readonly runtimeContextResolvers: readonly RuntimeContextResolver[];
-    readonly settings: OtelHarnessSettings;
+  /**
+   * Whether anything declared OpenTelemetry. False means eve should leave the
+   * global tracer provider slot alone rather than register an empty pipeline.
+   */
+  readonly declared: boolean;
+  readonly pipeline: OtelPipeline;
+  readonly runtimeContextResolvers: readonly RuntimeContextResolver[];
+  readonly settings: OtelHarnessSettings;
 }
 /**
  * Folds the declared values into the one pipeline a process can register.

@@ -16,4 +16,6 @@
  * that poll would leak for the life of the process, degrading streaming
  * throughput for every other session.
  */
-export declare function parseNdjsonStream<T>(createByteStream: () => ReadableStream<Uint8Array>): ReadableStream<T>;
+export declare function parseNdjsonStream<T>(
+  createByteStream: () => ReadableStream<Uint8Array>,
+): ReadableStream<T>;

@@ -31,10 +31,14 @@ const LEASE_MILLISECONDS = 60_000;
 
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
-    throw new Error("AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test");
+    throw new Error(
+      "AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test",
+    );
   }
 }
 
@@ -42,7 +46,10 @@ const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
 const COORDINATE = { eveSessionId: "ses_1", eveTurnId: "turn_2", toolCallId: "call-1" };
 const OTHER_CALL = { ...COORDINATE, toolCallId: "call-2" };
 
-async function enqueue(updateId: string, input: { chatId?: string; fromId?: number; text?: string; voice?: boolean } = {}) {
+async function enqueue(
+  updateId: string,
+  input: { chatId?: string; fromId?: number; text?: string; voice?: boolean } = {},
+) {
   const chatId = input.chatId ?? "101";
   await telegramIngressRepository.enqueue({
     continuationKey: `${chatId}::`,
@@ -51,7 +58,9 @@ async function enqueue(updateId: string, input: { chatId?: string; fromId?: numb
         chat: { id: Number(chatId), type: "private" },
         from: { id: input.fromId ?? 101, is_bot: false },
         message_id: Number(updateId),
-        ...(input.voice ? { voice: { file_id: `voice-${updateId}` } } : { text: input.text ?? `text ${updateId}` }),
+        ...(input.voice
+          ? { voice: { file_id: `voice-${updateId}` } }
+          : { text: input.text ?? `text ${updateId}` }),
       },
       update_id: Number(updateId),
     },
@@ -61,14 +70,16 @@ async function enqueue(updateId: string, input: { chatId?: string; fromId?: numb
 }
 
 async function conversation(): Promise<string> {
-  const family = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ('Встраивание') RETURNING id");
+  const family = await database().query<{ id: string }>(
+    "INSERT INTO families (name) VALUES ('Встраивание') RETURNING id",
+  );
   const user = await database().query<{ id: string }>(
     "INSERT INTO users (telegram_user_id, display_name) VALUES ('101', 'Владелец') RETURNING id",
   );
-  await database().query("INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')", [
-    family.rows[0]!.id,
-    user.rows[0]!.id,
-  ]);
+  await database().query(
+    "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+    [family.rows[0]!.id, user.rows[0]!.id],
+  );
   const session = await sessionRepository.prepareTurn({
     baseContinuationToken: "101::",
     familyId: family.rows[0]!.id,
@@ -105,7 +116,9 @@ describeWithDatabase("turnInterjectionRepository", () => {
     applicationSessionId = await conversation();
     call = { ...COORDINATE, applicationSessionId };
     await enqueue("1000", { text: "собери отчёт" });
-    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST))?.updateId).toBe("1000");
+    expect(
+      (await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST))?.updateId,
+    ).toBe("1000");
   });
 
   afterAll(async () => {
@@ -121,7 +134,11 @@ describeWithDatabase("turnInterjectionRepository", () => {
     const candidates = await list();
 
     expect(candidates.map((candidate) => candidate.updateId)).toEqual(["1001", "1004"]);
-    expect(candidates[1]).toMatchObject({ albumMemberCount: 0, voice: null, voiceTranscript: null });
+    expect(candidates[1]).toMatchObject({
+      albumMemberCount: 0,
+      voice: null,
+      voiceTranscript: null,
+    });
   });
 
   it("resolves the chat's canonical route to its live conversation", async () => {
@@ -130,19 +147,30 @@ describeWithDatabase("turnInterjectionRepository", () => {
   });
 
   it("recognizes a reply into a conversation that awaits a confirmation", async () => {
-    expect(await turnInterjectionRepository.isReplyToPendingConfirmation({
-      replyMessageId: "77", replyRouteToken: "101::77", telegramChatId: "101",
-    })).toBe(false);
+    expect(
+      await turnInterjectionRepository.isReplyToPendingConfirmation({
+        replyMessageId: "77",
+        replyRouteToken: "101::77",
+        telegramChatId: "101",
+      }),
+    ).toBe(false);
 
     await database().query(
       "INSERT INTO conversation_session_routes (base_continuation_token, session_id) VALUES ('101::77', $1)",
       [applicationSessionId],
     );
-    await database().query("UPDATE conversation_sessions SET pending_operation = true WHERE id = $1", [applicationSessionId]);
+    await database().query(
+      "UPDATE conversation_sessions SET pending_operation = true WHERE id = $1",
+      [applicationSessionId],
+    );
 
-    expect(await turnInterjectionRepository.isReplyToPendingConfirmation({
-      replyMessageId: "77", replyRouteToken: "101::77", telegramChatId: "101",
-    })).toBe(true);
+    expect(
+      await turnInterjectionRepository.isReplyToPendingConfirmation({
+        replyMessageId: "77",
+        replyRouteToken: "101::77",
+        telegramChatId: "101",
+      }),
+    ).toBe(true);
   });
 
   it("clears a stale returned mark when the same call claims again", async () => {
@@ -158,18 +186,32 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await enqueue("1001");
     await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0);
 
-    expect(await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }])).toEqual(new Set(["1001"]));
-    expect(await turnInterjectionRepository.claim({ ...OTHER_CALL, applicationSessionId }, [{ contentKind: "text", updateId: "1001" }]))
-      .toEqual(new Set());
+    expect(
+      await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }]),
+    ).toEqual(new Set(["1001"]));
+    expect(
+      await turnInterjectionRepository.claim({ ...OTHER_CALL, applicationSessionId }, [
+        { contentKind: "text", updateId: "1001" },
+      ]),
+    ).toEqual(new Set());
     expect((await list(OTHER_CALL)).map((candidate) => candidate.updateId)).toEqual([]);
     expect((await list()).map((candidate) => candidate.updateId)).toEqual(["1001"]);
 
     await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBeNull();
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId),
+    ).toBeNull();
     expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1)).toBe(1);
 
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", "00000000-0000-4000-8000-0000000000ff")).toBeNull();
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId),
+    ).toBe("text");
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind(
+        "1001",
+        "00000000-0000-4000-8000-0000000000ff",
+      ),
+    ).toBeNull();
     // A later step's call that happens to reuse the call id is not a retry of a delivered result.
     expect((await list()).map((candidate) => candidate.updateId)).toEqual([]);
   });
@@ -185,13 +227,21 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1);
     const second = { ...call, toolCallId: "call-3" };
     await turnInterjectionRepository.claim(second, [{ contentKind: "text", updateId: "1002" }]);
-    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, ["1002"]);
+    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, [
+      "1002",
+    ]);
 
     // Eve re-runs step 1: its tool result never reached a saved history.
     expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1)).toBe(0);
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId)).toBeNull();
-    expect((await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId)).toEqual(["1002"]);
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId),
+    ).toBe("text");
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId),
+    ).toBeNull();
+    expect(
+      (await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId),
+    ).toEqual(["1002"]);
   });
 
   it("settles the turn at its end: seen by the last step delivered, the rest released", async () => {
@@ -201,16 +251,31 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }]);
     await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
     await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1);
-    await turnInterjectionRepository.claim({ ...call, toolCallId: "call-3" }, [{ contentKind: "text", updateId: "1002" }]);
-    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, ["1002"]);
+    await turnInterjectionRepository.claim({ ...call, toolCallId: "call-3" }, [
+      { contentKind: "text", updateId: "1002" },
+    ]);
+    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, [
+      "1002",
+    ]);
 
     expect(await turnInterjectionRepository.finishTurn("ses_1", "turn_2")).toBe(0);
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId)).toBeNull();
-    const rows = await database().query("SELECT update_id FROM telegram_turn_interjections WHERE update_id = 1002");
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId),
+    ).toBe("text");
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId),
+    ).toBeNull();
+    const rows = await database().query(
+      "SELECT update_id FROM telegram_turn_interjections WHERE update_id = 1002",
+    );
     expect(rows.rowCount).toBe(0);
     expect((await database().query("SELECT 1 FROM telegram_turn_steps")).rowCount).toBe(0);
-    expect(await turnInterjectionRepository.findDeliveredContentKinds(["1001", "1002"], applicationSessionId)).toEqual(new Map([["1001", "text"]]));
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKinds(
+        ["1001", "1002"],
+        applicationSessionId,
+      ),
+    ).toEqual(new Map([["1001", "text"]]));
   });
 
   it("frees, never delivers, a result returned while no step was recorded", async () => {
@@ -219,15 +284,26 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
 
     expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0)).toBe(0);
-    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBeNull();
-    expect((await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId)).toEqual(["1001"]);
+    expect(
+      await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId),
+    ).toBeNull();
+    expect(
+      (await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId),
+    ).toEqual(["1001"]);
   });
 
   it("pages candidates past a full page of earlier ones", async () => {
     for (let id = 1001; id <= 1012; id += 1) await enqueue(String(id));
-    const page = async (afterUpdateId?: string) => (await turnInterjectionRepository.listCandidates({
-      ...COORDINATE, ...(afterUpdateId ? { afterUpdateId } : {}), currentUpdateId: "1000", limit: 5, telegramUserId: "101",
-    })).map((candidate) => candidate.updateId);
+    const page = async (afterUpdateId?: string) =>
+      (
+        await turnInterjectionRepository.listCandidates({
+          ...COORDINATE,
+          ...(afterUpdateId ? { afterUpdateId } : {}),
+          currentUpdateId: "1000",
+          limit: 5,
+          telegramUserId: "101",
+        })
+      ).map((candidate) => candidate.updateId);
     expect(await page()).toEqual(["1001", "1002", "1003", "1004", "1005"]);
     expect(await page("1005")).toEqual(["1006", "1007", "1008", "1009", "1010"]);
     expect(await page("1010")).toEqual(["1011", "1012"]);
@@ -239,21 +315,36 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await turnInterjectionRepository.releaseCall(COORDINATE);
 
     expect((await list(OTHER_CALL)).map((candidate) => candidate.updateId)).toEqual(["1001"]);
-    expect(await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1000" }])).toEqual(new Set());
+    expect(
+      await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1000" }]),
+    ).toEqual(new Set());
   });
 
   it("marks a paid transcription as started and lets the ordinary claim reuse the transcript", async () => {
     await enqueue("1001", { voice: true });
     await enqueue("1002", { voice: true });
-    expect((await list())[0]).toMatchObject({ voice: { fileId: "voice-1001" }, voiceTranscript: null });
+    expect((await list())[0]).toMatchObject({
+      voice: { fileId: "voice-1001" },
+      voiceTranscript: null,
+    });
 
-    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001")).toEqual({ status: "started" });
-    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001")).toEqual({ status: "unavailable" });
-    expect(await turnInterjectionRepository.saveEarlyVoiceTranscript("1001", " добавь цены ")).toBe("добавь цены");
-    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001"))
-      .toEqual({ status: "transcribed", transcript: "добавь цены" });
+    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001")).toEqual({
+      status: "started",
+    });
+    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001")).toEqual({
+      status: "unavailable",
+    });
+    expect(await turnInterjectionRepository.saveEarlyVoiceTranscript("1001", " добавь цены ")).toBe(
+      "добавь цены",
+    );
+    expect(await turnInterjectionRepository.beginEarlyVoiceTranscription("1001")).toEqual({
+      status: "transcribed",
+      transcript: "добавь цены",
+    });
     // A transcript can only follow a started call, exactly as on the ordinary path.
-    expect(await turnInterjectionRepository.saveEarlyVoiceTranscript("1002", "без начала")).toBeNull();
+    expect(
+      await turnInterjectionRepository.saveEarlyVoiceTranscript("1002", "без начала"),
+    ).toBeNull();
 
     const current = await database().query<{ lease_token: string }>(
       "SELECT lease_token::text FROM telegram_ingress_updates WHERE update_id = 1000",
@@ -261,6 +352,8 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await telegramIngressRepository.complete("1000", current.rows[0]!.lease_token);
     const voice = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
     expect(voice).toMatchObject({ transcript: "добавь цены", updateId: "1001" });
-    expect(await telegramIngressRepository.beginVoiceTranscription("1001", voice!.leaseToken)).toBe("completed");
+    expect(await telegramIngressRepository.beginVoiceTranscription("1001", voice!.leaseToken)).toBe(
+      "completed",
+    );
   });
 });

@@ -111,19 +111,21 @@ describe("prepareTelegramMemoryReviewTurn", () => {
       },
     });
 
-    const synchronizedIds = repository.syncParticipants.mock.calls.flatMap(([, entryIds]) => entryIds);
+    const synchronizedIds = repository.syncParticipants.mock.calls.flatMap(
+      ([, entryIds]) => entryIds,
+    );
     expect(synchronizedIds).toEqual(Array.from({ length: 98 }, (_, index) => id(index + 1)));
     expect(synchronizedIds).not.toContain(id(currentSequence));
     expect(repository.syncParticipants.mock.calls.map(([, entryIds]) => entryIds.length)).toEqual([
-      50,
-      48,
+      50, 48,
     ]);
     expect(repository.failInteractivePreparation).not.toHaveBeenCalled();
   });
 
   it("keeps the handoff of a retired session in front of the recomposed timeline", async () => {
     const repository = repositories([reviewEntry(1)]);
-    const handoffBlock = "<previous_context_summary>\nО чём шёл разговор\n- вода\n</previous_context_summary>";
+    const handoffBlock =
+      "<previous_context_summary>\nО чём шёл разговор\n- вода\n</previous_context_summary>";
 
     const result = await prepareTelegramMemoryReviewTurn({
       applicationSessionId: "session-1",
@@ -135,8 +137,9 @@ describe("prepareTelegramMemoryReviewTurn", () => {
     });
 
     expect(result.durableMessage.split("<previous_context_summary>")).toHaveLength(2);
-    expect(result.durableMessage.indexOf("</previous_context_summary>"))
-      .toBeLessThan(result.durableMessage.indexOf("<untrusted_telegram_group_timeline>"));
+    expect(result.durableMessage.indexOf("</previous_context_summary>")).toBeLessThan(
+      result.durableMessage.indexOf("<untrusted_telegram_group_timeline>"),
+    );
   });
 
   it("renders combined review, timeline, and current messages once in chronological order", async () => {
@@ -159,16 +162,20 @@ describe("prepareTelegramMemoryReviewTurn", () => {
       },
     });
 
-    const synchronizedIds = repository.syncParticipants.mock.calls.flatMap(([, entryIds]) => entryIds);
+    const synchronizedIds = repository.syncParticipants.mock.calls.flatMap(
+      ([, entryIds]) => entryIds,
+    );
     expect(synchronizedIds).toEqual([id(1), id(2), id(3), id(4)]);
     expect(new Set(synchronizedIds).size).toBe(synchronizedIds.length);
     const sequenceMarkers = ["#1 [user]", "#2 [user]", "#3 [user]", "#4 [user]"];
     const currentMarker = "<current_telegram_message>";
-    expect([...sequenceMarkers, currentMarker].map((marker) =>
-      result.durableMessage.indexOf(marker)
-    )).toEqual([...sequenceMarkers, currentMarker]
-      .map((marker) => result.durableMessage.indexOf(marker))
-      .sort((left, right) => left - right));
+    expect(
+      [...sequenceMarkers, currentMarker].map((marker) => result.durableMessage.indexOf(marker)),
+    ).toEqual(
+      [...sequenceMarkers, currentMarker]
+        .map((marker) => result.durableMessage.indexOf(marker))
+        .sort((left, right) => left - right),
+    );
     for (const marker of sequenceMarkers) {
       expect(result.durableMessage.split(marker)).toHaveLength(2);
     }
@@ -187,9 +194,7 @@ describe("prepareTelegramMemoryReviewTurn", () => {
     expect(result.durableMessage).not.toContain("review-2");
     expect(result.durableMessage).not.toContain("review-5");
     expect(result.durableMessage).toContain("<memory_review_source_selection>");
-    expect(result.durableMessage).toContain(
-      '"sourceSequences":["5","3","2","1"]',
-    );
+    expect(result.durableMessage).toContain('"sourceSequences":["5","3","2","1"]');
   });
 
   it("fails interactive preparation when duplicate source metadata has conflicting sequences", async () => {
@@ -199,17 +204,19 @@ describe("prepareTelegramMemoryReviewTurn", () => {
     };
     const repository = repositories([conflictingReviewEntry]);
 
-    await expect(prepareTelegramMemoryReviewTurn({
-      applicationSessionId: "session-1",
-      conversationId: "conversation-1",
-      currentEntryId: id(5),
-      groupId: "group-1",
-      preparedContext: preparedContext([2, 4], 5),
-      repositories: {
-        memoryReview: repository,
-        syncParticipants: repository.syncParticipants,
-      },
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_REVIEW_SOURCE_SEQUENCE_CONFLICT" });
+    await expect(
+      prepareTelegramMemoryReviewTurn({
+        applicationSessionId: "session-1",
+        conversationId: "conversation-1",
+        currentEntryId: id(5),
+        groupId: "group-1",
+        preparedContext: preparedContext([2, 4], 5),
+        repositories: {
+          memoryReview: repository,
+          syncParticipants: repository.syncParticipants,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_REVIEW_SOURCE_SEQUENCE_CONFLICT" });
 
     expect(repository.failInteractivePreparation).toHaveBeenCalledWith(
       "batch-1",

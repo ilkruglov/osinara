@@ -7,11 +7,11 @@ export declare function deriveEveWorkflowQueuePrefix(agentName: string): string;
 export declare function deriveEveWorkflowQueueTopic(agentName: string): string;
 /** Builds the Vercel queue trigger that invokes an eve agent's flow function. */
 export declare function createEveWorkflowQueueTrigger(agentName: string): {
-    type: "queue/v2beta";
-    topic: string;
-    consumer: string;
-    retryAfterSeconds: number;
-    initialDelaySeconds: number;
+  type: "queue/v2beta";
+  topic: string;
+  consumer: string;
+  retryAfterSeconds: number;
+  initialDelaySeconds: number;
 };
 /** Installs the agent-scoped namespace used by Workflow runtime operations. */
 export declare function installEveWorkflowQueueNamespace(agentName: string): string;

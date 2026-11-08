@@ -23,22 +23,30 @@ export function resolveTelegramSessionActor(auth: SessionAuth): TelegramSessionA
   const actorId = attributes?.telegramActorId;
 
   if (actorKind === "telegram_channel") {
-    const valid = caller.authenticator === "telegram" && caller.principalType === "service" &&
-      typeof actorId === "string" && /^-[0-9]+$/u.test(actorId) &&
-      attributes.telegramUserId === undefined && caller.principalId === `telegram-channel:${actorId}`;
+    const valid =
+      caller.authenticator === "telegram" &&
+      caller.principalType === "service" &&
+      typeof actorId === "string" &&
+      /^-[0-9]+$/u.test(actorId) &&
+      attributes.telegramUserId === undefined &&
+      caller.principalId === `telegram-channel:${actorId}`;
     return valid ? { id: actorId, kind: actorKind } : null;
   }
   // Another bot is a service principal named by its Telegram id; it never carries a user identity.
   if (actorKind === "telegram_bot") {
-    const valid = caller.authenticator === "telegram" && caller.principalType === "service" &&
-      typeof actorId === "string" && /^[0-9]+$/u.test(actorId) &&
-      attributes.telegramUserId === undefined && caller.principalId === `telegram-bot:${actorId}`;
+    const valid =
+      caller.authenticator === "telegram" &&
+      caller.principalType === "service" &&
+      typeof actorId === "string" &&
+      /^[0-9]+$/u.test(actorId) &&
+      attributes.telegramUserId === undefined &&
+      caller.principalId === `telegram-bot:${actorId}`;
     return valid ? { id: actorId, kind: actorKind } : null;
   }
   if (actorKind === "telegram_user") {
     const telegramUserId = attributes.telegramUserId;
-    const valid = caller.principalType === "user" && typeof actorId === "string" &&
-      actorId === telegramUserId;
+    const valid =
+      caller.principalType === "user" && typeof actorId === "string" && actorId === telegramUserId;
     return valid ? { id: actorId, kind: actorKind } : null;
   }
 

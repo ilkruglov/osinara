@@ -9,46 +9,71 @@ export type RuntimeToolCallActionRequest = z.infer<typeof runtimeToolCallActionR
 /**
  * Zod schema for one Eve-owned `tool-call` action request.
  */
-export declare const runtimeToolCallActionRequestSchema: z.ZodObject<{
+export declare const runtimeToolCallActionRequestSchema: z.ZodObject<
+  {
     callId: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
+    input: z.ZodType<
+      import("../../shared/json.ts").JsonObject,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+    >;
     kind: z.ZodLiteral<"tool-call">;
     toolName: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Runtime-owned subagent-call request surfaced by a harness and executed later
  * by workflow-backed runtime code.
  */
-export type RuntimeSubagentCallActionRequest = z.infer<typeof runtimeSubagentCallActionRequestSchema>;
+export type RuntimeSubagentCallActionRequest = z.infer<
+  typeof runtimeSubagentCallActionRequestSchema
+>;
 /**
  * Zod schema for one runtime-owned subagent-call action request.
  */
-declare const runtimeSubagentCallActionRequestSchema: z.ZodObject<{
+declare const runtimeSubagentCallActionRequestSchema: z.ZodObject<
+  {
     callId: z.ZodString;
     description: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
+    input: z.ZodType<
+      import("../../shared/json.ts").JsonObject,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+    >;
     kind: z.ZodLiteral<"subagent-call">;
     name: z.ZodString;
     nodeId: z.ZodString;
     subagentName: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Runtime-owned remote-agent-call request surfaced by a harness and executed
  * later by workflow-backed runtime code.
  */
-export type RuntimeRemoteAgentCallActionRequest = z.infer<typeof runtimeRemoteAgentCallActionRequestSchema>;
+export type RuntimeRemoteAgentCallActionRequest = z.infer<
+  typeof runtimeRemoteAgentCallActionRequestSchema
+>;
 /**
  * Zod schema for one runtime-owned remote-agent-call action request.
  */
-export declare const runtimeRemoteAgentCallActionRequestSchema: z.ZodObject<{
+export declare const runtimeRemoteAgentCallActionRequestSchema: z.ZodObject<
+  {
     callId: z.ZodString;
     description: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
+    input: z.ZodType<
+      import("../../shared/json.ts").JsonObject,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+    >;
     kind: z.ZodLiteral<"remote-agent-call">;
     name: z.ZodString;
     nodeId: z.ZodString;
     remoteAgentName: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Eve-owned `load-skill` action requested by the model.
  */
@@ -56,47 +81,94 @@ type RuntimeLoadSkillActionRequest = z.infer<typeof runtimeLoadSkillActionReques
 /**
  * Zod schema for one Eve-owned `load-skill` action request.
  */
-declare const runtimeLoadSkillActionRequestSchema: z.ZodObject<{
+declare const runtimeLoadSkillActionRequestSchema: z.ZodObject<
+  {
     callId: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
+    input: z.ZodType<
+      import("../../shared/json.ts").JsonObject,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+    >;
     kind: z.ZodLiteral<"load-skill">;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Eve-owned action request surfaced by the harness.
  *
  * A `tool-call` is one action kind, alongside control-plane work such as
  * `load-skill` and runtime-dispatched subagent calls.
  */
-export type RuntimeActionRequest = RuntimeLoadSkillActionRequest | RuntimeRemoteAgentCallActionRequest | RuntimeSubagentCallActionRequest | RuntimeToolCallActionRequest;
+export type RuntimeActionRequest =
+  | RuntimeLoadSkillActionRequest
+  | RuntimeRemoteAgentCallActionRequest
+  | RuntimeSubagentCallActionRequest
+  | RuntimeToolCallActionRequest;
 /**
  * Zod schema for one runtime action request.
  */
-export declare const runtimeActionRequestSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    callId: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
-    kind: z.ZodLiteral<"load-skill">;
-}, z.core.$strict>, z.ZodObject<{
-    callId: z.ZodString;
-    description: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
-    kind: z.ZodLiteral<"remote-agent-call">;
-    name: z.ZodString;
-    nodeId: z.ZodString;
-    remoteAgentName: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    callId: z.ZodString;
-    description: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
-    kind: z.ZodLiteral<"subagent-call">;
-    name: z.ZodString;
-    nodeId: z.ZodString;
-    subagentName: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    callId: z.ZodString;
-    input: z.ZodType<import("../../shared/json.ts").JsonObject, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>>;
-    kind: z.ZodLiteral<"tool-call">;
-    toolName: z.ZodString;
-}, z.core.$strict>], "kind">;
+export declare const runtimeActionRequestSchema: z.ZodDiscriminatedUnion<
+  [
+    z.ZodObject<
+      {
+        callId: z.ZodString;
+        input: z.ZodType<
+          import("../../shared/json.ts").JsonObject,
+          unknown,
+          z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+        >;
+        kind: z.ZodLiteral<"load-skill">;
+      },
+      z.core.$strict
+    >,
+    z.ZodObject<
+      {
+        callId: z.ZodString;
+        description: z.ZodString;
+        input: z.ZodType<
+          import("../../shared/json.ts").JsonObject,
+          unknown,
+          z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+        >;
+        kind: z.ZodLiteral<"remote-agent-call">;
+        name: z.ZodString;
+        nodeId: z.ZodString;
+        remoteAgentName: z.ZodString;
+      },
+      z.core.$strict
+    >,
+    z.ZodObject<
+      {
+        callId: z.ZodString;
+        description: z.ZodString;
+        input: z.ZodType<
+          import("../../shared/json.ts").JsonObject,
+          unknown,
+          z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+        >;
+        kind: z.ZodLiteral<"subagent-call">;
+        name: z.ZodString;
+        nodeId: z.ZodString;
+        subagentName: z.ZodString;
+      },
+      z.core.$strict
+    >,
+    z.ZodObject<
+      {
+        callId: z.ZodString;
+        input: z.ZodType<
+          import("../../shared/json.ts").JsonObject,
+          unknown,
+          z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonObject, unknown>
+        >;
+        kind: z.ZodLiteral<"tool-call">;
+        toolName: z.ZodString;
+      },
+      z.core.$strict
+    >,
+  ],
+  "kind"
+>;
 /**
  * Runtime-owned authored tool-result projected back into a harness resume call.
  */
@@ -104,13 +176,20 @@ export type RuntimeToolResultActionResult = z.infer<typeof runtimeToolResultActi
 /**
  * Zod schema for one runtime-owned authored tool-result action result.
  */
-declare const runtimeToolResultActionResultSchema: z.ZodObject<{
+declare const runtimeToolResultActionResultSchema: z.ZodObject<
+  {
     callId: z.ZodString;
     isError: z.ZodOptional<z.ZodBoolean>;
     kind: z.ZodLiteral<"tool-result">;
-    output: z.ZodType<import("../../shared/json.ts").JsonValue, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>>;
+    output: z.ZodType<
+      import("../../shared/json.ts").JsonValue,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>
+    >;
     toolName: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Subagent result produced by a dispatched child session and delivered back
  * through the parent's resume hook.
@@ -141,25 +220,46 @@ export type RuntimeSubagentChildResult = z.infer<typeof runtimeSubagentChildResu
 /**
  * Zod schema for one child-produced subagent result.
  */
-declare const runtimeSubagentChildResultSchema: z.ZodObject<{
-    backgroundTask: z.ZodOptional<z.ZodObject<{
-        status: z.ZodLiteral<"working">;
-        taskId: z.ZodString;
-    }, z.core.$strict>>;
+declare const runtimeSubagentChildResultSchema: z.ZodObject<
+  {
+    backgroundTask: z.ZodOptional<
+      z.ZodObject<
+        {
+          status: z.ZodLiteral<"working">;
+          taskId: z.ZodString;
+        },
+        z.core.$strict
+      >
+    >;
     callId: z.ZodString;
     isError: z.ZodOptional<z.ZodBoolean>;
     kind: z.ZodLiteral<"subagent-result">;
     origin: z.ZodLiteral<"child">;
-    outcome: z.ZodType<import("#shared/agent-turn-outcome.js").AgentTurnOutcome, unknown, z.core.$ZodTypeInternals<import("#shared/agent-turn-outcome.js").AgentTurnOutcome, unknown>>;
-    output: z.ZodType<import("../../shared/json.ts").JsonValue, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>>;
+    outcome: z.ZodType<
+      import("#shared/agent-turn-outcome.js").AgentTurnOutcome,
+      unknown,
+      z.core.$ZodTypeInternals<import("#shared/agent-turn-outcome.js").AgentTurnOutcome, unknown>
+    >;
+    output: z.ZodType<
+      import("../../shared/json.ts").JsonValue,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>
+    >;
     subagentName: z.ZodString;
-    usage: z.ZodOptional<z.ZodObject<{
-        cacheReadTokens: z.ZodNumber;
-        cacheWriteTokens: z.ZodNumber;
-        inputTokens: z.ZodNumber;
-        outputTokens: z.ZodNumber;
-    }, z.core.$strip>>;
-}, z.core.$strict>;
+    usage: z.ZodOptional<
+      z.ZodObject<
+        {
+          cacheReadTokens: z.ZodNumber;
+          cacheWriteTokens: z.ZodNumber;
+          inputTokens: z.ZodNumber;
+          outputTokens: z.ZodNumber;
+        },
+        z.core.$strip
+      >
+    >;
+  },
+  z.core.$strict
+>;
 /**
  * Subagent failure synthesized on the parent side when no child produced a
  * result: dispatch rejections, start failures, and agentId-continuation
@@ -170,14 +270,21 @@ export type RuntimeSubagentDispatchFailure = z.infer<typeof runtimeSubagentDispa
 /**
  * Zod schema for one parent-synthesized subagent dispatch failure.
  */
-declare const runtimeSubagentDispatchFailureSchema: z.ZodObject<{
+declare const runtimeSubagentDispatchFailureSchema: z.ZodObject<
+  {
     callId: z.ZodString;
     isError: z.ZodLiteral<true>;
     kind: z.ZodLiteral<"subagent-result">;
     origin: z.ZodLiteral<"dispatch">;
-    output: z.ZodType<import("../../shared/json.ts").JsonValue, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>>;
+    output: z.ZodType<
+      import("../../shared/json.ts").JsonValue,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>
+    >;
     subagentName: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Runtime-owned subagent result projected back into a harness resume call,
  * discriminated on `origin`: `child` results come from a dispatched child
@@ -195,15 +302,23 @@ type RuntimeLoadSkillActionResult = z.infer<typeof runtimeLoadSkillActionResultS
  * The result still reports whether a skill became active during the turn; the
  * action name reflects how the model requests those instructions.
  */
-declare const runtimeLoadSkillActionResultSchema: z.ZodObject<{
+declare const runtimeLoadSkillActionResultSchema: z.ZodObject<
+  {
     callId: z.ZodString;
     isError: z.ZodOptional<z.ZodBoolean>;
     kind: z.ZodLiteral<"load-skill-result">;
-    output: z.ZodType<import("../../shared/json.ts").JsonValue, unknown, z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>>;
+    output: z.ZodType<
+      import("../../shared/json.ts").JsonValue,
+      unknown,
+      z.core.$ZodTypeInternals<import("../../shared/json.ts").JsonValue, unknown>
+    >;
     name: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Runtime-owned action result produced by framework-owned runtime code.
  */
-export type RuntimeActionResult = RuntimeLoadSkillActionResult | RuntimeSubagentResult | RuntimeToolResultActionResult;
+export type RuntimeActionResult =
+  RuntimeLoadSkillActionResult | RuntimeSubagentResult | RuntimeToolResultActionResult;
 export {};

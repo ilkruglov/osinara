@@ -21,8 +21,11 @@ export function describeRecurrence(recurrence: AgentScheduleRecurrence): string 
   if (recurrence.kind === "once") return "один раз";
   if (recurrence.kind !== "weekly") {
     const labels = {
-      minutely: ["ежеминутно", "минут"], hourly: ["ежечасно", "часов"],
-      daily: ["ежедневно", "дней"], monthly: ["ежемесячно", "месяцев"], yearly: ["ежегодно", "лет"],
+      minutely: ["ежеминутно", "минут"],
+      hourly: ["ежечасно", "часов"],
+      daily: ["ежедневно", "дней"],
+      monthly: ["ежемесячно", "месяцев"],
+      yearly: ["ежегодно", "лет"],
     } as const;
     const [single, plural] = labels[recurrence.kind];
     return recurrence.interval === 1 ? single : `каждые ${recurrence.interval} ${plural}`;

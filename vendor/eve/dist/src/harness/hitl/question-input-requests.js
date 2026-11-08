@@ -18,17 +18,11 @@ function resolveQuestionOnlyInputBatches(r) {
       return {
         outcome: `unresolved`,
         messages: [...r.baseHistory],
-        session: queueDeferredStepInput(
-          r.session,
-          compactStepInput(r.resolvedStepInput),
-        ),
+        session: queueDeferredStepInput(r.session, compactStepInput(r.resolvedStepInput)),
       };
     let a = r.batches.length === 1 ? r.batches[0] : void 0;
     if (a === void 0) {
-      let t =
-        l.length === 0
-          ? r.session
-          : queueDeferredStepInput(r.session, { inputResponses: l });
+      let t = l.length === 0 ? r.session : queueDeferredStepInput(r.session, { inputResponses: l });
       return {
         consumedMessage: r.resolvedStepInput.messageConsumed,
         outcome: `continue`,
@@ -45,9 +39,7 @@ function resolveQuestionOnlyInputBatches(r) {
       consumedMessage: r.resolvedStepInput.messageConsumed,
       outcome: `resolved`,
       messages: o,
-      resolvedInputs: [buildResolvedInputBatch(a, [])].filter(
-        (e) => e !== void 0,
-      ),
+      resolvedInputs: [buildResolvedInputBatch(a, [])].filter((e) => e !== void 0),
       session: removePendingInputBatches(r.session, [a]),
     };
   }
@@ -75,9 +67,7 @@ function findAnsweredQuestionBatches(e, t) {
 function resolveQuestionBatches(e) {
   let t = new Map(e.responses.map((e) => [e.requestId, e]));
   for (let n of e.batches) {
-    let i = n.requests.map((e) =>
-      buildQuestionToolResponsePart(e, t.get(e.requestId)),
-    );
+    let i = n.requests.map((e) => buildQuestionToolResponsePart(e, t.get(e.requestId)));
     appendResolvedBatchTranscript(e.messages, n, i);
   }
   return e.messages;

@@ -5,11 +5,7 @@ function addNitroRoutingImportSpecifierPlugin(e) {
       t.plugins.unshift({
         name: `eve:nitro-routing-import-specifiers`,
         transform(e, t) {
-          if (
-            t !== `#nitro/virtual/routing` &&
-            t !== `#nitro/virtual/routing-meta`
-          )
-            return null;
+          if (t !== `#nitro/virtual/routing` && t !== `#nitro/virtual/routing-meta`) return null;
           let n = normalizeGeneratedEsmImportSpecifiers(e);
           return n === e ? null : { code: n, map: null };
         },

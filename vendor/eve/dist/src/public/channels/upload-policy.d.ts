@@ -15,8 +15,8 @@ export type UploadPolicy = "disabled" | UploadPolicyConfig;
  *   `image/*` matches `image/png`).
  */
 export interface UploadPolicyConfig {
-    readonly maxBytes: number;
-    readonly allowedMediaTypes: readonly string[] | "*";
+  readonly maxBytes: number;
+  readonly allowedMediaTypes: readonly string[] | "*";
 }
 /** Author-facing input accepted by channel factories. */
 export type UploadPolicyInput = "disabled" | Partial<UploadPolicyConfig>;
@@ -33,24 +33,29 @@ export declare const DEFAULT_UPLOAD_POLICY: UploadPolicyConfig;
  * (`413 Payload Too Large`, `415 Unsupported Media Type`) or to log and
  * drop individual attachments that should not reach the harness.
  */
-export type UploadPolicyViolation = {
-    readonly kind: "too-large";
-    readonly mediaType: string;
-    readonly filename?: string;
-    readonly byteLength: number;
-    readonly limit: number;
-} | {
-    readonly kind: "disallowed-media-type";
-    readonly mediaType: string;
-    readonly filename?: string;
-    readonly allowedMediaTypes: readonly string[];
-};
+export type UploadPolicyViolation =
+  | {
+      readonly kind: "too-large";
+      readonly mediaType: string;
+      readonly filename?: string;
+      readonly byteLength: number;
+      readonly limit: number;
+    }
+  | {
+      readonly kind: "disallowed-media-type";
+      readonly mediaType: string;
+      readonly filename?: string;
+      readonly allowedMediaTypes: readonly string[];
+    };
 /**
  * Produces a final {@link UploadPolicy} by merging an optional partial
  * override on top of `base` (default: {@link DEFAULT_UPLOAD_POLICY}).
  * Returns `"disabled"` unchanged when passed as the override.
  */
-export declare function mergeUploadPolicy(override?: UploadPolicyInput, base?: UploadPolicyConfig): UploadPolicy;
+export declare function mergeUploadPolicy(
+  override?: UploadPolicyInput,
+  base?: UploadPolicyConfig,
+): UploadPolicy;
 /**
  * Returns `true` when `policy` rejects every attachment — the explicit
  * `"disabled"` literal, `maxBytes: 0`, or an empty `allowedMediaTypes`
@@ -72,7 +77,10 @@ export declare function isMediaTypeAllowed(mediaType: string, policy: UploadPoli
  * CSV surfaces a 415 instead of a 413 — and mirrors how most HTTP
  * proxies enforce policy.
  */
-export declare function evaluateFilePart(part: FilePart, policy: UploadPolicy): UploadPolicyViolation | null;
+export declare function evaluateFilePart(
+  part: FilePart,
+  policy: UploadPolicy,
+): UploadPolicyViolation | null;
 /**
  * Walks a `UserContent` array and returns every policy violation, in
  * iteration order. Non-file parts (text, image) are skipped.
@@ -82,7 +90,10 @@ export declare function evaluateFilePart(part: FilePart, policy: UploadPolicy): 
  * rejecting an inbound request (HTTP) and dropping individual attachments
  * (Slack).
  */
-export declare function collectUploadPolicyViolations(content: string | UserContent, policy: UploadPolicy): readonly UploadPolicyViolation[];
+export declare function collectUploadPolicyViolations(
+  content: string | UserContent,
+  policy: UploadPolicy,
+): readonly UploadPolicyViolation[];
 /**
  * Returns a copy of `content` with every {@link FilePart} that violates
  * `policy` removed.
@@ -93,7 +104,10 @@ export declare function collectUploadPolicyViolations(content: string | UserCont
  * upload, keep the turn going) use this helper and log the dropped
  * attachments.
  */
-export declare function stripDisallowedFileParts(content: string | UserContent, policy: UploadPolicy): string | UserContent;
+export declare function stripDisallowedFileParts(
+  content: string | UserContent,
+  policy: UploadPolicy,
+): string | UserContent;
 /**
  * Renders a {@link UploadPolicyViolation} as a short human-readable
  * string. Used by channel error responses and warning logs.

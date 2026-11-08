@@ -13,10 +13,7 @@ const COMPOSE_PATH = `${BASE_DIR}/compose.installation.json`;
 const RELEASE_ENV_PATH = `${BASE_DIR}/release.env`;
 const LOCAL_HEALTH_URL = "http://127.0.0.1:8082/eve/v1/health";
 
-async function compose(
-  envPath: string,
-  args: readonly string[],
-): Promise<Buffer> {
+async function compose(envPath: string, args: readonly string[]): Promise<Buffer> {
   return await runHostCommand({
     args: [
       "compose",

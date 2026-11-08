@@ -1,10 +1,10 @@
 import type { SpanExporter, SpanProcessor } from "#compiled/@vercel/otel/index.js";
 /** @internal — exposed for tests; authors get the defaults. */
 export interface BatchSpanProcessorOptions {
-    readonly exportTimeoutMillis?: number;
-    readonly maxExportBatchSize?: number;
-    readonly maxQueueSize?: number;
-    readonly scheduledDelayMillis?: number;
+  readonly exportTimeoutMillis?: number;
+  readonly maxExportBatchSize?: number;
+  readonly maxQueueSize?: number;
+  readonly scheduledDelayMillis?: number;
 }
 /**
  * Buffers ended spans and hands them to one exporter in batches.
@@ -17,4 +17,7 @@ export interface BatchSpanProcessorOptions {
  * exporter that has stopped draining is already losing telemetry; taking the
  * agent's memory with it would turn that into an outage.
  */
-export declare function batchSpanProcessor(exporter: SpanExporter, options?: BatchSpanProcessorOptions): SpanProcessor;
+export declare function batchSpanProcessor(
+  exporter: SpanExporter,
+  options?: BatchSpanProcessorOptions,
+): SpanProcessor;

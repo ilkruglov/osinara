@@ -6,4 +6,6 @@ import { type RuntimeCompiledArtifactsSource } from "#runtime/compiled-artifacts
  * This lets long-lived processes keep cache hits across turns while still
  * invalidating naturally after recompilation under the same app root.
  */
-export declare function resolveRuntimeCompiledArtifactsVersionedCacheKey(source: RuntimeCompiledArtifactsSource): Promise<string>;
+export declare function resolveRuntimeCompiledArtifactsVersionedCacheKey(
+  source: RuntimeCompiledArtifactsSource,
+): Promise<string>;

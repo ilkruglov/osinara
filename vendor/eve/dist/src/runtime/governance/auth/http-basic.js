@@ -2,8 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 function authenticateHttpBasicStrategy(e) {
   let t = parseBasicAuthorizationHeader(e.authorization);
   return t === null ||
-    normalizeCredential(t.username) !==
-      normalizeCredential(e.strategy.username) ||
+    normalizeCredential(t.username) !== normalizeCredential(e.strategy.username) ||
     !timingSafeStringEquals(
       normalizeCredential(t.password),
       normalizeCredential(e.strategy.password),
@@ -32,9 +31,7 @@ function parseBasicAuthorizationHeader(e) {
     return null;
   }
   let i = r.indexOf(`:`);
-  return i === -1
-    ? null
-    : { password: r.slice(i + 1), username: r.slice(0, i) };
+  return i === -1 ? null : { password: r.slice(i + 1), username: r.slice(0, i) };
 }
 function normalizeCredential(e) {
   return e.normalize(`NFC`);

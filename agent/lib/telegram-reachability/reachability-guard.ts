@@ -25,11 +25,7 @@ import {
 } from "./reachability-repository.js";
 
 export type TelegramProactiveDeliveryKind =
-  | "agent_schedule"
-  | "order_watch"
-  | "owner_notice"
-  | "reminder"
-  | "software_update";
+  "agent_schedule" | "order_watch" | "owner_notice" | "reminder" | "software_update";
 
 export interface TelegramBotSelf {
   /** The bot's user id: the part of its token before the colon. */
@@ -40,11 +36,16 @@ export interface TelegramBotSelf {
 export async function unreachableTelegramRecipient(
   chatId: string,
   kind: TelegramProactiveDeliveryKind,
-  repository: Pick<TelegramReachabilityRepository, "unreachableReason"> = telegramReachabilityRepository,
+  repository: Pick<
+    TelegramReachabilityRepository,
+    "unreachableReason"
+  > = telegramReachabilityRepository,
 ): Promise<TelegramRecipientUnreachableReason | null> {
   const reason = await repository.unreachableReason(chatId);
   if (reason !== null) {
-    console.warn(JSON.stringify({ chatId, code: "AGENT_TELEGRAM_PROACTIVE_DELIVERY_SKIPPED", kind, reason }));
+    console.warn(
+      JSON.stringify({ chatId, code: "AGENT_TELEGRAM_PROACTIVE_DELIVERY_SKIPPED", kind, reason }),
+    );
   }
   return reason;
 }
@@ -55,19 +56,29 @@ function configuredBotSelf(): TelegramBotSelf {
   return { id, username };
 }
 
-export function isTelegramBotItself(user: unknown, self: TelegramBotSelf = configuredBotSelf()): boolean {
+export function isTelegramBotItself(
+  user: unknown,
+  self: TelegramBotSelf = configuredBotSelf(),
+): boolean {
   if (user === null || typeof user !== "object") return false;
   const candidate = user as { id?: unknown; is_bot?: unknown; username?: unknown };
   if (candidate.is_bot !== true) return false;
   if (self.id !== null && (typeof candidate.id === "number" || typeof candidate.id === "string")) {
     return String(candidate.id) === self.id;
   }
-  return self.username !== null && typeof candidate.username === "string" &&
-    candidate.username.toLowerCase() === self.username.toLowerCase();
+  return (
+    self.username !== null &&
+    typeof candidate.username === "string" &&
+    candidate.username.toLowerCase() === self.username.toLowerCase()
+  );
 }
 
 export async function noteInboundTelegramMessage(
-  input: { readonly chatId: string; readonly message: Record<string, unknown>; readonly updateId: string },
+  input: {
+    readonly chatId: string;
+    readonly message: Record<string, unknown>;
+    readonly updateId: string;
+  },
   dependencies: {
     readonly now?: () => Date;
     readonly repository?: Pick<TelegramReachabilityRepository, "recordInboundMessage">;
@@ -80,16 +91,32 @@ export async function noteInboundTelegramMessage(
   try {
     // A message without a date is still a message from the chat; it is ordered as the present.
     const date = input.message.date;
-    const sentAt = typeof date === "number" && Number.isSafeInteger(date) && date > 0 ? new Date(date * 1_000) : receivedAt;
-    const recorded = await repository.recordInboundMessage({ chatId: input.chatId, receivedAt, sentAt, updateId: input.updateId });
+    const sentAt =
+      typeof date === "number" && Number.isSafeInteger(date) && date > 0
+        ? new Date(date * 1_000)
+        : receivedAt;
+    const recorded = await repository.recordInboundMessage({
+      chatId: input.chatId,
+      receivedAt,
+      sentAt,
+      updateId: input.updateId,
+    });
     if (recorded?.cleared === true) {
-      console.info(JSON.stringify({ chatId: input.chatId, code: "AGENT_TELEGRAM_RECIPIENT_REACHABLE", source: "inbound_message" }));
+      console.info(
+        JSON.stringify({
+          chatId: input.chatId,
+          code: "AGENT_TELEGRAM_RECIPIENT_REACHABLE",
+          source: "inbound_message",
+        }),
+      );
     }
   } catch (error) {
-    console.error(JSON.stringify({
-      chatId: input.chatId,
-      code: "AGENT_TELEGRAM_REACHABILITY_CLEAR_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        chatId: input.chatId,
+        code: "AGENT_TELEGRAM_REACHABILITY_CLEAR_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
   }
 }

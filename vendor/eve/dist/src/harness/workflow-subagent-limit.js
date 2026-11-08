@@ -1,8 +1,7 @@
 const DEFAULT_WORKFLOW_MAX_SUBAGENTS = 100;
 function countResolvedWorkflowSubagentCalls(e) {
   let t = 0;
-  for (let n of e.continuation.ledger)
-    n.kind === `tool` && n.status !== `interrupted` && (t += 1);
+  for (let n of e.continuation.ledger) n.kind === `tool` && n.status !== `interrupted` && (t += 1);
   return t;
 }
 function planWorkflowSubagentDispatch(e) {

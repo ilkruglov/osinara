@@ -36,7 +36,9 @@ describe("grantable external group capabilities without a Codex subscription", (
   it("keeps every other catalog capability grantable, and widgets only with their switch on", () => {
     // TELEGRAM_WIDGETS_ENABLED is not set in the test environment.
     expect([...GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES]).toEqual(
-      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !requiresImageGenerationToolName(name) && !requiresTelegramWidgetsToolName(name)),
+      EXTERNAL_GROUP_TOOL_NAMES.filter(
+        (name) => !requiresImageGenerationToolName(name) && !requiresTelegramWidgetsToolName(name),
+      ),
     );
     expect(isGrantableExternalGroupToolName("send_widget")).toBe(false);
     expect(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES.length).toBeGreaterThan(0);
@@ -44,8 +46,9 @@ describe("grantable external group capabilities without a Codex subscription", (
 
   it("still parses a grant persisted under the previous provider", () => {
     // Dropping the whole policy would silently revoke unrelated capabilities of a live group.
-    expect(parseExternalGroupToolAllowlist(["generate_image", "remember"]))
-      .toEqual(new Set(["generate_image", "remember"]));
+    expect(parseExternalGroupToolAllowlist(["generate_image", "remember"])).toEqual(
+      new Set(["generate_image", "remember"]),
+    );
   });
 
   it("splits a persisted allowlist into effective and inert grants", () => {

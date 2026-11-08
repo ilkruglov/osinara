@@ -11,32 +11,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createConfiguredLanguageModel } from "./model-transport.js";
 
 function overloadedResponse(): Response {
-  return new Response(JSON.stringify({
-    error: {
-      message: "The server cluster is currently under high load. (2064)",
-      type: "overloaded_error",
+  return new Response(
+    JSON.stringify({
+      error: {
+        message: "The server cluster is currently under high load. (2064)",
+        type: "overloaded_error",
+      },
+      type: "error",
+    }),
+    {
+      headers: { "content-type": "application/json" },
+      status: 529,
     },
-    type: "error",
-  }), {
-    headers: { "content-type": "application/json" },
-    status: 529,
-  });
+  );
 }
 
 function successfulResponse(): Response {
-  return new Response(JSON.stringify({
-    content: [{ text: "Готово", type: "text" }],
-    id: "msg_retry_001",
-    model: "deepseek-v4-flash",
-    role: "assistant",
-    stop_reason: "end_turn",
-    stop_sequence: null,
-    type: "message",
-    usage: { input_tokens: 1, output_tokens: 1 },
-  }), {
-    headers: { "content-type": "application/json" },
-    status: 200,
-  });
+  return new Response(
+    JSON.stringify({
+      content: [{ text: "Готово", type: "text" }],
+      id: "msg_retry_001",
+      model: "deepseek-v4-flash",
+      role: "assistant",
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      type: "message",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }),
+    {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    },
+  );
 }
 
 afterEach(() => {

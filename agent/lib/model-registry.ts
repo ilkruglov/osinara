@@ -49,11 +49,12 @@ export const visionModel = visionConfig.supportsImageInput
   : null;
 
 // Voice is an explicit optional capability and never falls back to the agent transport.
-export const voiceTranscriptionModel = modelProviderConfig.voice.enabled && groqApiKey
-  ? createGroq({ apiKey: groqApiKey }).transcription(
-      modelProviderConfig.voice.transcriptionModelId,
-    )
-  : null;
+export const voiceTranscriptionModel =
+  modelProviderConfig.voice.enabled && groqApiKey
+    ? createGroq({ apiKey: groqApiKey }).transcription(
+        modelProviderConfig.voice.transcriptionModelId,
+      )
+    : null;
 
 type ReasoningEffort = "none" | "low" | "high" | "max";
 
@@ -66,9 +67,10 @@ function withReasoningEffort(
   if (transport.protocol === "openai-chat-completions" && transport.reasoning !== null) {
     return {
       ...transport,
-      reasoning: effort === "none"
-        ? { format: "deepseek", type: "none" }
-        : { effort, format: "deepseek", type: "effort" },
+      reasoning:
+        effort === "none"
+          ? { format: "deepseek", type: "none" }
+          : { effort, format: "deepseek", type: "effort" },
     };
   }
   return transport;
@@ -103,11 +105,12 @@ export function memoryReviewTransport(
 }
 
 const primaryConfig = modelProviderConfig.agent.models.primary;
-export const memoryReviewModel = primaryConfig.memoryReviewReasoningEffort === undefined
-  ? primaryModel
-  : createConfiguredLanguageModel({
-      apiKey: agentModelApiKey,
-      maxOutputTokens: primaryConfig.maxOutputTokens,
-      modelId: primaryConfig.id,
-      transport: memoryReviewTransport(modelProviderConfig.agent.transport, primaryConfig),
-    });
+export const memoryReviewModel =
+  primaryConfig.memoryReviewReasoningEffort === undefined
+    ? primaryModel
+    : createConfiguredLanguageModel({
+        apiKey: agentModelApiKey,
+        maxOutputTokens: primaryConfig.maxOutputTokens,
+        modelId: primaryConfig.id,
+        transport: memoryReviewTransport(modelProviderConfig.agent.transport, primaryConfig),
+      });

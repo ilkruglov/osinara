@@ -49,10 +49,13 @@ function telegramJson(value: unknown): TelegramJsonValue {
     typeof value === "boolean" ||
     typeof value === "number" ||
     typeof value === "string"
-  ) return value;
+  )
+    return value;
   if (Array.isArray(value)) return value.map(telegramJson);
   if (typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, telegramJson(item)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, telegramJson(item)]),
+    );
   }
   throw new AppError(
     "AGENT_TELEGRAM_DELIVERY_PAYLOAD_INVALID",
@@ -74,17 +77,18 @@ async function requestStableTelegramMessage(
 
   // `telegram.post` re-keys Eve as a side effect. Raw `sendMessage` deliberately bypasses that
   // adapter mutation while retaining Eve's authenticated Telegram API transport.
-  const payload = typeof message === "string"
-    ? { text: message }
-    : {
-        ...(message.reply_markup === undefined
-          ? {}
-          : { reply_markup: telegramJson(message.reply_markup) }),
-        ...(message.reply_parameters === undefined
-          ? {}
-          : { reply_parameters: telegramJson(message.reply_parameters) }),
-        text: message.text,
-      };
+  const payload =
+    typeof message === "string"
+      ? { text: message }
+      : {
+          ...(message.reply_markup === undefined
+            ? {}
+            : { reply_markup: telegramJson(message.reply_markup) }),
+          ...(message.reply_parameters === undefined
+            ? {}
+            : { reply_parameters: telegramJson(message.reply_parameters) }),
+          text: message.text,
+        };
   const response = await channel.telegram.request("sendMessage", {
     chat_id: chatId,
     ...(channel.state.messageThreadId === null
@@ -121,10 +125,7 @@ export async function postTelegramMessageWithReceiptWithoutContinuationChange(
   const result = await requestStableTelegramMessage(channel, message);
   const messageId = requireStableTelegramMessageId(result);
   const chatType = result.chat?.type;
-  if (
-    typeof chatType === "string" &&
-    TELEGRAM_CHAT_TYPES.has(chatType as TelegramChatType)
-  ) {
+  if (typeof chatType === "string" && TELEGRAM_CHAT_TYPES.has(chatType as TelegramChatType)) {
     return {
       chatType: chatType as TelegramChatType,
       messageId,

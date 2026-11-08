@@ -55,24 +55,37 @@ export async function makeRoomForContainer(input: {
   nowMs: number;
   project: string;
 }): Promise<{ room: boolean; running: number }> {
-  const running = (await input.docker.listContainers({
-    filters: {
-      label: [SANDBOX_SESSION_LABEL, `${SANDBOX_PROJECT_LABEL}=${input.project}`],
-      status: ["running"],
-    },
-  })).map((item) => ({ id: item.Id, sessionId: item.Labels[SANDBOX_SESSION_LABEL] }))
-    .filter((item): item is { id: string; sessionId: string } => typeof item.sessionId === "string");
+  const running = (
+    await input.docker.listContainers({
+      filters: {
+        label: [SANDBOX_SESSION_LABEL, `${SANDBOX_PROJECT_LABEL}=${input.project}`],
+        status: ["running"],
+      },
+    })
+  )
+    .map((item) => ({ id: item.Id, sessionId: item.Labels[SANDBOX_SESSION_LABEL] }))
+    .filter(
+      (item): item is { id: string; sessionId: string } => typeof item.sessionId === "string",
+    );
   // Every running container takes memory, the starting session's own (its Bash container when
   // its browser starts) included (Codex review, 5 October 2026).
   if (running.length < input.limit) return { room: true, running: running.length };
   // A session this process has never seen is the coldest of all.
-  const byLastUse = running.filter((item) => item.sessionId !== input.exceptSessionId)
-    .map((item) => ({ ...item, lastUsedAt: input.activity.lastActivityAt(item.sessionId) ?? Number.NEGATIVE_INFINITY }))
+  const byLastUse = running
+    .filter((item) => item.sessionId !== input.exceptSessionId)
+    .map((item) => ({
+      ...item,
+      lastUsedAt: input.activity.lastActivityAt(item.sessionId) ?? Number.NEGATIVE_INFINITY,
+    }))
     .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
   for (const item of byLastUse) {
-    const stopped = await input.activity.removeIfIdle(item.sessionId, input.nowMs - input.minIdleMs, async () => {
-      await stopContainer(input.docker.getContainer(item.id));
-    });
+    const stopped = await input.activity.removeIfIdle(
+      item.sessionId,
+      input.nowMs - input.minIdleMs,
+      async () => {
+        await stopContainer(input.docker.getContainer(item.id));
+      },
+    );
     if (stopped) return { room: true, running: running.length - 1 };
   }
   return { room: false, running: running.length };
@@ -83,9 +96,10 @@ async function stopContainer(container: Docker.Container): Promise<void> {
   try {
     await container.stop({ t: SANDBOX_STOP_TIMEOUT_SECONDS });
   } catch (error) {
-    const status = typeof error === "object" && error !== null && "statusCode" in error
-      ? Number(error.statusCode)
-      : undefined;
+    const status =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? Number(error.statusCode)
+        : undefined;
     if (status !== 304 && status !== 404) throw error;
   }
 }
@@ -104,49 +118,59 @@ export async function reconcileSandboxContainers(input: {
     },
   });
   const running = listed.filter((item) => item.State === "running");
-  const stopped = await Promise.all(listed.filter((item) => item.State !== "running").map(
-    async (item): Promise<StoppedContainer | null> => {
-      const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
-      if (typeof sessionId !== "string") return null;
-      const container = input.docker.getContainer(item.Id);
-      const inspection = await container.inspect();
-      return {
-        container,
-        finishedAtMs: requireFinishedAt(inspection.State.FinishedAt, item.Id),
-        id: item.Id,
-        sessionId,
-      };
-    },
-  ));
-  const stoppedContainers = stopped.filter((item): item is StoppedContainer => item !== null)
+  const stopped = await Promise.all(
+    listed
+      .filter((item) => item.State !== "running")
+      .map(async (item): Promise<StoppedContainer | null> => {
+        const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
+        if (typeof sessionId !== "string") return null;
+        const container = input.docker.getContainer(item.Id);
+        const inspection = await container.inspect();
+        return {
+          container,
+          finishedAtMs: requireFinishedAt(inspection.State.FinishedAt, item.Id),
+          id: item.Id,
+          sessionId,
+        };
+      }),
+  );
+  const stoppedContainers = stopped
+    .filter((item): item is StoppedContainer => item !== null)
     .sort((left, right) => left.finishedAtMs - right.finishedAtMs);
   const excess = Math.max(0, stoppedContainers.length - SANDBOX_STOPPED_CACHE_MAX);
   const retentionCutoffMs = input.nowMs - SANDBOX_STOPPED_RETENTION_MS;
-  const removalIds = new Set(stoppedContainers
-    .filter((item, index) => item.finishedAtMs <= retentionCutoffMs || index < excess)
-    .map((item) => item.id));
+  const removalIds = new Set(
+    stoppedContainers
+      .filter((item, index) => item.finishedAtMs <= retentionCutoffMs || index < excess)
+      .map((item) => item.id),
+  );
 
   // Stop only through the activity gate so an arriving command cannot race the transition.
-  const stopResults = await Promise.all(running.map(async (item) => {
-    const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
-    if (typeof sessionId !== "string") return false;
-    return await input.activity.removeIfIdle(sessionId, input.idleCutoffMs, async () => {
-      await stopContainer(input.docker.getContainer(item.Id));
-    });
-  }));
+  const stopResults = await Promise.all(
+    running.map(async (item) => {
+      const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
+      if (typeof sessionId !== "string") return false;
+      return await input.activity.removeIfIdle(sessionId, input.idleCutoffMs, async () => {
+        await stopContainer(input.docker.getContainer(item.Id));
+      });
+    }),
+  );
 
   // Recently stopped containers form the bounded warm cache; only expired or excess entries leave it.
-  const removeResults = await Promise.all(stoppedContainers.map(async (item) => {
-    if (!removalIds.has(item.id)) return false;
-    return await input.activity.removeIfIdle(item.sessionId, input.idleCutoffMs, async () => {
-      await item.container.remove({ force: true, v: true }).catch((error) => {
-        const status = typeof error === "object" && error !== null && "statusCode" in error
-          ? Number(error.statusCode)
-          : undefined;
-        if (status !== 404) throw error;
+  const removeResults = await Promise.all(
+    stoppedContainers.map(async (item) => {
+      if (!removalIds.has(item.id)) return false;
+      return await input.activity.removeIfIdle(item.sessionId, input.idleCutoffMs, async () => {
+        await item.container.remove({ force: true, v: true }).catch((error) => {
+          const status =
+            typeof error === "object" && error !== null && "statusCode" in error
+              ? Number(error.statusCode)
+              : undefined;
+          if (status !== 404) throw error;
+        });
       });
-    });
-  }));
+    }),
+  );
   return {
     removed: removeResults.filter(Boolean).length,
     stopped: stopResults.filter(Boolean).length,

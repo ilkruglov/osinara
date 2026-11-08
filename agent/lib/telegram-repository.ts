@@ -29,7 +29,10 @@ interface TelegramGroupRow {
 }
 
 export interface TelegramRepository {
-  claimFirstOwner(code: string, profile: TelegramProfile): Promise<"claimed" | "configured" | "invalid">;
+  claimFirstOwner(
+    code: string,
+    profile: TelegramProfile,
+  ): Promise<"claimed" | "configured" | "invalid">;
   findGroup(
     telegramChatId: string,
     telegramChatType: "group" | "supergroup",
@@ -109,7 +112,9 @@ export const telegramRepository: TelegramRepository = {
         "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
         [family.rows[0]?.id, user.rows[0]?.id],
       );
-      await client.query("UPDATE bootstrap_codes SET consumed_at = now() WHERE id = $1", [record.id]);
+      await client.query("UPDATE bootstrap_codes SET consumed_at = now() WHERE id = $1", [
+        record.id,
+      ]);
       await client.query("COMMIT");
       return "claimed";
     } catch (error) {

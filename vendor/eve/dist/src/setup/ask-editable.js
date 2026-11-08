@@ -3,9 +3,7 @@ function selectedValue(t, n) {
   let r = optionById(t, n);
   if (r !== void 0) return r.value;
   let i = t.options.map((e) => e.id).join(`, `);
-  throw Error(
-    `Invalid answer for "${t.key}": ${String(n)}. Expected one of: ${i}.`,
-  );
+  throw Error(`Invalid answer for "${t.key}": ${String(n)}. Expected one of: ${i}.`);
 }
 async function renderEditableQuestion(e, n) {
   let r = requiredOptionId(n, n.editable.value, `configured editable value`),
@@ -15,10 +13,7 @@ async function renderEditableQuestion(e, n) {
       hint: e.hint,
       featured: e.featured,
     })),
-    a =
-      n.recommended === void 0
-        ? void 0
-        : requiredOptionId(n, n.recommended, `recommendation`);
+    a = n.recommended === void 0 ? void 0 : requiredOptionId(n, n.recommended, `recommendation`);
   if (e.selectEditable !== void 0) {
     let t = await e.selectEditable({
         message: n.message,
@@ -35,15 +30,11 @@ async function renderEditableQuestion(e, n) {
     return o === n.editable.value
       ? {
           value: o,
-          text:
-            t.kind === `edited` ? t.text.trim() : n.editable.recommended.trim(),
+          text: t.kind === `edited` ? t.text.trim() : n.editable.recommended.trim(),
         }
       : { value: o };
   }
-  let o = selectedValue(
-    n,
-    await e.select({ message: n.message, options: i, initialValue: a }),
-  );
+  let o = selectedValue(n, await e.select({ message: n.message, options: i, initialValue: a }));
   return o === n.editable.value
     ? {
         value: o,

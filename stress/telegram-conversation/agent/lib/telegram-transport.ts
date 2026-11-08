@@ -9,17 +9,25 @@ globalThis.fetch = async (request, init) => {
   const url = new URL(request instanceof Request ? request.url : String(request));
   if (url.hostname === "memory-test" && url.pathname === "/v1/embeddings") {
     const body = JSON.parse(String(init?.body));
-    return Response.json({ model: body.model, data: body.input.map((_text: string, index: number) => ({
-      index, embedding: [1, ...Array.from({ length: 767 }, () => 0)],
-    })) });
+    return Response.json({
+      model: body.model,
+      data: body.input.map((_text: string, index: number) => ({
+        index,
+        embedding: [1, ...Array.from({ length: 767 }, () => 0)],
+      })),
+    });
   }
   if (url.hostname !== "api.telegram.org") return networkFetch(request, init);
   const method = url.pathname.split("/").at(-1);
   const body = JSON.parse(String(init?.body ?? "{}"));
   if (method === "getChat") {
-    return Response.json({ ok: true, result: { id: Number(body.chat_id), type: "supergroup", available_reactions: [] } });
+    return Response.json({
+      ok: true,
+      result: { id: Number(body.chat_id), type: "supergroup", available_reactions: [] },
+    });
   }
-  if (method === "sendChatAction" || method === "setMessageReaction") return Response.json({ ok: true, result: true });
+  if (method === "sendChatAction" || method === "setMessageReaction")
+    return Response.json({ ok: true, result: true });
   if (method !== "sendMessage" && method !== "sendRichMessage") {
     throw new Error(`TEST_UNEXPECTED_TELEGRAM_METHOD: ${method}`);
   }
@@ -27,9 +35,12 @@ globalThis.fetch = async (request, init) => {
     "INSERT INTO telegram_conversation_test_deliveries (body) VALUES ($1) RETURNING id",
     [body],
   );
-  return Response.json({ ok: true, result: {
-    message_id: result.rows[0]!.id,
-    chat: { id: Number(body.chat_id), type: Number(body.chat_id) > 0 ? "private" : "supergroup" },
-    date: Math.floor(Date.now() / 1_000),
-  } });
+  return Response.json({
+    ok: true,
+    result: {
+      message_id: result.rows[0]!.id,
+      chat: { id: Number(body.chat_id), type: Number(body.chat_id) > 0 ? "private" : "supergroup" },
+      date: Math.floor(Date.now() / 1_000),
+    },
+  });
 };

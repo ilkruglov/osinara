@@ -9,9 +9,7 @@ import {
   isInstrumentationDisabled,
   isInstrumentationProvider,
 } from "#public/instrumentation/provider.js";
-const INSTRUMENTATION_PROVIDERS_GLOBAL_KEY = Symbol.for(
-    `eve.harness-instrumentation-providers`,
-  ),
+const INSTRUMENTATION_PROVIDERS_GLOBAL_KEY = Symbol.for(`eve.harness-instrumentation-providers`),
   globalContainer = globalThis;
 function providerRegistry() {
   let e = globalContainer[INSTRUMENTATION_PROVIDERS_GLOBAL_KEY];
@@ -22,8 +20,7 @@ function providerRegistry() {
 function seedInstrumentationProviders() {
   let e = providerRegistry();
   (process.env.VERCEL_ENV === `production` && e.set(`agent-runs`, agentRuns()),
-    process.env[DEVELOPMENT_WORKER_APP_ROOT_ENV] !== void 0 &&
-      e.set(`local`, localTraces()));
+    process.env[DEVELOPMENT_WORKER_APP_ROOT_ENV] !== void 0 && e.set(`local`, localTraces()));
 }
 async function registerInstrumentationProvider(e) {
   if (isInstrumentationDisabled(e.value)) {

@@ -5,10 +5,7 @@ import {
   expectPositiveInteger,
   expectString,
 } from "#internal/authored-module.js";
-import {
-  serializeInputSchema,
-  serializeOutputSchema,
-} from "#shared/tool-schema.js";
+import { serializeInputSchema, serializeOutputSchema } from "#shared/tool-schema.js";
 import {
   assertResolverOnlyDynamicSentinel,
   isDynamicSentinel,
@@ -32,10 +29,7 @@ function normalizeToolDefinition(n, r) {
       expectOnlyKnownKeys(e, [`kind`, `maxSubagents`], r),
       {
         kind: `workflow-tool`,
-        maxSubagents:
-          e.maxSubagents === void 0
-            ? void 0
-            : expectPositiveInteger(e.maxSubagents, r),
+        maxSubagents: e.maxSubagents === void 0 ? void 0 : expectPositiveInteger(e.maxSubagents, r),
       }
     );
   }
@@ -50,15 +44,7 @@ function normalizeToolDefinition(n, r) {
   let i = expectObjectRecord(n, r);
   expectOnlyKnownKeys(
     i,
-    [
-      `auth`,
-      `description`,
-      `execute`,
-      `inputSchema`,
-      `approval`,
-      `outputSchema`,
-      `toModelOutput`,
-    ],
+    [`auth`, `description`, `execute`, `inputSchema`, `approval`, `outputSchema`, `toModelOutput`],
     r,
   );
   let a = i.inputSchema === void 0 ? null : serializeInputSchema(i.inputSchema),
@@ -72,8 +58,7 @@ function normalizeToolDefinition(n, r) {
     o !== void 0 && (s.outputSchema = o),
     i.approval !== void 0 && normalizeApproval(i.approval, r),
     i.toModelOutput !== void 0 && expectFunction(i.toModelOutput, r),
-    i.auth !== void 0 &&
-      expectFunction(expectObjectRecord(i.auth, r).getToken, r),
+    i.auth !== void 0 && expectFunction(expectObjectRecord(i.auth, r).getToken, r),
     { kind: `tool`, definition: s }
   );
 }

@@ -24,7 +24,7 @@ export interface MutableAgentScheduleRow extends AgentScheduleRow {
 }
 
 export function agentScheduleColumns(qualifier?: string): string {
-  const column = (name: string) => qualifier === undefined ? name : `${qualifier}.${name}`;
+  const column = (name: string) => (qualifier === undefined ? name : `${qualifier}.${name}`);
   return `${column("id")}, ${column("scope")}, ${column("title")}, ${column("user_request")}, ${column("scenario_prompt")},
   ${column("timezone")}, ${column("recurrence_kind")}, ${column("recurrence_interval")}, ${column("recurrence_days_of_week")},
   ${column("next_run_at")}, ${column("status")}, ${column("message_thread_id")}::text, ${column("forum_topic_id")}::text,
@@ -66,10 +66,10 @@ export async function lockAgentScheduleOperation(
   operationKey: string,
 ): Promise<void> {
   // PostgreSQL row locks cannot serialize a not-yet-created operation row.
-  await client.query(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0))",
-    [auth.familyId, operationKey],
-  );
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0))", [
+    auth.familyId,
+    operationKey,
+  ]);
 }
 
 export async function selectAgentSchedule(
@@ -109,11 +109,12 @@ export async function requireAgentScheduleMutationAccess(
     throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
   }
   const role = await requireCurrentMembership(client, auth);
-  const allowed = schedule.scope === "personal"
-    ? schedule.author_user_id === auth.userId
-    : schedule.scope === "family"
-      ? schedule.author_user_id === auth.userId || role === "owner"
-      : role === "owner" && auth.telegramChatType === "private";
+  const allowed =
+    schedule.scope === "personal"
+      ? schedule.author_user_id === auth.userId
+      : schedule.scope === "family"
+        ? schedule.author_user_id === auth.userId || role === "owner"
+        : role === "owner" && auth.telegramChatType === "private";
   if (!allowed) {
     throw new AppError(
       "AGENT_SCHEDULE_MUTATION_DENIED",

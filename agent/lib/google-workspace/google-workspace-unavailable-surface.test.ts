@@ -43,7 +43,8 @@ describe("Google Workspace surface without OAuth credentials", () => {
   it("omits the Google tools from private and family modes", () => {
     for (const environment of ["private", "family"] as const) {
       const surface = buildModeToolSurface({ environment });
-      for (const name of GOOGLE_TOOLS) expect(surface, `${environment}.${name}`).not.toHaveProperty(name);
+      for (const name of GOOGLE_TOOLS)
+        expect(surface, `${environment}.${name}`).not.toHaveProperty(name);
       expect(surface).toHaveProperty("remember");
       expect(surface).toHaveProperty("manage_reminder");
     }
@@ -51,6 +52,7 @@ describe("Google Workspace surface without OAuth credentials", () => {
 
   it("does not issue gws skill packages to a trusted session", () => {
     const skills = resolveTrustedSessionSkills(privateAuth());
-    for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).not.toHaveProperty(name);
+    for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES)
+      expect(skills).not.toHaveProperty(name);
   });
 });

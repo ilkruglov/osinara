@@ -90,9 +90,7 @@ function accumulateTurnUsage(e) {
     n = e.previous?.session ?? ZERO_TOKEN_USAGE;
   return {
     ...addTokenUsage(
-      e.previous !== void 0 && e.previous.turnId === e.turnId
-        ? e.previous
-        : ZERO_TOKEN_USAGE,
+      e.previous !== void 0 && e.previous.turnId === e.turnId ? e.previous : ZERO_TOKEN_USAGE,
       t,
     ),
     turnId: e.turnId,

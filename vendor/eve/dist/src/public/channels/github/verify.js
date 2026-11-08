@@ -6,16 +6,12 @@ async function verifyGitHubRequest(e, t) {
   let n = await e.text();
   if (t.webhookVerifier !== void 0) {
     let r = await t.webhookVerifier(e, n);
-    if (!r)
-      throw Error(
-        `githubChannel: inbound webhook verifier rejected the request.`,
-      );
+    if (!r) throw Error(`githubChannel: inbound webhook verifier rejected the request.`);
     return typeof r == `string` ? r : n;
   }
   let i = await resolveGitHubWebhookSecret(t.webhookSecret),
     a = e.headers.get(`x-hub-signature-256`) ?? ``;
-  if (!a)
-    throw Error(`githubChannel: inbound request missing X-Hub-Signature-256.`);
+  if (!a) throw Error(`githubChannel: inbound request missing X-Hub-Signature-256.`);
   if (!constantTimeCompare(signGitHubWebhookBody(n, i), a))
     throw Error(`githubChannel: inbound request signature mismatch.`);
   return n;

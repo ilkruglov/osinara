@@ -20,43 +20,43 @@
  * output.
  */
 export interface LiveRegionOutput {
-    write(chunk: string): boolean;
+  write(chunk: string): boolean;
 }
 export interface LiveRegionOptions {
-    /** Wrap each paint in synchronized-update markers to avoid flicker. */
-    synchronized?: boolean;
+  /** Wrap each paint in synchronized-update markers to avoid flicker. */
+  synchronized?: boolean;
 }
 export declare class LiveRegion {
-    #private;
-    constructor(output: LiveRegionOutput, options?: LiveRegionOptions);
-    /** Hides the hardware cursor; the renderer draws its own caret. */
-    hideCursor(): void;
-    showCursor(): void;
-    /** Toggles bracketed paste through the original write, bypassing foreign-output capture. */
-    emitBracketedPaste(enabled: boolean): void;
-    /** Writes a newline through the bound (original) write. */
-    newline(): void;
-    /**
-     * Repaints the live region in place from `liveRows`. Each row must already
-     * be styled and fit within the terminal width (one row == one screen line).
-     */
-    update(liveRows: readonly string[]): void;
-    /**
-     * Commits `committedRows` to scrollback above the live region, then repaints
-     * `liveRows`. Committed rows are permanent and scroll with the terminal.
-     */
-    flush(committedRows: readonly string[], liveRows: readonly string[]): void;
-    /**
-     * Erases the live region, leaving the cursor at its former top. Committed
-     * scrollback is untouched. Used on teardown before restoring the cursor.
-     */
-    clear(): void;
-    /** Clears the visible transcript and, where supported, terminal scrollback. */
-    clearAll(): void;
-    /**
-     * Forgets the live-region row count without moving the cursor. Call after
-     * the cursor position is known to be a fresh column-0 line that the engine
-     * did not itself paint (e.g. immediately after teardown).
-     */
-    reset(): void;
+  #private;
+  constructor(output: LiveRegionOutput, options?: LiveRegionOptions);
+  /** Hides the hardware cursor; the renderer draws its own caret. */
+  hideCursor(): void;
+  showCursor(): void;
+  /** Toggles bracketed paste through the original write, bypassing foreign-output capture. */
+  emitBracketedPaste(enabled: boolean): void;
+  /** Writes a newline through the bound (original) write. */
+  newline(): void;
+  /**
+   * Repaints the live region in place from `liveRows`. Each row must already
+   * be styled and fit within the terminal width (one row == one screen line).
+   */
+  update(liveRows: readonly string[]): void;
+  /**
+   * Commits `committedRows` to scrollback above the live region, then repaints
+   * `liveRows`. Committed rows are permanent and scroll with the terminal.
+   */
+  flush(committedRows: readonly string[], liveRows: readonly string[]): void;
+  /**
+   * Erases the live region, leaving the cursor at its former top. Committed
+   * scrollback is untouched. Used on teardown before restoring the cursor.
+   */
+  clear(): void;
+  /** Clears the visible transcript and, where supported, terminal scrollback. */
+  clearAll(): void;
+  /**
+   * Forgets the live-region row count without moving the cursor. Call after
+   * the cursor position is known to be a fresh column-0 line that the engine
+   * did not itself paint (e.g. immediately after teardown).
+   */
+  reset(): void;
 }

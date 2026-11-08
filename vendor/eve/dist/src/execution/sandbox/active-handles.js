@@ -4,10 +4,7 @@ function createActiveSandboxHandleKey(e, t) {
   return `${e}\0${t}`;
 }
 function trackActiveSandboxHandle(e) {
-  activeSandboxHandles.set(
-    createActiveSandboxHandleKey(e.backendName, e.sessionKey),
-    e.handle,
-  );
+  activeSandboxHandles.set(createActiveSandboxHandleKey(e.backendName, e.sessionKey), e.handle);
 }
 async function shutdownActiveSandboxHandles(n) {
   let r = [...activeSandboxHandles.entries()];
@@ -16,9 +13,7 @@ async function shutdownActiveSandboxHandles(n) {
   for (let [t, a] of i.entries())
     if (a.status === `rejected`) {
       let i = r[t];
-      n?.log?.(
-        `failed to shut down sandbox "${i?.[0] ?? `unknown`}": ${toErrorMessage(a.reason)}`,
-      );
+      n?.log?.(`failed to shut down sandbox "${i?.[0] ?? `unknown`}": ${toErrorMessage(a.reason)}`);
     }
 }
 function countActiveSandboxHandles() {

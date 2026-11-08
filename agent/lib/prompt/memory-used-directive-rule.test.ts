@@ -18,11 +18,14 @@ describe("memory-used directive rule", () => {
   });
 
   it("follows memory access in an external group", () => {
-    expect(modeInstructions({ capabilities: new Set(), environment: "external" }))
-      .not.toContain(RULE_FRAGMENT);
-    expect(modeInstructions({ capabilities: new Set(["remember"]), environment: "external" }))
-      .toContain(RULE_FRAGMENT);
-    expect(modeInstructions({ capabilities: new Set(["search_memories"]), environment: "external" }))
-      .toContain(RULE_FRAGMENT);
+    expect(modeInstructions({ capabilities: new Set(), environment: "external" })).not.toContain(
+      RULE_FRAGMENT,
+    );
+    expect(
+      modeInstructions({ capabilities: new Set(["remember"]), environment: "external" }),
+    ).toContain(RULE_FRAGMENT);
+    expect(
+      modeInstructions({ capabilities: new Set(["search_memories"]), environment: "external" }),
+    ).toContain(RULE_FRAGMENT);
   });
 });

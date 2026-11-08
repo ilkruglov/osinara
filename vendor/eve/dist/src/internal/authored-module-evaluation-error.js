@@ -4,11 +4,7 @@ import { fileURLToPath } from "node:url";
 function createAuthoredModuleEvaluationError(e, t) {
   let n = describeInstalledPackageLoadFailure(t);
   return Error(
-    [
-      `Failed to evaluate authored module:`,
-      `  ${e}`,
-      ...(n === void 0 ? [] : [``, n]),
-    ].join(`
+    [`Failed to evaluate authored module:`, `  ${e}`, ...(n === void 0 ? [] : [``, n])].join(`
 `),
     { cause: t },
   );
@@ -66,8 +62,7 @@ function findInstalledPackage(t) {
     if (existsSync(t) && isNodeModulesPath(t))
       try {
         let e = JSON.parse(readFileSync(t, `utf8`));
-        if (typeof e.name == `string` && e.name.length > 0)
-          return { name: e.name, root: r };
+        if (typeof e.name == `string` && e.name.length > 0) return { name: e.name, root: r };
       } catch {
         return;
       }

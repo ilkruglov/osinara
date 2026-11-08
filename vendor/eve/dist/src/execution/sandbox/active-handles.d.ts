@@ -4,7 +4,7 @@
  * variance friction.
  */
 export interface ShutdownCapableSandboxHandle {
-    shutdown(): Promise<void>;
+  shutdown(): Promise<void>;
 }
 /**
  * Registers a live sandbox handle for shutdown tracking. A handle
@@ -12,9 +12,9 @@ export interface ShutdownCapableSandboxHandle {
  * previous entry.
  */
 export declare function trackActiveSandboxHandle(input: {
-    readonly backendName: string;
-    readonly handle: ShutdownCapableSandboxHandle;
-    readonly sessionKey: string;
+  readonly backendName: string;
+  readonly handle: ShutdownCapableSandboxHandle;
+  readonly sessionKey: string;
 }): void;
 /**
  * Stops every tracked sandbox by calling `shutdown()` on each handle in
@@ -22,7 +22,7 @@ export declare function trackActiveSandboxHandle(input: {
  * thrown so one misbehaving sandbox cannot block server shutdown.
  */
 export declare function shutdownActiveSandboxHandles(input?: {
-    readonly log?: (message: string) => void;
+  readonly log?: (message: string) => void;
 }): Promise<void>;
 /** Returns the number of tracked handles. Exposed for tests and logging. */
 export declare function countActiveSandboxHandles(): number;

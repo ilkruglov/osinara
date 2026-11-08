@@ -4,10 +4,7 @@ function getPendingWorkflowInterrupt(e) {
   let n = e?.[PENDING_KEY];
   if (
     isRecord(n) &&
-    !(
-      !isWorkflowInterruptShape(n.interrupt) ||
-      !Array.isArray(n.responseMessages)
-    )
+    !(!isWorkflowInterruptShape(n.interrupt) || !Array.isArray(n.responseMessages))
   )
     return { interrupt: n.interrupt, responseMessages: n.responseMessages };
 }
@@ -26,10 +23,7 @@ function setPendingWorkflowInterrupt(e) {
 function clearPendingWorkflowInterrupt(e) {
   if (e.state?.[PENDING_KEY] === void 0) return e;
   let n = { ...e.state };
-  return (
-    delete n[PENDING_KEY],
-    { ...e, state: Object.keys(n).length > 0 ? n : void 0 }
-  );
+  return (delete n[PENDING_KEY], { ...e, state: Object.keys(n).length > 0 ? n : void 0 });
 }
 function isWorkflowInterruptShape(t) {
   return (
@@ -46,8 +40,4 @@ function isWorkflowInterruptShape(t) {
 function isRecord(e) {
   return typeof e == `object` && !!e && !Array.isArray(e);
 }
-export {
-  clearPendingWorkflowInterrupt,
-  getPendingWorkflowInterrupt,
-  setPendingWorkflowInterrupt,
-};
+export { clearPendingWorkflowInterrupt, getPendingWorkflowInterrupt, setPendingWorkflowInterrupt };

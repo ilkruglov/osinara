@@ -49,11 +49,15 @@ describe("timeline timestamps", () => {
   });
 
   it("dates each calendar day once, in the order the messages arrived", () => {
-    const context = formatTelegramGroupJournalContext([
-      entryAt("1", "2026-07-12T10:00:00.000Z"),
-      entryAt("2", "2026-07-12T23:59:00.000Z"),
-      entryAt("3", "2026-07-13T00:01:00.000Z"),
-    ], 12_000) ?? "";
+    const context =
+      formatTelegramGroupJournalContext(
+        [
+          entryAt("1", "2026-07-12T10:00:00.000Z"),
+          entryAt("2", "2026-07-12T23:59:00.000Z"),
+          entryAt("3", "2026-07-13T00:01:00.000Z"),
+        ],
+        12_000,
+      ) ?? "";
 
     expect(context.split("-- 2026-07-12 UTC --").length - 1).toBe(1);
     expect(context.split("-- 2026-07-13 UTC --").length - 1).toBe(1);
@@ -62,14 +66,15 @@ describe("timeline timestamps", () => {
   });
 
   it("renders the time of day and the day separator in the given timezone", () => {
-    const context = formatTelegramGroupJournalContext(
-      [entryAt("1", "2026-09-08T15:19:00.000Z")],
-      12_000,
-      null,
-      null,
-      null,
-      "Europe/Moscow",
-    ) ?? "";
+    const context =
+      formatTelegramGroupJournalContext(
+        [entryAt("1", "2026-09-08T15:19:00.000Z")],
+        12_000,
+        null,
+        null,
+        null,
+        "Europe/Moscow",
+      ) ?? "";
 
     expect(context).toContain("-- 2026-09-08 Europe/Moscow (+03:00) --");
     expect(context).toContain(" 18:19 ");
@@ -77,14 +82,15 @@ describe("timeline timestamps", () => {
   });
 
   it("splits calendar days by the given timezone, not by UTC", () => {
-    const context = formatTelegramGroupJournalContext(
-      [entryAt("1", "2026-09-08T20:30:00.000Z"), entryAt("2", "2026-09-08T21:30:00.000Z")],
-      12_000,
-      null,
-      null,
-      null,
-      "Europe/Moscow",
-    ) ?? "";
+    const context =
+      formatTelegramGroupJournalContext(
+        [entryAt("1", "2026-09-08T20:30:00.000Z"), entryAt("2", "2026-09-08T21:30:00.000Z")],
+        12_000,
+        null,
+        null,
+        null,
+        "Europe/Moscow",
+      ) ?? "";
 
     expect(context.split("-- 2026-09-08 Europe/Moscow (+03:00) --").length - 1).toBe(1);
     expect(context.split("-- 2026-09-09 Europe/Moscow (+03:00) --").length - 1).toBe(1);
@@ -92,14 +98,15 @@ describe("timeline timestamps", () => {
   });
 
   it("falls back to UTC when the timezone is unknown to the runtime", () => {
-    const context = formatTelegramGroupJournalContext(
-      [entryAt("1", "2026-09-08T15:19:00.000Z")],
-      12_000,
-      null,
-      null,
-      null,
-      "Mars/Olympus",
-    ) ?? "";
+    const context =
+      formatTelegramGroupJournalContext(
+        [entryAt("1", "2026-09-08T15:19:00.000Z")],
+        12_000,
+        null,
+        null,
+        null,
+        "Mars/Olympus",
+      ) ?? "";
 
     expect(context).toContain("-- 2026-09-08 UTC --");
     expect(context).toContain(" 15:19 ");
@@ -138,11 +145,7 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(newestOnly).not.toBeNull();
     if (!newestOnly) throw new Error("Test expected journal context");
     const context = formatTelegramGroupJournalContext(
-      [
-        entry("1", "старая-1".repeat(100)),
-        entry("2", "старая-2".repeat(100)),
-        entry("3", "новая"),
-      ],
+      [entry("1", "старая-1".repeat(100)), entry("2", "старая-2".repeat(100)), entry("3", "новая")],
       newestOnly.length + 150,
     );
     expect(context).not.toBeNull();
@@ -196,16 +199,21 @@ describe("formatTelegramGroupJournalContext", () => {
   });
 
   it("exposes safe lazy attachment metadata without Telegram file identifiers", () => {
-    const context = formatTelegramGroupJournalContext([{
-      ...entry("42", "проверь договор"),
-      attachment: {
-        attachmentId: "00000000-0000-4000-8000-000000000099",
-        fileName: "договор.pdf",
-        kind: "document",
-        mediaType: "application/pdf",
-        size: 1_024,
-      },
-    }], 10_000)!;
+    const context = formatTelegramGroupJournalContext(
+      [
+        {
+          ...entry("42", "проверь договор"),
+          attachment: {
+            attachmentId: "00000000-0000-4000-8000-000000000099",
+            fileName: "договор.pdf",
+            kind: "document",
+            mediaType: "application/pdf",
+            size: 1_024,
+          },
+        },
+      ],
+      10_000,
+    )!;
 
     expect(context).toContain("00000000-0000-4000-8000-000000000099");
     expect(context).toContain("договор.pdf");
@@ -215,7 +223,9 @@ describe("formatTelegramGroupJournalContext", () => {
 
 describe("member tags", () => {
   it("prints the tag next to the sender's name", () => {
-    const context = formatTelegramGroupJournalContext([{ ...entry("1", "привет"), senderTag: "Батя" }], 12_000) ?? "";
+    const context =
+      formatTelegramGroupJournalContext([{ ...entry("1", "привет"), senderTag: "Батя" }], 12_000) ??
+      "";
 
     expect(context).toContain('"Анна (anna)" tag:"Батя" ');
   });

@@ -13,9 +13,8 @@ import { memoryConflictRepository } from "./memory-conflict-repository.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("memory conflict repository", () => {
   beforeEach(async () => {
@@ -60,12 +59,22 @@ describeWithDatabase("memory conflict repository", () => {
       userId: member.id,
     };
     const first = await memoryRepository.create(ownerAuth, {
-      confirmation: "user_confirmed", content: "Город Казань", kind: "fact",
-      operationKey: "conflict-first", scope: "family", sensitivity: "normal", source: "test",
+      confirmation: "user_confirmed",
+      content: "Город Казань",
+      kind: "fact",
+      operationKey: "conflict-first",
+      scope: "family",
+      sensitivity: "normal",
+      source: "test",
     });
     const second = await memoryRepository.create(memberAuth, {
-      confirmation: "user_confirmed", content: "Дата одиннадцатое", kind: "fact",
-      operationKey: "conflict-second", scope: "family", sensitivity: "normal", source: "test",
+      confirmation: "user_confirmed",
+      content: "Дата одиннадцатое",
+      kind: "fact",
+      operationKey: "conflict-second",
+      scope: "family",
+      sensitivity: "normal",
+      source: "test",
     });
     const conflict = await database().query<{ conflict_ref: string }>(
       `INSERT INTO claim_conflicts
@@ -81,16 +90,27 @@ describeWithDatabase("memory conflict repository", () => {
       operationKey: "resolve-conflict-1",
     };
 
-    await expect(memoryConflictRepository.resolve(memberAuth, input))
-      .rejects.toThrowError(/AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u);
+    await expect(memoryConflictRepository.resolve(memberAuth, input)).rejects.toThrowError(
+      /AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u,
+    );
     // A member who authored both sides may resolve, but not after the membership is revoked.
     const ownClaimA = await memoryRepository.create(memberAuth, {
-      confirmation: "user_confirmed", content: "Гоша ест сухой корм", kind: "fact",
-      operationKey: "conflict-own-a", scope: "family", sensitivity: "normal", source: "test",
+      confirmation: "user_confirmed",
+      content: "Гоша ест сухой корм",
+      kind: "fact",
+      operationKey: "conflict-own-a",
+      scope: "family",
+      sensitivity: "normal",
+      source: "test",
     });
     const ownClaimB = await memoryRepository.create(memberAuth, {
-      confirmation: "user_confirmed", content: "Гоша ест влажный корм", kind: "fact",
-      operationKey: "conflict-own-b", scope: "family", sensitivity: "normal", source: "test",
+      confirmation: "user_confirmed",
+      content: "Гоша ест влажный корм",
+      kind: "fact",
+      operationKey: "conflict-own-b",
+      scope: "family",
+      sensitivity: "normal",
+      source: "test",
     });
     const ownConflict = await database().query<{ conflict_ref: string }>(
       `INSERT INTO claim_conflicts
@@ -99,16 +119,26 @@ describeWithDatabase("memory conflict repository", () => {
                'family', $3, 'deterministic_guard') RETURNING conflict_ref`,
       [ownClaimA.id, ownClaimB.id, ownerAuth.familyId],
     );
-    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [ownerAuth.familyId, memberAuth.userId]);
-    await expect(memoryConflictRepository.resolve(memberAuth, {
-      action: "choose", conflictRef: ownConflict.rows[0]!.conflict_ref, memoryRef: ownClaimA.memoryRef, operationKey: "conflict-own-resolve",
-    })).rejects.toThrowError(/AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u);
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      ownerAuth.familyId,
+      memberAuth.userId,
+    ]);
+    await expect(
+      memoryConflictRepository.resolve(memberAuth, {
+        action: "choose",
+        conflictRef: ownConflict.rows[0]!.conflict_ref,
+        memoryRef: ownClaimA.memoryRef,
+        operationKey: "conflict-own-resolve",
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u);
     const resolved = await memoryConflictRepository.resolve(ownerAuth, input);
     await expect(memoryConflictRepository.resolve(ownerAuth, input)).resolves.toEqual(resolved);
-    await expect(memoryConflictRepository.resolve(ownerAuth, {
-      ...input,
-      memoryRef: second.memoryRef,
-    })).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
+    await expect(
+      memoryConflictRepository.resolve(ownerAuth, {
+        ...input,
+        memoryRef: second.memoryRef,
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
 
     const versions = await database().query<{ claim_status: string; id: string }>(
       "SELECT id, claim_status::text FROM memory_items WHERE id = ANY($1::uuid[]) ORDER BY id",

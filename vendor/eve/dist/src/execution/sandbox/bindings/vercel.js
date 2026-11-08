@@ -17,9 +17,7 @@ import {
 import { getNamedVercelSandbox } from "#execution/sandbox/bindings/vercel-lookup.js";
 import { normalizeVercelReadStream } from "#execution/sandbox/bindings/vercel-read-stream.js";
 function createVercelSandbox(e = {}) {
-  let t =
-      e.loadSandboxModule ??
-      (async () => await import(`#compiled/@vercel/sandbox/index.js`)),
+  let t = e.loadSandboxModule ?? (async () => await import(`#compiled/@vercel/sandbox/index.js`)),
     n = { timeout: DEFAULT_SANDBOX_TIMEOUT_MS, ...e.createOptions },
     r = e.createSandbox ?? createVercelEveImageSandbox,
     i = new Map();
@@ -51,9 +49,7 @@ function createVercelSandbox(e = {}) {
           tags: c,
         });
       } catch (e) {
-        throw u !== null &&
-          (isVercelSnapshotUnavailableError(e) ||
-            isVercelSandboxMissingError(e))
+        throw u !== null && (isVercelSnapshotUnavailableError(e) || isVercelSandboxMissingError(e))
           ? (i.delete(u.templateKey),
             await (
               await getNamedVercelSandbox({
@@ -66,10 +62,9 @@ function createVercelSandbox(e = {}) {
               backendName: `vercel`,
               templateKey: u.templateKey,
             }))
-          : Error(
-              `Failed to create sandbox session "${o.sessionKey}": ${errorMessage(e)}`,
-              { cause: e },
-            );
+          : Error(`Failed to create sandbox session "${o.sessionKey}": ${errorMessage(e)}`, {
+              cause: e,
+            });
       }
       return (
         u === null &&
@@ -105,8 +100,7 @@ async function ensureTemplateWithUnavailableRetry(e) {
   try {
     return await ensureTemplate(e);
   } catch (t) {
-    if (!isVercelSnapshotUnavailableError(t) && !isVercelSandboxMissingError(t))
-      throw t;
+    if (!isVercelSnapshotUnavailableError(t) && !isVercelSandboxMissingError(t)) throw t;
     return (
       e.log?.(`cached template disappeared; rebuilding sandbox template`),
       await ensureTemplate(e)
@@ -139,10 +133,9 @@ async function readTemplateForCreate(e) {
   } catch (t) {
     throw SandboxTemplateNotProvisionedError.is(t)
       ? t
-      : Error(
-          `Failed to read sandbox template "${e.templateKey}": ${errorMessage(t)}`,
-          { cause: t },
-        );
+      : Error(`Failed to read sandbox template "${e.templateKey}": ${errorMessage(t)}`, {
+          cause: t,
+        });
   }
 }
 async function ensureTemplate(e) {
@@ -155,9 +148,7 @@ async function ensureTemplate(e) {
     a = resolveVercelSandboxTags(e.createOptions.tags, e.tags),
     o = extractAuthorSnapshotId(e.createOptions);
   if (
-    (n !== null &&
-      isUnprovisionedTerminalTemplateSandbox(n, o) &&
-      (await n.delete(), (n = null)),
+    (n !== null && isUnprovisionedTerminalTemplateSandbox(n, o) && (await n.delete(), (n = null)),
     n === null
       ? (n = await e.createSandbox({
           sandboxModule: t,
@@ -218,11 +209,7 @@ async function ensureSession(e) {
       sandboxModule: e.sandboxModule,
       sandboxName: t,
     });
-  if (n !== null)
-    return (
-      await ensureVercelSandboxTags(n, e.tags),
-      { created: !1, sandbox: n }
-    );
+  if (n !== null) return (await ensureVercelSandboxTags(n, e.tags), { created: !1, sandbox: n });
   let r = createSessionCreateParams(
     e,
     t,
@@ -241,8 +228,7 @@ async function ensureSession(e) {
 }
 function createSessionCreateParams(e, t, n = {}) {
   let r = { ...e.createOptions, ...n };
-  if (e.snapshotId === void 0)
-    return withBaseSetupNetworkPolicy({ ...r, name: t, persistent: !0 });
+  if (e.snapshotId === void 0) return withBaseSetupNetworkPolicy({ ...r, name: t, persistent: !0 });
   let { image: i, runtime: a, source: o, ...s } = r;
   return {
     ...s,
@@ -329,8 +315,7 @@ async function writeVercelSandboxSeedFiles(t) {
   if (t.seedFiles.length === 0) return;
   let n = await Promise.all(
     t.seedFiles.map(async (n) => ({
-      content:
-        typeof n.content == `string` ? Buffer.from(n.content) : n.content,
+      content: typeof n.content == `string` ? Buffer.from(n.content) : n.content,
       path: await resolveSandboxModelPath({ path: n.path, sandbox: t.session }),
     })),
   );
@@ -347,8 +332,7 @@ function isUnprovisionedTerminalTemplateSandbox(e, t) {
 }
 function extractAuthorSnapshotId(e) {
   let t = e.source;
-  if (t?.type === `snapshot` && typeof t.snapshotId == `string`)
-    return t.snapshotId;
+  if (t?.type === `snapshot` && typeof t.snapshotId == `string`) return t.snapshotId;
 }
 function getVercelSandboxName(e) {
   let t = e?.sandboxName;
@@ -368,9 +352,7 @@ function resolveVercelSandboxTags(e, t) {
   }
 }
 async function ensureVercelSandboxTags(e, t) {
-  t === void 0 ||
-    areVercelSandboxTagsEqual(e.tags, t) ||
-    (await e.update({ tags: t }));
+  t === void 0 || areVercelSandboxTagsEqual(e.tags, t) || (await e.update({ tags: t }));
 }
 function areVercelSandboxTagsEqual(e, t) {
   let n = e ?? {},
@@ -382,12 +364,7 @@ function errorMessage(e) {
   if (e instanceof Error) {
     let t = e.json,
       n = e.text,
-      r =
-        typeof n == `string` && n.length > 0
-          ? n
-          : t === void 0
-            ? void 0
-            : JSON.stringify(t);
+      r = typeof n == `string` && n.length > 0 ? n : t === void 0 ? void 0 : JSON.stringify(t);
     return r === void 0 ? e.message : `${e.message}: ${r}`;
   }
   return String(e);

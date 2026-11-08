@@ -29,21 +29,25 @@ describe("atomic model configuration controller", () => {
   it("preflights staged candidates, commits exact config bytes, and preserves unrelated env bytes", async () => {
     const { dependencies, files } = createDependencies();
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      groqApiKey: "new-groq-key",
-      modelApiKey: "new-model-key",
-    })).resolves.toEqual({ provider: "deepseek", primaryModelId: "deepseek-reasoner" });
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        groqApiKey: "new-groq-key",
+        modelApiKey: "new-model-key",
+      }),
+    ).resolves.toEqual({ provider: "deepseek", primaryModelId: "deepseek-reasoner" });
 
     expect(dependencies.preflight).toHaveBeenCalledOnce();
     const candidatePaths = vi.mocked(dependencies.preflight).mock.calls[0]?.[0];
     expect(candidatePaths?.configPath).not.toBe(paths.configPath);
     expect(candidatePaths?.envPath).not.toBe(paths.envPath);
     expect(files.files.get(paths.configPath)).toEqual(validConfig);
-    expect(files.files.get(paths.envPath)).toEqual(Buffer.from(
-      "DATABASE_URL=postgres://local\r\nMODEL_API_KEY='new-model-key'\r\nBINARY=\xff\r\nGROQ_API_KEY='new-groq-key'\r\n",
-      "latin1",
-    ));
+    expect(files.files.get(paths.envPath)).toEqual(
+      Buffer.from(
+        "DATABASE_URL=postgres://local\r\nMODEL_API_KEY='new-model-key'\r\nBINARY=\xff\r\nGROQ_API_KEY='new-groq-key'\r\n",
+        "latin1",
+      ),
+    );
     expect(dependencies.restart).toHaveBeenCalledOnce();
     expect(dependencies.health).toHaveBeenCalledOnce();
     expect(files.locked).toBe(false);
@@ -134,12 +138,16 @@ describe("atomic model configuration controller", () => {
 
   it("rejects invalid schema before staging or invoking preflight", async () => {
     const { dependencies, files } = createDependencies();
-    const invalid = Buffer.from(validConfig.toString().replace('"schemaVersion":4', '"schemaVersion":3'));
+    const invalid = Buffer.from(
+      validConfig.toString().replace('"schemaVersion":4', '"schemaVersion":3'),
+    );
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: invalid,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_SCHEMA_INVALID");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: invalid,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_SCHEMA_INVALID");
 
     expect(files.operations.some((operation) => operation.startsWith("stage:"))).toBe(false);
     expect(dependencies.preflight).not.toHaveBeenCalled();
@@ -150,10 +158,12 @@ describe("atomic model configuration controller", () => {
     const { dependencies, files } = createDependencies();
     files.files.set(paths.envPath, Buffer.from("MODEL_API_KEY=first\nMODEL_API_KEY=second\n"));
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_ENV_DUPLICATE");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_ENV_DUPLICATE");
 
     expect(files.operations.some((operation) => operation.startsWith("stage:"))).toBe(false);
     expect(dependencies.preflight).not.toHaveBeenCalled();
@@ -177,15 +187,18 @@ describe("atomic model configuration controller", () => {
   });
 
   it("rolls back exact previous bytes and restarts the previous selection after restart failure", async () => {
-    const restart = vi.fn()
+    const restart = vi
+      .fn()
       .mockRejectedValueOnce(new Error("restart failed"))
       .mockResolvedValueOnce(undefined);
     const { dependencies, files } = createDependencies({ restart });
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_APPLY_FAILED");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_APPLY_FAILED");
 
     expect(files.files.get(paths.configPath)).toEqual(previousConfig);
     expect(files.files.get(paths.envPath)).toEqual(previousEnv);
@@ -194,15 +207,18 @@ describe("atomic model configuration controller", () => {
   });
 
   it("reports an ambiguous state when rollback health also fails", async () => {
-    const health = vi.fn()
+    const health = vi
+      .fn()
       .mockRejectedValueOnce(new Error("new selection unhealthy"))
       .mockRejectedValueOnce(new Error("previous selection unhealthy"));
     const { dependencies, files } = createDependencies({ health });
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
 
     expect(files.files.get(paths.configPath)).toEqual(previousConfig);
     expect(files.files.get(paths.envPath)).toEqual(previousEnv);
@@ -211,16 +227,19 @@ describe("atomic model configuration controller", () => {
   });
 
   it("does not let a lock release failure mask ambiguous rollback health", async () => {
-    const health = vi.fn()
+    const health = vi
+      .fn()
       .mockRejectedValueOnce(new Error("new selection unhealthy"))
       .mockRejectedValueOnce(new Error("previous selection unhealthy"));
     const { dependencies, files } = createDependencies({ health });
     files.releaseError = new Error("lock release failed");
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
 
     expect(files.files.has(paths.journalPath)).toBe(true);
     expect(files.locked).toBe(false);
@@ -230,10 +249,12 @@ describe("atomic model configuration controller", () => {
     const { dependencies, files } = createDependencies();
     files.removeJournalError = new Error("directory fsync failed after unlink");
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "new-model-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "new-model-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_STATE_AMBIGUOUS");
 
     expect(files.files.get(paths.configPath)).toEqual(validConfig);
     expect(files.files.has(paths.journalPath)).toBe(false);
@@ -243,7 +264,9 @@ describe("atomic model configuration controller", () => {
 
   it("holds an exclusive lock for the complete activation transaction", async () => {
     let releaseRestart!: () => void;
-    const restartGate = new Promise<void>((resolve) => { releaseRestart = resolve; });
+    const restartGate = new Promise<void>((resolve) => {
+      releaseRestart = resolve;
+    });
     const { dependencies } = createDependencies({ restart: vi.fn(() => restartGate) });
     const first = applyModelConfiguration(dependencies, {
       configBytes: validConfig,
@@ -251,10 +274,12 @@ describe("atomic model configuration controller", () => {
     });
     await vi.waitFor(() => expect(dependencies.restart).toHaveBeenCalledOnce());
 
-    await expect(applyModelConfiguration(dependencies, {
-      configBytes: validConfig,
-      modelApiKey: "second-key",
-    })).rejects.toThrow("OSINARA_MODEL_CONFIG_LOCKED");
+    await expect(
+      applyModelConfiguration(dependencies, {
+        configBytes: validConfig,
+        modelApiKey: "second-key",
+      }),
+    ).rejects.toThrow("OSINARA_MODEL_CONFIG_LOCKED");
 
     releaseRestart();
     await expect(first).resolves.toBeDefined();

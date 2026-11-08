@@ -28,9 +28,7 @@ const ChannelKey = new ContextKey(`eve.channel`, {
     codec: {
       serialize: (e) => ({
         nodeId: e.nodeId,
-        source: serializeDurableCompiledArtifactsSource(
-          e.compiledArtifactsSource,
-        ),
+        source: serializeDurableCompiledArtifactsSource(e.compiledArtifactsSource),
       }),
       deserialize: (e) => {
         let { source: t, nodeId: r } = e;

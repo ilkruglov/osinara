@@ -77,16 +77,12 @@ function assertSafeSkillRelativePath(e) {
     e.includes(`\\`) ||
     e.split(`/`).some((e) => e.length === 0 || e === `.` || e === `..`)
   )
-    throw Error(
-      `Expected skill file path to be a relative path inside the skill directory.`,
-    );
+    throw Error(`Expected skill file path to be a relative path inside the skill directory.`);
 }
 async function requireSandboxSession(e) {
   let t = await e.get();
   if (t === null)
-    throw Error(
-      `The sandbox is not available in the current authored runtime context.`,
-    );
+    throw Error(`The sandbox is not available in the current authored runtime context.`);
   return t;
 }
 export { assertSafeSkillId, createSandboxSkillHandle, loadSkillFromSandbox };

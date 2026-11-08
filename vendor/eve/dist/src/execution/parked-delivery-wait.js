@@ -1,13 +1,9 @@
 import { coalesceDeliveries } from "#harness/messages.js";
 import { routeDeliverToChildren } from "#execution/route-child-delivery.js";
 import { reportDroppedWirePayloadStep } from "#execution/report-dropped-wire-payload-step.js";
-import {
-  SessionInboxWireError,
-  sessionInboxWire,
-} from "#execution/wire/session-inbox-wire.js";
+import { SessionInboxWireError, sessionInboxWire } from "#execution/wire/session-inbox-wire.js";
 async function nextTurnDelivery(e) {
-  if (e.awaitAuthorizationCallbacks !== !0)
-    return await awaitNextTurnDelivery(e);
+  if (e.awaitAuthorizationCallbacks !== !0) return await awaitNextTurnDelivery(e);
   e.commandInbox.setAuthorizationWindow(!0);
   try {
     return await awaitNextTurnDelivery(e);
@@ -37,8 +33,7 @@ async function awaitNextTurnDelivery(e) {
       serializedContext: e.stateCursor.serializedContext,
       sessionState: e.stateCursor.sessionState,
     });
-    if ((e.stateCursor.adoptState(o), o.kind === `cancel-turn`))
-      return { kind: `cancel-turn` };
+    if ((e.stateCursor.adoptState(o), o.kind === `cancel-turn`)) return { kind: `cancel-turn` };
     if (o.remainder !== void 0) return { delivery: o.remainder, kind: `turn` };
   }
 }
@@ -49,7 +44,6 @@ async function waitForNextSessionAction(e) {
     ;
     e.bufferedDeliveries[0] !== void 0 &&
     isCancelledTaskDelivery(e.bufferedDeliveries[0], e.cancelledTaskIds);
-
   )
     e.bufferedDeliveries.shift();
   if (
@@ -85,14 +79,11 @@ async function waitForNextSessionAction(e) {
       continue;
     }
     if (o.kind === `session-timeout`) return { kind: `expired` };
-    if (o.kind === `clear` || o.kind === `compact` || o.kind === `reset`)
-      return { kind: o.kind };
+    if (o.kind === `clear` || o.kind === `compact` || o.kind === `reset`) return { kind: o.kind };
     if (o.kind === `cancel`) {
       if (o.taskId !== void 0) {
         e.cancelledTaskIds.add(o.taskId);
-        let t = e.bufferedDeliveries.filter(
-          (t) => !isCancelledTaskDelivery(t, e.cancelledTaskIds),
-        );
+        let t = e.bufferedDeliveries.filter((t) => !isCancelledTaskDelivery(t, e.cancelledTaskIds));
         e.bufferedDeliveries.splice(0, e.bufferedDeliveries.length, ...t);
       }
       continue;
@@ -120,11 +111,10 @@ function isCancelledTaskDeliveryId(e, t) {
 }
 function takeBufferedTurnDelivery(t) {
   let n = t.shift();
-  if (n === void 0)
-    throw Error(`Cannot take a turn delivery from an empty buffer.`);
+  if (n === void 0) throw Error(`Cannot take a turn delivery from an empty buffer.`);
   let r = [n],
     i = n.caller;
-  for (; t.length > 0; ) {
+  for (; t.length > 0;) {
     let e = t[0];
     if (
       e === void 0 ||
@@ -134,8 +124,7 @@ function takeBufferedTurnDelivery(t) {
     )
       break;
     let a = t.shift();
-    if (a === void 0)
-      throw Error(`Buffered turn delivery disappeared while partitioning.`);
+    if (a === void 0) throw Error(`Buffered turn delivery disappeared while partitioning.`);
     (r.push(a), (i ??= a.caller));
   }
   return coalesceDeliveries(r);

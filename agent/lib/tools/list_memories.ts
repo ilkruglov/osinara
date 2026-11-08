@@ -23,7 +23,11 @@ export default defineTool({
     cursor: z.string().optional(),
     limit: z.number().int().min(1).max(MEMORY_LIST_MAX_LIMIT).default(MEMORY_LIST_DEFAULT_LIMIT),
     scope: z.enum(["personal", "family", "group"]).optional(),
-    memoryRefs: z.array(z.string().regex(MEMORY_REF_PATTERN)).min(1).max(MEMORY_LIST_MAX_LIMIT).optional(),
+    memoryRefs: z
+      .array(z.string().regex(MEMORY_REF_PATTERN))
+      .min(1)
+      .max(MEMORY_LIST_MAX_LIMIT)
+      .optional(),
   }),
   async execute(input, ctx) {
     const page = await memoryRepository.list(requireMemoryAuthorization(ctx), input);

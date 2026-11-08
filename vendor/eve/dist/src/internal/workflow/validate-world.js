@@ -3,13 +3,8 @@ import { resolveExpectedWorkflowVersion } from "#internal/application/package.js
 import { readFileSync } from "node:fs";
 import { assertWorkflowWorldCompatibility } from "#internal/workflow/world-compatibility.js";
 function validateWorkflowWorld(e) {
-  if (
-    (assertConfiguredWorldCompatibility(e.packageName),
-    !isWorkflowWorld(e.world))
-  )
-    throw Error(
-      `Configured Workflow world factory did not return a valid World.`,
-    );
+  if ((assertConfiguredWorldCompatibility(e.packageName), !isWorkflowWorld(e.world)))
+    throw Error(`Configured Workflow world factory did not return a valid World.`);
 }
 function assertConfiguredWorldCompatibility(n) {
   if (n === void 0) return;

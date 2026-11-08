@@ -14,4 +14,8 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * a separate compiled channel entry. The channel name is derived from
  * the filesystem path; the URL path comes from the route's `path` field.
  */
-export declare function compileChannelDefinition(agentRoot: string, source: ChannelSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledChannelEntry | readonly CompiledChannelEntry[]>;
+export declare function compileChannelDefinition(
+  agentRoot: string,
+  source: ChannelSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledChannelEntry | readonly CompiledChannelEntry[]>;

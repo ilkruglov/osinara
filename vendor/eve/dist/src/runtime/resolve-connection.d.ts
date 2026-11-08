@@ -12,4 +12,8 @@ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
  * authored module so they can reference ambient state (environment
  * variables, `AlsContext`, etc.).
  */
-export declare function resolveConnectionDefinition(definition: CompiledConnectionDefinition, moduleMap: CompiledModuleMap, nodeId: string | undefined): Promise<ResolvedConnectionDefinition>;
+export declare function resolveConnectionDefinition(
+  definition: CompiledConnectionDefinition,
+  moduleMap: CompiledModuleMap,
+  nodeId: string | undefined,
+): Promise<ResolvedConnectionDefinition>;

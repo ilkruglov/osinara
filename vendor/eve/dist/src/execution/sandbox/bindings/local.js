@@ -28,21 +28,14 @@ async function pruneLocalSandboxTemplates(t) {
     pruneJustBashSandboxTemplates$1(t),
     pruneMicrosandboxTemplates$1(t),
     pruneDockerSandboxTemplates$1(t).catch((t) => {
-      if (
-        !(
-          t instanceof DockerUnavailableError ||
-          t instanceof DockerDaemonUnavailableError
-        )
-      )
+      if (!(t instanceof DockerUnavailableError || t instanceof DockerDaemonUnavailableError))
         throw t;
     }),
   ]);
 }
 function pruneLocalSandboxTemplatesInBackground(e) {
   pruneLocalSandboxTemplates({ appRoot: e }).catch((e) => {
-    console.warn(
-      `[eve:dev] failed to prune stale local sandbox templates: ${errorMessage(e)}`,
-    );
+    console.warn(`[eve:dev] failed to prune stale local sandbox templates: ${errorMessage(e)}`);
   });
 }
 function errorMessage(e) {

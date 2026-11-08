@@ -8,7 +8,7 @@ import type { AssertionResult, EveEvalVerdict } from "#evals/types.js";
  * demote the verdict.
  */
 export declare function computeEvalVerdict(input: {
-    readonly error?: string;
-    readonly assertions: readonly AssertionResult[];
-    readonly skipReason?: string;
+  readonly error?: string;
+  readonly assertions: readonly AssertionResult[];
+  readonly skipReason?: string;
 }): EveEvalVerdict;

@@ -66,7 +66,12 @@ async function callTelegramApi(e) {
   // Osinara: the final answer of a failed send to a chat goes to the application's reachability
   // observer (a blocked bot, a removed group), with the start of the answered attempt; the
   // answer waits for the observer at most 500 ms and is never replaced by it.
-  await reportTelegramDeliveryFailure(e.method, e.body, { body: s, ok: a.ok, status: a.status }, startedAt);
+  await reportTelegramDeliveryFailure(
+    e.method,
+    e.body,
+    { body: s, ok: a.ok, status: a.status },
+    startedAt,
+  );
   return { body: s, ok: a.ok, status: a.status };
 }
 async function sendTelegramMessage(e) {
@@ -147,7 +152,7 @@ function splitTelegramMessageText(e) {
   if (e.length <= 4096) return [e];
   let t = [],
     n = e;
-  for (; n.length > TELEGRAM_MESSAGE_TEXT_MAX_LENGTH; ) {
+  for (; n.length > TELEGRAM_MESSAGE_TEXT_MAX_LENGTH;) {
     let e = n.lastIndexOf(
       `
 `,
@@ -168,10 +173,7 @@ function toTelegramMessageResult(t) {
     i = isObject(r.result) ? r.result : {},
     a = isObject(i.chat) ? i.chat : {};
   return {
-    chatId:
-      typeof a.id == `number` || typeof a.id == `string`
-        ? String(a.id)
-        : void 0,
+    chatId: typeof a.id == `number` || typeof a.id == `string` ? String(a.id) : void 0,
     chatType: parseTelegramChatType(a.type) ?? void 0,
     id:
       typeof i.message_id == `number` || typeof i.message_id == `string`

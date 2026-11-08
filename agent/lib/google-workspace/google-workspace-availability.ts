@@ -17,8 +17,10 @@ function configured(value: string | undefined): boolean {
 }
 
 export function supportsGoogleWorkspace(environment: GoogleWorkspaceEnvironment): boolean {
-  return configured(environment.GOOGLE_OAUTH_CLIENT_ID) &&
-    configured(environment.GOOGLE_OAUTH_CLIENT_SECRET);
+  return (
+    configured(environment.GOOGLE_OAUTH_CLIENT_ID) &&
+    configured(environment.GOOGLE_OAUTH_CLIENT_SECRET)
+  );
 }
 
 export const GOOGLE_WORKSPACE_AVAILABLE = supportsGoogleWorkspace(process.env);

@@ -36,8 +36,7 @@ function formatError(e, t) {
 }
 function extractErrorName(e) {
   if (e instanceof Error) return e.name === `Error` ? void 0 : e.name;
-  if (isObject(e) && isNonEmptyString(e.name) && e.name !== `Error`)
-    return e.name;
+  if (isObject(e) && isNonEmptyString(e.name) && e.name !== `Error`) return e.name;
 }
 function extractErrorMessage(e) {
   return isObject(e) && !(e instanceof Error) && typeof e.message == `string`
@@ -93,8 +92,7 @@ function write(e, t, n, r) {
       );
       return;
     } catch {}
-  let a =
-      e === `error` ? console.error : e === `warn` ? console.warn : console.log,
+  let a = e === `error` ? console.error : e === `warn` ? console.warn : console.log,
     o = `[eve:${t}] ${n}`;
   if (r === void 0) {
     a(o);
@@ -134,9 +132,7 @@ function recordOnActiveSpan(e, t) {
   n.addEvent(e, t ? renderFields(t) : void 0);
 }
 function isFormattedError(e) {
-  return (
-    isObject(e) && typeof e.errorId == `string` && typeof e.message == `string`
-  );
+  return isObject(e) && typeof e.errorId == `string` && typeof e.message == `string`;
 }
 function inspectError(t) {
   return truncate(
@@ -152,7 +148,7 @@ function inspectError(t) {
 function truncate(e, t) {
   if (Buffer.byteLength(e, `utf8`) <= t) return e;
   let n = e.slice(0, t);
-  for (; Buffer.byteLength(n, `utf8`) > t && n.length > 0; ) n = n.slice(0, -1);
+  for (; Buffer.byteLength(n, `utf8`) > t && n.length > 0;) n = n.slice(0, -1);
   return `${n}<…truncated>`;
 }
 export {

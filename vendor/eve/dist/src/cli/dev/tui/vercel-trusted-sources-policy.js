@@ -1,9 +1,6 @@
 const SYSTEM_ENVIRONMENTS = new Set([`development`, `preview`, `production`]);
 function environmentSetIncludes(t, n) {
-  return (
-    t.slugs?.includes(n) === !0 ||
-    (t.preset === `all-custom` && !SYSTEM_ENVIRONMENTS.has(n))
-  );
+  return t.slugs?.includes(n) === !0 || (t.preset === `all-custom` && !SYSTEM_ENVIRONMENTS.has(n));
 }
 function ruleIncludes(e, t, n) {
   return environmentSetIncludes(e.from, t) && environmentSetIncludes(e.to, n);

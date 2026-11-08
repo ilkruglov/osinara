@@ -26,8 +26,7 @@ function renderLinearInputRequest(e) {
           return `${t + 1}. ${e.label}${n}`;
         }),
       ),
-    e.allowFreeform === !0 &&
-      t.push(``, `You can also reply with a custom answer.`),
+    e.allowFreeform === !0 && t.push(``, `You can also reply with a custom answer.`),
     t.join(`
 `)
   );

@@ -135,7 +135,7 @@ describe("agent capability surface", () => {
   it("authors the whole dynamic tool surface at step scope", async () => {
     const source = await readFile(`${AGENT_ROOT}/tools/capabilities.ts`, "utf8");
 
-    expect(source).toContain('"step.started": (_event, ctx) => timed(');
+    expect(source).toMatch(/"step\.started":\s*\(_event, ctx\)\s*=>\s*timed\(/);
     expect(source).not.toContain('"turn.started"');
   });
 });

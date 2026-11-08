@@ -1,8 +1,6 @@
 function toPublicToolDefinition(e) {
   if (!e.execute)
-    throw Error(
-      `Tool "${e.name}" is client-side and cannot be re-exported publicly.`,
-    );
+    throw Error(`Tool "${e.name}" is client-side and cannot be re-exported publicly.`);
   let t = e.execute,
     n = {
       description: e.description,

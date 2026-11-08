@@ -18,14 +18,17 @@ export async function deliverMemoryExportFiles(
   const token = await resolveTelegramBotToken();
   const form = new FormData();
   form.set("chat_id", input.chatId);
-  form.set("media", JSON.stringify([
-    {
-      caption: "Экспорт личной памяти Osinara",
-      media: "attach://memory_json",
-      type: "document",
-    },
-    { media: "attach://memory_markdown", type: "document" },
-  ]));
+  form.set(
+    "media",
+    JSON.stringify([
+      {
+        caption: "Экспорт личной памяти Osinara",
+        media: "attach://memory_json",
+        type: "document",
+      },
+      { media: "attach://memory_markdown", type: "document" },
+    ]),
+  );
   form.set(
     "memory_json",
     new Blob([input.json], { type: "application/json;charset=utf-8" }),
@@ -48,20 +51,24 @@ export async function deliverMemoryExportFiles(
       token,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_MEMORY_EXPORT_DELIVERY_AMBIGUOUS",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_MEMORY_EXPORT_DELIVERY_AMBIGUOUS",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     throw new AppError(
       "AGENT_MEMORY_EXPORT_DELIVERY_AMBIGUOUS",
       "Не удалось подтвердить доставку экспорта. Проверьте документы в чате перед новым запросом",
     );
   }
   if (!response.ok) {
-    console.error(JSON.stringify({
-      code: "AGENT_MEMORY_EXPORT_DELIVERY_FAILED",
-      providerStatus: response.status,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_MEMORY_EXPORT_DELIVERY_FAILED",
+        providerStatus: response.status,
+      }),
+    );
     throw new AppError(
       "AGENT_MEMORY_EXPORT_DELIVERY_FAILED",
       "Не удалось отправить файлы экспорта. Повторите запрос позже",

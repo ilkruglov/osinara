@@ -1,17 +1,8 @@
-import {
-  expectFunction,
-  expectObjectRecord,
-} from "#internal/authored-module.js";
+import { expectFunction, expectObjectRecord } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
 import { isDynamicSentinel } from "#shared/dynamic-tool-definition.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
-import {
-  registerDefinitionSource,
-  stampDefinitionKey,
-} from "#public/tool-result-narrowing.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+import { registerDefinitionSource, stampDefinitionKey } from "#public/tool-result-narrowing.js";
 async function resolveDynamicToolDefinition(e, t, r) {
   try {
     return resolveLoadedDynamicToolDefinition(
@@ -40,10 +31,7 @@ function resolveLoadedDynamicToolDefinition(e, t, n) {
 function createResolvedDynamicToolResolver(t, n, r) {
   let i = {};
   for (let a of r)
-    i[a] = expectFunction(
-      t.events[a],
-      describe(n, `to provide a handler for event "${a}"`),
-    );
+    i[a] = expectFunction(t.events[a], describe(n, `to provide a handler for event "${a}"`));
   let a = `dynamic-tool-source:${n.sourceId}`;
   return (
     stampDefinitionKey(t, a),
@@ -66,12 +54,8 @@ function createResolvedDynamicToolResolver(t, n, r) {
 }
 function expectDynamicToolValue(e, n) {
   let i = expectObjectRecord(e, describe(n, `to return an object`));
-  if (!isDynamicSentinel(i))
-    throw Error(describe(n, `to be created by defineDynamic()`));
-  return (
-    expectObjectRecord(i.events, describe(n, `to provide an events object`)),
-    i
-  );
+  if (!isDynamicSentinel(i)) throw Error(describe(n, `to be created by defineDynamic()`));
+  return (expectObjectRecord(i.events, describe(n, `to provide an events object`)), i);
 }
 function describe(e, t) {
   return `Expected the dynamic tool export "${e.exportName ?? `default`}" from "${e.logicalPath}" ${t}.`;

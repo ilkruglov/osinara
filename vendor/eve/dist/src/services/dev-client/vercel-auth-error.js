@@ -20,23 +20,18 @@ function vercelTrustedSourcesErrorCode(e) {
   }
 }
 function bodyLooksLikeVercelAuthChallenge(e) {
-  return (
-    e.length > 0 && VERCEL_AUTH_CHALLENGE_MARKERS.every((t) => e.includes(t))
-  );
+  return e.length > 0 && VERCEL_AUTH_CHALLENGE_MARKERS.every((t) => e.includes(t));
 }
 function isVercelSsoUrl(e) {
   let t = URL.parse(e);
   return (
-    t?.origin === `https://vercel.com` &&
-    t.pathname === `/sso-api` &&
-    t.searchParams.has(`url`)
+    t?.origin === `https://vercel.com` && t.pathname === `/sso-api` && t.searchParams.has(`url`)
   );
 }
 function isVercelSsoRedirect(e, t) {
   if (e < 300 || e >= 400 || t === void 0) return !1;
   for (let [e, n] of Object.entries(t))
-    if (e.toLowerCase() === `location` && typeof n == `string`)
-      return isVercelSsoUrl(n);
+    if (e.toLowerCase() === `location` && typeof n == `string`) return isVercelSsoUrl(n);
   return !1;
 }
 function isVercelUnauthorized(e, t) {
@@ -64,8 +59,7 @@ function bodyLooksLikeStructuredVercelAuthChallenge(t) {
 }
 function isVercelAuthChallenge(n) {
   let r = n instanceof ClientError || isObject(n) ? n : void 0;
-  if (r === void 0 || typeof r.status != `number` || typeof r.body != `string`)
-    return !1;
+  if (r === void 0 || typeof r.status != `number` || typeof r.body != `string`) return !1;
   let i = isObject(r.headers) ? r.headers : void 0;
   return (
     isVercelSsoRedirect(r.status, i) ||
@@ -76,9 +70,7 @@ function isVercelAuthChallenge(n) {
   );
 }
 function formatVercelAuthChallengeMessage(e) {
-  let t = [
-    `Vercel Deployment Protection blocked the request to ${e.serverUrl}.`,
-  ];
+  let t = [`Vercel Deployment Protection blocked the request to ${e.serverUrl}.`];
   return (
     e.oidcTokenFailure !== void 0 &&
       t.push(``, formatDevelopmentOidcTokenFailure(e.oidcTokenFailure)),

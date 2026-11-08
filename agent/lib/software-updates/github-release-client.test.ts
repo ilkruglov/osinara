@@ -33,13 +33,15 @@ function deploymentManifest(overrides: Record<string, unknown> = {}) {
 
 function githubRelease(overrides: Record<string, unknown> = {}) {
   return {
-    assets: [{
-      browser_download_url:
-        "https://github.com/ilkruglov/osinara/releases/download/v0.2.0/osinara-deployment.json",
-      name: "osinara-deployment.json",
-      state: "uploaded",
-      url: "https://api.github.com/repos/ilkruglov/osinara/releases/assets/42",
-    }],
+    assets: [
+      {
+        browser_download_url:
+          "https://github.com/ilkruglov/osinara/releases/download/v0.2.0/osinara-deployment.json",
+        name: "osinara-deployment.json",
+        state: "uploaded",
+        url: "https://api.github.com/repos/ilkruglov/osinara/releases/assets/42",
+      },
+    ],
     draft: false,
     html_url: "https://github.com/ilkruglov/osinara/releases/tag/v0.2.0",
     immutable: true,
@@ -58,7 +60,8 @@ function jsonResponse(value: unknown, status = 200): Response {
 
 describe("GitHub software release client", () => {
   it("returns a fully validated release newer than the installed package", async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
       .mockResolvedValueOnce(jsonResponse(deploymentManifest()));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
@@ -75,9 +78,15 @@ describe("GitHub software release client", () => {
 
     // Public metadata and assets must never receive an accidental credential header.
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/ilkruglov/osinara/releases/latest");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.github.com/repos/ilkruglov/osinara/releases/assets/42");
-    expect(new Headers((fetchMock.mock.calls[1]![1] as RequestInit).headers).get("accept")).toBe("application/octet-stream");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/repos/ilkruglov/osinara/releases/latest",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.github.com/repos/ilkruglov/osinara/releases/assets/42",
+    );
+    expect(new Headers((fetchMock.mock.calls[1]![1] as RequestInit).headers).get("accept")).toBe(
+      "application/octet-stream",
+    );
     for (const call of fetchMock.mock.calls) {
       const headers = new Headers((call[1] as RequestInit | undefined)?.headers);
       expect(headers.has("authorization")).toBe(false);
@@ -87,30 +96,50 @@ describe("GitHub software release client", () => {
 
   it("sends an optional token to both requests and refuses an asset URL outside this repository", async () => {
     const token = "github_pat_0123456789abcdefghijABCDEFGHIJ";
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
       .mockResolvedValueOnce(jsonResponse(deploymentManifest()));
-    await createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000, token }).latestNewerThan("0.1.0");
+    await createGitHubSoftwareReleaseClient({
+      fetch: fetchMock,
+      timeoutMs: 1_000,
+      token,
+    }).latestNewerThan("0.1.0");
     for (const call of fetchMock.mock.calls) {
-      expect(new Headers((call[1] as RequestInit).headers).get("authorization")).toBe(`Bearer ${token}`);
+      expect(new Headers((call[1] as RequestInit).headers).get("authorization")).toBe(
+        `Bearer ${token}`,
+      );
     }
-    const foreign = vi.fn().mockResolvedValueOnce(jsonResponse(githubRelease({
-      assets: [{ ...githubRelease().assets[0], url: "https://evil.example/releases/assets/42" }],
-    })));
-    await expect(createGitHubSoftwareReleaseClient({ fetch: foreign, timeoutMs: 1_000 }).latestNewerThan("0.1.0"))
-      .rejects.toMatchObject({ code: "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID" });
+    const foreign = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        githubRelease({
+          assets: [
+            { ...githubRelease().assets[0], url: "https://evil.example/releases/assets/42" },
+          ],
+        }),
+      ),
+    );
+    await expect(
+      createGitHubSoftwareReleaseClient({ fetch: foreign, timeoutMs: 1_000 }).latestNewerThan(
+        "0.1.0",
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID" });
     expect(foreign).toHaveBeenCalledTimes(1);
-    expect(() => createGitHubSoftwareReleaseClient({ fetch: vi.fn(), timeoutMs: 1_000, token: "bad token" }))
-      .toThrow(expect.objectContaining({ code: "AGENT_SOFTWARE_UPDATE_TOKEN_INVALID" }));
+    expect(() =>
+      createGitHubSoftwareReleaseClient({ fetch: vi.fn(), timeoutMs: 1_000, token: "bad token" }),
+    ).toThrow(expect.objectContaining({ code: "AGENT_SOFTWARE_UPDATE_TOKEN_INVALID" }));
   });
 
   // The Codex subscription gateway image was retired in 1.8.11; a manifest naming it is foreign.
   it("accepts the embedder image once a release names it", async () => {
     const images = deploymentManifest().images;
     const memoryEmbedding = `ghcr.io/ilkruglov/osinara-memory-embedding@sha256:${DIGEST}`;
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
-      .mockResolvedValueOnce(jsonResponse(deploymentManifest({ images: { ...images, memoryEmbedding } })));
+      .mockResolvedValueOnce(
+        jsonResponse(deploymentManifest({ images: { ...images, memoryEmbedding } })),
+      );
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
     await expect(client.latestNewerThan("0.1.0")).resolves.toMatchObject({
@@ -120,23 +149,37 @@ describe("GitHub software release client", () => {
 
   it("rejects a manifest that still names the retired gateway image", async () => {
     const manifest = deploymentManifest();
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
-      .mockResolvedValueOnce(jsonResponse({
-        ...manifest,
-        images: { ...manifest.images, cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${DIGEST}` },
-      }));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...manifest,
+          images: {
+            ...manifest.images,
+            cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${DIGEST}`,
+          },
+        }),
+      );
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(/AGENT_SOFTWARE_MANIFEST_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_MANIFEST_INVALID/,
+    );
   });
 
   it("rejects an upstream release even when its version is newer", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(githubRelease({
-      html_url: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
-    })));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        githubRelease({
+          html_url: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
+        }),
+      ),
+    );
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
-    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(/AGENT_SOFTWARE_RELEASE_URL_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_RELEASE_URL_INVALID/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -164,8 +207,9 @@ describe("GitHub software release client", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ tag_name: "v0.2.0" }));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0"))
-      .rejects.toThrowError(/AGENT_SOFTWARE_RELEASE_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_RELEASE_INVALID/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -173,8 +217,9 @@ describe("GitHub software release client", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(githubRelease({ assets: [] })));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0"))
-      .rejects.toThrowError(/AGENT_SOFTWARE_MANIFEST_ASSET_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_MANIFEST_ASSET_INVALID/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -185,13 +230,15 @@ describe("GitHub software release client", () => {
         app: "ghcr.io/ilkruglov/osinara-app:latest",
       },
     });
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
       .mockResolvedValueOnce(jsonResponse(invalidManifest));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0"))
-      .rejects.toThrowError(/AGENT_SOFTWARE_MANIFEST_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_MANIFEST_INVALID/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -201,13 +248,15 @@ describe("GitHub software release client", () => {
     ["uppercase", { composeSha256: "C".repeat(64) }],
   ])("rejects a %s compose.production.yaml byte hash", async (_name, override) => {
     const invalidManifest = deploymentManifest(override);
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
       .mockResolvedValueOnce(jsonResponse(invalidManifest));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0"))
-      .rejects.toThrowError(/AGENT_SOFTWARE_MANIFEST_INVALID/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_MANIFEST_INVALID/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -215,8 +264,9 @@ describe("GitHub software release client", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: "rate limited" }, 429));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0"))
-      .rejects.toThrowError(/AGENT_SOFTWARE_RELEASE_REQUEST_FAILED/);
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(
+      /AGENT_SOFTWARE_RELEASE_REQUEST_FAILED/,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

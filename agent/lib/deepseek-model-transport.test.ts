@@ -16,27 +16,30 @@ import { z } from "zod";
 import { createConfiguredLanguageModel } from "./model-transport.js";
 
 function completion(message: Record<string, unknown>, finishReason: string): Response {
-  return new Response(JSON.stringify({
-    choices: [{ finish_reason: finishReason, index: 0, message }],
-    created: 1,
-    id: "deepseek-completion",
-    model: "deepseek-v4-flash",
-    object: "chat.completion",
-    usage: { completion_tokens: 10, prompt_tokens: 20, total_tokens: 30 },
-  }), {
-    headers: { "content-type": "application/json" },
-    status: 200,
-  });
+  return new Response(
+    JSON.stringify({
+      choices: [{ finish_reason: finishReason, index: 0, message }],
+      created: 1,
+      id: "deepseek-completion",
+      model: "deepseek-v4-flash",
+      object: "chat.completion",
+      usage: { completion_tokens: 10, prompt_tokens: 20, total_tokens: 30 },
+    }),
+    {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    },
+  );
 }
 
 function streamCompletion(chunks: readonly Record<string, unknown>[]): Response {
-  return new Response([
-    ...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
-    "data: [DONE]\n\n",
-  ].join(""), {
-    headers: { "content-type": "text/event-stream" },
-    status: 200,
-  });
+  return new Response(
+    [...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"].join(""),
+    {
+      headers: { "content-type": "text/event-stream" },
+      status: 200,
+    },
+  );
 }
 
 function deepSeekModel(fetch: typeof globalThis.fetch) {
@@ -59,11 +62,14 @@ describe("DeepSeek model transport", () => {
     let body: Record<string, unknown> | undefined;
     const model = deepSeekModel(async (_input, init) => {
       body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      return completion({
-        content: "Видимый ответ.",
-        reasoning_content: "Скрытое рассуждение.",
-        role: "assistant",
-      }, "stop");
+      return completion(
+        {
+          content: "Видимый ответ.",
+          reasoning_content: "Скрытое рассуждение.",
+          role: "assistant",
+        },
+        "stop",
+      );
     });
 
     const result = await model.doGenerate({
@@ -76,10 +82,12 @@ describe("DeepSeek model transport", () => {
       reasoning_effort: "high",
       thinking: { type: "enabled" },
     });
-    expect(result.content).toEqual(expect.arrayContaining([
-      { text: "Скрытое рассуждение.", type: "reasoning" },
-      { text: "Видимый ответ.", type: "text" },
-    ]));
+    expect(result.content).toEqual(
+      expect.arrayContaining([
+        { text: "Скрытое рассуждение.", type: "reasoning" },
+        { text: "Видимый ответ.", type: "text" },
+      ]),
+    );
     expect(result.content.filter((part) => part.type === "text")).toEqual([
       { text: "Видимый ответ.", type: "text" },
     ]);
@@ -91,18 +99,23 @@ describe("DeepSeek model transport", () => {
       apiKey: "deepseek-secret",
       fetch: async (_input, init) => {
         body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-        return completion({
-          content: null,
-          role: "assistant",
-          tool_calls: [{
-            function: {
-              arguments: JSON.stringify({ decisions: ["save"] }),
-              name: "submit_memory_test",
-            },
-            id: "call_memory_001",
-            type: "function",
-          }],
-        }, "tool_calls");
+        return completion(
+          {
+            content: null,
+            role: "assistant",
+            tool_calls: [
+              {
+                function: {
+                  arguments: JSON.stringify({ decisions: ["save"] }),
+                  name: "submit_memory_test",
+                },
+                id: "call_memory_001",
+                type: "function",
+              },
+            ],
+          },
+          "tool_calls",
+        );
       },
       maxOutputTokens: 2_048,
       modelId: "deepseek-v4-flash",
@@ -142,21 +155,29 @@ describe("DeepSeek model transport", () => {
   it("replays tool-call reasoning before sending the tool result", async () => {
     const requests: Record<string, unknown>[] = [];
     const responses = [
-      completion({
-        content: null,
-        reasoning_content: "Нужно получить время.",
-        role: "assistant",
-        tool_calls: [{
-          function: { arguments: "{}", name: "get_time" },
-          id: "call_time_001",
-          type: "function",
-        }],
-      }, "tool_calls"),
-      completion({
-        content: "Сейчас 12:00.",
-        reasoning_content: "Инструмент вернул точное время.",
-        role: "assistant",
-      }, "stop"),
+      completion(
+        {
+          content: null,
+          reasoning_content: "Нужно получить время.",
+          role: "assistant",
+          tool_calls: [
+            {
+              function: { arguments: "{}", name: "get_time" },
+              id: "call_time_001",
+              type: "function",
+            },
+          ],
+        },
+        "tool_calls",
+      ),
+      completion(
+        {
+          content: "Сейчас 12:00.",
+          reasoning_content: "Инструмент вернул точное время.",
+          role: "assistant",
+        },
+        "stop",
+      ),
     ];
     const model = deepSeekModel(async (_input, init) => {
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
@@ -180,16 +201,16 @@ describe("DeepSeek model transport", () => {
 
     expect(result.text).toBe("Сейчас 12:00.");
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        reasoning_content: "Нужно получить время.",
-        role: "assistant",
-        tool_calls: expect.arrayContaining([
-          expect.objectContaining({ id: "call_time_001" }),
-        ]),
-      }),
-      expect.objectContaining({ role: "tool", tool_call_id: "call_time_001" }),
-    ]));
+    expect(requests[1]?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reasoning_content: "Нужно получить время.",
+          role: "assistant",
+          tool_calls: expect.arrayContaining([expect.objectContaining({ id: "call_time_001" })]),
+        }),
+        expect.objectContaining({ role: "tool", tool_call_id: "call_time_001" }),
+      ]),
+    );
     expect(requests[1]).toMatchObject({
       reasoning_effort: "high",
       thinking: { type: "enabled" },
@@ -200,11 +221,14 @@ describe("DeepSeek model transport", () => {
     let body: Record<string, unknown> | undefined;
     const model = deepSeekModel(async (_input, init) => {
       body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      return completion({
-        content: "История обработана.",
-        reasoning_content: "Продолжаю после подтверждения.",
-        role: "assistant",
-      }, "stop");
+      return completion(
+        {
+          content: "История обработана.",
+          reasoning_content: "Продолжаю после подтверждения.",
+          role: "assistant",
+        },
+        "stop",
+      );
     });
 
     // Eve can resume with an approved call that has no execution result yet. DeepSeek only accepts
@@ -231,12 +255,14 @@ describe("DeepSeek model transport", () => {
           role: "assistant",
         },
         {
-          content: [{
-            output: { type: "json", value: { ok: true } },
-            toolCallId: "call_completed",
-            toolName: "mutate",
-            type: "tool-result",
-          }],
+          content: [
+            {
+              output: { type: "json", value: { ok: true } },
+              toolCallId: "call_completed",
+              toolName: "mutate",
+              type: "tool-result",
+            },
+          ],
           role: "tool",
         },
         { content: [{ text: "Продолжай", type: "text" }], role: "user" },
@@ -268,22 +294,26 @@ describe("DeepSeek model transport", () => {
     await model.doGenerate({
       prompt: [
         {
-          content: [{
-            input: {},
-            toolCallId: "call_misordered",
-            toolName: "probe",
-            type: "tool-call",
-          }],
+          content: [
+            {
+              input: {},
+              toolCallId: "call_misordered",
+              toolName: "probe",
+              type: "tool-call",
+            },
+          ],
           role: "assistant",
         },
         { content: [{ text: "Новый запрос", type: "text" }], role: "user" },
         {
-          content: [{
-            output: { type: "json", value: { ok: true } },
-            toolCallId: "call_misordered",
-            toolName: "probe",
-            type: "tool-result",
-          }],
+          content: [
+            {
+              output: { type: "json", value: { ok: true } },
+              toolCallId: "call_misordered",
+              toolName: "probe",
+              type: "tool-result",
+            },
+          ],
           role: "tool",
         },
       ],
@@ -302,13 +332,15 @@ describe("DeepSeek model transport", () => {
     await model.doGenerate({
       prompt: [
         {
-          content: [{
-            input: { query: "пример" },
-            providerExecuted: true,
-            toolCallId: "call_provider",
-            toolName: "provider_search",
-            type: "tool-call",
-          }],
+          content: [
+            {
+              input: { query: "пример" },
+              providerExecuted: true,
+              toolCallId: "call_provider",
+              toolName: "provider_search",
+              type: "tool-call",
+            },
+          ],
           role: "assistant",
         },
         { content: [{ text: "Продолжай", type: "text" }], role: "user" },
@@ -319,30 +351,32 @@ describe("DeepSeek model transport", () => {
   });
 
   it("streams reasoning separately and exposes only final content as text", async () => {
-    const model = deepSeekModel(async () => streamCompletion([
-      {
-        choices: [{ delta: { reasoning_content: "Скрытый анализ." }, index: 0 }],
-        created: 1,
-        id: "deepseek-stream",
-        model: "deepseek-v4-flash",
-        object: "chat.completion.chunk",
-      },
-      {
-        choices: [{ delta: { content: "Итоговый ответ." }, index: 0 }],
-        created: 1,
-        id: "deepseek-stream",
-        model: "deepseek-v4-flash",
-        object: "chat.completion.chunk",
-      },
-      {
-        choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
-        created: 1,
-        id: "deepseek-stream",
-        model: "deepseek-v4-flash",
-        object: "chat.completion.chunk",
-        usage: { completion_tokens: 4, prompt_tokens: 5, total_tokens: 9 },
-      },
-    ]));
+    const model = deepSeekModel(async () =>
+      streamCompletion([
+        {
+          choices: [{ delta: { reasoning_content: "Скрытый анализ." }, index: 0 }],
+          created: 1,
+          id: "deepseek-stream",
+          model: "deepseek-v4-flash",
+          object: "chat.completion.chunk",
+        },
+        {
+          choices: [{ delta: { content: "Итоговый ответ." }, index: 0 }],
+          created: 1,
+          id: "deepseek-stream",
+          model: "deepseek-v4-flash",
+          object: "chat.completion.chunk",
+        },
+        {
+          choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+          created: 1,
+          id: "deepseek-stream",
+          model: "deepseek-v4-flash",
+          object: "chat.completion.chunk",
+          usage: { completion_tokens: 4, prompt_tokens: 5, total_tokens: 9 },
+        },
+      ]),
+    );
 
     const result = streamText({ maxRetries: 0, model, prompt: "Проверь поток" });
 
@@ -364,17 +398,21 @@ describe("DeepSeek model transport", () => {
           object: "chat.completion.chunk",
         },
         {
-          choices: [{
-            delta: {
-              tool_calls: [{
-                function: { arguments: "{}", name: "probe" },
-                id: "call_probe_001",
-                index: 0,
-                type: "function",
-              }],
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { arguments: "{}", name: "probe" },
+                    id: "call_probe_001",
+                    index: 0,
+                    type: "function",
+                  },
+                ],
+              },
+              index: 0,
             },
-            index: 0,
-          }],
+          ],
           created: 1,
           id: "deepseek-stream-tool",
           model: "deepseek-v4-flash",
@@ -433,15 +471,15 @@ describe("DeepSeek model transport", () => {
 
     await expect(result.text).resolves.toBe("Готово.");
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        reasoning_content: "Нужно вызвать проверку.",
-        role: "assistant",
-        tool_calls: expect.arrayContaining([
-          expect.objectContaining({ id: "call_probe_001" }),
-        ]),
-      }),
-      expect.objectContaining({ role: "tool", tool_call_id: "call_probe_001" }),
-    ]));
+    expect(requests[1]?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reasoning_content: "Нужно вызвать проверку.",
+          role: "assistant",
+          tool_calls: expect.arrayContaining([expect.objectContaining({ id: "call_probe_001" })]),
+        }),
+        expect.objectContaining({ role: "tool", tool_call_id: "call_probe_001" }),
+      ]),
+    );
   });
 });

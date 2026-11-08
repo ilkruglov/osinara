@@ -19,12 +19,7 @@ const SETUP_SECTIONS = [
   ];
 function compose(e, t) {
   let n = e
-      .map((e) =>
-        readFileSync(
-          new URL(`./agent-prompt/${e}`, import.meta.url),
-          `utf8`,
-        ).trim(),
-      )
+      .map((e) => readFileSync(new URL(`./agent-prompt/${e}`, import.meta.url), `utf8`).trim())
       .join(
         `
 

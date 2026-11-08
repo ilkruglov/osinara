@@ -24,7 +24,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../workspaces/workspace-file-delivery-repository.js", () => ({
-  workspaceFileDeliveryRepository: { begin: mocks.begin, complete: mocks.complete, fail: mocks.fail },
+  workspaceFileDeliveryRepository: {
+    begin: mocks.begin,
+    complete: mocks.complete,
+    fail: mocks.fail,
+  },
 }));
 vi.mock("../telegram-group-journal-repository.js", () => ({
   telegramGroupJournalRepository: { recordAgentResponse: mocks.recordAgentResponse },
@@ -57,7 +61,11 @@ function context(groupType: "family_private" | "external" = "family_private"): T
   };
   return {
     callId: "call-1",
-    session: { auth: { current: caller, initiator: caller }, id: "eve-session-1", turn: { id: "turn-1", sequence: 1 } },
+    session: {
+      auth: { current: caller, initiator: caller },
+      id: "eve-session-1",
+      turn: { id: "turn-1", sequence: 1 },
+    },
   } as unknown as ToolContext;
 }
 
@@ -71,7 +79,11 @@ function reserved(html: string, path = "health/day.html", mediaType = "text/html
   };
 }
 const execute = (input: Record<string, unknown>, ctx = context()) =>
-  (sendWidget as unknown as { execute: (input: unknown, ctx: ToolContext) => Promise<Record<string, unknown>> }).execute(input, ctx);
+  (
+    sendWidget as unknown as {
+      execute: (input: unknown, ctx: ToolContext) => Promise<Record<string, unknown>>;
+    }
+  ).execute(input, ctx);
 
 describe("send_widget", () => {
   beforeEach(() => {
@@ -82,17 +94,40 @@ describe("send_widget", () => {
   });
 
   it("sends a checked card with its caption, completes the row and records it in the chat journal", async () => {
-    const result = await execute({ caption: "Итог дня: 1 840 ккал", path: "health/day.html", scope: "family" });
+    const result = await execute({
+      caption: "Итог дня: 1 840 ккал",
+      path: "health/day.html",
+      scope: "family",
+    });
 
-    expect(mocks.begin).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ operationKey: "call-1", presentation: "widget" }));
-    expect(mocks.send).toHaveBeenCalledWith({ caption: "Итог дня: 1 840 ккал", chatId: "-1001", html: card, messageThreadId: "42" });
+    expect(mocks.begin).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ operationKey: "call-1", presentation: "widget" }),
+    );
+    expect(mocks.send).toHaveBeenCalledWith({
+      caption: "Итог дня: 1 840 ккал",
+      chatId: "-1001",
+      html: card,
+      messageThreadId: "42",
+    });
     expect(mocks.complete).toHaveBeenCalledWith("call-1", "777");
-    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(expect.objectContaining({
-      contentText: "[виджет] Итог дня: 1 840 ккал", groupId: "group-1", messageThreadId: "42", telegramMessageIds: ["777"],
-    }));
-    expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalledWith(expect.objectContaining({ messageIds: ["777"] }));
+    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentText: "[виджет] Итог дня: 1 840 ккал",
+        groupId: "group-1",
+        messageThreadId: "42",
+        telegramMessageIds: ["777"],
+      }),
+    );
+    expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ["777"] }),
+    );
     expect(result).toMatchObject({
-      alreadySent: false, delivered: true, links: ["https://example.com/r"], telegramMessageId: "777", warnings: [],
+      alreadySent: false,
+      delivered: true,
+      links: ["https://example.com/r"],
+      telegramMessageId: "777",
+      warnings: [],
     });
     expect(String(result.caption_already_sent)).toMatch(/виджетом/u);
     expect(result.size).toMatchObject({ bytes: Buffer.byteLength(card) });
@@ -100,9 +135,13 @@ describe("send_widget", () => {
 
   it("never advises silence in a scheduled run, which only its final text completes", async () => {
     const scheduled = context();
-    (scheduled.session.auth.current!.attributes as Record<string, unknown>).scheduledRunId = "run-1";
+    (scheduled.session.auth.current!.attributes as Record<string, unknown>).scheduledRunId =
+      "run-1";
 
-    const result = await execute({ caption: "Погода на сегодня", path: "health/day.html", scope: "family" }, scheduled);
+    const result = await execute(
+      { caption: "Погода на сегодня", path: "health/day.html", scope: "family" },
+      scheduled,
+    );
 
     expect(String(result.caption_already_sent)).not.toContain("<telegram-silent>");
     expect(String(result.caption_already_sent)).toMatch(/итог/iu);
@@ -110,58 +149,100 @@ describe("send_widget", () => {
 
   it("refuses a card that would break, an oversized one and a file that is not HTML, before Telegram", async () => {
     mocks.begin.mockResolvedValueOnce(reserved(`<img src="https://example.com/a.png">`));
-    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(/AGENT_TELEGRAM_WIDGET_INVALID/u);
+    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(
+      /AGENT_TELEGRAM_WIDGET_INVALID/u,
+    );
     let seed = 7;
     const noisy = Array.from({ length: 12_000 }, () => {
       seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
-      return String.fromCharCode(0x41 + (seed >> 16) % 26);
+      return String.fromCharCode(0x41 + ((seed >> 16) % 26));
     }).join("");
     mocks.begin.mockResolvedValueOnce(reserved(`<p>${noisy}</p>`));
-    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(/AGENT_TELEGRAM_WIDGET_TOO_LARGE/u);
+    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(
+      /AGENT_TELEGRAM_WIDGET_TOO_LARGE/u,
+    );
     mocks.begin.mockResolvedValueOnce(reserved("<p>x</p>", "notes.txt", "text/plain"));
-    await expect(execute({ caption: "x", path: "notes.txt", scope: "family" })).rejects.toThrow(/AGENT_TELEGRAM_WIDGET_NOT_HTML/u);
+    await expect(execute({ caption: "x", path: "notes.txt", scope: "family" })).rejects.toThrow(
+      /AGENT_TELEGRAM_WIDGET_NOT_HTML/u,
+    );
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.fail).toHaveBeenCalledTimes(3);
   });
 
   it("refuses any link in an external group", async () => {
-    await expect(execute({ caption: "x", path: "a.html", scope: "group" }, context("external"))).rejects.toThrow(/ссылки в виджете запрещены/u);
+    await expect(
+      execute({ caption: "x", path: "a.html", scope: "group" }, context("external")),
+    ).rejects.toThrow(/ссылки в виджете запрещены/u);
     expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("fails the row on Telegram's refusal and leaves it started when the outcome is unknown", async () => {
-    mocks.send.mockResolvedValueOnce({ ambiguous: false, body: { description: "Bad Request: INPUT_MEDIA_WIDGET_HTML_INVALID" }, ok: false, status: 400 });
-    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(/INPUT_MEDIA_WIDGET_HTML_INVALID/u);
+    mocks.send.mockResolvedValueOnce({
+      ambiguous: false,
+      body: { description: "Bad Request: INPUT_MEDIA_WIDGET_HTML_INVALID" },
+      ok: false,
+      status: 400,
+    });
+    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(
+      /INPUT_MEDIA_WIDGET_HTML_INVALID/u,
+    );
     expect(mocks.fail).toHaveBeenCalledWith("call-1", "AGENT_TELEGRAM_WIDGET_REJECTED");
     mocks.fail.mockClear();
     mocks.send.mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"));
-    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
+    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(
+      /AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u,
+    );
     expect(mocks.fail).not.toHaveBeenCalled();
     // A server error or a success without the message id may have delivered it too.
-    mocks.send.mockResolvedValueOnce({ ambiguous: true, body: { description: "Bad Gateway" }, ok: false, status: 502 });
-    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
+    mocks.send.mockResolvedValueOnce({
+      ambiguous: true,
+      body: { description: "Bad Gateway" },
+      ok: false,
+      status: 502,
+    });
+    await expect(execute({ caption: "x", path: "a.html", scope: "family" })).rejects.toThrow(
+      /AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u,
+    );
     expect(mocks.fail).not.toHaveBeenCalled();
   });
 
   // Codex review of 1.8.55: a crash after the delivery was recorded but before the chat journal
   // left the card out of the group's history; the replay of that step writes it, like a file does.
   it("writes the chat journal and routes again when a confirmed delivery step replays", async () => {
-    mocks.begin.mockResolvedValueOnce({ ...reserved(card), status: "completed", telegramMessageId: "777" });
+    mocks.begin.mockResolvedValueOnce({
+      ...reserved(card),
+      status: "completed",
+      telegramMessageId: "777",
+    });
 
-    const result = await execute({ caption: "Итог дня: 1 840 ккал", path: "health/day.html", scope: "family" });
+    const result = await execute({
+      caption: "Итог дня: 1 840 ккал",
+      path: "health/day.html",
+      scope: "family",
+    });
 
     expect(mocks.send).not.toHaveBeenCalled();
-    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(expect.objectContaining({
-      contentText: "[виджет] Итог дня: 1 840 ккал", telegramMessageIds: ["777"],
-    }));
-    expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalledWith(expect.objectContaining({ messageIds: ["777"] }));
+    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentText: "[виджет] Итог дня: 1 840 ккал",
+        telegramMessageIds: ["777"],
+      }),
+    );
+    expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ["777"] }),
+    );
     expect(result).toMatchObject({ delivered: true, replayed: true, telegramMessageId: "777" });
   });
 
   it("points at the first message when the same bytes already went out in this turn", async () => {
-    mocks.begin.mockResolvedValueOnce({ ...reserved(card), status: "duplicate", telegramMessageId: "700" });
-    await expect(execute({ caption: "x", path: "health/day.html", scope: "family" }))
-      .resolves.toMatchObject({ alreadySent: true, telegramMessageId: "700" });
+    mocks.begin.mockResolvedValueOnce({
+      ...reserved(card),
+      status: "duplicate",
+      telegramMessageId: "700",
+    });
+    await expect(
+      execute({ caption: "x", path: "health/day.html", scope: "family" }),
+    ).resolves.toMatchObject({ alreadySent: true, telegramMessageId: "700" });
     expect(mocks.send).not.toHaveBeenCalled();
   });
 });

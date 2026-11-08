@@ -20,9 +20,11 @@ describe("production operational boundary", () => {
     { gid: 1000, platform: "linux", uid: 0 },
     { gid: 0, platform: "darwin", uid: 0 },
   ])("rejects a non-root or non-Linux host before work: %#", (identity) => {
-    expect(() => assertOperationalHost(identity)).toThrowError(expect.objectContaining({
-      code: "OSINARA_OPERATION_HOST_UNSUPPORTED",
-    }));
+    expect(() => assertOperationalHost(identity)).toThrowError(
+      expect.objectContaining({
+        code: "OSINARA_OPERATION_HOST_UNSUPPORTED",
+      }),
+    );
   });
 
   it("requires redirect:error and the exact requested health URL", async () => {

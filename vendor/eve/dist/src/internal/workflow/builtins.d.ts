@@ -4,7 +4,9 @@
  * These mirror Workflow's tiny `workflow/internal/builtins` module without
  * requiring eve to depend on Workflow's umbrella package.
  */
-export declare function __builtin_response_array_buffer(this: Request | Response): Promise<ArrayBuffer>;
+export declare function __builtin_response_array_buffer(
+  this: Request | Response,
+): Promise<ArrayBuffer>;
 export declare function __builtin_response_json(this: Request | Response): Promise<unknown>;
 export declare function __builtin_response_text(this: Request | Response): Promise<string>;
 /**
@@ -33,9 +35,12 @@ export declare function __builtin_response_text(this: Request | Response): Promi
  *   `console.error` so failed attribute writes never escalate into a
  *   `FatalError` and tear down the user's agent run.
  */
-export declare function __builtin_set_attributes(changes: Array<{
+export declare function __builtin_set_attributes(
+  changes: Array<{
     key: string;
     value: string | null;
-}>, options?: {
+  }>,
+  options?: {
     allowReservedAttributes?: boolean;
-}): Promise<void>;
+  },
+): Promise<void>;

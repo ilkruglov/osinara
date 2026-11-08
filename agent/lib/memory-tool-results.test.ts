@@ -100,9 +100,11 @@ const context = {
 } as unknown as ToolContext;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return value !== null &&
+  return (
+    value !== null &&
     (typeof value === "object" || typeof value === "function") &&
-    Symbol.asyncIterator in value;
+    Symbol.asyncIterator in value
+  );
 }
 
 async function executeNonStreamingTool<TInput, TOutput>(
@@ -149,28 +151,38 @@ describe("model-facing memory tool results", () => {
 
     await executeNonStreamingTool(remember, input, context);
 
-    expect(createMemory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      confirmation: "model_high",
-      sensitivity: "sensitive",
-    }));
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        confirmation: "model_high",
+        sensitivity: "sensitive",
+      }),
+    );
   });
 
   it("does not fabricate confirmation for an inferred private-to-family write", async () => {
     createMemory.mockResolvedValue(internalMemory);
 
-    await executeNonStreamingTool(remember, {
-      basis: "agent_inferred",
-      content: internalMemory.content,
-      kind: "preference",
-      scope: "family",
-      sensitivity: "normal",
-      subject: { kind: "current_author" },
-    }, context);
+    await executeNonStreamingTool(
+      remember,
+      {
+        basis: "agent_inferred",
+        content: internalMemory.content,
+        kind: "preference",
+        scope: "family",
+        sensitivity: "normal",
+        subject: { kind: "current_author" },
+      },
+      context,
+    );
 
-    expect(createMemory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      confirmation: "model_high",
-      scope: "family",
-    }));
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        confirmation: "model_high",
+        scope: "family",
+      }),
+    );
   });
 
   it("rejects impossible thread identities before tool execution", () => {
@@ -205,41 +217,49 @@ describe("model-facing memory tool results", () => {
     expect(personalProject.success).toBe(false);
     expect(freeLabelThread.success).toBe(false);
     if (!personalProject.success) {
-      expect(personalProject.error.issues[0]!.message)
-        .toContain("AGENT_MEMORY_THREAD_INPUT_INVALID");
+      expect(personalProject.error.issues[0]!.message).toContain(
+        "AGENT_MEMORY_THREAD_INPUT_INVALID",
+      );
     }
     if (!freeLabelThread.success) {
-      expect(freeLabelThread.error.issues[0]!.message)
-        .toContain("AGENT_MEMORY_THREAD_INPUT_INVALID");
+      expect(freeLabelThread.error.issues[0]!.message).toContain(
+        "AGENT_MEMORY_THREAD_INPUT_INVALID",
+      );
     }
-    expect(schema.safeParse({
-      ...input,
-      sensitivity: "sensitive",
-      sourceSequence: "42",
-    }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        ...input,
+        sensitivity: "sensitive",
+        sourceSequence: "42",
+      }).success,
+    ).toBe(false);
   });
 
   it("returns only a safe item and opaque undo ref from remember", async () => {
     createMemory.mockResolvedValue(internalMemory);
 
-    const result = await executeNonStreamingTool(remember, {
-      basis: "agent_inferred",
-      content: internalMemory.content,
-      kind: "preference",
-      scope: "personal",
-      sensitivity: "normal",
-      subject: {
-        kind: "verified_ref",
-        subjectRef: "subj_11111111111111111111111111111111",
+    const result = await executeNonStreamingTool(
+      remember,
+      {
+        basis: "agent_inferred",
+        content: internalMemory.content,
+        kind: "preference",
+        scope: "personal",
+        sensitivity: "normal",
+        subject: {
+          kind: "verified_ref",
+          subjectRef: "subj_11111111111111111111111111111111",
+        },
+        thread: {
+          action: "create",
+          identity: "subject",
+          purpose: "Сохранять предпочтения пользователя",
+          role: "constraint",
+          title: "Чай",
+        },
       },
-      thread: {
-        action: "create",
-        identity: "subject",
-        purpose: "Сохранять предпочтения пользователя",
-        role: "constraint",
-        title: "Чай",
-      },
-    }, context);
+      context,
+    );
     if (!("item" in result)) throw new Error("expected a saved memory");
 
     expect(result.item).toEqual({
@@ -279,11 +299,13 @@ describe("model-facing memory tool results", () => {
         },
       }),
     );
-    expect(logMemoryWriteEvent).toHaveBeenCalledWith(expect.objectContaining({
-      code: "AGENT_MEMORY_WRITE_SUCCEEDED",
-      sourceKind: "current",
-      threadAction: "created",
-    }));
+    expect(logMemoryWriteEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "AGENT_MEMORY_WRITE_SUCCEEDED",
+        sourceKind: "current",
+        threadAction: "created",
+      }),
+    );
   });
 
   it("selects one verified visible group-delta source by sequence", async () => {
@@ -296,63 +318,77 @@ describe("model-facing memory tool results", () => {
       timelineEntryId: "timeline-entry-42",
     });
 
-    await executeNonStreamingTool(remember, {
-      basis: "agent_inferred",
-      content: "Анна начала долгий проект",
-      kind: "fact",
-      scope: "group",
-      sensitivity: "normal",
-      sourceSequence: "42",
-      subject: { kind: "current_author" },
-      thread: {
-        action: "create",
-        identity: "subject",
-        purpose: "Отслеживать развитие проекта и будущие результаты",
-        role: "goal",
-        title: "Проект Анны",
-      },
-    }, context);
-
-    expect(resolveMemoryTurnSource).toHaveBeenCalledWith(
-      context,
-      expect.anything(),
-      "42",
-    );
-    expect(createMemory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      confirmation: "model_high",
-      explicitSource: {
-        conversationId: "conversation-1",
+    await executeNonStreamingTool(
+      remember,
+      {
+        basis: "agent_inferred",
+        content: "Анна начала долгий проект",
+        kind: "fact",
+        scope: "group",
+        sensitivity: "normal",
+        sourceSequence: "42",
         subject: { kind: "current_author" },
-        timelineEntryId: "timeline-entry-42",
+        thread: {
+          action: "create",
+          identity: "subject",
+          purpose: "Отслеживать развитие проекта и будущие результаты",
+          role: "goal",
+          title: "Проект Анны",
+        },
       },
-      messageThreadId: "42",
-      sourceEventId: "1042",
-    }));
-    expect(logMemoryWriteEvent).toHaveBeenCalledWith(expect.objectContaining({
-      code: "AGENT_MEMORY_WRITE_SUCCEEDED",
-      sourceKind: "delta",
-    }));
+      context,
+    );
+
+    expect(resolveMemoryTurnSource).toHaveBeenCalledWith(context, expect.anything(), "42");
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        confirmation: "model_high",
+        explicitSource: {
+          conversationId: "conversation-1",
+          subject: { kind: "current_author" },
+          timelineEntryId: "timeline-entry-42",
+        },
+        messageThreadId: "42",
+        sourceEventId: "1042",
+      }),
+    );
+    expect(logMemoryWriteEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "AGENT_MEMORY_WRITE_SUCCEEDED",
+        sourceKind: "delta",
+      }),
+    );
   });
 
   // Codex review, 6 November 2026: the slot's records were quoted in a thrown error, and Eve logs
   // every thrown tool error whole, so personal memory reached the log.
   it("answers a slot conflict with the slot's records and logs no content", async () => {
     const refusal = new SlotConflictRefusal({
-      category: "conflict", code: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED", correction: "Текущие записи слота: Гоша, кубинский амазон",
-      field: "slotUpdate", reason: "В слоте уже есть активные записи", retryable: false, sideEffectStatus: "not_started",
+      category: "conflict",
+      code: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
+      correction: "Текущие записи слота: Гоша, кубинский амазон",
+      field: "slotUpdate",
+      reason: "В слоте уже есть активные записи",
+      retryable: false,
+      sideEffectStatus: "not_started",
     });
     expect(refusal.message).toBe("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
     createMemory.mockRejectedValue(refusal);
 
-    const result = await executeNonStreamingTool(remember, {
-      attribute: "питомцы",
-      basis: "agent_inferred",
-      content: "Семейный попугай Гоша живёт дома",
-      kind: "fact",
-      scope: "personal",
-      sensitivity: "normal",
-      subject: { kind: "current_author" },
-    }, context);
+    const result = await executeNonStreamingTool(
+      remember,
+      {
+        attribute: "питомцы",
+        basis: "agent_inferred",
+        content: "Семейный попугай Гоша живёт дома",
+        kind: "fact",
+        scope: "personal",
+        sensitivity: "normal",
+        subject: { kind: "current_author" },
+      },
+      context,
+    );
 
     expect(result).toMatchObject({
       code: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
@@ -360,31 +396,45 @@ describe("model-facing memory tool results", () => {
       reason: "В слоте уже есть активные записи",
       saved: false,
     });
-    expect(logMemoryWriteEvent).toHaveBeenCalledWith(expect.objectContaining({
-      code: "AGENT_MEMORY_WRITE_DEFERRED", errorCode: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
-    }));
+    expect(logMemoryWriteEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "AGENT_MEMORY_WRITE_DEFERRED",
+        errorCode: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
+      }),
+    );
   });
 
   it("answers a near-duplicate stop with the similar records and logs no content", async () => {
     const refusal = new NearDuplicateRefusal([
-      { attribute: null, content: "Гоша, кубинский амазон, живёт дома", memoryRef: MEMORY_REF, similarity: 0.71 },
+      {
+        attribute: null,
+        content: "Гоша, кубинский амазон, живёт дома",
+        memoryRef: MEMORY_REF,
+        similarity: 0.71,
+      },
     ]);
     expect(refusal.message).not.toContain("Гоша");
     createMemory.mockRejectedValue(refusal);
 
-    const result = await executeNonStreamingTool(remember, {
-      basis: "agent_inferred",
-      content: "Семейный попугай Гоша живёт дома",
-      kind: "fact",
-      scope: "personal",
-      sensitivity: "normal",
-      subject: { kind: "current_author" },
-    }, context);
+    const result = await executeNonStreamingTool(
+      remember,
+      {
+        basis: "agent_inferred",
+        content: "Семейный попугай Гоша живёт дома",
+        kind: "fact",
+        scope: "personal",
+        sensitivity: "normal",
+        subject: { kind: "current_author" },
+      },
+      context,
+    );
 
     expect(result).toMatchObject({
       code: "AGENT_MEMORY_NEAR_DUPLICATE",
       saved: false,
-      similar: [{ attribute: null, content: "Гоша, кубинский амазон, живёт дома", memoryRef: MEMORY_REF }],
+      similar: [
+        { attribute: null, content: "Гоша, кубинский амазон, живёт дома", memoryRef: MEMORY_REF },
+      ],
     });
     expect(logMemoryWriteEvent).toHaveBeenCalledWith({
       code: "AGENT_MEMORY_WRITE_DEFERRED",
@@ -397,18 +447,26 @@ describe("model-facing memory tool results", () => {
   });
 
   it("logs a structured terminal remember failure without recording memory content", async () => {
-    createMemory.mockRejectedValue(Object.assign(new Error("source missing"), {
-      code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
-    }));
+    createMemory.mockRejectedValue(
+      Object.assign(new Error("source missing"), {
+        code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
+      }),
+    );
 
-    await expect(executeNonStreamingTool(remember, {
-      basis: "agent_inferred",
-      content: "Не записывать в диагностический лог",
-      kind: "fact",
-      scope: "personal",
-      sensitivity: "normal",
-      subject: { kind: "current_author" },
-    }, context)).rejects.toThrow("source missing");
+    await expect(
+      executeNonStreamingTool(
+        remember,
+        {
+          basis: "agent_inferred",
+          content: "Не записывать в диагностический лог",
+          kind: "fact",
+          scope: "personal",
+          sensitivity: "normal",
+          subject: { kind: "current_author" },
+        },
+        context,
+      ),
+    ).rejects.toThrow("source missing");
 
     expect(logMemoryWriteEvent).toHaveBeenCalledWith({
       code: "AGENT_MEMORY_WRITE_FAILED",
@@ -426,18 +484,20 @@ describe("model-facing memory tool results", () => {
     const result = await executeNonStreamingTool(listMemoriesTool, { limit: 20 }, context);
 
     expect(result).toEqual({
-      items: [{
-        authorStatus: "current_member",
-        confirmation: "user_confirmed",
-        content: internalMemory.content,
-        createdAt: internalMemory.createdAt,
-        evidence: internalMemory.sourceEvidence,
-        kind: "preference",
-        memoryRef: MEMORY_REF,
-        scope: "personal",
-        sensitivity: "normal",
-        updatedAt: internalMemory.updatedAt,
-      }],
+      items: [
+        {
+          authorStatus: "current_member",
+          confirmation: "user_confirmed",
+          content: internalMemory.content,
+          createdAt: internalMemory.createdAt,
+          evidence: internalMemory.sourceEvidence,
+          kind: "preference",
+          memoryRef: MEMORY_REF,
+          scope: "personal",
+          sensitivity: "normal",
+          updatedAt: internalMemory.updatedAt,
+        },
+      ],
       nextCursor: "opaque-cursor",
     });
     expect(JSON.stringify(result)).not.toMatch(/user-1|7100000001|session-internal|turn-internal/u);
@@ -457,8 +517,9 @@ describe("model-facing memory tool results", () => {
     };
     retrieveMemories.mockResolvedValue([safeMemory]);
 
-    await expect(executeNonStreamingTool(searchMemories, { query: "чай" }, context))
-      .resolves.toEqual([safeMemory]);
+    await expect(
+      executeNonStreamingTool(searchMemories, { query: "чай" }, context),
+    ).resolves.toEqual([safeMemory]);
     expect(JSON.stringify(await retrieveMemories.mock.results[0]!.value)).not.toContain(MEMORY_ID);
   });
 });

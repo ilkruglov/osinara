@@ -8,14 +8,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  MEMORY_EMBEDDING_DIMENSIONS,
-  MEMORY_EMBEDDING_MODEL,
-} from "./memory-config.js";
-import {
-  embedMemoryPassages,
-  embedMemoryQuery,
-} from "./memory-embedding-client.js";
+import { MEMORY_EMBEDDING_DIMENSIONS, MEMORY_EMBEDDING_MODEL } from "./memory-config.js";
+import { embedMemoryPassages, embedMemoryQuery } from "./memory-embedding-client.js";
 
 const originalBaseUrl = process.env.MEMORY_EMBEDDING_BASE_URL;
 
@@ -87,10 +81,14 @@ describe("memory embedding client", () => {
     const query = Array.from({ length: 50 }, (_, index) => `подробность-${index}`).join(" ");
 
     await expect(embedMemoryQuery(query, fetchMock)).resolves.toEqual(vector);
-    const requests = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)) as { input: string[] });
+    const requests = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String(call[1]?.body)) as { input: string[] },
+    );
     const inputs = requests.flatMap((request) => request.input);
     expect(inputs.length).toBeGreaterThan(1);
-    expect(inputs.every((input) => input.startsWith("search_query: ") && input.length <= 414)).toBe(true);
+    expect(inputs.every((input) => input.startsWith("search_query: ") && input.length <= 414)).toBe(
+      true,
+    );
   });
 
   it("fails fast when the environment-specific worker URL is absent", async () => {
@@ -113,10 +111,16 @@ describe("memory embedding client", () => {
       embedMemoryPassages(
         ["текст"],
         vi.fn().mockResolvedValue(
-          new Response(JSON.stringify({ data: [{ embedding: [0.1], index: 0 }], model: MEMORY_EMBEDDING_MODEL }), {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify({
+              data: [{ embedding: [0.1], index: 0 }],
+              model: MEMORY_EMBEDDING_MODEL,
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          ),
         ),
       ),
     ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID/);
@@ -127,10 +131,15 @@ describe("memory embedding client", () => {
     await expect(
       embedMemoryPassages(
         ["текст"],
-        vi.fn().mockResolvedValue(new Response(
-          JSON.stringify({ error: "Input validation error: `inputs` must have less than 512 tokens. Given: 697", error_type: "Validation" }),
-          { status: 422 },
-        )),
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: "Input validation error: `inputs` must have less than 512 tokens. Given: 697",
+              error_type: "Validation",
+            }),
+            { status: 422 },
+          ),
+        ),
       ),
     ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_INPUT_TOO_LONG/);
   });
@@ -140,13 +149,17 @@ describe("memory embedding client", () => {
     await expect(
       embedMemoryPassages(
         ["текст"],
-        vi.fn().mockResolvedValue(Response.json({
-          data: [{
-            embedding: Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0),
-            index: 0,
-          }],
-          model: "other/model",
-        })),
+        vi.fn().mockResolvedValue(
+          Response.json({
+            data: [
+              {
+                embedding: Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0),
+                index: 0,
+              },
+            ],
+            model: "other/model",
+          }),
+        ),
       ),
     ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_MODEL_MISMATCH/);
   });
@@ -154,16 +167,19 @@ describe("memory embedding client", () => {
   it.each([
     ["network", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5"))],
     ["json", vi.fn().mockResolvedValue(new Response("not-json", { status: 200 }))],
-  ])("normalizes a %s boundary failure without leaking transport details", async (_case, fetchMock) => {
-    process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
+  ])(
+    "normalizes a %s boundary failure without leaking transport details",
+    async (_case, fetchMock) => {
+      process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
 
-    await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.toMatchObject({
-      contract: {
-        category: "dependency",
-        retryable: false,
-        sideEffectStatus: "not_started",
-      },
-    });
-    await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.not.toThrow(/10\.0\.0\.5/u);
-  });
+      await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.toMatchObject({
+        contract: {
+          category: "dependency",
+          retryable: false,
+          sideEffectStatus: "not_started",
+        },
+      });
+      await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.not.toThrow(/10\.0\.0\.5/u);
+    },
+  );
 });

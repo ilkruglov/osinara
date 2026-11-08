@@ -1,13 +1,7 @@
-import {
-  stripTerminalControls,
-  visibleLength,
-  wrapVisibleLine,
-} from "#cli/ui/terminal-text.js";
+import { stripTerminalControls, visibleLength, wrapVisibleLine } from "#cli/ui/terminal-text.js";
 function formatAttributeContent(t, n, r, i) {
   if (typeof n != `string`)
-    return Array.isArray(n)
-      ? prettyJson(n, i)
-      : [stripTerminalControls(shortJson(n))];
+    return Array.isArray(n) ? prettyJson(n, i) : [stripTerminalControls(shortJson(n))];
   if (t === `ai.prompt.messages`) {
     let e = messageTranscript(n, r, i);
     if (e !== void 0) return e;
@@ -15,15 +9,11 @@ function formatAttributeContent(t, n, r, i) {
   return formatPayloadContent(n, i);
 }
 function wrapPlainText(t, r) {
-  return splitEmbeddedNewlines([stripTerminalControls(t)]).flatMap((e) =>
-    wrapVisibleLine(e, r),
-  );
+  return splitEmbeddedNewlines([stripTerminalControls(t)]).flatMap((e) => wrapVisibleLine(e, r));
 }
 function formatPayloadContent(e, t) {
   let n = parseJson(e);
-  return n !== void 0 && (Array.isArray(n) || isRecord(n))
-    ? prettyJson(n, t)
-    : wrapPlainText(e, t);
+  return n !== void 0 && (Array.isArray(n) || isRecord(n)) ? prettyJson(n, t) : wrapPlainText(e, t);
 }
 function messageTranscript(t, n, r) {
   let i = parseJson(t);
@@ -42,16 +32,10 @@ function messageTranscript(t, n, r) {
   }
   if (!o.every((e) => typeof e.role == `string`)) return;
   let s = [];
-  a > 0 &&
-    s.push(
-      n(`… ${a} earlier message${a === 1 ? `` : `s`} omitted (long context)`),
-    );
+  a > 0 && s.push(n(`… ${a} earlier message${a === 1 ? `` : `s`} omitted (long context)`));
   for (let t of o) {
     let i = messageContentParts(t.content),
-      a =
-        t.role === `tool`
-          ? toolRoleLabel(i)
-          : stripTerminalControls(String(t.role));
+      a = t.role === `tool` ? toolRoleLabel(i) : stripTerminalControls(String(t.role));
     i.forEach((e, t) => {
       let i = t === 0 ? `${n(`${a}:`)} ` : `  `;
       s.push(...wrapPrefixed(i, e.text, e.dim ? n : void 0, r));
@@ -75,8 +59,7 @@ function messageContentParts(t) {
     if (r.type === `text` && typeof r.text == `string`)
       n.push({ text: stripTerminalControls(r.text) });
     else if (r.type === `reasoning`) {
-      let t =
-        typeof r.text == `string` ? stripTerminalControls(r.text.trim()) : ``;
+      let t = typeof r.text == `string` ? stripTerminalControls(r.text.trim()) : ``;
       n.push({
         dim: !0,
         text: t.length > 0 ? `⟨reasoning⟩ ${t}` : `⟨reasoning⟩`,
@@ -128,7 +111,7 @@ function wrapHanging(e, r, i) {
 }
 function splitEmbeddedNewlines(e) {
   let t = e.flatMap((e) => e.split(/\r\n|\r|\n/));
-  for (; t.length > 1 && t[t.length - 1] === ``; ) t.pop();
+  for (; t.length > 1 && t[t.length - 1] === ``;) t.pop();
   return t;
 }
 function shortJson(e) {

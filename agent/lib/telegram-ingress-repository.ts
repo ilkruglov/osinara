@@ -70,9 +70,16 @@ async function requireActiveLease(
 
 function requirePrivateBurstPolicy(burst: TelegramPrivateBurstPolicy): void {
   const { maxWaitMilliseconds, quietMilliseconds } = burst;
-  if (![maxWaitMilliseconds, quietMilliseconds].every((value) => Number.isSafeInteger(value) && value >= 0) ||
-    maxWaitMilliseconds < quietMilliseconds) {
-    throw new AppError("AGENT_TELEGRAM_BURST_WINDOW_INVALID", "Пауза перед ответом в личном чате задана неверно");
+  if (
+    ![maxWaitMilliseconds, quietMilliseconds].every(
+      (value) => Number.isSafeInteger(value) && value >= 0,
+    ) ||
+    maxWaitMilliseconds < quietMilliseconds
+  ) {
+    throw new AppError(
+      "AGENT_TELEGRAM_BURST_WINDOW_INVALID",
+      "Пауза перед ответом в личном чате задана неверно",
+    );
   }
 }
 
@@ -118,10 +125,10 @@ export const telegramIngressRepository: TelegramIngressRepository = {
       }
 
       // Serialize absent rows and type changes with group administration before fixing the decision.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.chatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+        input.chatId,
+        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+      ]);
       const group = await client.query<{ tool_allowlist: string[]; type: string }>(
         `SELECT type::text, tool_allowlist
          FROM telegram_groups
@@ -145,7 +152,7 @@ export const telegramIngressRepository: TelegramIngressRepository = {
       }
       if (
         policy?.type === "external" &&
-          (input.mediaKind === "native_photo" || input.mediaKind === "image_document_candidate") &&
+        (input.mediaKind === "native_photo" || input.mediaKind === "image_document_candidate") &&
         externalAllowlist?.has("inspect_workspace_image") === true
       ) {
         await client.query("COMMIT");
@@ -421,7 +428,11 @@ export const telegramIngressRepository: TelegramIngressRepository = {
   },
 
   async hasPendingApprovalsInChat(telegramChatId) {
-    requireNonEmpty(telegramChatId, "AGENT_TELEGRAM_CHAT_INVALID", "Не задан идентификатор Telegram-чата");
+    requireNonEmpty(
+      telegramChatId,
+      "AGENT_TELEGRAM_CHAT_INVALID",
+      "Не задан идентификатор Telegram-чата",
+    );
     const result = await database().query<{ pending: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM telegram_hitl_approvals
@@ -433,7 +444,11 @@ export const telegramIngressRepository: TelegramIngressRepository = {
   },
 
   async hasPendingApprovals(eveSessionId) {
-    requireNonEmpty(eveSessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
+    requireNonEmpty(
+      eveSessionId,
+      "AGENT_TELEGRAM_SESSION_INVALID",
+      "Eve не вернул идентификатор сессии",
+    );
     const result = await database().query<{ pending: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM telegram_hitl_approvals

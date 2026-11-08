@@ -60,7 +60,10 @@ function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
     throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
   }
   if (scope === "personal" && !auth.userId) {
-    throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить владельца личной памяти");
+    throw new AppError(
+      "AGENT_MEMORY_CONTEXT_INVALID",
+      "Не удалось определить владельца личной памяти",
+    );
   }
   if (scope === "group" && !auth.groupId) {
     throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить группу памяти");
@@ -129,7 +132,8 @@ async function existingCreate(
     [replay.memory_item_id, auth.familyId, auth.scopes, auth.userId, auth.groupId],
   );
   const row = result.rows[0];
-  if (!row) throw new AppError("AGENT_MEMORY_REPLAY_COMPLETED", "Исходная запись памяти уже удалена");
+  if (!row)
+    throw new AppError("AGENT_MEMORY_REPLAY_COMPLETED", "Исходная запись памяти уже удалена");
   return {
     ...rowToReferencedMemory(row),
     ...(replay.thread_action && replay.thread_ref
@@ -152,13 +156,18 @@ async function insertCreateOperation(
         actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id,
         thread_id, thread_action)
      VALUES ($1, $2, 'create', $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [auth.familyId, input.operationKey, inputHash, memoryItemId,
+    [
+      auth.familyId,
+      input.operationKey,
+      inputHash,
+      memoryItemId,
       input.provenance && !input.systemActor ? auth.userId : null,
       input.provenance && !input.systemActor ? auth.telegramUserId : null,
-       input.provenance?.sessionId ?? null,
-       input.provenance?.turnId ?? null,
+      input.provenance?.sessionId ?? null,
+      input.provenance?.turnId ?? null,
       thread?.threadId ?? null,
-      thread?.result.action ?? null],
+      thread?.result.action ?? null,
+    ],
   );
 }
 
@@ -234,8 +243,7 @@ export async function createMemoryClaim(
   auth: MemoryAuthorization,
   input: CreateMemoryInput,
 ): Promise<ReferencedMemoryItem> {
-  if (input.systemActor &&
-    (!input.provenance?.sessionId || !input.provenance.turnId)) {
+  if (input.systemActor && (!input.provenance?.sessionId || !input.provenance.turnId)) {
     throw new AppError(
       "AGENT_MEMORY_SYSTEM_PROVENANCE_REQUIRED",
       "Системная запись памяти требует проверенный контекст выполнения Eve",
@@ -253,10 +261,10 @@ export async function createMemoryClaim(
   let titleEmbedding: Awaited<ReturnType<typeof embedMemoryThreadTitle>>;
   // An asserted distinct fact, a versioned slot and every episode skip the neighbour gate. Whether
   // the slot already exists is known only under its lock, so a slotted write is embedded upfront.
-  const contentEmbeddings = isSemanticMemoryKind(input.kind) && input.distinct !== true &&
-    input.slotUpdate === undefined
-    ? await embedNearDuplicateCandidate(auth, input.operationKey, input.content)
-    : null;
+  const contentEmbeddings =
+    isSemanticMemoryKind(input.kind) && input.distinct !== true && input.slotUpdate === undefined
+      ? await embedNearDuplicateCandidate(auth, input.operationKey, input.content)
+      : null;
   try {
     titleEmbedding = await embedMemoryThreadTitle(input.thread);
   } catch (error) {
@@ -318,19 +326,27 @@ export async function createMemoryClaim(
     if (input.scope !== "group" && !authorUserId) {
       throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить автора памяти");
     }
-    const scopePartitionKey = input.scope === "personal"
-      ? auth.userId!
-      : input.scope === "group"
-        ? auth.groupId!
-        : auth.familyId;
-    const contentNormalized = prepared?.contentNormalized ?? normalizeMemoryClaimContent(input.content);
-    const slotClaims = input.attribute === undefined ? [] : await lockSlotClaims(client, auth, {
-      attribute: input.attribute, kind: input.kind, scope: input.scope, scopePartitionKey,
-      subjectLabel: prepared?.subjectLabel ?? null,
-      subjectParticipantId: prepared?.subjectParticipantId ?? null,
-      subjectUserId: prepared?.subjectUserId ?? null,
-      memoryProjectId: threadWrite?.identity.memoryProjectId ?? null,
-    });
+    const scopePartitionKey =
+      input.scope === "personal"
+        ? auth.userId!
+        : input.scope === "group"
+          ? auth.groupId!
+          : auth.familyId;
+    const contentNormalized =
+      prepared?.contentNormalized ?? normalizeMemoryClaimContent(input.content);
+    const slotClaims =
+      input.attribute === undefined
+        ? []
+        : await lockSlotClaims(client, auth, {
+            attribute: input.attribute,
+            kind: input.kind,
+            scope: input.scope,
+            scopePartitionKey,
+            subjectLabel: prepared?.subjectLabel ?? null,
+            subjectParticipantId: prepared?.subjectParticipantId ?? null,
+            subjectUserId: prepared?.subjectUserId ?? null,
+            memoryProjectId: threadWrite?.identity.memoryProjectId ?? null,
+          });
     const reinforced = await reinforceExactClaim(client, auth, {
       attribute: input.attribute ?? null,
       contentNormalized,
@@ -346,8 +362,10 @@ export async function createMemoryClaim(
       subjectUserId: prepared?.subjectUserId ?? null,
       systemActor: input.systemActor === true,
     });
-    const previousClaimIds = !reinforced && input.attribute !== undefined
-      ? requireSlotUpdate(slotClaims, input.slotUpdate) : [];
+    const previousClaimIds =
+      !reinforced && input.attribute !== undefined
+        ? requireSlotUpdate(slotClaims, input.slotUpdate)
+        : [];
     // A write into an existing slot has read it and versions it there (`requireSlotUpdate`).
     if (!reinforced && contentEmbeddings && slotClaims.length === 0) {
       const neighbours = await findNearDuplicateClaims(client, auth, {
@@ -362,12 +380,14 @@ export async function createMemoryClaim(
         subjectUserId: prepared?.subjectUserId ?? null,
       });
       if (neighbours.length > 0) {
-        console.info(JSON.stringify({
-          code: "AGENT_MEMORY_NEAR_DUPLICATE",
-          candidates: neighbours.length,
-          scope: input.scope,
-          topSimilarity: Number(neighbours[0]!.similarity.toFixed(3)),
-        }));
+        console.info(
+          JSON.stringify({
+            code: "AGENT_MEMORY_NEAR_DUPLICATE",
+            candidates: neighbours.length,
+            scope: input.scope,
+            topSimilarity: Number(neighbours[0]!.similarity.toFixed(3)),
+          }),
+        );
         throw new NearDuplicateRefusal(neighbours);
       }
     }
@@ -406,28 +426,52 @@ export async function createMemoryClaim(
                 $29::timestamptz)
        RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                  confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
-      [auth.familyId, ownerUserId, groupId, authorUserId,
-        prepared?.primaryAuthorTelegramUserId ?? (input.scope === "group" ? auth.telegramUserId : null),
-        input.scope, input.kind, input.content, input.source, input.sourceEventId ?? null,
-        input.messageThreadId ?? null, input.confirmation, input.sensitivity, input.operationKey,
-        prepared?.conversationId ?? null, prepared?.subjectParticipantId ?? null,
-        prepared?.subjectConversationId ?? null, prepared?.subjectUserId ?? null,
-         prepared?.subjectLabel ?? null, threadWrite?.identity.memoryProjectId ?? null,
-         prepared === null ? null : input.confirmation === "user_confirmed",
-         endorsedByUserId, prepared === null ? "legacy_unresolved" : "evidenced",
-          contentNormalized,
-          prepared !== null && input.sensitivity === "normal" &&
-            (prepared.subjectUserId !== null || prepared.subjectParticipantId !== null),
-          "active",
-          null,
-          input.attribute ?? null,
-          input.occurredAt ?? null],
+      [
+        auth.familyId,
+        ownerUserId,
+        groupId,
+        authorUserId,
+        prepared?.primaryAuthorTelegramUserId ??
+          (input.scope === "group" ? auth.telegramUserId : null),
+        input.scope,
+        input.kind,
+        input.content,
+        input.source,
+        input.sourceEventId ?? null,
+        input.messageThreadId ?? null,
+        input.confirmation,
+        input.sensitivity,
+        input.operationKey,
+        prepared?.conversationId ?? null,
+        prepared?.subjectParticipantId ?? null,
+        prepared?.subjectConversationId ?? null,
+        prepared?.subjectUserId ?? null,
+        prepared?.subjectLabel ?? null,
+        threadWrite?.identity.memoryProjectId ?? null,
+        prepared === null ? null : input.confirmation === "user_confirmed",
+        endorsedByUserId,
+        prepared === null ? "legacy_unresolved" : "evidenced",
+        contentNormalized,
+        prepared !== null &&
+          input.sensitivity === "normal" &&
+          (prepared.subjectUserId !== null || prepared.subjectParticipantId !== null),
+        "active",
+        null,
+        input.attribute ?? null,
+        input.occurredAt ?? null,
+      ],
     );
     const row = result.rows[0];
     if (!row) throw new AppError("AGENT_MEMORY_WRITE_FAILED", "Не удалось сохранить запись памяти");
     if (prepared !== null) await insertClaimEvidence(client, row.id, prepared);
     if (threadWrite) {
-      await materializeMemoryThreadWrite(client, auth, row.id, threadWrite, input.systemActor === true);
+      await materializeMemoryThreadWrite(
+        client,
+        auth,
+        row.id,
+        threadWrite,
+        input.systemActor === true,
+      );
     }
     const reference = await client.query<{ memory_ref: string }>(
       "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
@@ -442,8 +486,11 @@ export async function createMemoryClaim(
     }
     if (input.attribute !== undefined) {
       await supersedeSlotClaims(client, auth, {
-        attribute: input.attribute, newClaimId: row.id, previousClaimIds,
-        scope: input.scope, systemActor: input.systemActor === true,
+        attribute: input.attribute,
+        newClaimId: row.id,
+        previousClaimIds,
+        scope: input.scope,
+        systemActor: input.systemActor === true,
       });
     }
     await insertCreateOperation(client, auth, input, inputHash, row.id, threadWrite);
@@ -452,8 +499,14 @@ export async function createMemoryClaim(
       `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
        VALUES ($1, $2, 'memory.created', $3,
                jsonb_build_object('scope', $4::text, 'kind', $5::text, 'sensitivity', $6::text))`,
-       [auth.familyId, input.systemActor ? null : prepared?.auditActorUserId ?? auth.userId, row.id,
-        input.scope, input.kind, input.sensitivity],
+      [
+        auth.familyId,
+        input.systemActor ? null : (prepared?.auditActorUserId ?? auth.userId),
+        row.id,
+        input.scope,
+        input.kind,
+        input.sensitivity,
+      ],
     );
     await completeThreadOutcome(client, auth, input, reservation, resolvingCandidate);
     await client.query("COMMIT");

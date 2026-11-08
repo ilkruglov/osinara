@@ -14,7 +14,12 @@
  * getFile past 30 seconds for two photos in a row in «Дизраптим» (another bot measured 65 % of its
  * uncached downloads timing out that day), so getFile alone waits longer.
  */
-import { callTelegramApi, downloadTelegramFile, getTelegramFile, telegramSendPacer } from "eve/channels/telegram";
+import {
+  callTelegramApi,
+  downloadTelegramFile,
+  getTelegramFile,
+  telegramSendPacer,
+} from "eve/channels/telegram";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -28,7 +33,10 @@ describe("Eve Telegram API deadlines", () => {
     const fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       signals.push(init?.signal);
       return signals.length === 1
-        ? Response.json({ error_code: 429, ok: false, parameters: { retry_after: 1 } }, { status: 429 })
+        ? Response.json(
+            { error_code: 429, ok: false, parameters: { retry_after: 1 } },
+            { status: 429 },
+          )
         : Response.json({ ok: true, result: true });
     });
 
@@ -45,11 +53,27 @@ describe("Eve Telegram API deadlines", () => {
   it("hands the pause of a second 429 to the pacer and returns that 429", async () => {
     const retryAfter = vi.spyOn(telegramSendPacer, "retryAfter").mockReturnValue(true);
     vi.spyOn(telegramSendPacer, "waitForPause").mockResolvedValue(undefined);
-    const fetch = vi.fn()
-      .mockResolvedValueOnce(Response.json({ error_code: 429, ok: false, parameters: { retry_after: 1 } }, { status: 429 }))
-      .mockResolvedValueOnce(Response.json({ error_code: 429, ok: false, parameters: { retry_after: 7 } }, { status: 429 }));
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error_code: 429, ok: false, parameters: { retry_after: 1 } },
+          { status: 429 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          { error_code: 429, ok: false, parameters: { retry_after: 7 } },
+          { status: 429 },
+        ),
+      );
 
-    const response = await callTelegramApi({ body: { chat_id: 42, text: "x" }, botToken: "1:test", fetch, method: "sendMessage" });
+    const response = await callTelegramApi({
+      body: { chat_id: 42, text: "x" },
+      botToken: "1:test",
+      fetch,
+      method: "sendMessage",
+    });
 
     expect(response.status).toBe(429);
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -58,9 +82,11 @@ describe("Eve Telegram API deadlines", () => {
 
   it("gives getFile a one-minute deadline and leaves every other method at 30 seconds", async () => {
     const timeout = vi.spyOn(AbortSignal, "timeout");
-    const fetch = vi.fn(async (url: string | URL | Request) => (String(url).endsWith("/getFile")
-      ? Response.json({ ok: true, result: { file_id: "f", file_path: "photos/a.jpg" } })
-      : Response.json({ ok: true, result: true })));
+    const fetch = vi.fn(async (url: string | URL | Request) =>
+      String(url).endsWith("/getFile")
+        ? Response.json({ ok: true, result: { file_id: "f", file_path: "photos/a.jpg" } })
+        : Response.json({ ok: true, result: true }),
+    );
 
     const file = await getTelegramFile({ credentials: { botToken: "1:test" }, fetch, fileId: "f" });
     await callTelegramApi({ botToken: "1:test", fetch, method: "getMe" });
@@ -76,7 +102,11 @@ describe("Eve Telegram API deadlines", () => {
       return new Response("bytes");
     });
 
-    const response = await downloadTelegramFile({ credentials: { botToken: "1:test" }, fetch, filePath: "photos/a.jpg" });
+    const response = await downloadTelegramFile({
+      credentials: { botToken: "1:test" },
+      fetch,
+      filePath: "photos/a.jpg",
+    });
 
     expect(await response.text()).toBe("bytes");
     expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([120_000]);
@@ -85,9 +115,14 @@ describe("Eve Telegram API deadlines", () => {
   it("aborts an attempt Telegram never answers", async () => {
     const controller = new AbortController();
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
-    const fetch = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () => reject(new DOMException("timed out", "TimeoutError")));
-    }));
+    const fetch = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("timed out", "TimeoutError")),
+          );
+        }),
+    );
 
     const pending = callTelegramApi({ botToken: "1:test", fetch, method: "getMe" });
     // The call resolves the token and takes its pacing slot first; abort once the request is out.

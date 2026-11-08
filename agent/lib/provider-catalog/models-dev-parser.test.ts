@@ -38,32 +38,32 @@ describe("enrichModelsFromModelsDev", () => {
     [[{ max: 262_144, type: "budget_tokens" }]],
     [[{ type: "effort", values: ["medium", "xhigh", "minimal"] }]],
   ])("does not invent an unsupported reasoning selection for %#", (reasoningOptions) => {
-    const [model] = enrichModelsFromModelsDev(
-      metadataCatalog(reasoningOptions),
-      "deepseek",
-      [{ id: "deepseek-v4-flash", protocol: "openai-chat-completions" }],
-    );
+    const [model] = enrichModelsFromModelsDev(metadataCatalog(reasoningOptions), "deepseek", [
+      { id: "deepseek-v4-flash", protocol: "openai-chat-completions" },
+    ]);
 
     expect(model.reasoningOptions).toEqual([]);
   });
 
   it("keeps none for an OpenAI toggle when no provider-native enabled mode is expressible", () => {
-    const [model] = enrichModelsFromModelsDev(
-      metadataCatalog([{ type: "toggle" }]),
-      "deepseek",
-      [{ id: "deepseek-v4-flash", protocol: "openai-chat-completions" }],
-    );
+    const [model] = enrichModelsFromModelsDev(metadataCatalog([{ type: "toggle" }]), "deepseek", [
+      { id: "deepseek-v4-flash", protocol: "openai-chat-completions" },
+    ]);
 
     expect(model.reasoningOptions).toEqual([{ type: "none" }]);
   });
 
   it("rejects an unknown reasoning option contract", () => {
-    expect(() => enrichModelsFromModelsDev(
-      metadataCatalog([{ type: "future-mode", value: true }]),
-      "deepseek",
-      [{ id: "deepseek-v4-flash", protocol: "openai-chat-completions" }],
-    )).toThrow(expect.objectContaining<Partial<AppError>>({
-      code: "AGENT_PROVIDER_METADATA_RESPONSE_INVALID",
-    }));
+    expect(() =>
+      enrichModelsFromModelsDev(
+        metadataCatalog([{ type: "future-mode", value: true }]),
+        "deepseek",
+        [{ id: "deepseek-v4-flash", protocol: "openai-chat-completions" }],
+      ),
+    ).toThrow(
+      expect.objectContaining<Partial<AppError>>({
+        code: "AGENT_PROVIDER_METADATA_RESPONSE_INVALID",
+      }),
+    );
   });
 });

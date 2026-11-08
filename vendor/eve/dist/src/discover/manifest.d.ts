@@ -1,4 +1,8 @@
-import type { MarkdownSourceRef, ModuleSourceRef, SkillPackageSourceRef } from "#shared/source-ref.js";
+import type {
+  MarkdownSourceRef,
+  ModuleSourceRef,
+  SkillPackageSourceRef,
+} from "#shared/source-ref.js";
 import type { NamedSkillDefinition } from "#shared/skill-definition.js";
 import type { ScheduleDefinition } from "#public/definitions/schedule.js";
 import type { SkillDefinition } from "#public/definitions/skill.js";
@@ -23,12 +27,12 @@ export type ChannelSourceRef = ModuleSourceRef;
  * re-derive it from the module's logical path.
  */
 export interface ConnectionSourceRef extends ModuleSourceRef {
-    /**
-     * Authored connection name. Equals the basename of the file form
-     * (`connections/linear.ts` -> `"linear"`) or the directory name of the
-     * folder form (`connections/linear/connection.ts` -> `"linear"`).
-     */
-    readonly connectionName: string;
+  /**
+   * Authored connection name. Equals the basename of the file form
+   * (`connections/linear.ts` -> `"linear"`) or the directory name of the
+   * folder form (`connections/linear/connection.ts` -> `"linear"`).
+   */
+  readonly connectionName: string;
 }
 /**
  * Hook source reference preserved by the discovery manifest.
@@ -42,7 +46,10 @@ export type InstructionsSourceRef = MarkdownSourceRef<InstructionsDefinition> | 
 /**
  * Skill source reference preserved by the discovery manifest.
  */
-export type SkillSourceRef = MarkdownSourceRef<SkillDefinition> | ModuleSourceRef | (NamedSkillDefinition & SkillPackageSourceRef);
+export type SkillSourceRef =
+  | MarkdownSourceRef<SkillDefinition>
+  | ModuleSourceRef
+  | (NamedSkillDefinition & SkillPackageSourceRef);
 /**
  * Tool source reference preserved by the discovery manifest.
  */
@@ -51,12 +58,12 @@ export type ToolSourceRef = ModuleSourceRef;
  * Recursive manifest entry for a local subagent package.
  */
 export interface LocalSubagentSourceRef {
-    entryPath: string;
-    logicalPath: string;
-    manifest: AgentSourceManifest;
-    rootPath: string;
-    sourceId: string;
-    subagentId: string;
+  entryPath: string;
+  logicalPath: string;
+  manifest: AgentSourceManifest;
+  rootPath: string;
+  sourceId: string;
+  subagentId: string;
 }
 /**
  * Schedule source reference preserved by the discovery manifest. A
@@ -82,25 +89,25 @@ export type SandboxSourceRef = ModuleSourceRef;
  * sandbox's live cwd at session bootstrap.
  */
 export interface SandboxWorkspaceFolderSourceRef {
-    /**
-     * Logical path of the workspace folder relative to the agent root,
-     * e.g. `"sandbox/workspace"`.
-     */
-    readonly logicalPath: string;
-    /**
-     * Top-level directory entries discovered inside the workspace folder.
-     * Directories are listed with a trailing `/`. Used by the workspace
-     * prompt section so the model can see the file tree at a glance.
-     */
-    readonly rootEntries: readonly string[];
-    /**
-     * Stable id derived from the logical path.
-     */
-    readonly sourceId: string;
-    /**
-     * Absolute on-disk path to the workspace folder.
-     */
-    readonly sourcePath: string;
+  /**
+   * Logical path of the workspace folder relative to the agent root,
+   * e.g. `"sandbox/workspace"`.
+   */
+  readonly logicalPath: string;
+  /**
+   * Top-level directory entries discovered inside the workspace folder.
+   * Directories are listed with a trailing `/`. Used by the workspace
+   * prompt section so the model can see the file tree at a glance.
+   */
+  readonly rootEntries: readonly string[];
+  /**
+   * Stable id derived from the logical path.
+   */
+  readonly sourceId: string;
+  /**
+   * Absolute on-disk path to the workspace folder.
+   */
+  readonly sourcePath: string;
 }
 /**
  * Package-local helper module preserved by the discovery manifest.
@@ -118,27 +125,27 @@ export type ExtensionSourceRef = ModuleSourceRef;
  * consuming agent, prefixing contributions with {@link namespace}.
  */
 export interface ResolvedExtensionMount {
-    /** Mount namespace derived from the mount filename (e.g. `crm`). */
-    readonly namespace: string;
-    /** Package specifier the mount imports (e.g. `@acme/crm`). */
-    readonly specifier: string;
-    /** Package name from the resolved package.json, used to scope state. */
-    readonly packageName: string;
-    /** Absolute path to the resolved package root. */
-    readonly packageRoot: string;
-    /** Absolute path to the extension's agent-shaped source root. */
-    readonly sourceRoot: string;
-    /** Discovered agent-shaped source manifest for the extension. */
-    readonly manifest: AgentSourceManifest;
-    /** Runtime packages this extension requires the consuming application to externalize. */
-    readonly externalDependencies: readonly string[];
-    /**
-     * Consumer-authored overrides discovered in the mount directory form
-     * (`extensions/<ns>/{tools,connections,…}/`). Composed under the same
-     * `<ns>__` namespace as the extension's own contributions but winning on
-     * name collision. Absent for the flat file mount form.
-     */
-    readonly overrides?: AgentSourceManifest;
+  /** Mount namespace derived from the mount filename (e.g. `crm`). */
+  readonly namespace: string;
+  /** Package specifier the mount imports (e.g. `@acme/crm`). */
+  readonly specifier: string;
+  /** Package name from the resolved package.json, used to scope state. */
+  readonly packageName: string;
+  /** Absolute path to the resolved package root. */
+  readonly packageRoot: string;
+  /** Absolute path to the extension's agent-shaped source root. */
+  readonly sourceRoot: string;
+  /** Discovered agent-shaped source manifest for the extension. */
+  readonly manifest: AgentSourceManifest;
+  /** Runtime packages this extension requires the consuming application to externalize. */
+  readonly externalDependencies: readonly string[];
+  /**
+   * Consumer-authored overrides discovered in the mount directory form
+   * (`extensions/<ns>/{tools,connections,…}/`). Composed under the same
+   * `<ns>__` namespace as the extension's own contributions but winning on
+   * name collision. Absent for the flat file mount form.
+   */
+  readonly overrides?: AgentSourceManifest;
 }
 /**
  * Subagent source reference preserved by the discovery manifest.
@@ -148,134 +155,136 @@ export type SubagentSourceRef = LocalSubagentSourceRef;
  * Input used to build a manifest-ready connection source ref.
  */
 export interface CreateConnectionSourceRefInput extends CreateModuleSourceRefInput {
-    connectionName: string;
+  connectionName: string;
 }
 /**
  * Versioned source manifest emitted by discovery.
  */
 export interface AgentSourceManifest {
-    agentId: string;
-    agentRoot: string;
-    appRoot: string;
-    channels: ChannelSourceRef[];
-    connections: ConnectionSourceRef[];
-    configModule?: ModuleSourceRef;
-    diagnosticsSummary: DiscoverDiagnosticsSummary;
-    /**
-     * Mounted extension source references discovered under `agent/extensions/`.
-     * Each entry's logical-path basename is the mount namespace the compiler
-     * prefixes onto the extension's composed contributions.
-     */
-    extensions: ExtensionSourceRef[];
-    /**
-     * Mounted extensions resolved to their packages and discovered source trees.
-     * Populated only for the agent root; extension trees do not mount further
-     * extensions (transitive mounting is a non-goal).
-     */
-    resolvedExtensions: ResolvedExtensionMount[];
-    hooks: ModuleSourceRef[];
-    lib: LibSourceRef[];
-    kind: typeof AGENT_SOURCE_MANIFEST_KIND;
-    /**
-     * Authored instructions prompt sources discovered at the agent root.
-     *
-     * Supports three forms:
-     * 1. Flat file: `instructions.md` or `instructions.{ts,...}` → single element.
-     * 2. Directory: `instructions/` with `.md` and `.ts` files → multiple elements.
-     * 3. Legacy: `system.{md,ts,...}` → single element with deprecation warning.
-     *
-     * Empty when no instructions are authored.
-     */
-    instructions: InstructionsSourceRef[];
-    /**
-     * Authored sandbox module discovered for this agent, or `null` when
-     * the agent does not declare one. Every agent owns at most one
-     * sandbox.
-     */
-    sandbox: SandboxSourceRef | null;
-    /**
-     * Authored sandbox workspace folder discovered under
-     * `agent/sandbox/workspace/`. At most one entry per agent; mounted
-     * into the live sandbox cwd at session bootstrap.
-     */
-    sandboxWorkspaces: SandboxWorkspaceFolderSourceRef[];
-    schedules: ScheduleSourceRef[];
-    skills: SkillSourceRef[];
-    tools: ModuleSourceRef[];
-    version: typeof AGENT_SOURCE_MANIFEST_VERSION;
-    subagents: SubagentSourceRef[];
+  agentId: string;
+  agentRoot: string;
+  appRoot: string;
+  channels: ChannelSourceRef[];
+  connections: ConnectionSourceRef[];
+  configModule?: ModuleSourceRef;
+  diagnosticsSummary: DiscoverDiagnosticsSummary;
+  /**
+   * Mounted extension source references discovered under `agent/extensions/`.
+   * Each entry's logical-path basename is the mount namespace the compiler
+   * prefixes onto the extension's composed contributions.
+   */
+  extensions: ExtensionSourceRef[];
+  /**
+   * Mounted extensions resolved to their packages and discovered source trees.
+   * Populated only for the agent root; extension trees do not mount further
+   * extensions (transitive mounting is a non-goal).
+   */
+  resolvedExtensions: ResolvedExtensionMount[];
+  hooks: ModuleSourceRef[];
+  lib: LibSourceRef[];
+  kind: typeof AGENT_SOURCE_MANIFEST_KIND;
+  /**
+   * Authored instructions prompt sources discovered at the agent root.
+   *
+   * Supports three forms:
+   * 1. Flat file: `instructions.md` or `instructions.{ts,...}` → single element.
+   * 2. Directory: `instructions/` with `.md` and `.ts` files → multiple elements.
+   * 3. Legacy: `system.{md,ts,...}` → single element with deprecation warning.
+   *
+   * Empty when no instructions are authored.
+   */
+  instructions: InstructionsSourceRef[];
+  /**
+   * Authored sandbox module discovered for this agent, or `null` when
+   * the agent does not declare one. Every agent owns at most one
+   * sandbox.
+   */
+  sandbox: SandboxSourceRef | null;
+  /**
+   * Authored sandbox workspace folder discovered under
+   * `agent/sandbox/workspace/`. At most one entry per agent; mounted
+   * into the live sandbox cwd at session bootstrap.
+   */
+  sandboxWorkspaces: SandboxWorkspaceFolderSourceRef[];
+  schedules: ScheduleSourceRef[];
+  skills: SkillSourceRef[];
+  tools: ModuleSourceRef[];
+  version: typeof AGENT_SOURCE_MANIFEST_VERSION;
+  subagents: SubagentSourceRef[];
 }
 /**
  * Input used to build a discovery manifest with stable defaults.
  */
 export interface CreateAgentSourceManifestInput {
-    agentId?: string;
-    agentRoot: string;
-    appRoot: string;
-    channels?: readonly ChannelSourceRef[];
-    connections?: readonly ConnectionSourceRef[];
-    configModule?: ModuleSourceRef;
-    diagnostics?: readonly DiscoverDiagnostic[];
-    extensions?: readonly ExtensionSourceRef[];
-    resolvedExtensions?: readonly ResolvedExtensionMount[];
-    hooks?: readonly ModuleSourceRef[];
-    lib?: readonly LibSourceRef[];
-    /**
-     * Optional package name read from the app root's package.json.
-     * When provided this is preferred over `basename(appRoot)` for agent id
-     * derivation so that builds running in synthetic CI paths (e.g.
-     * `/vercel/path0`) produce a meaningful agent id.
-     */
-    packageName?: string;
-    instructions?: readonly InstructionsSourceRef[];
-    sandbox?: SandboxSourceRef | null;
-    sandboxWorkspaces?: readonly SandboxWorkspaceFolderSourceRef[];
-    schedules?: readonly ScheduleSourceRef[];
-    skills?: readonly SkillSourceRef[];
-    tools?: readonly ModuleSourceRef[];
-    subagents?: readonly SubagentSourceRef[];
+  agentId?: string;
+  agentRoot: string;
+  appRoot: string;
+  channels?: readonly ChannelSourceRef[];
+  connections?: readonly ConnectionSourceRef[];
+  configModule?: ModuleSourceRef;
+  diagnostics?: readonly DiscoverDiagnostic[];
+  extensions?: readonly ExtensionSourceRef[];
+  resolvedExtensions?: readonly ResolvedExtensionMount[];
+  hooks?: readonly ModuleSourceRef[];
+  lib?: readonly LibSourceRef[];
+  /**
+   * Optional package name read from the app root's package.json.
+   * When provided this is preferred over `basename(appRoot)` for agent id
+   * derivation so that builds running in synthetic CI paths (e.g.
+   * `/vercel/path0`) produce a meaningful agent id.
+   */
+  packageName?: string;
+  instructions?: readonly InstructionsSourceRef[];
+  sandbox?: SandboxSourceRef | null;
+  sandboxWorkspaces?: readonly SandboxWorkspaceFolderSourceRef[];
+  schedules?: readonly ScheduleSourceRef[];
+  skills?: readonly SkillSourceRef[];
+  tools?: readonly ModuleSourceRef[];
+  subagents?: readonly SubagentSourceRef[];
 }
 /**
  * Input used to build a manifest-ready skill package source ref.
  */
 export interface CreateSkillPackageSourceRefInput {
-    assetsPath?: string;
-    description: string;
-    license?: string;
-    logicalPath: string;
-    markdown: string;
-    metadata?: Readonly<Record<string, string>>;
-    name: string;
-    referencesPath?: string;
-    rootPath: string;
-    scriptsPath?: string;
-    skillFilePath: string;
-    skillId: string;
-    sourceId: string;
+  assetsPath?: string;
+  description: string;
+  license?: string;
+  logicalPath: string;
+  markdown: string;
+  metadata?: Readonly<Record<string, string>>;
+  name: string;
+  referencesPath?: string;
+  rootPath: string;
+  scriptsPath?: string;
+  skillFilePath: string;
+  skillId: string;
+  sourceId: string;
 }
 /**
  * Input used to build a manifest-ready module source ref.
  */
 export interface CreateModuleSourceRefInput {
-    exportName?: string;
-    logicalPath: string;
-    sourceId?: string;
+  exportName?: string;
+  logicalPath: string;
+  sourceId?: string;
 }
 /**
  * Input used to build a manifest-ready local subagent source ref.
  */
 export interface CreateLocalSubagentSourceRefInput {
-    entryPath: string;
-    logicalPath: string;
-    manifest: AgentSourceManifest;
-    rootPath: string;
-    sourceId?: string;
-    subagentId: string;
+  entryPath: string;
+  logicalPath: string;
+  manifest: AgentSourceManifest;
+  rootPath: string;
+  sourceId?: string;
+  subagentId: string;
 }
 /**
  * Creates a versioned discovery manifest with stable empty-array defaults.
  */
-export declare function createAgentSourceManifest(input: CreateAgentSourceManifestInput): AgentSourceManifest;
+export declare function createAgentSourceManifest(
+  input: CreateAgentSourceManifestInput,
+): AgentSourceManifest;
 /**
  * Derives a stable agent id from the resolved app and agent roots.
  *
@@ -283,7 +292,11 @@ export declare function createAgentSourceManifest(input: CreateAgentSourceManife
  * that builds running inside synthetic CI working directories (e.g.
  * `/vercel/path0`) produce a meaningful agent id instead of `"path0"`.
  */
-export declare function deriveAgentIdFromRoots(appRoot: string, agentRoot: string, packageName?: string): string;
+export declare function deriveAgentIdFromRoots(
+  appRoot: string,
+  agentRoot: string,
+  packageName?: string,
+): string;
 /**
  * Creates a stable path-derived source id for manifest entries.
  */
@@ -295,12 +308,18 @@ export declare function createModuleSourceRef(input: CreateModuleSourceRefInput)
 /**
  * Creates a connection source ref tagged with its authored name.
  */
-export declare function createConnectionSourceRef(input: CreateConnectionSourceRefInput): ConnectionSourceRef;
+export declare function createConnectionSourceRef(
+  input: CreateConnectionSourceRefInput,
+): ConnectionSourceRef;
 /**
  * Creates a local subagent source ref while omitting optional undefined fields.
  */
-export declare function createLocalSubagentSourceRef(input: CreateLocalSubagentSourceRefInput): LocalSubagentSourceRef;
+export declare function createLocalSubagentSourceRef(
+  input: CreateLocalSubagentSourceRefInput,
+): LocalSubagentSourceRef;
 /**
  * Creates a skill package source ref while omitting optional undefined fields.
  */
-export declare function createSkillPackageSourceRef(input: CreateSkillPackageSourceRefInput): NamedSkillDefinition & SkillPackageSourceRef;
+export declare function createSkillPackageSourceRef(
+  input: CreateSkillPackageSourceRefInput,
+): NamedSkillDefinition & SkillPackageSourceRef;

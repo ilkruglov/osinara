@@ -48,7 +48,9 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const authorizeImageGeneration = vi.fn();
     // A name that is neither static nor granted is refused by the live authored-skill check.
-    const authorizeAuthoredSkill = vi.fn().mockRejectedValue(new Error("AGENT_GROUP_SKILL_FORBIDDEN"));
+    const authorizeAuthoredSkill = vi
+      .fn()
+      .mockRejectedValue(new Error("AGENT_GROUP_SKILL_FORBIDDEN"));
     const tool = createExternalGroupLoadSkillTool({
       authorizeAuthoredSkill,
       authorizeImageGeneration,
@@ -74,10 +76,16 @@ describe("external group load_skill", () => {
       executeNative,
     });
 
-    await expect(tool.execute({ skill: "weekly-digest" }, context())).resolves.toEqual({ loaded: true });
+    await expect(tool.execute({ skill: "weekly-digest" }, context())).resolves.toEqual({
+      loaded: true,
+    });
     expect(authorizeAuthoredSkill).toHaveBeenCalledWith(expect.anything(), "weekly-digest");
-    await expect(tool.execute({ skill: "gws-gmail" }, context())).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
-    await expect(tool.execute({ skill: "Bad Name" }, context())).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "gws-gmail" }, context())).rejects.toThrowError(
+      /AGENT_GROUP_SKILL_FORBIDDEN/u,
+    );
+    await expect(tool.execute({ skill: "Bad Name" }, context())).rejects.toThrowError(
+      /AGENT_GROUP_SKILL_FORBIDDEN/u,
+    );
     expect(authorizeAuthoredSkill).toHaveBeenCalledTimes(1);
   });
 
@@ -96,9 +104,9 @@ describe("external group load_skill", () => {
   });
 
   it("does not load imagegen when the live capability check rejects", async () => {
-    const authorizeImageGeneration = vi.fn().mockRejectedValue(
-      new Error("AGENT_GROUP_TOOL_FORBIDDEN"),
-    );
+    const authorizeImageGeneration = vi
+      .fn()
+      .mockRejectedValue(new Error("AGENT_GROUP_TOOL_FORBIDDEN"));
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
@@ -107,8 +115,9 @@ describe("external group load_skill", () => {
       executeNative,
     });
 
-    await expect(tool.execute({ skill: "imagegen" }, context()))
-      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "imagegen" }, context())).rejects.toThrowError(
+      /AGENT_GROUP_TOOL_FORBIDDEN/u,
+    );
     expect(executeNative).not.toHaveBeenCalled();
   });
 
@@ -122,9 +131,12 @@ describe("external group load_skill", () => {
       executeNative,
     });
 
-    await expect(tool.execute({ skill: "auto-analyst" }, context())).resolves.toEqual({ loaded: true });
-    await expect(tool.execute({ skill: "policy-finance-analyst" }, context()))
-      .resolves.toEqual({ loaded: true });
+    await expect(tool.execute({ skill: "auto-analyst" }, context())).resolves.toEqual({
+      loaded: true,
+    });
+    await expect(tool.execute({ skill: "policy-finance-analyst" }, context())).resolves.toEqual({
+      loaded: true,
+    });
     expect(authorizeKnowledgeSkills).toHaveBeenCalledTimes(2);
   });
 
@@ -137,8 +149,9 @@ describe("external group load_skill", () => {
       executeNative,
     });
 
-    await expect(tool.execute({ skill: "auto-analyst" }, context()))
-      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "auto-analyst" }, context())).rejects.toThrowError(
+      /AGENT_GROUP_TOOL_FORBIDDEN/u,
+    );
     expect(executeNative).not.toHaveBeenCalled();
   });
 
@@ -163,14 +176,24 @@ describe("external group load_skill", () => {
   it("opens the widget skill only with the live send_widget grant", async () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const authorizeAuthoredSkill = vi.fn();
-    const authorizeTelegramWidgets = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("AGENT_GROUP_TOOL_FORBIDDEN"));
+    const authorizeTelegramWidgets = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("AGENT_GROUP_TOOL_FORBIDDEN"));
     const tool = createExternalGroupLoadSkillTool({
-      authorizeAuthoredSkill, authorizeImageGeneration: vi.fn(), authorizeKnowledgeSkills: vi.fn(), authorizeTelegramWidgets, executeNative,
+      authorizeAuthoredSkill,
+      authorizeImageGeneration: vi.fn(),
+      authorizeKnowledgeSkills: vi.fn(),
+      authorizeTelegramWidgets,
+      executeNative,
     });
-    await expect(tool.execute({ skill: "telegram-widgets" }, context())).resolves.toEqual({ loaded: true });
-    await expect(tool.execute({ skill: "telegram-widgets" }, context())).rejects.toThrow(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "telegram-widgets" }, context())).resolves.toEqual({
+      loaded: true,
+    });
+    await expect(tool.execute({ skill: "telegram-widgets" }, context())).rejects.toThrow(
+      /AGENT_GROUP_TOOL_FORBIDDEN/u,
+    );
     expect(authorizeAuthoredSkill).not.toHaveBeenCalled();
     expect(executeNative).toHaveBeenCalledOnce();
   });
 });
-

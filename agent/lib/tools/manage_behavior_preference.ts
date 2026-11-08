@@ -27,11 +27,13 @@ import {
 const INPUT_ERROR_CODE = "AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID";
 const TOOL_ACTIONS = ["get", "append", "replace", "clear"] as const;
 
-const manageBehaviorPreferenceSchema = z.object({
-  action: z.enum(TOOL_ACTIONS),
-  content: z.string().min(1).max(CHAT_OPERATIONAL_PROMPT_MAX_CHARACTERS).optional(),
-  expectedRevision: z.number().int().min(0).optional(),
-}).strict();
+const manageBehaviorPreferenceSchema = z
+  .object({
+    action: z.enum(TOOL_ACTIONS),
+    content: z.string().min(1).max(CHAT_OPERATIONAL_PROMPT_MAX_CHARACTERS).optional(),
+    expectedRevision: z.number().int().min(0).optional(),
+  })
+  .strict();
 
 function requireExpectedRevision(value: unknown): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
@@ -45,7 +47,12 @@ function requireExpectedRevision(value: unknown): number {
 
 function requireManageBehaviorPreferenceInput(input: unknown) {
   const payload = requireInputRecord(input, "manage_behavior_preference", INPUT_ERROR_CODE);
-  const action = requireAction(payload, "manage_behavior_preference", TOOL_ACTIONS, INPUT_ERROR_CODE);
+  const action = requireAction(
+    payload,
+    "manage_behavior_preference",
+    TOOL_ACTIONS,
+    INPUT_ERROR_CODE,
+  );
   if (action === "get") {
     requireOnlyFields(payload, ["action"], "action=get", INPUT_ERROR_CODE);
     return { action } as const;

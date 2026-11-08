@@ -45,81 +45,128 @@ describe("reinforceUsedMemories", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const reinforceByRefs = vi.fn().mockResolvedValue({ reinforced: ["mem_a"], unknown: [] });
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a", "mem_b"], timelineEntryId: "entry-9" }, {
-      exposures: {
-        sessionTurn: vi.fn().mockResolvedValue(4),
-        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+    await reinforceUsedMemories(
+      {
+        applicationSessionId: "app-1",
+        ctx,
+        declared: true,
+        memoryRefs: ["mem_a", "mem_b"],
+        timelineEntryId: "entry-9",
       },
-      reinforcement: { reinforceByRefs },
-    });
-    expect(reinforceByRefs).toHaveBeenCalledWith(expect.objectContaining({ familyId: "family-1" }), {
-      memoryRefs: ["mem_a"],
-      provenance: { sessionId: "eve-session-1", turnId: "turn-1" },
-      reason: "model_used",
-    });
-    expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: ["mem_b"] }));
+      {
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+        },
+        reinforcement: { reinforceByRefs },
+      },
+    );
+    expect(reinforceByRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ familyId: "family-1" }),
+      {
+        memoryRefs: ["mem_a"],
+        provenance: { sessionId: "eve-session-1", turnId: "turn-1" },
+        reason: "model_used",
+      },
+    );
+    expect(warn).toHaveBeenCalledWith(
+      JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: ["mem_b"] }),
+    );
     expect(JSON.parse(String(info.mock.calls[0]![0]))).toMatchObject({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_REINFORCED", refs: ["mem_a"], sessionTurn: 4, shown: 1,
-      shownRefs: ["mem_a"], timelineEntryId: "entry-9",
+      applicationSessionId: "app-1",
+      code: "AGENT_MEMORY_REINFORCED",
+      refs: ["mem_a"],
+      sessionTurn: 4,
+      shown: 1,
+      shownRefs: ["mem_a"],
+      timelineEntryId: "entry-9",
     });
   });
 
   it("logs a missing directive when records were shown this turn", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const reinforceByRefs = vi.fn();
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] }, {
-      exposures: {
-        sessionTurn: vi.fn().mockResolvedValue(4),
-        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a", "mem_b"])),
+    await reinforceUsedMemories(
+      { applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] },
+      {
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a", "mem_b"])),
+        },
+        reinforcement: { reinforceByRefs },
       },
-      reinforcement: { reinforceByRefs },
-    });
+    );
     expect(reinforceByRefs).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_MISSING", sessionTurn: 4, shown: 2,
-      shownRefs: ["mem_a", "mem_b"], timelineEntryId: null,
-    }));
+    expect(warn).toHaveBeenCalledWith(
+      JSON.stringify({
+        applicationSessionId: "app-1",
+        code: "AGENT_MEMORY_USED_MISSING",
+        sessionTurn: 4,
+        shown: 2,
+        shownRefs: ["mem_a", "mem_b"],
+        timelineEntryId: null,
+      }),
+    );
   });
 
   it("stays silent without the directive when nothing was shown", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] }, {
-      exposures: {
-        sessionTurn: vi.fn().mockResolvedValue(4),
-        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set()),
+    await reinforceUsedMemories(
+      { applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] },
+      {
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set()),
+        },
+        reinforcement: { reinforceByRefs: vi.fn() },
       },
-      reinforcement: { reinforceByRefs: vi.fn() },
-    });
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("treats an empty declared directive as used nothing without a warning", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [] }, {
-      exposures: {
-        sessionTurn: vi.fn().mockResolvedValue(4),
-        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+    await reinforceUsedMemories(
+      { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [] },
+      {
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+        },
+        reinforcement: { reinforceByRefs: vi.fn() },
       },
-      reinforcement: { reinforceByRefs: vi.fn() },
-    });
+    );
     expect(warn).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_NONE", sessionTurn: 4, shown: 1,
-      shownRefs: ["mem_a"], timelineEntryId: null,
-    }));
+    expect(info).toHaveBeenCalledWith(
+      JSON.stringify({
+        applicationSessionId: "app-1",
+        code: "AGENT_MEMORY_USED_NONE",
+        sessionTurn: 4,
+        shown: 1,
+        shownRefs: ["mem_a"],
+        timelineEntryId: null,
+      }),
+    );
   });
 
   it("swallows a repository failure after logging it", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await expect(reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a"] }, {
-      exposures: {
-        sessionTurn: vi.fn().mockResolvedValue(4),
-        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
-      },
-      reinforcement: { reinforceByRefs: vi.fn().mockRejectedValue(new Error("db down")) },
-    })).resolves.toBeUndefined();
-    expect(error).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_FAILED", error: "db down" }));
+    await expect(
+      reinforceUsedMemories(
+        { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a"] },
+        {
+          exposures: {
+            sessionTurn: vi.fn().mockResolvedValue(4),
+            shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+          },
+          reinforcement: { reinforceByRefs: vi.fn().mockRejectedValue(new Error("db down")) },
+        },
+      ),
+    ).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledWith(
+      JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_FAILED", error: "db down" }),
+    );
   });
 });

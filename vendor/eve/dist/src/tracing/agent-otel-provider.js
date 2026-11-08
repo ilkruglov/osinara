@@ -34,8 +34,7 @@ function createAgentOtelInstrumentation(e) {
       recordInputs: t,
       recordOutputs: f,
       resolveTraceContext: async (t) =>
-        (await e.stateStore.getTurn(t.scope.sessionId, t.scope.turnId))
-          ?.context,
+        (await e.stateStore.getTurn(t.scope.sessionId, t.scope.turnId))?.context,
       stateStore: e.stateStore,
       tracer: e.tracer,
     }),
@@ -55,9 +54,7 @@ function createAgentOtelInstrumentation(e) {
       resolveFallback: (e) => {
         let t = m.get(e.scope.attemptId) ?? e.scope,
           n = h.get(t)?.step;
-        return n === void 0
-          ? void 0
-          : { context: n.context, spanContext: n.span.spanContext() };
+        return n === void 0 ? void 0 : { context: n.context, spanContext: n.span.spanContext() };
       },
       tracer: e.tracer,
     }),
@@ -87,8 +84,7 @@ function createAgentOtelInstrumentation(e) {
                   "agent.session.id": t.scope.sessionId,
                   "agent.framework.name": `eve`,
                   "agent.framework.version": e.frameworkVersion,
-                  "agent.root.session.id":
-                    t.scope.rootSessionId ?? t.scope.sessionId,
+                  "agent.root.session.id": t.scope.rootSessionId ?? t.scope.sessionId,
                   "agent.step.attempt": t.scope.attemptIndex,
                   "agent.step.index": t.scope.stepIndex,
                   "agent.turn.id": t.scope.turnId,
@@ -133,23 +129,16 @@ function createAgentOtelInstrumentation(e) {
       let t = m.get(e.scope.attemptId) ?? e.scope;
       (p.delete(t),
         drainOpenSpans({ ...e, scope: t }),
-        y.drain(
-          e.scope.attemptId,
-          e.type === `step.attempt.failed` ? { error: e.error } : void 0,
-        ),
-        e.type === `step.attempt.failed` &&
-          (await _.failForAttempt(t, e.error)),
+        y.drain(e.scope.attemptId, e.type === `step.attempt.failed` ? { error: e.error } : void 0),
+        e.type === `step.attempt.failed` && (await _.failForAttempt(t, e.error)),
         m.delete(e.scope.attemptId));
       let n = h.get(t);
       n !== void 0 &&
         (n.step.span.addEvent(
-          e.type === `step.attempt.completed`
-            ? `step.completed`
-            : `step.failed`,
+          e.type === `step.attempt.completed` ? `step.completed` : `step.failed`,
         ),
         e.type === `step.attempt.failed` &&
-          (recordError(n.operation.span, e.error),
-          recordError(n.step.span, e.error)),
+          (recordError(n.operation.span, e.error), recordError(n.step.span, e.error)),
         n.operation.span.end(),
         n.step.span.end(),
         h.delete(t));
@@ -161,10 +150,7 @@ function createAgentOtelInstrumentation(e) {
       n !== void 0 &&
         (await e.stateStore.setTurn(t.sessionId, t.turnId, {
           ...n,
-          terminal:
-            t.type === `turn.failed`
-              ? { error: t.error, type: t.type }
-              : { type: t.type },
+          terminal: t.type === `turn.failed` ? { error: t.error, type: t.type } : { type: t.type },
         }));
     },
     onSessionTransition = async (t) => {
@@ -200,15 +186,13 @@ function createAgentOtelInstrumentation(e) {
           (i.addEvent(`turn.started`, void 0, n.startTimeMs),
             n.terminal !== void 0 &&
               (i.addEvent(n.terminal.type),
-              n.terminal.type === `turn.failed` &&
-                recordError(i, n.terminal.error)),
+              n.terminal.type === `turn.failed` && recordError(i, n.terminal.error)),
             i.end(),
             await e.stateStore.deleteTurn(t.sessionId, t.turnId));
         }
       }
       (t.type === `session.completed` || t.type === `session.failed`) &&
-        (await _.deleteForSession(t.sessionId),
-        await e.stateStore.deleteSession(t.sessionId));
+        (await _.deleteForSession(t.sessionId), await e.stateStore.deleteSession(t.sessionId));
     },
     onModelCallStarted = (n) => {
       let i = h.get(n.scope);
@@ -249,9 +233,7 @@ function createAgentOtelInstrumentation(e) {
         if (e.type === `model.call.failed`) recordError(t.span, e.error);
         else {
           (setAgentUsage(t.span, e.usage),
-            t.span.setAttribute(`gen_ai.response.finish_reasons`, [
-              e.finishReason,
-            ]));
+            t.span.setAttribute(`gen_ai.response.finish_reasons`, [e.finishReason]));
           let n = h.get(e.scope);
           if ((n !== void 0 && setAgentUsage(n.step.span, e.usage), f)) {
             t.span.setAttribute(`ai.response.finish_reason`, e.finishReason);
@@ -285,9 +267,7 @@ function createAgentOtelInstrumentation(e) {
               e !== void 0 && t.span.setAttribute(`ai.response.tool_calls`, e);
             }
             let l = n
-              .filter(
-                (e) => e.type === `tool-result` || e.type === `tool-error`,
-              )
+              .filter((e) => e.type === `tool-result` || e.type === `tool-error`)
               .map((e) =>
                 e.type === `tool-result`
                   ? {
@@ -305,8 +285,7 @@ function createAgentOtelInstrumentation(e) {
               );
             if (l.length > 0) {
               let e = toolResultsContentAttribute(l);
-              e !== void 0 &&
-                t.span.setAttribute(`ai.response.tool_results`, e);
+              e !== void 0 && t.span.setAttribute(`ai.response.tool_results`, e);
             }
           }
         }
@@ -325,8 +304,7 @@ function createAgentOtelInstrumentation(e) {
       let t = h.get(e.scope);
       if (t === void 0) return;
       let n = readGatewayCost(e.providerMetadata);
-      if (n !== void 0)
-        for (let [e, r] of Object.entries(n)) t.step.span.setAttribute(e, r);
+      if (n !== void 0) for (let [e, r] of Object.entries(n)) t.step.span.setAttribute(e, r);
     };
   return {
     hook: {
@@ -376,8 +354,7 @@ function createAgentOtelInstrumentation(e) {
   }
   function drainOpenSpans(e) {
     for (let t of g.get(e.scope)?.values() ?? [])
-      (e.type === `step.attempt.failed` && recordError(t.span, e.error),
-        t.span.end());
+      (e.type === `step.attempt.failed` && recordError(t.span, e.error), t.span.end());
     g.delete(e.scope);
   }
 }
@@ -397,10 +374,7 @@ function parentLineageAttributes(e) {
     "agent.parent.session.id": e.sessionId,
     "agent.parent.turn.id": e.turnId,
   };
-  return (
-    e.subagentName !== void 0 && (t[`agent.subagent.name`] = e.subagentName),
-    t
-  );
+  return (e.subagentName !== void 0 && (t[`agent.subagent.name`] = e.subagentName), t);
 }
 function contextFromSpanContext(t) {
   return trace.setSpan(ROOT_CONTEXT, trace.wrapSpanContext(t));
@@ -438,8 +412,7 @@ function modelSpanName(e) {
 function runtimeContextAttributes(e) {
   let t = {};
   if (e === void 0) return t;
-  for (let [n, r] of Object.entries(e))
-    flattenContextAttribute(t, `ai.settings.context.${n}`, r);
+  for (let [n, r] of Object.entries(e)) flattenContextAttribute(t, `ai.settings.context.${n}`, r);
   return t;
 }
 function flattenContextAttribute(e, t, n) {
@@ -450,17 +423,14 @@ function flattenContextAttribute(e, t, n) {
     }
     if (Array.isArray(n)) {
       let r = n.filter(
-        (e) =>
-          typeof e == `string` || typeof e == `number` || typeof e == `boolean`,
+        (e) => typeof e == `string` || typeof e == `number` || typeof e == `boolean`,
       );
-      if (r.length !== n.length || new Set(r.map((e) => typeof e)).size !== 1)
-        return;
+      if (r.length !== n.length || new Set(r.map((e) => typeof e)).size !== 1) return;
       e[t] = r;
       return;
     }
     if (typeof n == `object`)
-      for (let [r, i] of Object.entries(n))
-        flattenContextAttribute(e, `${t}.${r}`, i);
+      for (let [r, i] of Object.entries(n)) flattenContextAttribute(e, `${t}.${r}`, i);
   }
 }
 function errorText(e) {
@@ -468,8 +438,7 @@ function errorText(e) {
 }
 function recordError(e, n) {
   n instanceof Error
-    ? (e.recordException(n),
-      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    ? (e.recordException(n), e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
     : e.setStatus({ code: SpanStatusCode.ERROR });
 }
 export { createAgentOtelInstrumentation };

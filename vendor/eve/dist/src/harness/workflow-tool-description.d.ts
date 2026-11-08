@@ -17,6 +17,9 @@
  *   (defaults to {@link DEFAULT_WORKFLOW_MAX_SUBAGENTS}), surfaced so the
  *   model sizes its fan-out to fit.
  */
-export declare function workflowToolDescription(toolNames: readonly string[], options?: {
+export declare function workflowToolDescription(
+  toolNames: readonly string[],
+  options?: {
     readonly maxSubagents?: number;
-}): string;
+  },
+): string;

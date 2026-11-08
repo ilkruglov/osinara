@@ -64,7 +64,10 @@ function storage() {
 
 const MARKER = { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "101" };
 
-function ingress(repository: ReturnType<typeof storage>, whisper?: { close: ReturnType<typeof vi.fn>; open: ReturnType<typeof vi.fn> }) {
+function ingress(
+  repository: ReturnType<typeof storage>,
+  whisper?: { close: ReturnType<typeof vi.fn>; open: ReturnType<typeof vi.fn> },
+) {
   return createTelegramDurableIngress({
     acceptMedia: vi.fn().mockResolvedValue(true),
     authorizeVoice: vi.fn(),
@@ -81,7 +84,12 @@ function ingress(repository: ReturnType<typeof storage>, whisper?: { close: Retu
 function verified(raw: Record<string, unknown>): TelegramVerifiedUpdateContext {
   const update = parseTelegramUpdate(raw);
   if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое сообщение");
-  return { dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext;
+  return {
+    dispatch: vi.fn(),
+    raw,
+    update,
+    waitUntil: vi.fn(),
+  } as unknown as TelegramVerifiedUpdateContext;
 }
 
 describe("durable ingress of ephemeral messages", () => {
@@ -93,7 +101,10 @@ describe("durable ingress of ephemeral messages", () => {
     const response = await ingress(repository, whisper)(verified(raw));
 
     expect(response.status).toBe(200);
-    expect(whisper.open).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ messageId: "0", text: "/whisper о чём спор?" }), "2001");
+    expect(whisper.open).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ messageId: "0", text: "/whisper о чём спор?" }),
+      "2001",
+    );
     expect(repository.enqueue).toHaveBeenCalledExactlyOnceWith({
       continuationKey: "telegram:whisper:-1001:101",
       payload: { ...raw, message: { ...(raw.message as object), osinara_whisper: MARKER } },
@@ -123,11 +134,16 @@ describe("durable ingress of ephemeral messages", () => {
 
   it("removes the second placeholder of a redelivered whisper", async () => {
     const repository = storage();
-    repository.enqueue.mockRejectedValueOnce(new AppError(
-      "AGENT_TELEGRAM_UPDATE_CONFLICT",
-      "Telegram повторно прислал идентификатор обновления с другими данными. Обработка остановлена",
-    ));
-    const whisper = { close: vi.fn().mockResolvedValue(undefined), open: vi.fn().mockResolvedValue(MARKER) };
+    repository.enqueue.mockRejectedValueOnce(
+      new AppError(
+        "AGENT_TELEGRAM_UPDATE_CONFLICT",
+        "Telegram повторно прислал идентификатор обновления с другими данными. Обработка остановлена",
+      ),
+    );
+    const whisper = {
+      close: vi.fn().mockResolvedValue(undefined),
+      open: vi.fn().mockResolvedValue(MARKER),
+    };
 
     const response = await ingress(repository, whisper)(verified(ephemeralPayload()));
 
@@ -138,9 +154,14 @@ describe("durable ingress of ephemeral messages", () => {
   it("keeps the placeholder when the queue write fails without a clear answer", async () => {
     const repository = storage();
     repository.enqueue.mockRejectedValueOnce(new Error("Connection terminated unexpectedly"));
-    const whisper = { close: vi.fn().mockResolvedValue(undefined), open: vi.fn().mockResolvedValue(MARKER) };
+    const whisper = {
+      close: vi.fn().mockResolvedValue(undefined),
+      open: vi.fn().mockResolvedValue(MARKER),
+    };
 
-    await expect(ingress(repository, whisper)(verified(ephemeralPayload()))).rejects.toThrow("Connection terminated");
+    await expect(ingress(repository, whisper)(verified(ephemeralPayload()))).rejects.toThrow(
+      "Connection terminated",
+    );
 
     // The write may have committed: removing the placeholder would leave that whisper unanswerable.
     expect(whisper.close).not.toHaveBeenCalled();
@@ -163,10 +184,12 @@ describe("durable ingress of ephemeral messages", () => {
       voice: null,
     };
     repository.claimNext.mockResolvedValueOnce(claim).mockResolvedValueOnce(null);
-    repository.beginDispatch.mockRejectedValueOnce(new AppError(
-      "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
-      "Не уверена, что обработала это сообщение",
-    ));
+    repository.beginDispatch.mockRejectedValueOnce(
+      new AppError(
+        "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
+        "Не уверена, что обработала это сообщение",
+      ),
+    );
     const notifyFailure = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const handle = createTelegramDurableIngress({
@@ -181,12 +204,19 @@ describe("durable ingress of ephemeral messages", () => {
     });
     const tasks: Promise<unknown>[] = [];
 
-    await handle.drain({ dispatch: vi.fn(), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never);
+    await handle.drain({
+      dispatch: vi.fn(),
+      waitUntil: (task: Promise<unknown>) => tasks.push(task),
+    } as never);
     await Promise.all(tasks.map((task) => task.catch(() => undefined)));
 
     expect(repository.fail.mock.calls.map((call) => call[0])).toEqual(["2001"]);
     expect(notifyFailure).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: expect.objectContaining({ raw: expect.objectContaining({ osinara_whisper: MARKER }) }) }),
+      expect.objectContaining({
+        message: expect.objectContaining({
+          raw: expect.objectContaining({ osinara_whisper: MARKER }),
+        }),
+      }),
       expect.objectContaining({ code: "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED" }),
     );
   });
@@ -195,25 +225,28 @@ describe("durable ingress of ephemeral messages", () => {
     const repository = storage();
     const payload = ephemeralPayload();
     (payload.message as Record<string, unknown>).osinara_whisper = MARKER;
-    repository.claimNext.mockResolvedValueOnce({
-      attemptCount: 1,
-      deliveryContinuationKey: "telegram:whisper:-1001:101",
-      ingressContinuationKey: "telegram:whisper:-1001:101",
-      leaseExpiresAt: new Date(Date.now() + 60_000),
-      leaseToken: "123e4567-e89b-42d3-a456-426614174000",
-      payload,
-      queueId: "123e4567-e89b-42d3-a456-426614174001",
-      transcript: null,
-      updateId: "2001",
-      voice: null,
-    }).mockResolvedValueOnce(null);
+    repository.claimNext
+      .mockResolvedValueOnce({
+        attemptCount: 1,
+        deliveryContinuationKey: "telegram:whisper:-1001:101",
+        ingressContinuationKey: "telegram:whisper:-1001:101",
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+        leaseToken: "123e4567-e89b-42d3-a456-426614174000",
+        payload,
+        queueId: "123e4567-e89b-42d3-a456-426614174001",
+        transcript: null,
+        updateId: "2001",
+        voice: null,
+      })
+      .mockResolvedValueOnce(null);
     const failedSession = {
-      getEventStream: async () => new ReadableStream({
-        start(controller) {
-          controller.enqueue({ type: "session.failed" });
-          controller.close();
-        },
-      }),
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "session.failed" });
+            controller.close();
+          },
+        }),
       id: "eve-whisper-1",
     };
     const notifyFailure = vi.fn().mockResolvedValue(undefined);
@@ -229,12 +262,19 @@ describe("durable ingress of ephemeral messages", () => {
     });
     const tasks: Promise<unknown>[] = [];
 
-    await handle.drain({ dispatch: vi.fn().mockResolvedValue(failedSession), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never);
+    await handle.drain({
+      dispatch: vi.fn().mockResolvedValue(failedSession),
+      waitUntil: (task: Promise<unknown>) => tasks.push(task),
+    } as never);
     await Promise.all(tasks);
 
     expect(repository.completeWithSession).toHaveBeenCalledOnce();
     expect(notifyFailure).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: expect.objectContaining({ raw: expect.objectContaining({ osinara_whisper: MARKER }) }) }),
+      expect.objectContaining({
+        message: expect.objectContaining({
+          raw: expect.objectContaining({ osinara_whisper: MARKER }),
+        }),
+      }),
       expect.objectContaining({ code: "AGENT_TELEGRAM_SESSION_FAILED" }),
     );
   });
@@ -250,6 +290,8 @@ describe("durable ingress of ephemeral messages", () => {
     await ingress(repository, whisper)(verified(raw));
 
     expect(whisper.open).not.toHaveBeenCalled();
-    expect(repository.enqueue).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ continuationKey: "-1001::" }));
+    expect(repository.enqueue).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ continuationKey: "-1001::" }),
+    );
   });
 });

@@ -25,40 +25,48 @@ export const paths: ModelConfigPaths = {
   lockPath: "/srv/osinara/.model-config.lock",
 };
 
-export const validConfig = Buffer.from(JSON.stringify({
-  agent: {
-    models: {
-      primary: { contextWindowTokens: 128_000, id: "deepseek-reasoner", maxOutputTokens: 16_000 },
-      vision: { supportsImageInput: false },
+export const validConfig = Buffer.from(
+  JSON.stringify({
+    agent: {
+      models: {
+        primary: { contextWindowTokens: 128_000, id: "deepseek-reasoner", maxOutputTokens: 16_000 },
+        vision: { supportsImageInput: false },
+      },
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "openai-chat-completions",
+        providerName: "deepseek",
+        reasoning: { effort: "high", format: "deepseek", type: "effort" },
+      },
     },
-    transport: {
-      baseUrl: "https://api.deepseek.com",
-      protocol: "openai-chat-completions",
-      providerName: "deepseek",
-      reasoning: { effort: "high", format: "deepseek", type: "effort" },
-    },
-  },
-  provider: "deepseek",
-  schemaVersion: 4,
-  voice: { enabled: true, transcriptionModelId: "whisper-large-v3-turbo" },
-}));
+    provider: "deepseek",
+    schemaVersion: 4,
+    voice: { enabled: true, transcriptionModelId: "whisper-large-v3-turbo" },
+  }),
+);
 
-export const previousConfig = Buffer.from(JSON.stringify({
-  agent: {
-    models: {
-      primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 8_192 },
-      vision: { supportsImageInput: false },
+export const previousConfig = Buffer.from(
+  JSON.stringify({
+    agent: {
+      models: {
+        primary: {
+          contextWindowTokens: 1_000_000,
+          id: "deepseek-v4-flash",
+          maxOutputTokens: 8_192,
+        },
+        vision: { supportsImageInput: false },
+      },
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "deepseek-responses",
+        reasoning: { effort: "high" },
+      },
     },
-    transport: {
-      baseUrl: "https://api.deepseek.com",
-      protocol: "deepseek-responses",
-      reasoning: { effort: "high" },
-    },
-  },
-  provider: "deepseek",
-  schemaVersion: 4,
-  voice: { enabled: false },
-}));
+    provider: "deepseek",
+    schemaVersion: 4,
+    voice: { enabled: false },
+  }),
+);
 
 export const previousEnv = Buffer.from(
   "DATABASE_URL=postgres://local\r\nMODEL_API_KEY=old-key\r\nBINARY=\xff\r\n",
@@ -78,18 +86,20 @@ export function transactionJournalBytes(
   phase: TestJournalPhase,
   candidateEnv = Buffer.from("MODEL_API_KEY='new-model-key'\n"),
 ): Buffer {
-  return Buffer.from(JSON.stringify({
-    candidate: {
-      config: encodedJournalBytes(validConfig),
-      env: encodedJournalBytes(candidateEnv),
-    },
-    phase,
-    previous: {
-      config: encodedJournalBytes(previousConfig),
-      env: encodedJournalBytes(previousEnv),
-    },
-    schemaVersion: 1,
-  }));
+  return Buffer.from(
+    JSON.stringify({
+      candidate: {
+        config: encodedJournalBytes(validConfig),
+        env: encodedJournalBytes(candidateEnv),
+      },
+      phase,
+      previous: {
+        config: encodedJournalBytes(previousConfig),
+        env: encodedJournalBytes(previousEnv),
+      },
+      schemaVersion: 1,
+    }),
+  );
 }
 
 export class MemoryFileStore implements ModelConfigFileStore {

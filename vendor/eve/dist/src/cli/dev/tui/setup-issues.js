@@ -1,13 +1,9 @@
 import { join } from "node:path";
 import { pathExists } from "#setup/path-exists.js";
-import {
-  hasEnvValue,
-  resolveGatewayCredential,
-} from "#internal/resolve-model-endpoint-status.js";
+import { hasEnvValue, resolveGatewayCredential } from "#internal/resolve-model-endpoint-status.js";
 function normalizeLocalModelEndpoint(e, t) {
   let n = modelProviderAccess({ env: t, info: e });
-  if (e === void 0 || n.kind !== `gateway` || n.runtime.status !== `connected`)
-    return e;
+  if (e === void 0 || n.kind !== `gateway` || n.runtime.status !== `connected`) return e;
   let { credential: r } = n.runtime,
     i = e.agent.model;
   if (i.id === void 0 || i.routing.kind !== `gateway`) return e;

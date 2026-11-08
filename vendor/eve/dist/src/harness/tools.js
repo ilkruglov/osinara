@@ -13,14 +13,8 @@ import { isAsyncIterable } from "#shared/async-iterable.js";
 import { stashToolInterrupt } from "#harness/tool-interrupts.js";
 import { ASK_QUESTION_TOOL_NAME } from "#runtime/framework-tools/ask-question.js";
 import { WEB_SEARCH_TOOL_DEFINITION } from "#runtime/framework-tools/web-search.js";
-import {
-  resolveWebSearchBackend,
-  resolveWebSearchProviderTool,
-} from "#harness/provider-tools.js";
-import {
-  normalizeToolJsonOutput,
-  normalizeToolModelOutput,
-} from "#harness/tool-model-output.js";
+import { resolveWebSearchBackend, resolveWebSearchProviderTool } from "#harness/provider-tools.js";
+import { normalizeToolJsonOutput, normalizeToolModelOutput } from "#harness/tool-model-output.js";
 const toolApprovals = new WeakMap();
 function buildToolSet(e) {
   let t = {},
@@ -94,9 +88,7 @@ function wrapToolExecute(e) {
       }
       return isAsyncIterable(i)
         ? normalizeToolExecuteIterable(i, e.name, r)
-        : Promise.resolve(i).then((t) =>
-            normalizeToolExecuteOutput(t, e.name, r),
-          );
+        : Promise.resolve(i).then((t) => normalizeToolExecuteOutput(t, e.name, r));
     };
 }
 async function* normalizeToolExecuteIterable(e, t, n) {
@@ -104,8 +96,7 @@ async function* normalizeToolExecuteIterable(e, t, n) {
 }
 function normalizeToolExecuteOutput(e, n, r) {
   return isAuthorizationSignal(e)
-    ? (stashToolInterrupt(loadContext(), r.toolCallId, e),
-      modelFacingAuthorizationOutput(e))
+    ? (stashToolInterrupt(loadContext(), r.toolCallId, e), modelFacingAuthorizationOutput(e))
     : normalizeToolJsonOutput({
         boundary: `execute`,
         output: e,
@@ -129,8 +120,7 @@ async function buildToolSetWithProviderTools(e) {
       let t = resolveWebSearchBackend(e.modelReference, e.webSearchProvider);
       t === null
         ? delete n[WEB_SEARCH_TOOL_DEFINITION.name]
-        : (n[WEB_SEARCH_TOOL_DEFINITION.name] =
-            await resolveWebSearchProviderTool(t));
+        : (n[WEB_SEARCH_TOOL_DEFINITION.name] = await resolveWebSearchProviderTool(t));
     }
   }
   return n;
@@ -152,9 +142,7 @@ function buildApprovalFn(t, i) {
 function buildToolApproval(e) {
   return async ({ toolCall: t }) => {
     let n = e[t.toolName];
-    return n === void 0
-      ? void 0
-      : await toolApprovals.get(n)?.(t.input, t.toolCallId);
+    return n === void 0 ? void 0 : await toolApprovals.get(n)?.(t.input, t.toolCallId);
   };
 }
 export {

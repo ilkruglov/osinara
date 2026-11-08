@@ -17,12 +17,7 @@ var FileContentCache = class {
   }
   observeRead(t) {
     let n = readFileResultShape(t);
-    if (
-      n === void 0 ||
-      n.truncated ||
-      n.content.length > MAX_CACHED_CONTENT_CHARS
-    )
-      return;
+    if (n === void 0 || n.truncated || n.content.length > MAX_CACHED_CONTENT_CHARS) return;
     let r = reconstructNumberedLines(n.content);
     r === void 0 ||
       r.length !== n.totalLines ||

@@ -10,15 +10,9 @@ function translateTaskInboundPayload(n) {
         let n = readTaskUsage(t.outcome.usageDelta);
         switch (t.outcome.result.kind) {
           case `succeeded`:
-            return withUsage(
-              { data: t.output, kind: `complete`, lifecycle: t.outcome.kind },
-              n,
-            );
+            return withUsage({ data: t.output, kind: `complete`, lifecycle: t.outcome.kind }, n);
           case `failed`:
-            return withUsage(
-              { data: t.output, kind: `fail`, lifecycle: t.outcome.kind },
-              n,
-            );
+            return withUsage({ data: t.output, kind: `fail`, lifecycle: t.outcome.kind }, n);
           case `cancelled`:
             return withUsage({ kind: `cancel`, lifecycle: t.outcome.kind }, n);
         }

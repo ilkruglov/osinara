@@ -69,21 +69,25 @@ export interface MemoryReviewOwnerAlertTransport {
 export function createMemoryReviewOwnerAlertTransport(
   dependencies: MemoryReviewOwnerAlertTransportDependencies,
 ): MemoryReviewOwnerAlertTransport {
-  if (!dependencies.botToken) throw new AppError(
-    "AGENT_TELEGRAM_CONFIG_MISSING",
-    "Не задан токен Telegram для уведомления владельца",
-  );
-  if (!Number.isSafeInteger(dependencies.timeoutMilliseconds) ||
-      dependencies.timeoutMilliseconds <= 0) throw new AppError(
-    "AGENT_MEMORY_REVIEW_OWNER_ALERT_TIMEOUT_INVALID",
-    "Тайм-аут уведомления владельца должен быть положительным целым числом",
-  );
+  if (!dependencies.botToken)
+    throw new AppError(
+      "AGENT_TELEGRAM_CONFIG_MISSING",
+      "Не задан токен Telegram для уведомления владельца",
+    );
+  if (
+    !Number.isSafeInteger(dependencies.timeoutMilliseconds) ||
+    dependencies.timeoutMilliseconds <= 0
+  )
+    throw new AppError(
+      "AGENT_MEMORY_REVIEW_OWNER_ALERT_TIMEOUT_INVALID",
+      "Тайм-аут уведомления владельца должен быть положительным целым числом",
+    );
 
   const boundedFetch = withRequestTimeout(dependencies.fetch, dependencies.timeoutMilliseconds);
   async function requireReachable(chatId: string): Promise<void> {
     let known: TelegramRecipientUnreachableReason | null;
     try {
-      known = await dependencies.unreachableRecipient?.(chatId) ?? null;
+      known = (await dependencies.unreachableRecipient?.(chatId)) ?? null;
     } catch {
       // Nothing reached Telegram, so this is a definite failure: a dispatcher may try again.
       throw new MemoryReviewOwnerAlertTransportError(
@@ -98,14 +102,21 @@ export function createMemoryReviewOwnerAlertTransport(
     async deliverWidget(input): Promise<void> {
       await requireReachable(input.chatId);
       const sent = await sendTelegramWidget({
-        botToken: dependencies.botToken, caption: input.caption, chatId: input.chatId, fetch: boundedFetch, html: input.html,
+        botToken: dependencies.botToken,
+        caption: input.caption,
+        chatId: input.chatId,
+        fetch: boundedFetch,
+        html: input.html,
       });
       if (!sent.ok) {
         const reason = classifyTelegramRecipientFailure(sent.status, sent.body);
         if (reason !== null) throw new TelegramRecipientUnreachableError(input.chatId, reason);
         // Not a refusal: the card may be in the chat, which the caller tells apart.
         if (sent.ambiguous) {
-          throw new AppError("AGENT_OWNER_WIDGET_AMBIGUOUS", `Telegram не подтвердил карточку: HTTP ${sent.status}`);
+          throw new AppError(
+            "AGENT_OWNER_WIDGET_AMBIGUOUS",
+            `Telegram не подтвердил карточку: HTTP ${sent.status}`,
+          );
         }
         throw new MemoryReviewOwnerAlertTransportError(
           "failed",
@@ -137,10 +148,11 @@ export function createMemoryReviewOwnerAlertTransport(
 
 function productionTransport(): MemoryReviewOwnerAlertTransport {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) throw new AppError(
-    "AGENT_TELEGRAM_CONFIG_MISSING",
-    "Не задан токен Telegram для уведомления владельца",
-  );
+  if (!botToken)
+    throw new AppError(
+      "AGENT_TELEGRAM_CONFIG_MISSING",
+      "Не задан токен Telegram для уведомления владельца",
+    );
   return createMemoryReviewOwnerAlertTransport({
     botToken,
     fetch,

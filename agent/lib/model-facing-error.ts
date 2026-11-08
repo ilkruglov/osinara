@@ -9,12 +9,7 @@
 import { AppError } from "./app-error.js";
 
 export type ModelFacingErrorCategory =
-  | "authorization"
-  | "conflict"
-  | "dependency"
-  | "input"
-  | "not_found"
-  | "operation";
+  "authorization" | "conflict" | "dependency" | "input" | "not_found" | "operation";
 
 export type SideEffectStatus = "completed" | "not_started" | "partial" | "unknown";
 
@@ -90,16 +85,20 @@ export function normalizeModelFacingError(
   context: NormalizeModelFacingErrorContext,
 ): ModelFacingError {
   if (error instanceof ModelFacingError) return error;
-  const applicationError = error instanceof AppError
-    ? { code: error.code, reason: error.message.replace(new RegExp(`^${error.code}:\\s*`, "u"), "") }
-    : null;
-  const genericCode = error instanceof Error
-    ? /^(AGENT_[A-Z0-9_]+)/u.exec(error.message)?.[1]
-    : undefined;
+  const applicationError =
+    error instanceof AppError
+      ? {
+          code: error.code,
+          reason: error.message.replace(new RegExp(`^${error.code}:\\s*`, "u"), ""),
+        }
+      : null;
+  const genericCode =
+    error instanceof Error ? /^(AGENT_[A-Z0-9_]+)/u.exec(error.message)?.[1] : undefined;
   if (applicationError || genericCode) {
     const code = applicationError?.code ?? genericCode!;
     // Generic errors may carry host paths, addresses, or provider secrets after the stable code.
-    const reason = applicationError?.reason ??
+    const reason =
+      applicationError?.reason ??
       "Инструмент отклонил операцию по проверяемому прикладному правилу.";
     const category = categoryForCode(code);
     const canCorrect = category === "input" || category === "not_found";
@@ -115,7 +114,8 @@ export function normalizeModelFacingError(
   return new ModelFacingError({
     category: "dependency",
     code: "AGENT_TOOL_DEPENDENCY_FAILED",
-    correction: "Не повторяйте вызов автоматически. Сообщите пользователю о временном внутреннем сбое.",
+    correction:
+      "Не повторяйте вызов автоматически. Сообщите пользователю о временном внутреннем сбое.",
     reason: `Зависимость инструмента ${context.toolName} завершилась с ошибкой.`,
     retryable: false,
     sideEffectStatus: "unknown",

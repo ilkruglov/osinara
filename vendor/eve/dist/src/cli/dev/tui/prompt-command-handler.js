@@ -15,18 +15,14 @@ function createPromptCommandHandler(n) {
           };
         let e = a.workspaceRoot;
         try {
-          let { modelChangeRefusalForUneditableModel: t } = await import(
-              `#setup/flows/model.js`
-            ),
+          let { modelChangeRefusalForUneditableModel: t } = await import(`#setup/flows/model.js`),
             { changeAgentModel: i, formatApplyModelOutcome: a } = await import(
               `#setup/flows/model-source-change.js`
             ),
             o = await (n.modelChangeRefusal ?? t)(e);
           return o === null
             ? {
-                message: a(
-                  await (n.applyModel ?? i)({ appRoot: e, slug: r.argument }),
-                ),
+                message: a(await (n.applyModel ?? i)({ appRoot: e, slug: r.argument })),
               }
             : { message: o };
         } catch (e) {
@@ -34,16 +30,13 @@ function createPromptCommandHandler(n) {
         }
       }
       let o = i.renderer.setupFlow;
-      if (o === void 0)
-        return { message: `/${r.name} is not supported by this renderer.` };
+      if (o === void 0) return { message: `/${r.name} is not supported by this renderer.` };
       if (r.name === `vc:login` && a.kind === `remote`) {
         if (i.remoteConnection === void 0)
           return { message: `/vc:login is not available in this session.` };
         let e;
         try {
-          ({ runRemoteAuthCommand: e } = await import(
-            `./remote-auth-command.js`
-          ));
+          ({ runRemoteAuthCommand: e } = await import(`./remote-auth-command.js`));
         } catch (e) {
           return { message: `/vc:login failed: ${toErrorMessage(e)}` };
         }
@@ -73,8 +66,7 @@ function createPromptCommandHandler(n) {
           withExclusiveTerminal: i.withExclusiveTerminal,
           chatGptAccountLabel: i.chatGptAccountLabel,
         };
-        (i.initialModelStep !== void 0 &&
-          (e.initialModelStep = i.initialModelStep),
+        (i.initialModelStep !== void 0 && (e.initialModelStep = i.initialModelStep),
           n.flows !== void 0 && (e.flows = n.flows));
         let t = await c(e);
         d = t.preserveFlowDiagnostics;

@@ -168,8 +168,7 @@ async function discoverLocalSubagentPackage(t) {
     rootEntries: s,
     source: t.source,
   });
-  (n.push(..._.diagnostics),
-    n.push(...createLocalSubagentScheduleDiagnostics(t.subagentRoot, s)));
+  (n.push(..._.diagnostics), n.push(...createLocalSubagentScheduleDiagnostics(t.subagentRoot, s)));
   let v = await discoverSkills({ agentRoot: t.subagentRoot, source: t.source });
   n.push(...v.diagnostics);
   let y = await discoverSubagents({
@@ -228,8 +227,7 @@ async function discoverLocalSubagentPackage(t) {
 }
 function createLocalSubagentScheduleDiagnostics(t, n) {
   return n.flatMap((n) =>
-    classifyLocalSubagentEntry(n.name, getDirectoryEntryType(n)) ===
-    `invalid-schedules-directory`
+    classifyLocalSubagentEntry(n.name, getDirectoryEntryType(n)) === `invalid-schedules-directory`
       ? [
           createDiscoverErrorDiagnostic({
             code: DISCOVER_LOCAL_SUBAGENT_SCHEDULES_INVALID,

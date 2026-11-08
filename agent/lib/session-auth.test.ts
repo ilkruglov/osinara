@@ -10,7 +10,10 @@ import { describe, expect, it } from "vitest";
 
 import { resolveSessionCaller } from "./session-auth.js";
 
-function caller(principalId: string, chatType: "private" | "supergroup" = "private"): SessionAuthContext {
+function caller(
+  principalId: string,
+  chatType: "private" | "supergroup" = "private",
+): SessionAuthContext {
   return {
     attributes: { familyId: "family-1", role: "owner", telegramChatType: chatType },
     authenticator: "telegram",

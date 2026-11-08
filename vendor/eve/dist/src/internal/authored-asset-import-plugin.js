@@ -46,28 +46,18 @@ async function readAssetText(t) {
   }
 }
 function isPotentialAuthoredAssetImport(e) {
-  if (
-    e.startsWith(`\0`) ||
-    e.startsWith(`node:`) ||
-    e.startsWith(`data:`) ||
-    e.startsWith(`file:`)
-  )
+  if (e.startsWith(`\0`) || e.startsWith(`node:`) || e.startsWith(`data:`) || e.startsWith(`file:`))
     return !1;
   let { path: t } = splitImportSuffix(e);
-  if (!t.startsWith(`.`) && !t.startsWith(`/`) && !/^[A-Za-z]:[\\/]/.test(t))
-    return !1;
+  if (!t.startsWith(`.`) && !t.startsWith(`/`) && !/^[A-Za-z]:[\\/]/.test(t)) return !1;
   let r = extname(t);
-  return (
-    r.length > 0 && r !== `.node` && !AUTHORED_ASSET_CODE_EXTENSIONS.includes(r)
-  );
+  return r.length > 0 && r !== `.node` && !AUTHORED_ASSET_CODE_EXTENSIONS.includes(r);
 }
 function splitImportSuffix(e) {
   let t = e.indexOf(`?`),
     n = e.indexOf(`#`),
     r = t === -1 ? n : n === -1 ? t : Math.min(t, n);
-  return r === -1
-    ? { path: e, suffix: `` }
-    : { path: e.slice(0, r), suffix: e.slice(r) };
+  return r === -1 ? { path: e, suffix: `` } : { path: e.slice(0, r), suffix: e.slice(r) };
 }
 async function readAssetDataUrl(t) {
   try {
@@ -80,10 +70,7 @@ async function readAssetDataUrl(t) {
 }
 function isPathNotFoundError(e) {
   return (
-    typeof e == `object` &&
-    !!e &&
-    `code` in e &&
-    (e.code === `ENOENT` || e.code === `ENOTDIR`)
+    typeof e == `object` && !!e && `code` in e && (e.code === `ENOENT` || e.code === `ENOTDIR`)
   );
 }
 function getAssetMimeType(e) {

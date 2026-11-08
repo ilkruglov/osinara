@@ -40,15 +40,10 @@ function createInstrumentationHandleEvent(n) {
             c.type === `turn.failed` || c.type === `session.failed`
               ? Error(c.data.message)
               : void 0,
-          errorCode:
-            c.type === `turn.failed` || c.type === `session.failed`
-              ? c.data.code
-              : void 0,
+          errorCode: c.type === `turn.failed` || c.type === `session.failed` ? c.data.code : void 0,
           hooks: i,
           includeTurn:
-            c.type === `turn.cancelled` ||
-            c.type === `turn.completed` ||
-            c.type === `turn.failed`,
+            c.type === `turn.cancelled` || c.type === `turn.completed` || c.type === `turn.failed`,
           outcome:
             c.type === `turn.failed` || c.type === `session.failed`
               ? `failed`
@@ -62,8 +57,7 @@ function createInstrumentationHandleEvent(n) {
         ? await publishActionStarts(c, n, i, a)
         : c.type === `action.result`
           ? await publishActionTerminal(c, n, i)
-          : c.type === `input.requested` &&
-            (await publishInputStarts(c, n, i, o)));
+          : c.type === `input.requested` && (await publishInputStarts(c, n, i, o)));
   };
 }
 async function publishInputStarts(e, t, n, i) {
@@ -99,11 +93,7 @@ async function publishInputStarts(e, t, n, i) {
 }
 async function publishInputResolutions(e) {
   for (let t of e.batch.inputs) {
-    let n = inputIdempotencyKey(
-        e.sessionId,
-        e.batch.event.turnId,
-        t.request.requestId,
-      ),
+    let n = inputIdempotencyKey(e.sessionId, e.batch.event.turnId, t.request.requestId),
       r = takeInstrumentationInputScope(n);
     r !== void 0 &&
       (await e.hooks.publish(
@@ -147,24 +137,19 @@ async function publishActionStarts(e, t, r, i) {
     }
 }
 async function publishActionTerminal(t, n, r) {
-  let a = takeInstrumentationActionScopeForCall(
-    n.sessionId,
-    t.data.result.callId,
-  );
+  let a = takeInstrumentationActionScopeForCall(n.sessionId, t.data.result.callId);
   if (a === void 0) return;
   let { idempotencyKey: s, scope: c } = a;
   if (t.data.status === `completed`) {
     await r.publish(
       Object.freeze({
-        acceptedAtMs: contextStorage
-          .getStore()
-          ?.get(RuntimeActionSettlementTimesKey)?.[t.data.result.callId],
+        acceptedAtMs: contextStorage.getStore()?.get(RuntimeActionSettlementTimesKey)?.[
+          t.data.result.callId
+        ],
         idempotencyKey: s,
         outcome: `completed`,
         output: Object.freeze(
-          r.capturesContent
-            ? { output: t.data.result.output, type: `result` }
-            : { type: `result` },
+          r.capturesContent ? { output: t.data.result.output, type: `result` } : { type: `result` },
         ),
         scope: c,
         type: `action.completed`,
@@ -179,9 +164,9 @@ async function publishActionTerminal(t, n, r) {
       : Object.assign(Error(t.data.error.message), { code: t.data.error.code });
   await r.publish(
     Object.freeze({
-      acceptedAtMs: contextStorage
-        .getStore()
-        ?.get(RuntimeActionSettlementTimesKey)?.[t.data.result.callId],
+      acceptedAtMs: contextStorage.getStore()?.get(RuntimeActionSettlementTimesKey)?.[
+        t.data.result.callId
+      ],
       error: l,
       errorCode: t.data.error?.code,
       idempotencyKey: s,
@@ -192,13 +177,7 @@ async function publishActionTerminal(t, n, r) {
   );
 }
 function actionUsage(e) {
-  if (
-    !(
-      e.kind !== `subagent-result` ||
-      e.origin !== `child` ||
-      e.usage === void 0
-    )
-  )
+  if (!(e.kind !== `subagent-result` || e.origin !== `child` || e.usage === void 0))
     return {
       inputTokenDetails: {
         cacheReadTokens: e.usage.cacheReadTokens,
@@ -209,11 +188,7 @@ function actionUsage(e) {
     };
 }
 function actionName(e) {
-  return e.kind === `tool-call`
-    ? e.toolName
-    : e.kind === `load-skill`
-      ? `load_skill`
-      : e.name;
+  return e.kind === `tool-call` ? e.toolName : e.kind === `load-skill` ? `load_skill` : e.name;
 }
 function toLifecycleEvent(e, t, n) {
   switch (e.type) {

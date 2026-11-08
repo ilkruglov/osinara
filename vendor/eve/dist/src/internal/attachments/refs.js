@@ -9,10 +9,7 @@ function encodeAttachmentRef(e) {
     throw RangeError(
       `AttachmentRef.size must be a non-negative integer. Received: ${String(e.size)}.`,
     );
-  let n =
-      e.size === void 0
-        ? { params: e.params }
-        : { params: e.params, size: e.size },
+  let n = e.size === void 0 ? { params: e.params } : { params: e.params, size: e.size },
     r = Buffer.from(JSON.stringify(n), `utf8`).toString(`base64url`),
     i = new URL(ATTACHMENT_REF_SCHEME);
   return (i.searchParams.set(`v`, `1`), i.searchParams.set(`p`, r), i);
@@ -29,25 +26,19 @@ function parseAttachmentRef(n) {
     );
   let i = n.searchParams.get(`p`);
   if (i === null || i === ``)
-    throw Error(
-      `AttachmentRef URL is missing the required "p" payload query param.`,
-    );
+    throw Error(`AttachmentRef URL is missing the required "p" payload query param.`);
   let a;
   try {
     let e = Buffer.from(i, `base64url`).toString(`utf8`);
     a = JSON.parse(e);
   } catch (t) {
-    throw Error(
-      `AttachmentRef payload is not valid base64url-encoded JSON: ${toErrorMessage(t)}`,
-    );
+    throw Error(`AttachmentRef payload is not valid base64url-encoded JSON: ${toErrorMessage(t)}`);
   }
   if (typeof a != `object` || !a || Array.isArray(a))
     throw Error(`AttachmentRef payload must decode to a JSON object.`);
   let o = a;
   if (!(`params` in o))
-    throw Error(
-      `AttachmentRef payload is missing the required "params" field.`,
-    );
+    throw Error(`AttachmentRef payload is missing the required "params" field.`);
   let s = o.params;
   if (!(`size` in o)) return { params: s };
   let c = o.size;

@@ -36,7 +36,11 @@ function privateRepository(visibleEntryIds: string[]) {
   });
   repository.conversations.syncTimelineParticipants.mockImplementation(
     async (_conversationId, entryIds) => {
-      if (entryIds.length === 0 || entryIds.length > 50 || new Set(entryIds).size !== entryIds.length) {
+      if (
+        entryIds.length === 0 ||
+        entryIds.length > 50 ||
+        new Set(entryIds).size !== entryIds.length
+      ) {
         throw new Error("AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID");
       }
       return [];
@@ -54,8 +58,11 @@ it("chunks a full private timeline after synchronizing the current participant",
 
   await expect(handler(telegramContext().context, privateMessage("куку"))).resolves.toBeTruthy();
 
-  expect(repository.conversations.syncTimelineParticipants.mock.calls.map(([, entryIds]) => entryIds.length))
-    .toEqual([1, 50, 33]);
+  expect(
+    repository.conversations.syncTimelineParticipants.mock.calls.map(
+      ([, entryIds]) => entryIds.length,
+    ),
+  ).toEqual([1, 50, 33]);
   const additionalEntryIds = repository.conversations.syncTimelineParticipants.mock.calls
     .slice(1)
     .flatMap(([, entryIds]) => entryIds);
@@ -69,6 +76,7 @@ it("rejects duplicate private timeline entries across chunk boundaries", async (
   const repository = privateRepository(visibleEntryIds);
   const handler = createTelegramMessageHandler(repository);
 
-  await expect(handler(telegramContext().context, privateMessage("куку")))
-    .rejects.toThrowError(/AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID/u);
+  await expect(handler(telegramContext().context, privateMessage("куку"))).rejects.toThrowError(
+    /AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID/u,
+  );
 });

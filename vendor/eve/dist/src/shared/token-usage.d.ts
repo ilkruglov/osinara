@@ -14,9 +14,12 @@ export type TokenUsage = z.infer<typeof tokenUsageSchema>;
  * from a callee on a different eve version — unknown keys are stripped
  * rather than rejected so a newer sender never voids the whole payload.
  */
-export declare const tokenUsageSchema: z.ZodObject<{
+export declare const tokenUsageSchema: z.ZodObject<
+  {
     cacheReadTokens: z.ZodNumber;
     cacheWriteTokens: z.ZodNumber;
     inputTokens: z.ZodNumber;
     outputTokens: z.ZodNumber;
-}, z.core.$strip>;
+  },
+  z.core.$strip
+>;

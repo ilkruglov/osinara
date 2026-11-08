@@ -15,20 +15,42 @@ import type { OrderWatchState } from "./order-watch-status.js";
 
 export async function startOrderWatch(
   ctx: ToolContext,
-  input: { familyId: string; initialState: OrderWatchState | null; orderId: string; service: OrderWatchService; userId: string },
+  input: {
+    familyId: string;
+    initialState: OrderWatchState | null;
+    orderId: string;
+    service: OrderWatchService;
+    userId: string;
+  },
   repository: Pick<typeof orderWatchRepository, "start"> = orderWatchRepository,
 ): Promise<boolean> {
   try {
     const telegramChatId = ctx.session.auth.current?.attributes.telegramChatId;
-    if (typeof telegramChatId !== "string" || telegramChatId.length === 0) throw new Error("telegram_chat_missing");
-    await repository.start({ ...input, now: new Date(), sandboxSessionId: sandboxSessionId(ctx), telegramChatId });
+    if (typeof telegramChatId !== "string" || telegramChatId.length === 0)
+      throw new Error("telegram_chat_missing");
+    await repository.start({
+      ...input,
+      now: new Date(),
+      sandboxSessionId: sandboxSessionId(ctx),
+      telegramChatId,
+    });
     return true;
   } catch (error) {
-    console.error(JSON.stringify({ code: "AGENT_ORDER_WATCH_START_FAILED", error: error instanceof Error ? error.message.slice(0, 120) : "unknown", service: input.service }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_ORDER_WATCH_START_FAILED",
+        error: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+        service: input.service,
+      }),
+    );
     return false;
   }
 }
 
-export async function stopOrderWatches(input: { orderId?: string | undefined; service: OrderWatchService; userId: string }): Promise<number> {
+export async function stopOrderWatches(input: {
+  orderId?: string | undefined;
+  service: OrderWatchService;
+  userId: string;
+}): Promise<number> {
   return await orderWatchRepository.stop(input);
 }

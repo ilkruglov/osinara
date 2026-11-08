@@ -62,11 +62,13 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
         await dependencies.repository.complete(job, completedAt, receipt);
       } catch (error) {
         if (isAppError(error) && error.code === "AGENT_REMINDER_LEASE_STALE") {
-          console.error(JSON.stringify({
-            code: error.code,
-            message: "Reminder lease changed before delivery completed",
-            reminderId: job.id,
-          }));
+          console.error(
+            JSON.stringify({
+              code: error.code,
+              message: "Reminder lease changed before delivery completed",
+              reminderId: job.id,
+            }),
+          );
           continue;
         }
         const errorCode = isAppError(error)

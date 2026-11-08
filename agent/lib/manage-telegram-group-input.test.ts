@@ -49,9 +49,9 @@ const context = {
 } as unknown as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return (manageTelegramGroup.approval as (context: never) => unknown)(
-    { toolInput: input } as never,
-  );
+  return (manageTelegramGroup.approval as (context: never) => unknown)({
+    toolInput: input,
+  } as never);
 }
 
 describe("manage_telegram_group model input", () => {
@@ -94,48 +94,63 @@ describe("manage_telegram_group model input", () => {
     [{ action: "update_skills", telegramChatId: "-1001" }, /action/u],
   ])("rejects the same invalid action before HITL and execution", async (invalid, message) => {
     expect(() => approvalFor(invalid)).toThrowError(message);
-    await expect(manageTelegramGroup.execute(invalid as never, context)).rejects.toThrowError(message);
+    await expect(manageTelegramGroup.execute(invalid as never, context)).rejects.toThrowError(
+      message,
+    );
   });
 
   it("keeps valid status and context rotation outside HITL", () => {
     expect(approvalFor({ action: "status" })).toBe("not-applicable");
-    expect(approvalFor({
-      action: "start_new_context",
-      telegramChatId: "-1001234567890",
-    })).toBe("not-applicable");
+    expect(
+      approvalFor({
+        action: "start_new_context",
+        telegramChatId: "-1001234567890",
+      }),
+    ).toBe("not-applicable");
   });
 
   it("ignores only published MiniMax siblings and rejects removed fields before HITL", () => {
-    expect(approvalFor({
-      action: "remove",
-      messageMode: "all",
-      registration: {},
-      telegramChatId: "-1001234567890",
-      toolAllowlist: [],
-    })).toBe("user-approval");
-    expect(() => approvalFor({
-      action: "remove",
-      telegramChat: "-1001234567890",
-      telegramChatId: "-1001234567890",
-    })).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat/u);
-    expect(() => approvalFor({
-      action: "remove",
-      skillAllowlist: [],
-      telegramChatId: "-1001234567890",
-    })).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*skillAllowlist/u);
+    expect(
+      approvalFor({
+        action: "remove",
+        messageMode: "all",
+        registration: {},
+        telegramChatId: "-1001234567890",
+        toolAllowlist: [],
+      }),
+    ).toBe("user-approval");
+    expect(() =>
+      approvalFor({
+        action: "remove",
+        telegramChat: "-1001234567890",
+        telegramChatId: "-1001234567890",
+      }),
+    ).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat/u);
+    expect(() =>
+      approvalFor({
+        action: "remove",
+        skillAllowlist: [],
+        telegramChatId: "-1001234567890",
+      }),
+    ).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*skillAllowlist/u);
   });
 
   it("returns complete applied registration and replacement policies", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "register",
-      registration: {
-        messageMode: "owner_only",
-        telegramChatId: "-1001234567890",
-        title: "Внешняя",
-        toolAllowlist: ["search_memories"],
-        type: "external",
-      },
-    }, context)).resolves.toMatchObject({
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "register",
+          registration: {
+            messageMode: "owner_only",
+            telegramChatId: "-1001234567890",
+            title: "Внешняя",
+            toolAllowlist: ["search_memories"],
+            type: "external",
+          },
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({
       groupId: "group-1",
       messageMode: "owner_only",
       telegramChatId: "-1001234567890",
@@ -143,19 +158,29 @@ describe("manage_telegram_group model input", () => {
       toolAllowlist: ["search_memories"],
       type: "external",
     });
-    await expect(manageTelegramGroup.execute({
-      action: "update_policy",
-      messageMode: "all",
-      telegramChatId: "-1001234567890",
-      toolAllowlist: ["search_memories"],
-    }, context)).resolves.toMatchObject({
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "update_policy",
+          messageMode: "all",
+          telegramChatId: "-1001234567890",
+          toolAllowlist: ["search_memories"],
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({
       messageMode: "all",
       toolAllowlist: ["search_memories"],
     });
-    await expect(manageTelegramGroup.execute({
-      action: "remove",
-      telegramChatId: "-1001234567890",
-    }, context)).resolves.toMatchObject({ groupId: "group-1" });
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "remove",
+          telegramChatId: "-1001234567890",
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({ groupId: "group-1" });
   });
 
   it("documents exact action payloads and finite enums", () => {
@@ -165,6 +190,7 @@ describe("manage_telegram_group model input", () => {
       '{"action":"remove","telegramChatId":"-1001234567890"}',
       "addressed_only | all | owner_only",
       "family_private | external",
-    ]) expect(manageTelegramGroup.description).toContain(fragment);
+    ])
+      expect(manageTelegramGroup.description).toContain(fragment);
   });
 });

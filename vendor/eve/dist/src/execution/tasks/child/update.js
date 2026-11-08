@@ -9,8 +9,7 @@ import { fireTaskUpdateCallbackStep } from "#execution/session-callback-step.js"
 import { createTaskControlError } from "#execution/tasks/parent/control-shared.js";
 async function executeTaskUpdate(n) {
   let r = readUpdateMessage(n.action.input);
-  if (r === void 0)
-    return createTaskControlError(n.action, "Provide a non-empty `message`.");
+  if (r === void 0) return createTaskControlError(n.action, "Provide a non-empty `message`.");
   let i = n.serializedContext?.[SessionCallbackKey.name];
   if (i !== void 0) {
     let e = await fireTaskUpdateCallbackStep({
@@ -21,25 +20,16 @@ async function executeTaskUpdate(n) {
       message: r,
     });
     return e === void 0
-      ? createTaskControlError(
-          n.action,
-          `This session is not owned by a parent task.`,
-        )
+      ? createTaskControlError(n.action, `This session is not owned by a parent task.`)
       : createTaskUpdateResult(n.action, e);
   }
   let a = n.adapter;
   if (a?.kind !== SUBAGENT_ADAPTER_KIND || !isSubagentAdapterState(a.state))
-    return createTaskControlError(
-      n.action,
-      `This session is not owned by a parent task.`,
-    );
+    return createTaskControlError(n.action, `This session is not owned by a parent task.`);
   let o = a.state.parentContinuationToken,
     s = readTaskIdFromInboxToken(o);
   return s === void 0
-    ? createTaskControlError(
-        n.action,
-        `This session is not owned by a parent task.`,
-      )
+    ? createTaskControlError(n.action, `This session is not owned by a parent task.`)
     : (await resumeHook(o, {
         callId: n.action.callId,
         childStepIndex: n.childStepIndex,
@@ -50,9 +40,7 @@ async function executeTaskUpdate(n) {
       createTaskUpdateResult(n.action, s));
 }
 function readUpdateMessage(e) {
-  return typeof e.message == `string` && e.message.trim() !== ``
-    ? e.message
-    : void 0;
+  return typeof e.message == `string` && e.message.trim() !== `` ? e.message : void 0;
 }
 function createTaskUpdateResult(e, t) {
   return {

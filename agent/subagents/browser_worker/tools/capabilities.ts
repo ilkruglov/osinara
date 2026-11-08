@@ -28,7 +28,16 @@ import inspectWorkspaceImage from "../../../lib/tools/inspect_workspace_image.js
 import { readModelStepIndex } from "../../../lib/turn-model-step-limit.js";
 
 export const BROWSER_WORKER_DENIED_TOOL_NAMES = [
-  "ask_question", "bash", "glob", "grep", "load_skill", "read_file", "todo", "web_fetch", "web_search", "write_file",
+  "ask_question",
+  "bash",
+  "glob",
+  "grep",
+  "load_skill",
+  "read_file",
+  "todo",
+  "web_fetch",
+  "web_search",
+  "write_file",
 ] as const;
 
 function deniedTool(name: string) {
@@ -36,7 +45,10 @@ function deniedTool(name: string) {
     description: `Инструмент ${name} недоступен исполнителю задач в браузере.`,
     inputSchema: z.record(z.string(), z.unknown()),
     async execute() {
-      throw new AppError("AGENT_BROWSER_WORKER_TOOL_FORBIDDEN", "Исполнителю задач в браузере доступны только инструменты браузера");
+      throw new AppError(
+        "AGENT_BROWSER_WORKER_TOOL_FORBIDDEN",
+        "Исполнителю задач в браузере доступны только инструменты браузера",
+      );
     },
   });
 }
@@ -55,7 +67,10 @@ function untrustedTool(name: string) {
     description: `Инструмент ${name} недоступен: исполнитель браузера работает только в личном чате и семейной группе.`,
     inputSchema: z.record(z.string(), z.unknown()),
     async execute() {
-      throw new AppError("AGENT_BROWSER_FORBIDDEN", "Исполнитель браузера доступен только в личном чате и семейной группе");
+      throw new AppError(
+        "AGENT_BROWSER_FORBIDDEN",
+        "Исполнитель браузера доступен только в личном чате и семейной группе",
+      );
     },
   });
 }
@@ -65,7 +80,10 @@ function exhaustedTool(name: string) {
     description: `Инструмент ${name} больше недоступен: лимит шагов исполнителя исчерпан. Верни итог со status=blocked.`,
     inputSchema: z.record(z.string(), z.unknown()),
     async execute() {
-      throw new AppError("AGENT_BROWSER_WORKER_STEP_LIMIT_EXCEEDED", "Лимит шагов исполнителя в браузере исчерпан: верни итог со status=blocked и тем, что удалось выяснить");
+      throw new AppError(
+        "AGENT_BROWSER_WORKER_STEP_LIMIT_EXCEEDED",
+        "Лимит шагов исполнителя в браузере исчерпан: верни итог со status=blocked и тем, что удалось выяснить",
+      );
     },
   });
 }
@@ -74,13 +92,23 @@ export default defineDynamic({
   events: {
     "step.started": (event, ctx) => {
       const attributes = ctx.session.auth.current?.attributes;
-      const trusted = attributes !== undefined && attributes.role !== "external" && attributes.memoryReviewMode === undefined
-        && (attributes.telegramChatType === "private" || attributes.groupType === "family_private");
+      const trusted =
+        attributes !== undefined &&
+        attributes.role !== "external" &&
+        attributes.memoryReviewMode === undefined &&
+        (attributes.telegramChatType === "private" || attributes.groupType === "family_private");
       const step = readModelStepIndex(event);
       const withinBudget = step !== null && step < BROWSER_WORKER_MAX_MODEL_STEPS;
       return {
-        ...Object.fromEntries(Object.entries(BROWSER_WORKER_TOOLS).map(([name, tool]) => [name, !trusted ? untrustedTool(name) : withinBudget ? tool : exhaustedTool(name)])),
-        ...Object.fromEntries(BROWSER_WORKER_DENIED_TOOL_NAMES.map((name) => [name, deniedTool(name)])),
+        ...Object.fromEntries(
+          Object.entries(BROWSER_WORKER_TOOLS).map(([name, tool]) => [
+            name,
+            !trusted ? untrustedTool(name) : withinBudget ? tool : exhaustedTool(name),
+          ]),
+        ),
+        ...Object.fromEntries(
+          BROWSER_WORKER_DENIED_TOOL_NAMES.map((name) => [name, deniedTool(name)]),
+        ),
       };
     },
   },

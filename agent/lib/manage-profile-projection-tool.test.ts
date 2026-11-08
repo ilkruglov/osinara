@@ -58,7 +58,8 @@ describe("manage_profile_projection", () => {
       "manage_profile_projection",
       input,
     );
-    expect(requireApprovalEvidence.mock.invocationCallOrder[0])
-      .toBeLessThan(updatePolicy.mock.invocationCallOrder[0]!);
+    expect(requireApprovalEvidence.mock.invocationCallOrder[0]).toBeLessThan(
+      updatePolicy.mock.invocationCallOrder[0]!,
+    );
   });
 });

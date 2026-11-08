@@ -41,8 +41,4 @@ async function loadResolvedCompiledScheduleByTaskName(e, n) {
     { taskName: e },
   );
 }
-export {
-  loadResolvedCompiledScheduleByTaskName,
-  loadResolvedCompiledSchedules,
-  resolveSchedules,
-};
+export { loadResolvedCompiledScheduleByTaskName, loadResolvedCompiledSchedules, resolveSchedules };

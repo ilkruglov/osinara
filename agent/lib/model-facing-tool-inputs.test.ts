@@ -111,13 +111,21 @@ describe("model-facing tool input hardening", () => {
   });
 
   it.each([
-    ["manage_reminder", manageReminder, /AGENT_REMINDER_INPUT_INVALID: Для manage_reminder передайте action/],
+    [
+      "manage_reminder",
+      manageReminder,
+      /AGENT_REMINDER_INPUT_INVALID: Для manage_reminder передайте action/,
+    ],
     [
       "notification_settings",
       notificationSettings,
       /AGENT_NOTIFICATION_SETTINGS_INPUT_INVALID: Для notification_settings передайте action/,
     ],
-    ["manage_memory", manageMemory, /AGENT_MEMORY_INPUT_INVALID: Для manage_memory передайте action/],
+    [
+      "manage_memory",
+      manageMemory,
+      /AGENT_MEMORY_INPUT_INVALID: Для manage_memory передайте action/,
+    ],
     [
       "manage_telegram_group",
       manageTelegramGroup,
@@ -143,19 +151,29 @@ describe("model-facing tool input hardening", () => {
       inspectWorkspaceImage,
       /AGENT_WORKSPACE_IMAGE_INPUT_INVALID: Для inspect_workspace_image передайте ровно один источник/,
     ],
-  ] as const)("%s returns an actionable input error for an empty payload", async (_name, tool, message) => {
-    await expect(executeInvalidToolInput(tool, {} as never, context)).rejects.toThrowError(message);
-  });
+  ] as const)(
+    "%s returns an actionable input error for an empty payload",
+    async (_name, tool, message) => {
+      await expect(executeInvalidToolInput(tool, {} as never, context)).rejects.toThrowError(
+        message,
+      );
+    },
+  );
 
   it("explains the exact reminder recurrence shape when interval is missing", async () => {
-    await expect(manageReminder.execute({
-      action: "create",
-      content: "Позвонить врачу",
-      firstRunAt: "2026-08-01T10:00:00+03:00",
-      recurrence: { unit: "weekly" },
-      scope: "personal",
-      timezone: "Europe/Moscow",
-    } as never, context)).rejects.toThrowError(
+    await expect(
+      manageReminder.execute(
+        {
+          action: "create",
+          content: "Позвонить врачу",
+          firstRunAt: "2026-08-01T10:00:00+03:00",
+          recurrence: { unit: "weekly" },
+          scope: "personal",
+          timezone: "Europe/Moscow",
+        } as never,
+        context,
+      ),
+    ).rejects.toThrowError(
       /AGENT_REMINDER_INPUT_INVALID: Для recurrence передайте null или объект \{"unit":"weekly","interval":1\}/,
     );
     expect(toolCalls.reminderCreate).not.toHaveBeenCalled();
@@ -165,19 +183,19 @@ describe("model-facing tool input hardening", () => {
     const approval = manageReminder.approval;
     expect(approval).toBeTypeOf("function");
 
-    expect(() => (approval as (context: never) => unknown)({
-      approvedTools: new Set(),
-      callId: "call-invalid-recurrence",
-      session: {} as never,
-      toolInput: {
-        action: "update",
-        id: "00000000-0000-4000-8000-000000000001",
-        recurrence: {},
-      } as never,
-      toolName: "manage_reminder",
-    } as never)).toThrowError(
-      /AGENT_REMINDER_INPUT_INVALID: Поле unit обязательно.*Пример: daily/u,
-    );
+    expect(() =>
+      (approval as (context: never) => unknown)({
+        approvedTools: new Set(),
+        callId: "call-invalid-recurrence",
+        session: {} as never,
+        toolInput: {
+          action: "update",
+          id: "00000000-0000-4000-8000-000000000001",
+          recurrence: {},
+        } as never,
+        toolName: "manage_reminder",
+      } as never),
+    ).toThrowError(/AGENT_REMINDER_INPUT_INVALID: Поле unit обязательно.*Пример: daily/u);
     expect(toolCalls.reminderUpdate).not.toHaveBeenCalled();
   });
 
@@ -185,62 +203,94 @@ describe("model-facing tool input hardening", () => {
     const approval = manageReminder.approval;
     expect(approval).toBeTypeOf("function");
 
-    expect((approval as (context: never) => unknown)({
-      approvedTools: new Set(),
-      callId: "call-valid-recurrence",
-      session: {} as never,
-      toolInput: {
-        action: "update",
-        id: "00000000-0000-4000-8000-000000000001",
-        recurrence: null,
-      },
-      toolName: "manage_reminder",
-    } as never)).toBe("user-approval");
+    expect(
+      (approval as (context: never) => unknown)({
+        approvedTools: new Set(),
+        callId: "call-valid-recurrence",
+        session: {} as never,
+        toolInput: {
+          action: "update",
+          id: "00000000-0000-4000-8000-000000000001",
+          recurrence: null,
+        },
+        toolName: "manage_reminder",
+      } as never),
+    ).toBe("user-approval");
   });
 
   it("resumes a completed reminder with a new time in one call", async () => {
     toolCalls.reminderUpdate.mockResolvedValue({ enabled: true });
 
-    await manageReminder.execute({
-      action: "resume",
-      firstRunAt: "2026-09-10T09:00:00+03:00",
-      id: "00000000-0000-4000-8000-000000000001",
-    } as never, { callId: "call-resume", session: {} } as never);
+    await manageReminder.execute(
+      {
+        action: "resume",
+        firstRunAt: "2026-09-10T09:00:00+03:00",
+        id: "00000000-0000-4000-8000-000000000001",
+      } as never,
+      { callId: "call-resume", session: {} } as never,
+    );
 
     // The repository requires a new time to resume a completed reminder; the tool must accept one.
-    expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(expect.anything(), "00000000-0000-4000-8000-000000000001", expect.objectContaining({
-      enabled: true,
-      firstRunAt: new Date("2026-09-10T09:00:00+03:00"),
-    }));
+    expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      "00000000-0000-4000-8000-000000000001",
+      expect.objectContaining({
+        enabled: true,
+        firstRunAt: new Date("2026-09-10T09:00:00+03:00"),
+      }),
+    );
   });
 
-  it.each(["minutely", "hourly", "yearly"])("accepts %s recurrence for trusted reminders", async (unit) => {
-    const recurrence = { unit, interval: 1 };
-    const input = {
-      action: "create", content: "Проверка", firstRunAt: "2026-09-12T18:00:00+03:00",
-      recurrence, scope: "personal", timezone: "Europe/Moscow",
-    };
-    expect((manageReminder.inputSchema as z.ZodType).safeParse(input).success).toBe(true);
-    await manageReminder.execute(input as never, context);
-    expect(toolCalls.reminderCreate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ recurrence }));
-    await manageReminder.execute({ action: "update", id: "00000000-0000-4000-8000-000000000001", recurrence } as never, context);
-    expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ recurrence }));
-    for (const interval of [0, -1, 0.5]) {
-      await expect(manageReminder.execute({ ...input, recurrence: { unit, interval } } as never, context))
-        .rejects.toMatchObject({ code: "AGENT_REMINDER_INPUT_INVALID" });
-    }
-  });
+  it.each(["minutely", "hourly", "yearly"])(
+    "accepts %s recurrence for trusted reminders",
+    async (unit) => {
+      const recurrence = { unit, interval: 1 };
+      const input = {
+        action: "create",
+        content: "Проверка",
+        firstRunAt: "2026-09-12T18:00:00+03:00",
+        recurrence,
+        scope: "personal",
+        timezone: "Europe/Moscow",
+      };
+      expect((manageReminder.inputSchema as z.ZodType).safeParse(input).success).toBe(true);
+      await manageReminder.execute(input as never, context);
+      expect(toolCalls.reminderCreate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recurrence }),
+      );
+      await manageReminder.execute(
+        { action: "update", id: "00000000-0000-4000-8000-000000000001", recurrence } as never,
+        context,
+      );
+      expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ recurrence }),
+      );
+      for (const interval of [0, -1, 0.5]) {
+        await expect(
+          manageReminder.execute({ ...input, recurrence: { unit, interval } } as never, context),
+        ).rejects.toMatchObject({ code: "AGENT_REMINDER_INPUT_INVALID" });
+      }
+    },
+  );
 
   it("ignores known create-only sibling fields on a recurrence update", async () => {
     toolCalls.reminderUpdate.mockResolvedValue({ recurrence: null });
 
-    await expect(manageReminder.execute({
-      action: "update",
-      id: "00000000-0000-4000-8000-000000000001",
-      recurrence: null,
-      scope: "personal",
-      timezone: "Europe/Moscow",
-    }, context)).resolves.toEqual({ recurrence: null });
+    await expect(
+      manageReminder.execute(
+        {
+          action: "update",
+          id: "00000000-0000-4000-8000-000000000001",
+          recurrence: null,
+          scope: "personal",
+          timezone: "Europe/Moscow",
+        },
+        context,
+      ),
+    ).resolves.toEqual({ recurrence: null });
 
     expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(
       expect.anything(),
@@ -257,11 +307,16 @@ describe("model-facing tool input hardening", () => {
   it("accepts a group-scoped Telegram message ID for workspace image inspection", async () => {
     toolCalls.inspectImage.mockResolvedValue({ analysis: "Фото группы" });
 
-    await expect(inspectWorkspaceImage.execute({
-      question: "Что изображено?",
-      scope: "group",
-      telegramMessageId: "42",
-    }, context)).resolves.toEqual({ analysis: "Фото группы" });
+    await expect(
+      inspectWorkspaceImage.execute(
+        {
+          question: "Что изображено?",
+          scope: "group",
+          telegramMessageId: "42",
+        },
+        context,
+      ),
+    ).resolves.toEqual({ analysis: "Фото группы" });
 
     expect(toolCalls.inspectImage).toHaveBeenCalledWith(
       { familyId: "family-1", userId: "user-1" },
@@ -276,16 +331,26 @@ describe("model-facing tool input hardening", () => {
   it("accepts attachmentId and rejects multiple image sources", async () => {
     toolCalls.inspectImage.mockResolvedValue({ analysis: "Фото группы" });
 
-    await expect(inspectWorkspaceImage.execute({
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "group",
-    }, context)).resolves.toEqual({ analysis: "Фото группы" });
-    await expect(inspectWorkspaceImage.execute({
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      path: "group/image.png",
-      question: "Что изображено?",
-      scope: "group",
-    }, context)).rejects.toThrowError(/AGENT_WORKSPACE_IMAGE_INPUT_INVALID/);
+    await expect(
+      inspectWorkspaceImage.execute(
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+        context,
+      ),
+    ).resolves.toEqual({ analysis: "Фото группы" });
+    await expect(
+      inspectWorkspaceImage.execute(
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          path: "group/image.png",
+          question: "Что изображено?",
+          scope: "group",
+        },
+        context,
+      ),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_IMAGE_INPUT_INVALID/);
   });
 });

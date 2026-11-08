@@ -80,13 +80,18 @@ describe("manage_telegram_group.register", () => {
 
   it("asks Telegram whether the verified owner administers the chat before persistence", async () => {
     const order: string[] = [];
-    requireAdministrator.mockImplementation(async () => { order.push("telegram"); });
+    requireAdministrator.mockImplementation(async () => {
+      order.push("telegram");
+    });
     registerGroup.mockImplementation(async () => {
       order.push("database");
       return { groupId: "group-1" };
     });
 
-    await manageTelegramGroup.execute({ action: "register", registration: input }, context("private"));
+    await manageTelegramGroup.execute(
+      { action: "register", registration: input },
+      context("private"),
+    );
 
     expect(requireAdministrator).toHaveBeenCalledWith({
       signal: abortController.signal,
@@ -103,26 +108,30 @@ describe("manage_telegram_group.register", () => {
   ])("does not register the chat when Telegram verification fails with %s", async (code) => {
     requireAdministrator.mockRejectedValue(new AppError(code, "Группа не зарегистрирована"));
 
-    await expect(manageTelegramGroup.execute(
-      { action: "register", registration: input },
-      context("private"),
-    )).rejects.toMatchObject({ code });
+    await expect(
+      manageTelegramGroup.execute({ action: "register", registration: input }, context("private")),
+    ).rejects.toMatchObject({ code });
     expect(registerGroup).not.toHaveBeenCalled();
   });
 
   it.each([
     ["no Telegram user", {}],
     ["a bot actor", { telegramActorId: "777", telegramActorKind: "telegram_bot" }],
-    ["a mismatched actor", {
-      telegramActorId: "202",
-      telegramActorKind: "telegram_user",
-      telegramUserId: OWNER_TELEGRAM_USER_ID,
-    }],
+    [
+      "a mismatched actor",
+      {
+        telegramActorId: "202",
+        telegramActorKind: "telegram_user",
+        telegramUserId: OWNER_TELEGRAM_USER_ID,
+      },
+    ],
   ])("refuses registration when the session carries %s", async (_label, actor) => {
-    await expect(manageTelegramGroup.execute(
-      { action: "register", registration: input },
-      context("private", actor),
-    )).rejects.toMatchObject({ code: "AGENT_TELEGRAM_GROUP_OWNER_IDENTITY_MISSING" });
+    await expect(
+      manageTelegramGroup.execute(
+        { action: "register", registration: input },
+        context("private", actor),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_GROUP_OWNER_IDENTITY_MISSING" });
     expect(requireAdministrator).not.toHaveBeenCalled();
     expect(registerGroup).not.toHaveBeenCalled();
   });
@@ -130,16 +139,16 @@ describe("manage_telegram_group.register", () => {
   it("does not consult Telegram while deciding whether registration needs approval", () => {
     const approval = manageTelegramGroup.approval as (context: never) => unknown;
 
-    expect(approval({ toolInput: { action: "register", registration: input } } as never))
-      .toBe("user-approval");
+    expect(approval({ toolInput: { action: "register", registration: input } } as never)).toBe(
+      "user-approval",
+    );
     expect(requireAdministrator).not.toHaveBeenCalled();
   });
 
   it("persists the group after a private owner approval resumes", async () => {
-    await expect(manageTelegramGroup.execute(
-      { action: "register", registration: input },
-      context("private"),
-    )).resolves.toEqual({
+    await expect(
+      manageTelegramGroup.execute({ action: "register", registration: input }, context("private")),
+    ).resolves.toEqual({
       active: true,
       groupId: "group-1",
       messageMode: "all",
@@ -157,71 +166,90 @@ describe("manage_telegram_group.register", () => {
   });
 
   it("ignores known top-level fields materialized beside registration", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "register",
-      messageMode: "owner_only",
-      registration: input,
-      telegramChatId: "-1009999999999",
-      toolAllowlist: ["remember"],
-    }, context("private"))).resolves.toMatchObject({
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "register",
+          messageMode: "owner_only",
+          registration: input,
+          telegramChatId: "-1009999999999",
+          toolAllowlist: ["remember"],
+        },
+        context("private"),
+      ),
+    ).resolves.toMatchObject({
       telegramChatId: "-1003567628736",
       type: "family_private",
     });
-    expect(registerGroup).toHaveBeenCalledWith(expect.objectContaining({
-      telegramChatId: "-1003567628736",
-      type: "family_private",
-    }));
+    expect(registerGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramChatId: "-1003567628736",
+        type: "family_private",
+      }),
+    );
   });
 
   it("rejects registration approval from a group chat", async () => {
-    await expect(manageTelegramGroup.execute(
-      { action: "register", registration: input },
-      context("supergroup"),
-    )).rejects.toThrowError(
-      /AGENT_PRIVATE_CHAT_REQUIRED/,
-    );
+    await expect(
+      manageTelegramGroup.execute(
+        { action: "register", registration: input },
+        context("supergroup"),
+      ),
+    ).rejects.toThrowError(/AGENT_PRIVATE_CHAT_REQUIRED/);
     expect(requireAdministrator).not.toHaveBeenCalled();
     expect(registerGroup).not.toHaveBeenCalled();
   });
 
   it("rejects an external allowlist change from a group chat", async () => {
-    await expect(manageTelegramGroup.execute(
-      {
-        action: "register",
-        registration: {
-          ...input,
-          toolAllowlist: ["remember"],
-          type: "external",
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "register",
+          registration: {
+            ...input,
+            toolAllowlist: ["remember"],
+            type: "external",
+          },
         },
-      },
-      context("supergroup"),
-    )).rejects.toThrowError(/AGENT_PRIVATE_CHAT_REQUIRED/);
+        context("supergroup"),
+      ),
+    ).rejects.toThrowError(/AGENT_PRIVATE_CHAT_REQUIRED/);
     expect(registerGroup).not.toHaveBeenCalled();
   });
 
   it("persists owner-only dispatch for an external group", async () => {
-    await manageTelegramGroup.execute({
-      action: "register",
-      registration: {
-        ...input,
+    await manageTelegramGroup.execute(
+      {
+        action: "register",
+        registration: {
+          ...input,
+          messageMode: "owner_only",
+          toolAllowlist: ["list_group_history"],
+          type: "external",
+        },
+      },
+      context("private"),
+    );
+
+    expect(registerGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
         messageMode: "owner_only",
         toolAllowlist: ["list_group_history"],
         type: "external",
-      },
-    }, context("private"));
-
-    expect(registerGroup).toHaveBeenCalledWith(expect.objectContaining({
-      messageMode: "owner_only",
-      toolAllowlist: ["list_group_history"],
-      type: "external",
-    }));
+      }),
+    );
   });
 
   it("rejects owner-only dispatch for a family group", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "register",
-      registration: { ...input, messageMode: "owner_only" },
-    }, context("private"))).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "register",
+          registration: { ...input, messageMode: "owner_only" },
+        },
+        context("private"),
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
 
     expect(registerGroup).not.toHaveBeenCalled();
   });
@@ -230,10 +258,12 @@ describe("manage_telegram_group.register", () => {
     { ...input, telegramChatId: -1003567628736 },
     { ...input, title: "Рабочая группа\nTelegram chat ID: -100999" },
   ])("rejects ambiguous registration fields before persistence", async (registration) => {
-    await expect(manageTelegramGroup.execute(
-      { action: "register", registration } as never,
-      context("private"),
-    )).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
+    await expect(
+      manageTelegramGroup.execute(
+        { action: "register", registration } as never,
+        context("private"),
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
     expect(registerGroup).not.toHaveBeenCalled();
   });
 });

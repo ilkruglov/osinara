@@ -1,6 +1,10 @@
 import type { FileUIPart, ProviderMetadata, TextUIPart, UserContent } from "ai";
 import type { ConnectionAuthorizationChallenge } from "#public/connections/errors.js";
-import type { RuntimeActionRequest, RuntimeActionResult, RuntimeToolResultActionResult } from "#runtime/actions/types.js";
+import type {
+  RuntimeActionRequest,
+  RuntimeActionResult,
+  RuntimeToolResultActionResult,
+} from "#runtime/actions/types.js";
 import type { InputRequest, InputResponse } from "#runtime/input/types.js";
 import type { JsonObject, JsonValue } from "#shared/json.js";
 export declare const EVE_SESSION_ID_HEADER = "x-eve-session-id";
@@ -17,13 +21,14 @@ export declare const EVE_MESSAGE_STREAM_VERSION = "23";
  * tool-loop harness. All other values indicate the assistant step ended the
  * current turn.
  */
-export type AssistantStepFinishReason = "content-filter" | "error" | "length" | "other" | "stop" | "tool-calls";
+export type AssistantStepFinishReason =
+  "content-filter" | "error" | "length" | "other" | "stop" | "tool-calls";
 type ProviderMetadataEntry = NonNullable<ProviderMetadata[string]>;
 type GatewayGenerationId = Extract<ProviderMetadataEntry["generationId"], string>;
 export interface StepCompletedProviderMetadata {
-    readonly gateway: {
-        readonly generationId: GatewayGenerationId;
-    };
+  readonly gateway: {
+    readonly generationId: GatewayGenerationId;
+  };
 }
 /**
  * Durable metadata attached to one persisted session stream event.
@@ -33,16 +38,16 @@ export interface StepCompletedProviderMetadata {
  * or replaying a finished session — yields the same values every time.
  */
 export interface MessageStreamEventMeta {
-    /** ISO-8601 emission time. */
-    readonly at: string;
-    /**
-     * Unique, lexicographically sortable identifier for this event.
-     *
-     * Stamped from stream version 20 on: rewinding into a session that started
-     * before the upgrade yields events whose `id` is absent despite this type,
-     * and those cannot be deduplicated.
-     */
-    readonly id: string;
+  /** ISO-8601 emission time. */
+  readonly at: string;
+  /**
+   * Unique, lexicographically sortable identifier for this event.
+   *
+   * Stamped from stream version 20 on: rewinding into a session that started
+   * before the upgrade yields events whose `id` is absent despite this type,
+   * and those cannot be deduplicated.
+   */
+  readonly id: string;
 }
 /**
  * Normalized completion status for one emitted runtime action result.
@@ -59,19 +64,19 @@ export type ActionResultStatus = "completed" | "failed" | "rejected";
  * output strings just to determine whether a tool call failed.
  */
 export interface ActionResultError {
-    readonly code: string;
-    readonly message: string;
+  readonly code: string;
+  readonly message: string;
 }
 /**
  * Invocation metadata attached to the `session.started` event for one child
  * subagent workflow session.
  */
 export interface SubagentSessionInvocationMetadata {
-    readonly kind: "subagent";
-    readonly parentCallId: string;
-    readonly parentSessionId: string;
-    readonly parentTurnId: string;
-    readonly name: string;
+  readonly kind: "subagent";
+  readonly parentCallId: string;
+  readonly parentSessionId: string;
+  readonly parentTurnId: string;
+  readonly name: string;
 }
 /**
  * Runtime identity metadata attached to the `session.started` event.
@@ -81,14 +86,14 @@ export interface SubagentSessionInvocationMetadata {
  * serving the run.
  */
 export interface RuntimeIdentity {
-    readonly agentId: string;
-    readonly agentName?: string;
-    readonly eveVersion: string;
-    readonly build?: {
-        readonly deployedAt?: string;
-        readonly gitBranch?: string;
-        readonly gitSha?: string;
-    };
+  readonly agentId: string;
+  readonly agentName?: string;
+  readonly eveVersion: string;
+  readonly build?: {
+    readonly deployedAt?: string;
+    readonly gitBranch?: string;
+    readonly gitSha?: string;
+  };
 }
 /**
  * Portable trace coordinates for correlating an eve run with an external
@@ -96,9 +101,9 @@ export interface RuntimeIdentity {
  * remaining owned by eve rather than exposing an OpenTelemetry type.
  */
 export interface RuntimeTraceContext {
-    readonly traceId: string;
-    readonly spanId: string;
-    readonly traceFlags: number;
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly traceFlags: number;
 }
 /**
  * JSON request accepted by the canonical message route.
@@ -109,38 +114,40 @@ export interface RuntimeTraceContext {
  * `sendMessage({ files })` produces. `clientContext` is one-turn
  * client/page context; the channel converts it into internal model context.
  */
-export type HandleMessageRequestBody = {
-    readonly inputResponses?: never;
-    readonly message: string | UserContent;
-    readonly clientContext?: string | readonly string[] | JsonObject;
-    readonly outputSchema?: JsonObject;
-} | {
-    readonly inputResponses: readonly InputResponse[];
-    readonly message?: never;
-    readonly clientContext?: string | readonly string[] | JsonObject;
-    readonly outputSchema?: JsonObject;
-};
+export type HandleMessageRequestBody =
+  | {
+      readonly inputResponses?: never;
+      readonly message: string | UserContent;
+      readonly clientContext?: string | readonly string[] | JsonObject;
+      readonly outputSchema?: JsonObject;
+    }
+  | {
+      readonly inputResponses: readonly InputResponse[];
+      readonly message?: never;
+      readonly clientContext?: string | readonly string[] | JsonObject;
+      readonly outputSchema?: JsonObject;
+    };
 /**
  * Stream event emitted when the durable message workflow session starts.
  */
 export interface SessionStartedStreamEvent {
-    data: {
-        invocation?: SubagentSessionInvocationMetadata;
-        runtime?: RuntimeIdentity;
-        trace?: RuntimeTraceContext;
-    };
-    type: "session.started";
+  data: {
+    invocation?: SubagentSessionInvocationMetadata;
+    runtime?: RuntimeIdentity;
+    trace?: RuntimeTraceContext;
+  };
+  type: "session.started";
 }
 /**
  * Stream event emitted when one runtime turn starts.
  */
 export interface TurnStartedStreamEvent {
-    data: {
-        sequence: number;
-        trace?: RuntimeTraceContext;
-        turnId: string;
-    };
-    type: "turn.started";
+  data: {
+    sequence: number;
+    trace?: RuntimeTraceContext;
+    turnId: string;
+  };
+  type: "turn.started";
 }
 /**
  * Stream event emitted when the runtime receives one normalized user message.
@@ -150,13 +157,13 @@ export interface TurnStartedStreamEvent {
  * attachments.
  */
 export interface MessageReceivedStreamEvent {
-    data: {
-        message: string;
-        parts?: readonly MessageReceivedPart[];
-        sequence: number;
-        turnId: string;
-    };
-    type: "message.received";
+  data: {
+    message: string;
+    parts?: readonly MessageReceivedPart[];
+    sequence: number;
+    turnId: string;
+  };
+  type: "message.received";
 }
 /**
  * One structured part of a received user message.
@@ -166,10 +173,12 @@ export interface MessageReceivedStreamEvent {
  * projected; `url` is optional because it is present only for client-resolvable
  * `http(s)` and `data:` URLs.
  */
-export type MessageReceivedPart = Readonly<Pick<TextUIPart, "text" | "type">> | (Readonly<Pick<FileUIPart, "filename" | "mediaType" | "type">> & {
-    readonly size?: number;
-    readonly url?: FileUIPart["url"];
-});
+export type MessageReceivedPart =
+  | Readonly<Pick<TextUIPart, "text" | "type">>
+  | (Readonly<Pick<FileUIPart, "filename" | "mediaType" | "type">> & {
+      readonly size?: number;
+      readonly url?: FileUIPart["url"];
+    });
 /**
  * Stream event emitted when the model requests one or more actions.
  *
@@ -179,144 +188,144 @@ export type MessageReceivedPart = Readonly<Pick<TextUIPart, "text" | "type">> | 
  * from an assistant step.
  */
 export interface ActionsRequestedStreamEvent {
-    data: {
-        actions: readonly RuntimeActionRequest[];
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "actions.requested";
+  data: {
+    actions: readonly RuntimeActionRequest[];
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "actions.requested";
 }
 export type ApprovalCandidateOutcome = "pending" | "rejected" | "failed" | "timed-out" | "stale";
 /** Safe lifecycle event for one responder-bound approval candidate. */
 export interface ApprovalCandidateStreamEvent {
-    data: {
-        candidateId: string;
-        outcome: ApprovalCandidateOutcome;
-        requestId: string;
-        responderPrincipalId: string;
-        reason?: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "approval.candidate";
+  data: {
+    candidateId: string;
+    outcome: ApprovalCandidateOutcome;
+    requestId: string;
+    responderPrincipalId: string;
+    reason?: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "approval.candidate";
 }
 /** Terminal durable settlement for one approval request. */
 export interface ApprovalSettledStreamEvent {
-    data: {
-        outcome: "approved" | "cancelled";
-        requestId: string;
-        responderPrincipalId: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "approval.settled";
+  data: {
+    outcome: "approved" | "cancelled";
+    requestId: string;
+    responderPrincipalId: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "approval.settled";
 }
 /**
  * Stream event emitted when the harness needs human input before it can
  * continue the run.
  */
 export interface InputRequestedStreamEvent {
-    data: {
-        requests: readonly InputRequest[];
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "input.requested";
+  data: {
+    requests: readonly InputRequest[];
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "input.requested";
 }
 /** Authoritative terminal outcome for one human-input request. */
 export type InputResolutionOutcome = "answered" | "approved" | "denied" | "ignored" | "invalid";
 /** One server-accepted resolution from a pending human-input batch. */
 export interface InputResolution {
-    readonly kind: InputRequest["kind"];
-    readonly outcome: InputResolutionOutcome;
-    readonly requestId: string;
-    readonly response?: InputResponse;
+  readonly kind: InputRequest["kind"];
+  readonly outcome: InputResolutionOutcome;
+  readonly requestId: string;
+  readonly response?: InputResponse;
 }
 /**
  * Stream event emitted after eve accepts a terminal resolution for one or more
  * pending human-input requests.
  */
 export interface InputResolvedStreamEvent {
-    data: {
-        resolutions: readonly InputResolution[];
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "input.resolved";
+  data: {
+    resolutions: readonly InputResolution[];
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "input.resolved";
 }
 /**
  * Stream event emitted for each runtime action result projected back into the
  * session loop.
  */
 export interface ActionResultStreamEvent {
-    data: {
-        error?: ActionResultError;
-        result: RuntimeActionResult;
-        sequence: number;
-        stepIndex: number;
-        status: ActionResultStatus;
-        turnId: string;
-    };
-    type: "action.result";
+  data: {
+    error?: ActionResultError;
+    result: RuntimeActionResult;
+    sequence: number;
+    stepIndex: number;
+    status: ActionResultStatus;
+    turnId: string;
+  };
+  type: "action.result";
 }
 /**
  * Stream event emitted for a preliminary snapshot from a locally executed
  * tool generator. The final snapshot is emitted as `action.result`.
  */
 export interface ActionPartialStreamEvent {
-    data: {
-        result: RuntimeToolResultActionResult;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "action.partial";
+  data: {
+    result: RuntimeToolResultActionResult;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "action.partial";
 }
 /**
  * Stream event emitted when the parent workflow starts a child subagent session.
  */
 export interface SubagentCalledStreamEvent {
-    data: {
-        callId: string;
-        childSessionId: string;
-        childStreamPath: string;
-        sessionId: string;
-        sequence: number;
-        name: string;
-        remote?: {
-            /**
-             * Key to the authored credential functions (`auth`/`headers`) for this
-             * remote child, resolved at stream-proxy time by
-             * `resolveRemoteAgentStreamHeaders`. Static subagent → the node id in
-             * `subagentRegistry.subagentsByNodeId`; dynamic subagent → its
-             * `credentialsStepId` in the step registry. The event stores this key —
-             * never resolved header values — because tokens expire and this event
-             * is persisted and streamed to clients. Absent when the remote child
-             * has no authored credentials.
-             */
-            resolverId?: string;
-            url: string;
-        };
-        toolName: string;
-        turnId: string;
-        workflowId: string;
+  data: {
+    callId: string;
+    childSessionId: string;
+    childStreamPath: string;
+    sessionId: string;
+    sequence: number;
+    name: string;
+    remote?: {
+      /**
+       * Key to the authored credential functions (`auth`/`headers`) for this
+       * remote child, resolved at stream-proxy time by
+       * `resolveRemoteAgentStreamHeaders`. Static subagent → the node id in
+       * `subagentRegistry.subagentsByNodeId`; dynamic subagent → its
+       * `credentialsStepId` in the step registry. The event stores this key —
+       * never resolved header values — because tokens expire and this event
+       * is persisted and streamed to clients. Absent when the remote child
+       * has no authored credentials.
+       */
+      resolverId?: string;
+      url: string;
     };
-    type: "subagent.called";
+    toolName: string;
+    turnId: string;
+    workflowId: string;
+  };
+  type: "subagent.called";
 }
 /**
  * Stream event emitted when an inline subagent execution starts.
  */
 export interface SubagentStartedStreamEvent {
-    data: {
-        callId: string;
-        subagentName: string;
-    };
-    type: "subagent.started";
+  data: {
+    callId: string;
+    subagentName: string;
+  };
+  type: "subagent.started";
 }
 /**
  * Stream event (`type: "subagent.event"`) wrapping one child stream event
@@ -324,60 +333,60 @@ export interface SubagentStartedStreamEvent {
  * originating `data.callId` and `data.subagentName`.
  */
 export interface SubagentChildEventStreamEvent {
-    data: {
-        callId: string;
-        event: UnstampedMessageStreamEvent;
-        subagentName: string;
-    };
-    type: "subagent.event";
+  data: {
+    callId: string;
+    event: UnstampedMessageStreamEvent;
+    subagentName: string;
+  };
+  type: "subagent.event";
 }
 /**
  * Stream event emitted when an inline subagent completes.
  */
 export interface SubagentCompletedStreamEvent {
-    data: {
-        /**
-         * Present when the originating call completed with a background-task
-         * receipt while the child itself kept running. Consumers must not treat
-         * this as the child's terminal boundary; the child stream owns that.
-         */
-        backgroundTask?: {
-            taskId: string;
-            status: "working";
-        };
-        callId: string;
-        output: string;
-        subagentName: string;
+  data: {
+    /**
+     * Present when the originating call completed with a background-task
+     * receipt while the child itself kept running. Consumers must not treat
+     * this as the child's terminal boundary; the child stream owns that.
+     */
+    backgroundTask?: {
+      taskId: string;
+      status: "working";
     };
-    type: "subagent.completed";
+    callId: string;
+    output: string;
+    subagentName: string;
+  };
+  type: "subagent.completed";
 }
 /**
  * Stream event emitted when one assistant text delta is appended to the
  * current message for the current step.
  */
 export interface MessageAppendedStreamEvent {
-    data: {
-        messageDelta: string;
-        messageSoFar: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "message.appended";
+  data: {
+    messageDelta: string;
+    messageSoFar: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "message.appended";
 }
 /**
  * Stream event emitted when one reasoning delta is appended to the current
  * reasoning block for the current step.
  */
 export interface ReasoningAppendedStreamEvent {
-    data: {
-        reasoningDelta: string;
-        reasoningSoFar: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "reasoning.appended";
+  data: {
+    reasoningDelta: string;
+    reasoningSoFar: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "reasoning.appended";
 }
 /**
  * Stream event emitted when one assistant step completes with visible text.
@@ -388,109 +397,109 @@ export interface ReasoningAppendedStreamEvent {
  * why that assistant message boundary completed.
  */
 export interface MessageCompletedStreamEvent {
-    data: {
-        finishReason: AssistantStepFinishReason;
-        message: string | null;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "message.completed";
+  data: {
+    finishReason: AssistantStepFinishReason;
+    message: string | null;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "message.completed";
 }
 /**
  * Stream event emitted when one completed reasoning block is available for the
  * current step.
  */
 export interface ReasoningCompletedStreamEvent {
-    data: {
-        reasoning: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "reasoning.completed";
+  data: {
+    reasoning: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "reasoning.completed";
 }
 /**
  * Stream event emitted when the harness finalized a structured result that
  * matches the requested output schema.
  */
 export interface ResultCompletedStreamEvent {
-    data: {
-        result: JsonValue;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "result.completed";
+  data: {
+    result: JsonValue;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "result.completed";
 }
 /**
  * Stream event emitted when one model call starts inside the current turn.
  */
 export interface StepStartedStreamEvent {
-    data: {
-        readonly modelId: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "step.started";
+  data: {
+    readonly modelId: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "step.started";
 }
 /**
  * Stream event emitted when one model call completes successfully.
  */
 export interface StepCompletedStreamEvent {
-    data: {
-        finishReason: AssistantStepFinishReason;
-        providerMetadata?: StepCompletedProviderMetadata;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-        usage?: {
-            readonly costUsd?: number;
-            readonly inputTokens?: number;
-            readonly outputTokens?: number;
-            readonly cacheReadTokens?: number;
-            readonly cacheWriteTokens?: number;
-        };
+  data: {
+    finishReason: AssistantStepFinishReason;
+    providerMetadata?: StepCompletedProviderMetadata;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+    usage?: {
+      readonly costUsd?: number;
+      readonly inputTokens?: number;
+      readonly outputTokens?: number;
+      readonly cacheReadTokens?: number;
+      readonly cacheWriteTokens?: number;
     };
-    type: "step.completed";
+  };
+  type: "step.completed";
 }
 /**
  * Stream event emitted when one model call fails.
  */
 export interface StepFailedStreamEvent {
-    data: {
-        code: string;
-        details?: JsonObject;
-        message: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "step.failed";
+  data: {
+    code: string;
+    details?: JsonObject;
+    message: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "step.failed";
 }
 /**
  * Stream event emitted when one turn reaches a terminal successful outcome.
  */
 export interface TurnCompletedStreamEvent {
-    data: {
-        sequence: number;
-        turnId: string;
-    };
-    type: "turn.completed";
+  data: {
+    sequence: number;
+    turnId: string;
+  };
+  type: "turn.completed";
 }
 /**
  * Stream event emitted when one turn fails.
  */
 export interface TurnFailedStreamEvent {
-    data: {
-        code: string;
-        details?: JsonObject;
-        message: string;
-        sequence: number;
-        turnId: string;
-    };
-    type: "turn.failed";
+  data: {
+    code: string;
+    details?: JsonObject;
+    message: string;
+    sequence: number;
+    turnId: string;
+  };
+  type: "turn.failed";
 }
 /**
  * Stream event emitted when one turn is cancelled before reaching a
@@ -499,69 +508,69 @@ export interface TurnFailedStreamEvent {
  * the session accepts the next message normally.
  */
 export interface TurnCancelledStreamEvent {
-    data: {
-        sequence: number;
-        turnId: string;
-    };
-    type: "turn.cancelled";
+  data: {
+    sequence: number;
+    turnId: string;
+  };
+  type: "turn.cancelled";
 }
 /**
  * Stream event emitted after the durable model-message history is cleared.
  * The session itself and its non-message state remain active.
  */
 export interface ContextClearedStreamEvent {
-    data: {
-        sequence: number;
-        sessionId: string;
-        turnId: string;
-    };
-    type: "context.cleared";
+  data: {
+    sequence: number;
+    sessionId: string;
+    turnId: string;
+  };
+  type: "context.cleared";
 }
 /**
  * Stream event emitted when the workflow decides to compact the current
  * visible session history before the next model fragment runs.
  */
 export interface CompactionRequestedStreamEvent {
-    data: {
-        modelId: string;
-        sequence: number;
-        sessionId: string;
-        turnId: string;
-        usageInputTokens: number | null;
-    };
-    type: "compaction.requested";
+  data: {
+    modelId: string;
+    sequence: number;
+    sessionId: string;
+    turnId: string;
+    usageInputTokens: number | null;
+  };
+  type: "compaction.requested";
 }
 /**
  * Stream event emitted after one compaction checkpoint message has been
  * appended to the durable session history.
  */
 export interface CompactionCompletedStreamEvent {
-    data: {
-        modelId: string;
-        sequence: number;
-        sessionId: string;
-        turnId: string;
-    };
-    type: "compaction.completed";
+  data: {
+    modelId: string;
+    sequence: number;
+    sessionId: string;
+    turnId: string;
+  };
+  type: "compaction.completed";
 }
 /**
  * Stream event emitted when a connection or tool needs user authorization
  * before it can continue.
  */
 export interface AuthorizationRequiredStreamEvent {
-    data: {
-        /** Stable identity of this exact authorization attempt. */
-        attemptId?: string;
-        authorization?: ConnectionAuthorizationChallenge;
-        candidateId?: string;
-        description: string;
-        name: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-        webhookUrl?: string;
-    };
-    type: "authorization.required";
+  data: {
+    /** Stable identity of this exact authorization attempt. */
+    attemptId?: string;
+    authorization?: ConnectionAuthorizationChallenge;
+    candidateId?: string;
+    description: string;
+    name: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+    webhookUrl?: string;
+  };
+  type: "authorization.required";
 }
 /**
  * Outcome of one completed authorization attempt, emitted on
@@ -581,54 +590,54 @@ export type ConnectionAuthorizationOutcome = AuthorizationOutcome;
  * model's next fragment streams in.
  */
 export interface AuthorizationCompletedStreamEvent {
-    data: {
-        /** Stable identity shared with the matching required event. */
-        attemptId?: string;
-        candidateId?: string;
-        /**
-         * The challenge from the matching `authorization.required` event,
-         * journaled across the park. Lets channels keep rendering the
-         * challenge's `displayName` in completion status text.
-         */
-        authorization?: ConnectionAuthorizationChallenge;
-        name: string;
-        outcome: AuthorizationOutcome;
-        reason?: string;
-        sequence: number;
-        stepIndex: number;
-        turnId: string;
-    };
-    type: "authorization.completed";
+  data: {
+    /** Stable identity shared with the matching required event. */
+    attemptId?: string;
+    candidateId?: string;
+    /**
+     * The challenge from the matching `authorization.required` event,
+     * journaled across the park. Lets channels keep rendering the
+     * challenge's `displayName` in completion status text.
+     */
+    authorization?: ConnectionAuthorizationChallenge;
+    name: string;
+    outcome: AuthorizationOutcome;
+    reason?: string;
+    sequence: number;
+    stepIndex: number;
+    turnId: string;
+  };
+  type: "authorization.completed";
 }
 /**
  * Stream event emitted when the session parks waiting for the next user
  * message.
  */
 export interface SessionWaitingStreamEvent {
-    data: {
-        /** Channel-local continuation token, or the immutable session ID for an ID-only session. */
-        continuationToken: string;
-        wait: "next-user-message";
-    };
-    type: "session.waiting";
+  data: {
+    /** Channel-local continuation token, or the immutable session ID for an ID-only session. */
+    continuationToken: string;
+    wait: "next-user-message";
+  };
+  type: "session.waiting";
 }
 /**
  * Stream event emitted when the session fails.
  */
 export interface SessionFailedStreamEvent {
-    data: {
-        code: string;
-        details?: JsonObject;
-        message: string;
-        sessionId: string;
-    };
-    type: "session.failed";
+  data: {
+    code: string;
+    details?: JsonObject;
+    message: string;
+    sessionId: string;
+  };
+  type: "session.failed";
 }
 /**
  * Stream event emitted when the session completes successfully.
  */
 export interface SessionCompletedStreamEvent {
-    type: "session.completed";
+  type: "session.completed";
 }
 /**
  * Serializable event before eve stamps the durable stream envelope.
@@ -636,18 +645,52 @@ export interface SessionCompletedStreamEvent {
  * Internal emitters use this type while constructing events. Public stream
  * consumers receive {@link MessageStreamEvent}.
  */
-export type UnstampedMessageStreamEvent = ApprovalCandidateStreamEvent | ApprovalSettledStreamEvent | ContextClearedStreamEvent | CompactionCompletedStreamEvent | CompactionRequestedStreamEvent | AuthorizationCompletedStreamEvent | AuthorizationRequiredStreamEvent | MessageAppendedStreamEvent | MessageCompletedStreamEvent | MessageReceivedStreamEvent | ReasoningAppendedStreamEvent | SessionCompletedStreamEvent | SessionFailedStreamEvent | SessionStartedStreamEvent | SessionWaitingStreamEvent | ResultCompletedStreamEvent | SubagentCalledStreamEvent | SubagentChildEventStreamEvent | SubagentCompletedStreamEvent | SubagentStartedStreamEvent | ActionsRequestedStreamEvent | InputRequestedStreamEvent | InputResolvedStreamEvent | ActionPartialStreamEvent | ActionResultStreamEvent | ReasoningCompletedStreamEvent | StepCompletedStreamEvent | StepFailedStreamEvent | StepStartedStreamEvent | TurnCancelledStreamEvent | TurnCompletedStreamEvent | TurnFailedStreamEvent | TurnStartedStreamEvent;
+export type UnstampedMessageStreamEvent =
+  | ApprovalCandidateStreamEvent
+  | ApprovalSettledStreamEvent
+  | ContextClearedStreamEvent
+  | CompactionCompletedStreamEvent
+  | CompactionRequestedStreamEvent
+  | AuthorizationCompletedStreamEvent
+  | AuthorizationRequiredStreamEvent
+  | MessageAppendedStreamEvent
+  | MessageCompletedStreamEvent
+  | MessageReceivedStreamEvent
+  | ReasoningAppendedStreamEvent
+  | SessionCompletedStreamEvent
+  | SessionFailedStreamEvent
+  | SessionStartedStreamEvent
+  | SessionWaitingStreamEvent
+  | ResultCompletedStreamEvent
+  | SubagentCalledStreamEvent
+  | SubagentChildEventStreamEvent
+  | SubagentCompletedStreamEvent
+  | SubagentStartedStreamEvent
+  | ActionsRequestedStreamEvent
+  | InputRequestedStreamEvent
+  | InputResolvedStreamEvent
+  | ActionPartialStreamEvent
+  | ActionResultStreamEvent
+  | ReasoningCompletedStreamEvent
+  | StepCompletedStreamEvent
+  | StepFailedStreamEvent
+  | StepStartedStreamEvent
+  | TurnCancelledStreamEvent
+  | TurnCompletedStreamEvent
+  | TurnFailedStreamEvent
+  | TurnStartedStreamEvent;
 /**
  * Stream events that represent an unrecovered turn/session failure.
  */
-export type TurnFailureStreamEvent = SessionFailedStreamEvent | StepFailedStreamEvent | TurnFailedStreamEvent;
+export type TurnFailureStreamEvent =
+  SessionFailedStreamEvent | StepFailedStreamEvent | TurnFailedStreamEvent;
 /**
  * One event read from an eve session stream.
  *
  * eve stamps the durable identity and emission time before writing the event.
  */
 export type MessageStreamEvent = UnstampedMessageStreamEvent & {
-    readonly meta: MessageStreamEventMeta;
+  readonly meta: MessageStreamEventMeta;
 };
 /**
  * @deprecated Use {@link MessageStreamEvent}.
@@ -664,22 +707,24 @@ export declare function isCurrentTurnBoundaryEvent(event: UnstampedMessageStream
  * Generic so narrowing keeps the input's stamping: a
  * {@link MessageStreamEvent} narrows to a stamped failure event.
  */
-export declare function isTurnFailureEvent<TEvent extends UnstampedMessageStreamEvent>(event: TEvent): event is TEvent & TurnFailureStreamEvent;
+export declare function isTurnFailureEvent<TEvent extends UnstampedMessageStreamEvent>(
+  event: TEvent,
+): event is TEvent & TurnFailureStreamEvent;
 /**
  * Creates the `session.started` event for one session.
  */
 export declare function createSessionStartedEvent(input?: {
-    readonly invocation?: SubagentSessionInvocationMetadata;
-    readonly runtime?: RuntimeIdentity;
-    readonly trace?: RuntimeTraceContext;
+  readonly invocation?: SubagentSessionInvocationMetadata;
+  readonly runtime?: RuntimeIdentity;
+  readonly trace?: RuntimeTraceContext;
 }): SessionStartedStreamEvent;
 /**
  * Creates the `turn.started` event for one prepared runtime turn.
  */
 export declare function createTurnStartedEvent(input: {
-    readonly sequence: number;
-    readonly trace?: RuntimeTraceContext;
-    readonly turnId: string;
+  readonly sequence: number;
+  readonly trace?: RuntimeTraceContext;
+  readonly turnId: string;
 }): TurnStartedStreamEvent;
 /**
  * Creates the `message.received` event for one normalized user message.
@@ -691,19 +736,19 @@ export declare function createTurnStartedEvent(input: {
  * consumers while preserving the authored turn content upstream.
  */
 export declare function createMessageReceivedEvent(input: {
-    readonly message: string | UserContent;
-    readonly sequence: number;
-    readonly turnId: string;
+  readonly message: string | UserContent;
+  readonly sequence: number;
+  readonly turnId: string;
 }): MessageReceivedStreamEvent;
 /**
  * Creates the `actions.requested` event for one observed group of model action
  * requests.
  */
 export declare function createActionsRequestedEvent(input: {
-    readonly actions: readonly RuntimeActionRequest[];
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly actions: readonly RuntimeActionRequest[];
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ActionsRequestedStreamEvent;
 /**
  * Creates the `authorization.required` event for one authorization source
@@ -714,15 +759,15 @@ export declare function createActionsRequestedEvent(input: {
  * for `getToken`-only authorization sources that authorize out of band.
  */
 export declare function createAuthorizationRequiredEvent(input: {
-    readonly attemptId?: string;
-    readonly authorization?: ConnectionAuthorizationChallenge;
-    readonly candidateId?: string;
-    readonly description: string;
-    readonly name: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
-    readonly webhookUrl?: string;
+  readonly attemptId?: string;
+  readonly authorization?: ConnectionAuthorizationChallenge;
+  readonly candidateId?: string;
+  readonly description: string;
+  readonly name: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
+  readonly webhookUrl?: string;
 }): AuthorizationRequiredStreamEvent;
 /**
  * Creates the `authorization.completed` event emitted once per
@@ -730,35 +775,39 @@ export declare function createAuthorizationRequiredEvent(input: {
  * authorization deadline has expired.
  */
 export declare function createAuthorizationCompletedEvent(input: {
-    readonly attemptId?: string;
-    readonly authorization?: ConnectionAuthorizationChallenge;
-    readonly candidateId?: string;
-    readonly name: string;
-    readonly outcome: AuthorizationOutcome;
-    readonly reason?: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly attemptId?: string;
+  readonly authorization?: ConnectionAuthorizationChallenge;
+  readonly candidateId?: string;
+  readonly name: string;
+  readonly outcome: AuthorizationOutcome;
+  readonly reason?: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): AuthorizationCompletedStreamEvent;
 /** Creates a safe candidate lifecycle event. */
-export declare function createApprovalCandidateEvent(input: ApprovalCandidateStreamEvent["data"]): ApprovalCandidateStreamEvent;
+export declare function createApprovalCandidateEvent(
+  input: ApprovalCandidateStreamEvent["data"],
+): ApprovalCandidateStreamEvent;
 /** Creates a terminal approval settlement event. */
-export declare function createApprovalSettledEvent(input: ApprovalSettledStreamEvent["data"]): ApprovalSettledStreamEvent;
+export declare function createApprovalSettledEvent(
+  input: ApprovalSettledStreamEvent["data"],
+): ApprovalSettledStreamEvent;
 /**
  * Creates the `input.requested` event for one pending HITL batch.
  */
 export declare function createInputRequestedEvent(input: {
-    readonly requests: readonly InputRequest[];
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly requests: readonly InputRequest[];
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): InputRequestedStreamEvent;
 /** Creates the authoritative `input.resolved` event for one pending HITL batch. */
 export declare function createInputResolvedEvent(input: {
-    readonly resolutions: readonly InputResolution[];
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly resolutions: readonly InputResolution[];
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): InputResolvedStreamEvent;
 /**
  * Creates the `action.result` event for one runtime action result.
@@ -768,181 +817,183 @@ export declare function createInputResolvedEvent(input: {
  * derived from the synthesized denial output.
  */
 export declare function createActionResultEvent(input: {
-    readonly rejected?: boolean;
-    readonly result: RuntimeActionResult;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly rejected?: boolean;
+  readonly result: RuntimeActionResult;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ActionResultStreamEvent;
 /** Creates an `action.partial` event for one preliminary tool-result snapshot. */
 export declare function createActionPartialEvent(input: {
-    readonly result: RuntimeToolResultActionResult;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly result: RuntimeToolResultActionResult;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ActionPartialStreamEvent;
 /**
  * Creates the `subagent.called` event for one started child workflow session.
  */
 export declare function createSubagentCalledEvent(input: {
-    readonly callId: string;
-    readonly childSessionId: string;
-    readonly sessionId: string;
-    readonly sequence: number;
-    readonly name: string;
-    readonly remote?: {
-        readonly resolverId?: string;
-        readonly url: string;
-    };
-    readonly toolName: string;
-    readonly turnId: string;
-    readonly workflowId: string;
+  readonly callId: string;
+  readonly childSessionId: string;
+  readonly sessionId: string;
+  readonly sequence: number;
+  readonly name: string;
+  readonly remote?: {
+    readonly resolverId?: string;
+    readonly url: string;
+  };
+  readonly toolName: string;
+  readonly turnId: string;
+  readonly workflowId: string;
 }): SubagentCalledStreamEvent;
 /**
  * Creates the `message.appended` event for one streamed assistant text delta.
  */
 export declare function createMessageAppendedEvent(input: {
-    readonly messageDelta: string;
-    readonly messageSoFar: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly messageDelta: string;
+  readonly messageSoFar: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): MessageAppendedStreamEvent;
 /**
  * Creates the `reasoning.appended` event for one streamed reasoning delta.
  */
 export declare function createReasoningAppendedEvent(input: {
-    readonly reasoningDelta: string;
-    readonly reasoningSoFar: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly reasoningDelta: string;
+  readonly reasoningSoFar: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ReasoningAppendedStreamEvent;
 /**
  * Creates the `message.completed` event for one completed assistant text chunk.
  */
 export declare function createMessageCompletedEvent(input: {
-    readonly finishReason?: AssistantStepFinishReason;
-    readonly message: string | null;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly finishReason?: AssistantStepFinishReason;
+  readonly message: string | null;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): MessageCompletedStreamEvent;
 /**
  * Creates the `reasoning.completed` event for one completed reasoning block.
  */
 export declare function createReasoningCompletedEvent(input: {
-    readonly reasoning: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly reasoning: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ReasoningCompletedStreamEvent;
 /**
  * Creates the `result.completed` event for one finalized structured result.
  */
 export declare function createResultCompletedEvent(input: {
-    readonly result: JsonValue;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly result: JsonValue;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): ResultCompletedStreamEvent;
 /**
  * Creates the `step.started` event for one model call.
  */
 export declare function createStepStartedEvent(input: {
-    readonly modelId: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly modelId: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): StepStartedStreamEvent;
 /**
  * Creates the `step.completed` event for one completed model call.
  */
 export declare function createStepCompletedEvent(input: {
-    readonly finishReason: AssistantStepFinishReason;
-    readonly providerMetadata?: StepCompletedProviderMetadata;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
-    readonly usage?: {
-        readonly costUsd?: number;
-        readonly inputTokens?: number;
-        readonly outputTokens?: number;
-        readonly cacheReadTokens?: number;
-        readonly cacheWriteTokens?: number;
-    };
+  readonly finishReason: AssistantStepFinishReason;
+  readonly providerMetadata?: StepCompletedProviderMetadata;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
+  readonly usage?: {
+    readonly costUsd?: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly cacheReadTokens?: number;
+    readonly cacheWriteTokens?: number;
+  };
 }): StepCompletedStreamEvent;
 /**
  * Creates the `step.failed` event for one failed model call.
  */
 export declare function createStepFailedEvent(input: {
-    readonly code: string;
-    readonly details?: JsonObject;
-    readonly message: string;
-    readonly sequence: number;
-    readonly stepIndex: number;
-    readonly turnId: string;
+  readonly code: string;
+  readonly details?: JsonObject;
+  readonly message: string;
+  readonly sequence: number;
+  readonly stepIndex: number;
+  readonly turnId: string;
 }): StepFailedStreamEvent;
 /**
  * Creates the `turn.completed` event for one terminal successful turn.
  */
 export declare function createTurnCompletedEvent(input: {
-    readonly sequence: number;
-    readonly turnId: string;
+  readonly sequence: number;
+  readonly turnId: string;
 }): TurnCompletedStreamEvent;
 /**
  * Creates the `turn.failed` event for one failed turn.
  */
 export declare function createTurnFailedEvent(input: {
-    readonly code: string;
-    readonly details?: JsonObject;
-    readonly message: string;
-    readonly sequence: number;
-    readonly turnId: string;
+  readonly code: string;
+  readonly details?: JsonObject;
+  readonly message: string;
+  readonly sequence: number;
+  readonly turnId: string;
 }): TurnFailedStreamEvent;
 /** Creates the `turn.cancelled` event for one cancelled turn. */
 export declare function createTurnCancelledEvent(input: {
-    readonly sequence: number;
-    readonly turnId: string;
+  readonly sequence: number;
+  readonly turnId: string;
 }): TurnCancelledStreamEvent;
 /** Creates the `context.cleared` event for one manual history clear. */
 export declare function createContextClearedEvent(input: {
-    readonly sequence: number;
-    readonly sessionId: string;
-    readonly turnId: string;
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
 }): ContextClearedStreamEvent;
 /**
  * Creates the `compaction.requested` event for one runtime compaction pass.
  */
 export declare function createCompactionRequestedEvent(input: {
-    readonly modelId: string;
-    readonly sequence: number;
-    readonly sessionId: string;
-    readonly turnId: string;
-    readonly usageInputTokens: number | undefined;
+  readonly modelId: string;
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly usageInputTokens: number | undefined;
 }): CompactionRequestedStreamEvent;
 /**
  * Creates the `compaction.completed` event for one appended checkpoint.
  */
 export declare function createCompactionCompletedEvent(input: {
-    readonly modelId: string;
-    readonly sequence: number;
-    readonly sessionId: string;
-    readonly turnId: string;
+  readonly modelId: string;
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
 }): CompactionCompletedStreamEvent;
 /**
  * Creates the `session.waiting` event for the only supported between-turn
  * wait.
  */
-export declare function createSessionWaitingEvent(namespacedContinuationToken?: string): SessionWaitingStreamEvent;
+export declare function createSessionWaitingEvent(
+  namespacedContinuationToken?: string,
+): SessionWaitingStreamEvent;
 /**
  * Creates the `session.failed` event for one terminal session failure.
  */
 export declare function createSessionFailedEvent(input: {
-    readonly code: string;
-    readonly details?: JsonObject;
-    readonly message: string;
-    readonly sessionId: string;
+  readonly code: string;
+  readonly details?: JsonObject;
+  readonly message: string;
+  readonly sessionId: string;
 }): SessionFailedStreamEvent;
 /**
  * Creates the `session.completed` event for one terminal session completion.
@@ -955,7 +1006,9 @@ export declare function createSessionCompletedEvent(): SessionCompletedStreamEve
  * One stamping seam is what makes the persisted stream and authored hooks
  * observe the same `meta.id`.
  */
-export declare function stampMessageStreamEvent(event: UnstampedMessageStreamEvent): MessageStreamEvent;
+export declare function stampMessageStreamEvent(
+  event: UnstampedMessageStreamEvent,
+): MessageStreamEvent;
 /**
  * Encodes one message stream event as newline-delimited JSON.
  */

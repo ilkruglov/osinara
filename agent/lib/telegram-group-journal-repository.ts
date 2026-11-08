@@ -85,7 +85,9 @@ export interface TelegramGroupJournalRepository {
     message: TelegramMessage,
     actor: TelegramInboundActor,
   ): Promise<TimelineRecordResult>;
-  recordAgentResponse(input: RecordTelegramAgentResponseInput): Promise<{ entryId: string; sequenceId: string }>;
+  recordAgentResponse(
+    input: RecordTelegramAgentResponseInput,
+  ): Promise<{ entryId: string; sequenceId: string }>;
   search(input: TelegramGroupHistorySearchInput): Promise<{
     entries: TelegramGroupJournalEntry[];
     nextBeforeSequence: string | null;
@@ -169,8 +171,10 @@ function validateList(input: ListRecentInput, maxLimit: number): void {
       `AGENT_TELEGRAM_TIMELINE_LIMIT_INVALID: Лимит истории должен быть целым числом от 1 до ${maxLimit}`,
     );
   }
-  if (input.beforeSequence !== null) requireTelegramPositiveBigint(input.beforeSequence, "before_sequence");
-  if (input.messageThreadId !== null) requireTelegramPositiveBigint(input.messageThreadId, "message_thread_id");
+  if (input.beforeSequence !== null)
+    requireTelegramPositiveBigint(input.beforeSequence, "before_sequence");
+  if (input.messageThreadId !== null)
+    requireTelegramPositiveBigint(input.messageThreadId, "message_thread_id");
 }
 
 async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]> {
@@ -209,13 +213,16 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
 
 export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
   async listIncremental(input) {
-    validateList({
-      anchorEntryId: null,
-      beforeSequence: input.beforeSequence,
-      groupId: input.groupId,
-      limit: input.limit,
-      messageThreadId: input.messageThreadId,
-    }, TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES);
+    validateList(
+      {
+        anchorEntryId: null,
+        beforeSequence: input.beforeSequence,
+        groupId: input.groupId,
+        limit: input.limit,
+        messageThreadId: input.messageThreadId,
+      },
+      TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
+    );
     requireTelegramPositiveBigint(input.afterSequence, "after_sequence");
     if (BigInt(input.afterSequence) >= BigInt(input.beforeSequence)) {
       throw new Error(
@@ -255,23 +262,31 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
          WHERE message.id IN (SELECT id FROM ancestry)
            AND message.id <> $7::uuid
          ORDER BY message.sequence_id`,
-      [input.groupId, input.messageThreadId, input.afterSequence, input.beforeSequence,
-        input.applicationSessionId, input.limit, input.anchorEntryId],
+      [
+        input.groupId,
+        input.messageThreadId,
+        input.afterSequence,
+        input.beforeSequence,
+        input.applicationSessionId,
+        input.limit,
+        input.anchorEntryId,
+      ],
     );
     const totalCount = Number(result.rows[0]?.total_count ?? 0);
     const selectedCount = Number(result.rows[0]?.selected_count ?? 0);
     return {
       entries: result.rows.map(project),
-      omittedBeforeSequence: totalCount > selectedCount
-        ? result.rows[0]?.selected_boundary ?? input.beforeSequence
-        : null,
+      omittedBeforeSequence:
+        totalCount > selectedCount
+          ? (result.rows[0]?.selected_boundary ?? input.beforeSequence)
+          : null,
     };
   },
 
   async findSeriesSequences(input) {
     if (input.telegramMessageIds.length === 0) return [];
     const messageIds = input.telegramMessageIds.map((id) =>
-      requireTelegramPositiveBigint(id, "message_id")
+      requireTelegramPositiveBigint(id, "message_id"),
     );
     const result = await database().query<{ sequence_id: string }>(
       `SELECT sequence_id::text
@@ -309,11 +324,13 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         return {
           entryId: duplicate.rows[0].entry_id,
           replyToAgent: false,
-          replyTargetUnavailable: duplicate.rows[0].reply_to_message_id !== null &&
+          replyTargetUnavailable:
+            duplicate.rows[0].reply_to_message_id !== null &&
             duplicate.rows[0].reply_to_entry_id === null,
-          replyToSequenceId: duplicate.rows[0].reply_to_entry_id === null
-            ? null
-            : duplicate.rows[0].reply_to_sequence_id,
+          replyToSequenceId:
+            duplicate.rows[0].reply_to_entry_id === null
+              ? null
+              : duplicate.rows[0].reply_to_sequence_id,
           sequenceId: duplicate.rows[0].sequence_id,
           status: "duplicate",
         };
@@ -322,35 +339,50 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       const replyId = message.replyToMessage
         ? requireTelegramPositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
         : null;
-      const replyTarget = replyId === null
-        ? null
-        : (await client.query<{
-          actor_kind: TelegramTimelineActorKind;
-          entry_id: string;
-          sequence_id: string;
-        }>(
-          `SELECT alias.entry_id, target.actor_kind, target.sequence_id::text
+      const replyTarget =
+        replyId === null
+          ? null
+          : ((
+              await client.query<{
+                actor_kind: TelegramTimelineActorKind;
+                entry_id: string;
+                sequence_id: string;
+              }>(
+                `SELECT alias.entry_id, target.actor_kind, target.sequence_id::text
            FROM telegram_group_message_ids alias
            JOIN telegram_group_messages target ON target.id = alias.entry_id
            WHERE alias.group_id = $1 AND alias.telegram_message_id = $2`,
-          [groupId, replyId],
-        )).rows[0] ?? null;
+                [groupId, replyId],
+              )
+            ).rows[0] ?? null);
       const inserted = await client.query<{ id: string }>(
-         `INSERT INTO telegram_group_messages
+        `INSERT INTO telegram_group_messages
            (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
              message_thread_id, telegram_user_id, telegram_sender_chat_id, sender_username,
              sender_display_name, sender_is_bot, message_kind, content_text,
              reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at, sender_tag)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           RETURNING id`,
-        [groupId, sequenceId, actor.timelineKind, actor.actorId, messageId,
+        [
+          groupId,
+          sequenceId,
+          actor.timelineKind,
+          actor.actorId,
+          messageId,
           telegramForumTopicId(message),
           actor.kind === "telegram_user" || actor.kind === "telegram_bot" ? actor.id : null,
-          actor.kind === "telegram_channel" ? actor.id : null, actor.username, actor.displayName,
+          actor.kind === "telegram_channel" ? actor.id : null,
+          actor.username,
+          actor.displayName,
           actor.kind === "telegram_bot",
-          telegramMessageKind(message), telegramMessageContent(message), replyId,
-          replyTarget?.entry_id ?? null, replyTarget?.sequence_id ?? null,
-          telegramMessageSentAt(message), telegramSenderTag(message)],
+          telegramMessageKind(message),
+          telegramMessageContent(message),
+          replyId,
+          replyTarget?.entry_id ?? null,
+          replyTarget?.sequence_id ?? null,
+          telegramMessageSentAt(message),
+          telegramSenderTag(message),
+        ],
       );
       const entryId = inserted.rows[0]!.id;
       await client.query(
@@ -359,18 +391,21 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       );
       await pruneTelegramGroupJournal(client, groupId);
       // Pruning can remove an old target in this transaction; only retained targets are model-visible.
-      const retainedReplyTarget = replyTarget === null
-        ? null
-        : (await client.query<{ id: string }>(
-            "SELECT id FROM telegram_group_messages WHERE id = $1 AND group_id = $2",
-            [replyTarget.entry_id, groupId],
-          )).rows[0] ?? null;
+      const retainedReplyTarget =
+        replyTarget === null
+          ? null
+          : ((
+              await client.query<{ id: string }>(
+                "SELECT id FROM telegram_group_messages WHERE id = $1 AND group_id = $2",
+                [replyTarget.entry_id, groupId],
+              )
+            ).rows[0] ?? null);
       await client.query("COMMIT");
       return {
         entryId,
         replyToAgent: replyTarget?.actor_kind === "agent_self",
         replyTargetUnavailable: replyId !== null && retainedReplyTarget === null,
-        replyToSequenceId: retainedReplyTarget === null ? null : replyTarget?.sequence_id ?? null,
+        replyToSequenceId: retainedReplyTarget === null ? null : (replyTarget?.sequence_id ?? null),
         sequenceId,
         status: "inserted",
       };
@@ -404,9 +439,19 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
          AND ($8::text IS NULL OR message.actor_id = $8 OR message.sender_username = $8)
          AND ($9::text IS NULL OR position(lower($9) in lower(coalesce(message.content_text, ''))) > 0)
        ORDER BY message.sequence_id DESC LIMIT $10`,
-      [input.groupId, input.messageThreadId, input.beforeSequence, input.sequenceFrom,
-        input.sequenceTo, input.from, input.to, input.participant, input.query, input.limit + 1,
-        input.allTopics === true],
+      [
+        input.groupId,
+        input.messageThreadId,
+        input.beforeSequence,
+        input.sequenceFrom,
+        input.sequenceTo,
+        input.from,
+        input.to,
+        input.participant,
+        input.query,
+        input.limit + 1,
+        input.allTopics === true,
+      ],
     );
     const hasMore = result.rows.length > input.limit;
     const page = result.rows.slice(0, input.limit).reverse().map(project);

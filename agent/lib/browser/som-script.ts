@@ -227,5 +227,7 @@ export function clearScript(): string {
 export function actScript(epoch: string, n: number, action: SomAction): string {
   if (!Number.isInteger(n) || n < 1) throw new RangeError("AGENT_BROWSER_SOM_INDEX_INVALID");
   // Callback replacements: a `$&` typed into a field must not expand into the placeholder.
-  return ACT.replace("__EPOCH__", () => JSON.stringify(epoch)).replace("__N__", () => String(n)).replace("__ACTION__", () => JSON.stringify(action));
+  return ACT.replace("__EPOCH__", () => JSON.stringify(epoch))
+    .replace("__N__", () => String(n))
+    .replace("__ACTION__", () => JSON.stringify(action));
 }

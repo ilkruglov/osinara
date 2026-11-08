@@ -8,10 +8,7 @@ function discordDeferredJson(e) {
   let t = {
     type: DISCORD_INTERACTION_RESPONSE_TYPE.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
   };
-  return (
-    e && (t.data = { flags: DISCORD_EPHEMERAL_MESSAGE_FLAG }),
-    discordJsonBody(t)
-  );
+  return (e && (t.data = { flags: DISCORD_EPHEMERAL_MESSAGE_FLAG }), discordJsonBody(t));
 }
 function discordJson(e) {
   if (`content` in e && typeof e.content == `string`) {
@@ -35,9 +32,4 @@ function readMessageContent(n) {
   let r = isObject(n.message) ? n.message : null;
   return isNonEmptyString(r?.content) ? r.content : void 0;
 }
-export {
-  discordDeferredJson,
-  discordJson,
-  discordJsonBody,
-  readMessageContent,
-};
+export { discordDeferredJson, discordJson, discordJsonBody, readMessageContent };

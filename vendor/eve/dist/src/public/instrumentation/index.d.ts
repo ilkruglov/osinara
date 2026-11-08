@@ -5,10 +5,21 @@
 import type { ModelMessage, SystemModelMessage } from "ai";
 import type { SessionAuthContext, SessionParent } from "#channel/types.js";
 import type { InstrumentationChannel } from "#public/channels/index.js";
-import { PROVIDER, type ProviderDefinition, type ProviderSetupContext } from "#public/instrumentation/provider.js";
+import {
+  PROVIDER,
+  type ProviderDefinition,
+  type ProviderSetupContext,
+} from "#public/instrumentation/provider.js";
 import type { JsonObject } from "#shared/json.js";
 export * from "#public/instrumentation/provider.js";
-export { isChannel, type InstrumentationChannel, type InstrumentationChannelForChannel, type InstrumentationChannelForKind, type InstrumentationChannelKind, type InstrumentationChannelMetadata, } from "#public/channels/index.js";
+export {
+  isChannel,
+  type InstrumentationChannel,
+  type InstrumentationChannelForChannel,
+  type InstrumentationChannelForKind,
+  type InstrumentationChannelKind,
+  type InstrumentationChannelMetadata,
+} from "#public/channels/index.js";
 /**
  * Context passed to the {@link InstrumentationDefinition.setup} callback.
  *
@@ -17,8 +28,7 @@ export { isChannel, type InstrumentationChannel, type InstrumentationChannelForC
  * two divergent ones would leave every authored `setup(context)` parameter an
  * implicit `any`.
  */
-export interface InstrumentationSetupContext extends ProviderSetupContext {
-}
+export interface InstrumentationSetupContext extends ProviderSetupContext {}
 /**
  * User-authored runtime context values attached to AI SDK telemetry spans.
  *
@@ -35,12 +45,12 @@ export type InstrumentationRuntimeContext = JsonObject;
  * sessions. `parent` is present only for delegated subagent sessions.
  */
 export interface InstrumentationSession {
-    readonly auth: {
-        readonly current: SessionAuthContext | null;
-        readonly initiator: SessionAuthContext | null;
-    };
-    readonly id: string;
-    readonly parent?: SessionParent;
+  readonly auth: {
+    readonly current: SessionAuthContext | null;
+    readonly initiator: SessionAuthContext | null;
+  };
+  readonly id: string;
+  readonly parent?: SessionParent;
 }
 /**
  * Identifies the turn in progress when an instrumentation event fires.
@@ -48,15 +58,15 @@ export interface InstrumentationSession {
  * within the session.
  */
 export interface InstrumentationTurn {
-    readonly id: string;
-    readonly sequence: number;
+  readonly id: string;
+  readonly sequence: number;
 }
 /**
  * The step (model-call attempt) in progress for an instrumentation event.
  * `index` is the zero-based step index within the current turn.
  */
 export interface InstrumentationStep {
-    readonly index: number;
+  readonly index: number;
 }
 /**
  * Final model input assembled for one model-call attempt, snapshotted for
@@ -65,8 +75,8 @@ export interface InstrumentationStep {
  * `messages` is the non-system conversation passed to the model.
  */
 export interface InstrumentationModelInput {
-    readonly instructions: string | SystemModelMessage | undefined;
-    readonly messages: readonly ModelMessage[];
+  readonly instructions: string | SystemModelMessage | undefined;
+  readonly messages: readonly ModelMessage[];
 }
 /**
  * Input passed to `events["step.started"]` and to a provider's
@@ -74,11 +84,11 @@ export interface InstrumentationModelInput {
  * input for this attempt and before constructing the AI SDK model call.
  */
 export interface InstrumentationStepStartedEventInput {
-    readonly channel: InstrumentationChannel;
-    readonly modelInput: InstrumentationModelInput;
-    readonly session: InstrumentationSession;
-    readonly step: InstrumentationStep;
-    readonly turn: InstrumentationTurn;
+  readonly channel: InstrumentationChannel;
+  readonly modelInput: InstrumentationModelInput;
+  readonly session: InstrumentationSession;
+  readonly step: InstrumentationStep;
+  readonly turn: InstrumentationTurn;
 }
 /**
  * Input passed to a provider's `runtimeContext` resolver. Same shape as
@@ -93,20 +103,22 @@ export type InstrumentationRuntimeContextInput = InstrumentationStepStartedEvent
  * contribute no context.
  */
 export interface InstrumentationStepStartedEventResult {
-    /**
-     * Additional runtime context merged into AI SDK telemetry spans.
-     */
-    readonly runtimeContext: InstrumentationRuntimeContext;
+  /**
+   * Additional runtime context merged into AI SDK telemetry spans.
+   */
+  readonly runtimeContext: InstrumentationRuntimeContext;
 }
 /**
  * Event hooks accepted by {@link defineInstrumentation}.
  */
 export interface InstrumentationEvents {
-    /**
-     * Resolve per-attempt runtime context before the model call. The AI SDK
-     * child spans inherit the returned values.
-     */
-    readonly "step.started"?: (input: InstrumentationStepStartedEventInput) => InstrumentationStepStartedEventResult | undefined;
+  /**
+   * Resolve per-attempt runtime context before the model call. The AI SDK
+   * child spans inherit the returned values.
+   */
+  readonly "step.started"?: (
+    input: InstrumentationStepStartedEventInput,
+  ) => InstrumentationStepStartedEventResult | undefined;
 }
 /**
  * Authored instrumentation settings accepted by `defineInstrumentation`.
@@ -115,41 +127,41 @@ export interface InstrumentationEvents {
  * telemetry. There is no separate `isEnabled` toggle.
  */
 export interface InstrumentationDefinition {
-    /**
-     * Override the function identifier attached to telemetry spans
-     * (`ai.telemetry.functionId`). Defaults to the agent name; omitted when
-     * neither is set.
-     */
-    readonly functionId?: string;
-    /**
-     * Instrumentation event hooks.
-     */
-    readonly events?: InstrumentationEvents;
-    /**
-     * Whether to record full model inputs in telemetry spans. Defaults to
-     * `false`. Set `true` only when the destination is approved to receive
-     * input content.
-     */
-    readonly recordInputs?: boolean;
-    /**
-     * Whether to record full model outputs in telemetry spans. Defaults to
-     * `false`. Set `true` only when the destination is approved to receive
-     * output content.
-     */
-    readonly recordOutputs?: boolean;
-    /**
-     * Whether to emit the inbound HTTP `SERVER` span that wraps each channel
-     * request (the parent of the turn trace and any `hook.resume`/outgoing
-     * HTTP spans). Defaults to `false`. Set `true` to emit these request spans
-     * alongside the rest of the trace.
-     */
-    readonly traceChannelRequests?: boolean;
-    /**
-     * Setup callback invoked at server startup, before the first request. Use it
-     * to call `registerOTel` or other OTel provider setup; `context.agentName`
-     * comes from `defineAgent`. A returned promise is awaited.
-     */
-    readonly setup?: (context: InstrumentationSetupContext) => void | PromiseLike<void>;
+  /**
+   * Override the function identifier attached to telemetry spans
+   * (`ai.telemetry.functionId`). Defaults to the agent name; omitted when
+   * neither is set.
+   */
+  readonly functionId?: string;
+  /**
+   * Instrumentation event hooks.
+   */
+  readonly events?: InstrumentationEvents;
+  /**
+   * Whether to record full model inputs in telemetry spans. Defaults to
+   * `false`. Set `true` only when the destination is approved to receive
+   * input content.
+   */
+  readonly recordInputs?: boolean;
+  /**
+   * Whether to record full model outputs in telemetry spans. Defaults to
+   * `false`. Set `true` only when the destination is approved to receive
+   * output content.
+   */
+  readonly recordOutputs?: boolean;
+  /**
+   * Whether to emit the inbound HTTP `SERVER` span that wraps each channel
+   * request (the parent of the turn trace and any `hook.resume`/outgoing
+   * HTTP spans). Defaults to `false`. Set `true` to emit these request spans
+   * alongside the rest of the trace.
+   */
+  readonly traceChannelRequests?: boolean;
+  /**
+   * Setup callback invoked at server startup, before the first request. Use it
+   * to call `registerOTel` or other OTel provider setup; `context.agentName`
+   * comes from `defineAgent`. A returned promise is awaited.
+   */
+  readonly setup?: (context: InstrumentationSetupContext) => void | PromiseLike<void>;
 }
 /**
  * Declares instrumentation, in either of eve's two layouts.
@@ -166,8 +178,13 @@ export interface InstrumentationDefinition {
  * config shape alone, and a misspelled key can reach `eve build` rather than
  * failing at `tsc`.
  */
-export declare function defineInstrumentation<const TDefinition extends InstrumentationDefinition | ProviderDefinition>(definition: TDefinition): InstrumentationDeclaration<TDefinition>;
+export declare function defineInstrumentation<
+  const TDefinition extends InstrumentationDefinition | ProviderDefinition,
+>(definition: TDefinition): InstrumentationDeclaration<TDefinition>;
 /** The branded result of {@link defineInstrumentation}. */
-export type InstrumentationDeclaration<TDefinition extends InstrumentationDefinition | ProviderDefinition = InstrumentationDefinition | ProviderDefinition> = TDefinition & {
-    readonly [PROVIDER]: true;
+export type InstrumentationDeclaration<
+  TDefinition extends InstrumentationDefinition | ProviderDefinition =
+    InstrumentationDefinition | ProviderDefinition,
+> = TDefinition & {
+  readonly [PROVIDER]: true;
 };

@@ -13,10 +13,7 @@ import { loadModuleBackedDefinition } from "#compiler/normalize-helpers.js";
 import { createPathDerivedSourceId } from "#discover/manifest.js";
 import { isDynamicSentinel } from "#shared/dynamic-tool-definition.js";
 import { composeAgentSubagentSources } from "#compiler/normalize-extension.js";
-const ALLOWED_DYNAMIC_SUBAGENT_EVENTS = new Set([
-  `session.started`,
-  `turn.started`,
-]);
+const ALLOWED_DYNAMIC_SUBAGENT_EVENTS = new Set([`session.started`, `turn.started`]);
 async function compileSubagentGraph(e) {
   let t = [],
     n = [],
@@ -37,19 +34,14 @@ async function compileSubagentGraph(e) {
       continue;
     }
     (t.push(a.node, ...a.descendants.nodes),
-      n.push(
-        { childNodeId: a.node.nodeId, parentNodeId: e.parentNodeId },
-        ...a.descendants.edges,
-      ));
+      n.push({ childNodeId: a.node.nodeId, parentNodeId: e.parentNodeId }, ...a.descendants.edges));
   }
   return { edges: n, nodes: t, remoteAgents: r };
 }
 async function compileSubagentDefinition(e) {
   let t = e.source.manifest.configModule;
   if (t === void 0)
-    throw Error(
-      `Subagent "${e.source.logicalPath}" is missing an agent config module.`,
-    );
+    throw Error(`Subagent "${e.source.logicalPath}" is missing an agent config module.`);
   let n = createSubagentConfigModuleSourceRef(e.source, t, e.parentAgentRoot),
     r = await loadModuleBackedDefinition({
       agentRoot: e.source.manifest.agentRoot,
@@ -76,8 +68,7 @@ async function compileSubagentDefinition(e) {
         ...(await compileLocalSubagent({
           ...e,
           agentConfigDefinition: i === void 0 ? r : void 0,
-          configResolver:
-            i === void 0 ? void 0 : { ...t, ...i.definition, build: i.build },
+          configResolver: i === void 0 ? void 0 : { ...t, ...i.definition, build: i.build },
         })),
       };
 }
@@ -154,9 +145,7 @@ const compileLocalSubagent = compileSubagent;
 function compileRemoteAgent(e) {
   let t = e.source.manifest.configModule;
   if (t === void 0)
-    throw Error(
-      `Remote agent "${e.source.logicalPath}" is missing a config module.`,
-    );
+    throw Error(`Remote agent "${e.source.logicalPath}" is missing a config module.`);
   assertRemoteAgentDefinitionHasNoLocalPackageEntries(e.source);
   let n = createSubagentConfigModuleSourceRef(e.source, t, e.parentAgentRoot),
     r = normalizeRemoteAgentDefinition(
@@ -179,8 +168,7 @@ function normalizeDynamicSubagentDefinition(e, i) {
   if (!isDynamicSentinel(e)) return;
   let a = expectObjectRecord(e, i);
   expectOnlyKnownKeys(a, [`build`, `events`, `kind`], i);
-  let o =
-      a.build === void 0 ? void 0 : normalizeDynamicSubagentBuild(a.build, i),
+  let o = a.build === void 0 ? void 0 : normalizeDynamicSubagentBuild(a.build, i),
     s = expectObjectRecord(a.events, i),
     c = [];
   for (let [e, n] of Object.entries(s)) {
@@ -195,10 +183,7 @@ function normalizeDynamicSubagentDefinition(e, i) {
 }
 function normalizeDynamicSubagentBuild(e, t) {
   let a = expectObjectRecord(e, t);
-  if (
-    (expectOnlyKnownKeys(a, [`externalDependencies`], t),
-    a.externalDependencies === void 0)
-  )
+  if ((expectOnlyKnownKeys(a, [`externalDependencies`], t), a.externalDependencies === void 0))
     return {};
   if (!Array.isArray(a.externalDependencies)) throw Error(t);
   return {
@@ -209,10 +194,7 @@ function mergeExternalDependencies(...e) {
   return [...new Set(e.flatMap((e) => e ?? []))];
 }
 function createSubagentConfigModuleSourceRef(e, t, n) {
-  let r = relative(n, join(e.manifest.agentRoot, t.logicalPath)).replaceAll(
-      `\\`,
-      `/`,
-    ),
+  let r = relative(n, join(e.manifest.agentRoot, t.logicalPath)).replaceAll(`\\`, `/`),
     i = {
       logicalPath: r,
       sourceId:
@@ -224,27 +206,14 @@ function createSubagentConfigModuleSourceRef(e, t, n) {
   return (t.exportName !== void 0 && (i.exportName = t.exportName), i);
 }
 function readAgentDefinitionKind(e) {
-  return typeof e != `object` || !e
-    ? `local`
-    : e.kind === `remote`
-      ? `remote`
-      : `local`;
+  return typeof e != `object` || !e ? `local` : e.kind === `remote` ? `remote` : `local`;
 }
 function normalizeRemoteAgentDefinition(t, o) {
   let s = expectObjectRecord(t, o);
   if (
     (expectOnlyKnownKeys(
       s,
-      [
-        `auth`,
-        `description`,
-        `forwardPrincipal`,
-        `headers`,
-        `kind`,
-        `outputSchema`,
-        `path`,
-        `url`,
-      ],
+      [`auth`, `description`, `forwardPrincipal`, `headers`, `kind`, `outputSchema`, `path`, `url`],
       o,
     ),
     s.kind !== `remote`)
@@ -252,15 +221,11 @@ function normalizeRemoteAgentDefinition(t, o) {
     throw Error(`${o} Expected "kind" to be "remote".`);
   return (
     s.forwardPrincipal !== void 0 &&
-      expectBoolean(
-        s.forwardPrincipal,
-        `${o} Expected "forwardPrincipal" to be a boolean.`,
-      ),
+      expectBoolean(s.forwardPrincipal, `${o} Expected "forwardPrincipal" to be a boolean.`),
     {
       description: expectString(s.description, o),
       outputSchema: serializeOutputSchema(s.outputSchema),
-      path:
-        s.path === void 0 ? EVE_SESSION_ROUTE_PATH : expectString(s.path, o),
+      path: s.path === void 0 ? EVE_SESSION_ROUTE_PATH : expectString(s.path, o),
       url: typeof s.url == `function` ? void 0 : expectString(s.url, o),
     }
   );

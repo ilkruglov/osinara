@@ -23,7 +23,8 @@ export interface RuntimeVersions {
   softwareVersion: string;
 }
 
-const hash = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex").slice(0, 32);
+const hash = (value: unknown) =>
+  createHash("sha256").update(canonicalJson(value)).digest("hex").slice(0, 32);
 
 function computePromptHash(): string {
   return hash([

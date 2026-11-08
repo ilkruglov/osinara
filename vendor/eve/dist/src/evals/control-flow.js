@@ -1,7 +1,6 @@
 var EvalRequirementFailed = class extends Error {
     constructor() {
-      (super(`A required eval assertion failed.`),
-        (this.name = `EvalRequirementFailed`));
+      (super(`A required eval assertion failed.`), (this.name = `EvalRequirementFailed`));
     }
   },
   EvalSkipped = class extends Error {

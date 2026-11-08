@@ -10,21 +10,16 @@ async function __builtin_response_text() {
   "use step";
   return await this.text();
 }
-const EVE_UNSUPPORTED_WORLD_WARNED = Symbol.for(
-  `@workflow/setAttributes//unsupportedWorldWarned`,
-);
+const EVE_UNSUPPORTED_WORLD_WARNED = Symbol.for(`@workflow/setAttributes//unsupportedWorldWarned`);
 function formatUnknownError(e) {
-  return e instanceof Error
-    ? (e.stack ?? `${e.name}: ${e.message}`)
-    : String(e);
+  return e instanceof Error ? (e.stack ?? `${e.name}: ${e.message}`) : String(e);
 }
 async function __builtin_set_attributes(t, n) {
   "use step";
   if (t.length === 0) return;
   let r = globalThis,
     i = r[Symbol.for(`WORKFLOW_STEP_CONTEXT_STORAGE`)]?.getStore?.(),
-    a =
-      typeof i?.stepMetadata?.attempt == `number` ? i.stepMetadata.attempt : 3,
+    a = typeof i?.stepMetadata?.attempt == `number` ? i.stepMetadata.attempt : 3,
     o = r[Symbol.for(`@workflow/world//cache`)];
   if (typeof o?.runs?.experimentalSetAttributes != `function`) {
     if (r[EVE_UNSUPPORTED_WORLD_WARNED] !== !0) {
@@ -39,9 +34,7 @@ async function __builtin_set_attributes(t, n) {
   try {
     let e = i?.workflowMetadata?.workflowRunId;
     if (e === void 0)
-      throw Error(
-        `__builtin_set_attributes: no workflow run id available in step context`,
-      );
+      throw Error(`__builtin_set_attributes: no workflow run id available in step context`);
     await o.runs.experimentalSetAttributes(e, t, n);
   } catch (e) {
     if (a < 3) throw e;

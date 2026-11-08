@@ -21,26 +21,21 @@ async function resolveAvailableProviders(e, t = {}) {
   n?.throwIfAborted();
   let s = [`chatgpt`];
   return (
-    (a !== void 0 || hasEnvValue(r[AI_GATEWAY_API_KEY_ENV_VAR])) &&
-      s.push(`ai-gateway-key`),
+    (a !== void 0 || hasEnvValue(r[AI_GATEWAY_API_KEY_ENV_VAR])) && s.push(`ai-gateway-key`),
     (i !== void 0 || o !== void 0) && s.push(`ai-gateway-project`),
     s
   );
 }
 async function readProviderSelection(e) {
   try {
-    return parseProviderSelection(
-      JSON.parse(await readFile(providerSettingsPath(e), `utf8`)),
-    );
+    return parseProviderSelection(JSON.parse(await readFile(providerSettingsPath(e), `utf8`)));
   } catch {
     return;
   }
 }
 function readProviderSelectionSync(e) {
   try {
-    return parseProviderSelection(
-      JSON.parse(readFileSync(providerSettingsPath(e), `utf8`)),
-    );
+    return parseProviderSelection(JSON.parse(readFileSync(providerSettingsPath(e), `utf8`)));
   } catch {
     return;
   }

@@ -6,12 +6,7 @@ function resolveTextToResponse(e, t) {
     let e = matchOption(r, t.options);
     if (e !== void 0) return { requestId: t.requestId, optionId: e.id };
   }
-  if (
-    (t.allowFreeform === !0 ||
-      t.options === void 0 ||
-      t.options.length === 0) &&
-    n.length > 0
-  )
+  if ((t.allowFreeform === !0 || t.options === void 0 || t.options.length === 0) && n.length > 0)
     return { requestId: t.requestId, text: n };
 }
 function resolveTextToResponses(e, t) {

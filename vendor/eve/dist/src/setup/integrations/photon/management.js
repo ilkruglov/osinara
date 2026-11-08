@@ -78,8 +78,7 @@ async function requestDeviceCode(e) {
       `Photon returned an invalid device authorization response.`,
     ),
     a = r.verification_uri_complete ?? r.verification_uri;
-  if (a === void 0)
-    throw Error(`Photon returned an invalid device authorization response.`);
+  if (a === void 0) throw Error(`Photon returned an invalid device authorization response.`);
   return {
     deviceCode: r.device_code,
     userCode: r.user_code,
@@ -91,7 +90,7 @@ async function requestDeviceCode(e) {
 async function pollForToken(e, t, r) {
   let a = Date.now() + e.expiresIn * 1e3,
     o = e.interval * 1e3;
-  for (; Date.now() < a; ) {
+  for (; Date.now() < a;) {
     await t.delay(o, r);
     let a = await t.fetch(`${PHOTON_DASHBOARD_HOST}/api/auth/device/token`, {
         method: `POST`,
@@ -112,9 +111,7 @@ async function pollForToken(e, t, r) {
       );
       if (e.access_token !== void 0) return e.access_token;
       if (e.accessToken !== void 0) return e.accessToken;
-      throw Error(
-        `Photon approved device login without returning an access token.`,
-      );
+      throw Error(`Photon approved device login without returning an access token.`);
     }
     let c = ErrorResponseSchema.safeParse(s),
       l = c.success ? (c.data.error ?? c.data.message) : void 0;
@@ -158,14 +155,11 @@ async function regenerateSecret(e, t, r) {
   ).projectSecret;
 }
 async function registerUser(e, t, n, i) {
-  let a = await i.fetch(
-    `${PHOTON_SPECTRUM_HOST}/projects/${encodeURIComponent(e)}/users/`,
-    {
-      method: `POST`,
-      headers: basic(e, t),
-      body: JSON.stringify({ type: `shared`, phoneNumber: n }),
-    },
-  );
+  let a = await i.fetch(`${PHOTON_SPECTRUM_HOST}/projects/${encodeURIComponent(e)}/users/`, {
+    method: `POST`,
+    headers: basic(e, t),
+    body: JSON.stringify({ type: `shared`, phoneNumber: n }),
+  });
   return parsePhotonResponse(
     PhoneRegistrationSchema,
     await json(a, `phone registration`),
@@ -185,10 +179,10 @@ async function findDedicatedPhotonLine(e) {
     ).data.line.phoneNumber;
 }
 async function deleteProject(e, t, r) {
-  let i = await r.fetch(
-    `${PHOTON_DASHBOARD_HOST}/api/projects/${encodeURIComponent(t)}`,
-    { method: `DELETE`, headers: bearer(e) },
-  );
+  let i = await r.fetch(`${PHOTON_DASHBOARD_HOST}/api/projects/${encodeURIComponent(t)}`, {
+    method: `DELETE`,
+    headers: bearer(e),
+  });
   !i.ok && i.status !== 404 && (await json(i, `project cleanup`));
 }
 async function provisionPhotonProject(e) {
@@ -217,8 +211,7 @@ async function provisionPhotonProject(e) {
 async function usePhotonProject(e) {
   let t = e.projectId.trim(),
     n = e.projectSecret.trim();
-  if (!t || !n)
-    throw Error(`Photon project ID and project secret are required.`);
+  if (!t || !n) throw Error(`Photon project ID and project secret are required.`);
   let r =
     e.dedicatedLine ??
     (await findDedicatedPhotonLine({
@@ -234,9 +227,7 @@ async function usePhotonProject(e) {
       cleanup: async () => {},
     };
   if (e.phoneNumber === void 0)
-    throw Error(
-      `Photon phone number is required for projects without a dedicated line.`,
-    );
+    throw Error(`Photon phone number is required for projects without a dedicated line.`);
   let i = e.phoneNumber.trim(),
     a = validatePhotonPhoneNumber(i);
   if (a !== null) throw Error(`Photon phone number is invalid. ${a}.`);

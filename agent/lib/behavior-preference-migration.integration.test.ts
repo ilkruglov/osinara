@@ -19,7 +19,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 // Migration tests destroy an isolated schema and must never run against a production database.
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -112,9 +114,11 @@ describeWithDatabase("071 chat communication preferences migration", () => {
          ORDER BY conversation.scope, conversation.telegram_chat_id`,
       );
       expect(projected.rows).toHaveLength(4);
-      expect(projected.rows.filter((row) => row.scope !== "group").every(
-        (row) => row.content.includes("Отвечай кратко"),
-      )).toBe(true);
+      expect(
+        projected.rows
+          .filter((row) => row.scope !== "group")
+          .every((row) => row.content.includes("Отвечай кратко")),
+      ).toBe(true);
       const ownerPrompt = projected.rows.find(
         (row) => row.scope === "personal" && row.content.includes("тёплый"),
       );
@@ -162,9 +166,9 @@ describeWithDatabase("071 chat communication preferences migration", () => {
         [family.rows[0]!.id, owner.rows[0]!.id],
       );
 
-      await expect(client.query(
-        await readFile(resolve("migrations", MIGRATION_NAME), "utf8"),
-      )).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED/u);
+      await expect(
+        client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8")),
+      ).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED/u);
       const legacyColumn = await client.query(
         `SELECT 1 FROM information_schema.columns
          WHERE table_schema = $1 AND table_name = 'behavior_preferences' AND column_name = 'scope'`,
@@ -195,9 +199,9 @@ describeWithDatabase("071 chat communication preferences migration", () => {
         [family.rows[0]!.id],
       );
 
-      await expect(client.query(
-        await readFile(resolve("migrations", MIGRATION_NAME), "utf8"),
-      )).rejects.toThrowError(
+      await expect(
+        client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8")),
+      ).rejects.toThrowError(
         new RegExp(
           `AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED:.*${family.rows[0]!.id}.*family.*tone`,
           "u",

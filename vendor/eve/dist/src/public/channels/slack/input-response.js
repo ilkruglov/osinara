@@ -4,12 +4,10 @@ import { buildSlackAuthContext } from "#public/channels/slack/auth.js";
 import { deriveHitlResponse } from "#public/channels/slack/hitl.js";
 const log = createLogger(`slack.interactions`);
 function approvalResponderStatePatch(e, t) {
-  if (
-    !(
-      t?.principalId === void 0 ||
-      !e.actions.some((e) => deriveHitlResponse(e)?.kind === `tool-approval`)
-    )
-  )
+  if (!(
+    t?.principalId === void 0 ||
+    !e.actions.some((e) => deriveHitlResponse(e)?.kind === `tool-approval`)
+  ))
     return { approvalResponderUsers: { [t.principalId]: e.user.id } };
 }
 async function authorizeInputResponse(e) {
@@ -30,10 +28,7 @@ async function authorizeInputResponse(e) {
   try {
     return await e.deps.onInputResponse(a, e.submission);
   } catch (e) {
-    return (
-      log.error(`HITL input response authorization failed`, { error: e }),
-      null
-    );
+    return (log.error(`HITL input response authorization failed`, { error: e }), null);
   }
 }
 export { approvalResponderStatePatch, authorizeInputResponse };

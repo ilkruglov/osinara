@@ -49,8 +49,12 @@ describe("parseMyChatMemberUpdate", () => {
 
   it("returns null for another update, a malformed one or a status that says nothing", () => {
     expect(parseMyChatMemberUpdate({ message: { chat: privateChat }, update_id: 1 })).toBeNull();
-    expect(parseMyChatMemberUpdate({ my_chat_member: { chat: privateChat }, update_id: 1 })).toBeNull();
-    expect(parseMyChatMemberUpdate(update({ id: "101", type: "private" }, { status: "kicked" }))).toBeNull();
+    expect(
+      parseMyChatMemberUpdate({ my_chat_member: { chat: privateChat }, update_id: 1 }),
+    ).toBeNull();
+    expect(
+      parseMyChatMemberUpdate(update({ id: "101", type: "private" }, { status: "kicked" })),
+    ).toBeNull();
     expect(parseMyChatMemberUpdate(update(privateChat, { status: "left" }))).toBeNull();
   });
 });
@@ -63,14 +67,26 @@ describe("createMyChatMemberHook", () => {
     const repository = { applyMembershipChange: vi.fn().mockResolvedValue(true) };
     const receivedAt = new Date("2026-10-24T06:00:00.000Z");
 
-    const response = await createMyChatMemberHook(repository, () => receivedAt)(update(privateChat, { status: "kicked" }));
+    const response = await createMyChatMemberHook(
+      repository,
+      () => receivedAt,
+    )(update(privateChat, { status: "kicked" }));
 
     expect(response.status).toBe(200);
-    expect(repository.applyMembershipChange).toHaveBeenCalledWith(expect.objectContaining({
-      chatId: "101", reason: "blocked", receivedAt, updateId: "501",
-    }));
+    expect(repository.applyMembershipChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: "101",
+        reason: "blocked",
+        receivedAt,
+        updateId: "501",
+      }),
+    );
     const logged = String(info.mock.calls[0]?.[0]);
-    expect(JSON.parse(logged)).toMatchObject({ applied: true, chatId: "101", code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE" });
+    expect(JSON.parse(logged)).toMatchObject({
+      applied: true,
+      chatId: "101",
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+    });
     expect(logged).not.toContain("Анна");
     expect(logged).not.toContain("Семья");
   });
@@ -84,8 +100,11 @@ describe("createMyChatMemberHook", () => {
   });
 
   it("lets a failed write fail the webhook, so Telegram delivers the update again", async () => {
-    const repository = { applyMembershipChange: vi.fn().mockRejectedValue(new Error("database down")) };
-    await expect(createMyChatMemberHook(repository)(update(group, { status: "member" })))
-      .rejects.toThrow("database down");
+    const repository = {
+      applyMembershipChange: vi.fn().mockRejectedValue(new Error("database down")),
+    };
+    await expect(
+      createMyChatMemberHook(repository)(update(group, { status: "member" })),
+    ).rejects.toThrow("database down");
   });
 });

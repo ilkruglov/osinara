@@ -1,12 +1,4 @@
-const HTTP_METHODS = [
-  `get`,
-  `put`,
-  `post`,
-  `delete`,
-  `patch`,
-  `head`,
-  `options`,
-];
+const HTTP_METHODS = [`get`, `put`, `post`, `delete`, `patch`, `head`, `options`];
 function operationName(e, t, n) {
   if (typeof e.operationId == `string` && e.operationId.length > 0) {
     let t = sanitizeToolName(e.operationId);
@@ -28,7 +20,7 @@ function sanitizeToolName(e) {
 function uniqueName(e, t) {
   let n = e,
     r = 2;
-  for (; t.has(n); ) ((n = `${e}_${r}`), (r += 1));
+  for (; t.has(n);) ((n = `${e}_${r}`), (r += 1));
   return (t.add(n), n);
 }
 function operationDescription(e) {

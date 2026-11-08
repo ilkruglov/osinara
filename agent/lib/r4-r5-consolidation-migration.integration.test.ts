@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_r4_r5_consolidation_migration";
 const MIGRATION_NAME = "053_r4_r5_claim_consolidation.sql";
 
@@ -72,20 +71,24 @@ describeWithDatabase("053 R4/R5 claim consolidation migration", () => {
          ORDER BY item.operation_key`,
       );
       expect(after.rows).toEqual(before.rows);
-      await expect(client.query(
-        `INSERT INTO claim_relations
+      await expect(
+        client.query(
+          `INSERT INTO claim_relations
            (source_claim_id, target_claim_id, family_id, scope, scope_partition_key, relation_type, detection_method)
          SELECT $1, $2, family_id, scope, scope_partition_key, 'correction', 'user_explicit'
          FROM memory_items WHERE id = $1`,
-        [claims.rows[0]!.id, claims.rows[2]!.id],
-      )).rejects.toThrow();
-      await expect(client.query(
-        `INSERT INTO claim_conflicts
+          [claims.rows[0]!.id, claims.rows[2]!.id],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        client.query(
+          `INSERT INTO claim_conflicts
            (claim_a_id, claim_b_id, family_id, scope, scope_partition_key, detection_method)
          SELECT $1, $2, family_id, scope, scope_partition_key, 'model_guarded'
          FROM memory_items WHERE id = $1`,
-        [claims.rows[0]!.id, claims.rows[2]!.id],
-      )).rejects.toThrow();
+          [claims.rows[0]!.id, claims.rows[2]!.id],
+        ),
+      ).rejects.toThrow();
 
       const conflict = await client.query<{ conflict_ref: string }>(
         `INSERT INTO claim_conflicts

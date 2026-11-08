@@ -8,46 +8,48 @@ export declare const DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION = 40000000;
  * this shape onto the numeric {@link SessionLimits} the harness checks.
  */
 export interface AuthoredSessionLimits {
-    readonly maxInputTokensPerSession?: number | false;
-    readonly maxOutputTokensPerSession?: number | false;
+  readonly maxInputTokensPerSession?: number | false;
+  readonly maxOutputTokensPerSession?: number | false;
 }
 /**
  * Creates the durable compaction configuration used by one harness session.
  */
 export declare function createCompactionConfig(input?: {
-    readonly contextWindowTokens?: number;
-    readonly lastKnownInputTokens?: number;
-    readonly lastKnownPromptMessageCount?: number;
-    readonly thresholdPercent?: number;
-}): {
-    recentWindowSize: number;
-    threshold: number;
-    thresholdPercent: number;
-} | {
-    recentWindowSize: number;
-    threshold: number;
-    thresholdPercent: number;
-    lastKnownInputTokens: number;
-    lastKnownPromptMessageCount: number | undefined;
-};
-export interface CreateSessionInput {
-    readonly continuationToken: string;
-    readonly compactionOverrides?: {
-        readonly thresholdPercent?: number;
+  readonly contextWindowTokens?: number;
+  readonly lastKnownInputTokens?: number;
+  readonly lastKnownPromptMessageCount?: number;
+  readonly thresholdPercent?: number;
+}):
+  | {
+      recentWindowSize: number;
+      threshold: number;
+      thresholdPercent: number;
+    }
+  | {
+      recentWindowSize: number;
+      threshold: number;
+      thresholdPercent: number;
+      lastKnownInputTokens: number;
+      lastKnownPromptMessageCount: number | undefined;
     };
-    /**
-     * Optional root session id passed in by the runtime when this
-     * session is a delegated subagent child. `undefined` for top-level
-     * sessions — `sessionId` is the root for those.
-     */
-    readonly rootSessionId?: string;
-    readonly sessionId: string;
-    readonly turnAgent: RuntimeTurnAgent;
-    readonly limits?: AuthoredSessionLimits;
-    readonly outputSchema?: HarnessSession["outputSchema"];
-    readonly subagentDepth?: number;
-    readonly systemPromptAdditions?: readonly string[];
-    readonly workflowMaxSubagents?: number;
+export interface CreateSessionInput {
+  readonly continuationToken: string;
+  readonly compactionOverrides?: {
+    readonly thresholdPercent?: number;
+  };
+  /**
+   * Optional root session id passed in by the runtime when this
+   * session is a delegated subagent child. `undefined` for top-level
+   * sessions — `sessionId` is the root for those.
+   */
+  readonly rootSessionId?: string;
+  readonly sessionId: string;
+  readonly turnAgent: RuntimeTurnAgent;
+  readonly limits?: AuthoredSessionLimits;
+  readonly outputSchema?: HarnessSession["outputSchema"];
+  readonly subagentDepth?: number;
+  readonly systemPromptAdditions?: readonly string[];
+  readonly workflowMaxSubagents?: number;
 }
 /** Creates a fresh {@link HarnessSession} from the current `turnAgent`. */
 export declare function createSession(input: CreateSessionInput): HarnessSession;
@@ -57,12 +59,12 @@ export declare function createSession(input: CreateSessionInput): HarnessSession
  * conversation history and state.
  */
 export declare function refreshSessionFromTurnAgent(input: {
-    readonly session: HarnessSession;
-    readonly systemPromptAdditions?: readonly string[];
-    readonly turnAgent: RuntimeTurnAgent;
-    readonly compactionOverrides?: {
-        readonly thresholdPercent?: number;
-    };
+  readonly session: HarnessSession;
+  readonly systemPromptAdditions?: readonly string[];
+  readonly turnAgent: RuntimeTurnAgent;
+  readonly compactionOverrides?: {
+    readonly thresholdPercent?: number;
+  };
 }): HarnessSession;
 /**
  * Mints a continuation token for a delegated subagent session.
@@ -84,9 +86,9 @@ export declare function projectToDurableSession(session: HarnessSession): Durabl
  * compaction fields the durable shape omits.
  */
 export declare function hydrateDurableSession(input: {
-    readonly durable: DurableSession;
-    readonly turnAgent: RuntimeTurnAgent;
-    readonly compactionOverrides?: {
-        readonly thresholdPercent?: number;
-    };
+  readonly durable: DurableSession;
+  readonly turnAgent: RuntimeTurnAgent;
+  readonly compactionOverrides?: {
+    readonly thresholdPercent?: number;
+  };
 }): HarnessSession;

@@ -7,28 +7,27 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  parseBootstrapProcessOutput,
-  releaseEnvironmentFromManifest,
-} from "./host-contracts.js";
+import { parseBootstrapProcessOutput, releaseEnvironmentFromManifest } from "./host-contracts.js";
 
 const digest = (name: string, character: string): string =>
   `ghcr.io/ilkruglov/${name}@sha256:${character.repeat(64)}`;
 
 function manifest(): Buffer {
-  return Buffer.from(JSON.stringify({
-    commitSha: "1".repeat(40),
-    composeSha256: "2".repeat(64),
-    images: {
-      app: digest("osinara-app", "a"),
-      edge: digest("osinara-edge", "c"),
-      sandboxEgressProxy: digest("osinara-sandbox-egress-proxy", "d"),
-      sandboxRunner: digest("osinara-sandbox-runner", "e"),
-      sandboxRuntime: digest("osinara-sandbox-runtime", "f"),
-    },
-    schemaVersion: 1,
-    version: "0.15.3",
-  }));
+  return Buffer.from(
+    JSON.stringify({
+      commitSha: "1".repeat(40),
+      composeSha256: "2".repeat(64),
+      images: {
+        app: digest("osinara-app", "a"),
+        edge: digest("osinara-edge", "c"),
+        sandboxEgressProxy: digest("osinara-sandbox-egress-proxy", "d"),
+        sandboxRunner: digest("osinara-sandbox-runner", "e"),
+        sandboxRuntime: digest("osinara-sandbox-runtime", "f"),
+      },
+      schemaVersion: 1,
+      version: "0.15.3",
+    }),
+  );
 }
 
 describe("production host contracts", () => {
@@ -44,26 +43,37 @@ describe("production host contracts", () => {
     const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
     parsed.images.memoryEmbedding = digest("osinara-memory-embedding", "9");
 
-    const environment = releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3").toString("utf8");
-    expect(environment).toContain(`OSINARA_MEMORY_EMBEDDING_IMAGE=${digest("osinara-memory-embedding", "9")}\n`);
-    expect(releaseEnvironmentFromManifest(manifest(), "0.15.3").toString("utf8")).not.toContain("OSINARA_MEMORY_EMBEDDING_IMAGE");
+    const environment = releaseEnvironmentFromManifest(
+      Buffer.from(JSON.stringify(parsed)),
+      "0.15.3",
+    ).toString("utf8");
+    expect(environment).toContain(
+      `OSINARA_MEMORY_EMBEDDING_IMAGE=${digest("osinara-memory-embedding", "9")}\n`,
+    );
+    expect(releaseEnvironmentFromManifest(manifest(), "0.15.3").toString("utf8")).not.toContain(
+      "OSINARA_MEMORY_EMBEDDING_IMAGE",
+    );
 
     parsed.images.memoryEmbedding = digest("osinara-app", "9");
-    expect(() => releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"))
-      .toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
+    expect(() =>
+      releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"),
+    ).toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
   });
 
   it("rejects a manifest that still names the retired gateway image", () => {
     const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
     parsed.images.cliProxy = digest("osinara-cli-proxy", "b");
 
-    expect(() => releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"))
-      .toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
+    expect(() =>
+      releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"),
+    ).toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
   });
 
   it("rejects inherited upstream image references", () => {
     const upstream = Buffer.from(manifest().toString("utf8").replaceAll("ilkruglov", "nyxandro"));
-    expect(() => releaseEnvironmentFromManifest(upstream, "0.15.3")).toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
+    expect(() => releaseEnvironmentFromManifest(upstream, "0.15.3")).toThrow(
+      "OSINARA_INSTALL_MANIFEST_INVALID",
+    );
   });
 
   it("rejects a manifest from another release", () => {
@@ -73,20 +83,32 @@ describe("production host contracts", () => {
   });
 
   it("parses the exact bootstrap command JSON", () => {
-    expect(parseBootstrapProcessOutput(Buffer.from(JSON.stringify({
-      bootstrapCode: "bootstrap_secret-123",
-      bootstrapExpiresAt: "2026-08-13T12:15:00.000Z",
-    })))).toEqual({
+    expect(
+      parseBootstrapProcessOutput(
+        Buffer.from(
+          JSON.stringify({
+            bootstrapCode: "bootstrap_secret-123",
+            bootstrapExpiresAt: "2026-08-13T12:15:00.000Z",
+          }),
+        ),
+      ),
+    ).toEqual({
       bootstrapCode: "bootstrap_secret-123",
       bootstrapExpiresAt: "2026-08-13T12:15:00.000Z",
     });
   });
 
   it("rejects extra bootstrap fields", () => {
-    expect(() => parseBootstrapProcessOutput(Buffer.from(JSON.stringify({
-      bootstrapCode: "bootstrap_secret-123",
-      bootstrapExpiresAt: "2026-08-13T12:15:00.000Z",
-      leaked: "unexpected",
-    })))).toThrow("OSINARA_INSTALL_BOOTSTRAP_OUTPUT_INVALID");
+    expect(() =>
+      parseBootstrapProcessOutput(
+        Buffer.from(
+          JSON.stringify({
+            bootstrapCode: "bootstrap_secret-123",
+            bootstrapExpiresAt: "2026-08-13T12:15:00.000Z",
+            leaked: "unexpected",
+          }),
+        ),
+      ),
+    ).toThrow("OSINARA_INSTALL_BOOTSTRAP_OUTPUT_INVALID");
   });
 });

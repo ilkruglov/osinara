@@ -18,9 +18,7 @@ function getAnthropicCacheMarker() {
 }
 function mergeGatewayAutoCaching(e) {
   let t =
-      e?.gateway !== void 0 &&
-      typeof e.gateway == `object` &&
-      e.gateway !== null
+      e?.gateway !== void 0 && typeof e.gateway == `object` && e.gateway !== null
         ? e.gateway
         : void 0,
     n = { ...t, caching: t?.caching ?? `auto` };
@@ -59,8 +57,7 @@ function applyConversationCacheControl(e, t) {
   let n = [...e],
     mark = (e) => {
       let r = n[e];
-      r !== void 0 &&
-        (n[e] = { ...r, providerOptions: { ...r.providerOptions, ...t } });
+      r !== void 0 && (n[e] = { ...r, providerOptions: { ...r.providerOptions, ...t } });
     };
   mark(n.length - 1);
   for (let e = n.length - 2; e >= 0; e--)

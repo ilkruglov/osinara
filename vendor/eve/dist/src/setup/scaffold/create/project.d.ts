@@ -12,14 +12,16 @@ export declare const DEFAULT_ZOD_PACKAGE_VERSION = "__ZOD_VERSION__";
  * runtime contract.
  */
 export interface EvePackageContract {
-    /** eve dependency version or npm specifier written to the generated package. */
-    version: string;
-    /** The matching eve release's authored `package.json` `engines.node` value. */
-    nodeEngine: string;
+  /** eve dependency version or npm specifier written to the generated package. */
+  version: string;
+  /** The matching eve release's authored `package.json` `engines.node` value. */
+  nodeEngine: string;
 }
 export declare const DEFAULT_EVE_PACKAGE_CONTRACT: EvePackageContract;
 /** Resolves a stamped or explicitly supplied eve package contract. */
-export declare function resolveEvePackageContract(contract?: EvePackageContract): EvePackageContract;
+export declare function resolveEvePackageContract(
+  contract?: EvePackageContract,
+): EvePackageContract;
 /**
  * Provider slug a gateway model id routes through: the segment before the
  * first "/" (e.g. `anthropic/claude-sonnet-5` → `anthropic`). The slug is
@@ -41,41 +43,45 @@ export declare function byokProviderEnvVar(modelId: string): string;
  * subset `eve init` writes when adding an agent to an existing project, where
  * everything outside `agent/` belongs to the host app.
  */
-export declare function agentTemplateFiles(model: string, reasoning?: AgentReasoningDefinition): Record<string, string>;
+export declare function agentTemplateFiles(
+  model: string,
+  reasoning?: AgentReasoningDefinition,
+): Record<string, string>;
 export declare function formatEveDependencySpecifier(versionOrSpecifier: string): string;
 /** Trailing fields only written when the scaffold is not a workspace member. */
-export declare const ROOT_ONLY_PACKAGE_JSON_TEMPLATE_SUFFIX = ",\n  \"engines\": {\n    \"node\": \"__EVE_INIT_NODE_ENGINE__\"\n  }\n";
+export declare const ROOT_ONLY_PACKAGE_JSON_TEMPLATE_SUFFIX =
+  ',\n  "engines": {\n    "node": "__EVE_INIT_NODE_ENGINE__"\n  }\n';
 export interface ScaffoldBaseProjectOptions {
-    projectName: string;
-    model: string;
-    reasoning?: AgentReasoningDefinition;
-    /**
-     * The manager that owns command execution and manager-specific generated
-     * project files for this scaffold.
-     * Defaults to pnpm.
-     */
-    packageManager?: PackageManagerKind;
-    targetDirectory?: string;
-    overwriteExisting?: boolean;
-    onOverwriteFile?: (filePath: string) => void | Promise<void>;
-    evePackage?: EvePackageContract;
-    aiPackageVersion?: string;
-    connectPackageVersion?: string;
-    zodPackageVersion?: string;
-    typescriptPackageVersion?: string;
-    /**
-     * Final project path used to discover ancestor workspaces. This differs from
-     * the write target only when the CLI stages a scaffold before moving it into
-     * place.
-     */
-    workspaceProbeDirectory?: string;
-    onWorkspaceRootMutation?: (mutation: WorkspaceRootMutation) => void | Promise<void>;
-    /**
-     * Scaffold an inline provider `byok` block in `agent.ts` that reads the
-     * provider key from `process.env` instead of relying on the managed Vercel
-     * AI Gateway. `process` is typed by the `@types/node` every scaffold ships.
-     */
-    byokProvider?: boolean;
+  projectName: string;
+  model: string;
+  reasoning?: AgentReasoningDefinition;
+  /**
+   * The manager that owns command execution and manager-specific generated
+   * project files for this scaffold.
+   * Defaults to pnpm.
+   */
+  packageManager?: PackageManagerKind;
+  targetDirectory?: string;
+  overwriteExisting?: boolean;
+  onOverwriteFile?: (filePath: string) => void | Promise<void>;
+  evePackage?: EvePackageContract;
+  aiPackageVersion?: string;
+  connectPackageVersion?: string;
+  zodPackageVersion?: string;
+  typescriptPackageVersion?: string;
+  /**
+   * Final project path used to discover ancestor workspaces. This differs from
+   * the write target only when the CLI stages a scaffold before moving it into
+   * place.
+   */
+  workspaceProbeDirectory?: string;
+  onWorkspaceRootMutation?: (mutation: WorkspaceRootMutation) => void | Promise<void>;
+  /**
+   * Scaffold an inline provider `byok` block in `agent.ts` that reads the
+   * provider key from `process.env` instead of relying on the managed Vercel
+   * AI Gateway. `process` is typed by the `@types/node` every scaffold ships.
+   */
+  byokProvider?: boolean;
 }
 export declare function scaffoldBaseProject(options: ScaffoldBaseProjectOptions): Promise<string>;
 export declare function isEveProject(projectRoot: string): Promise<boolean>;

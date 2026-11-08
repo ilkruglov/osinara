@@ -14,8 +14,7 @@ var LoadCompiledModuleMapError = class extends Error {
 async function loadCompiledModuleMap(e) {
   let t =
     e.compiledArtifactsSource.kind === `disk`
-      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot)
-          .moduleMapPath
+      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot).moduleMapPath
       : void 0;
   if (t !== void 0) {
     let e = createFileImportSpecifier(t);
@@ -27,8 +26,7 @@ async function loadCompiledModuleMap(e) {
     }
   }
   let a = readBundledCompiledArtifacts();
-  if (a !== null)
-    return parseCompiledModuleMap(a.moduleMap, BUNDLED_MODULE_MAP_SOURCE);
+  if (a !== null) return parseCompiledModuleMap(a.moduleMap, BUNDLED_MODULE_MAP_SOURCE);
   throw new LoadCompiledModuleMapError(
     `Compiled module map is unavailable without an app root or bundled compiled artifacts.`,
     BUNDLED_MODULE_MAP_SOURCE,

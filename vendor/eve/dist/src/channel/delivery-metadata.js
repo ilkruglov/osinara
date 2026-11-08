@@ -6,8 +6,7 @@ function createChannelDeliveryMetadata(e) {
   };
   return (
     e.requestId !== void 0 && (t.requestId = e.requestId),
-    e.requestTraceContext !== void 0 &&
-      (t.requestTraceContext = e.requestTraceContext),
+    e.requestTraceContext !== void 0 && (t.requestTraceContext = e.requestTraceContext),
     t
   );
 }

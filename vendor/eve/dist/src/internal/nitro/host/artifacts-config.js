@@ -4,23 +4,15 @@ import { resolveDevelopmentRuntimeArtifactsPointerPath } from "#internal/nitro/d
 function createDevelopmentNitroArtifactsConfig(e) {
   return {
     appRoot: e.appRoot,
-    devRuntimeArtifactsPointerPath:
-      resolveDevelopmentRuntimeArtifactsPointerPath(e.appRoot),
-    durableArtifactsReference: usesParentDevelopmentWorkflowWorld(
-      e.configuredWorld,
-    )
+    devRuntimeArtifactsPointerPath: resolveDevelopmentRuntimeArtifactsPointerPath(e.appRoot),
+    durableArtifactsReference: usesParentDevelopmentWorkflowWorld(e.configuredWorld)
       ? `development-generation`
       : void 0,
     kind: `development`,
-    moduleMapLoaderPath: resolvePackageSourceFilePath(
-      `src/internal/authored-module-map-loader.ts`,
-    ),
+    moduleMapLoaderPath: resolvePackageSourceFilePath(`src/internal/authored-module-map-loader.ts`),
   };
 }
 function createProductionNitroArtifactsConfig() {
   return { kind: `production` };
 }
-export {
-  createDevelopmentNitroArtifactsConfig,
-  createProductionNitroArtifactsConfig,
-};
+export { createDevelopmentNitroArtifactsConfig, createProductionNitroArtifactsConfig };

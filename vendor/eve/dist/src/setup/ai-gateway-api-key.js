@@ -17,8 +17,4 @@ async function writeAiGatewayApiKey(e) {
     }
   );
 }
-export {
-  AI_GATEWAY_API_KEY_ENV_FILE,
-  AI_GATEWAY_API_KEY_ENV_VAR,
-  writeAiGatewayApiKey,
-};
+export { AI_GATEWAY_API_KEY_ENV_FILE, AI_GATEWAY_API_KEY_ENV_VAR, writeAiGatewayApiKey };

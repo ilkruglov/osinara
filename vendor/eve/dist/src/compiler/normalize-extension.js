@@ -31,9 +31,7 @@ async function compileExtensionContributions(e) {
     merged: mergeContributions(a.contributions, i.contributions),
     disables: a.disabledToolTargets,
     extensionToolNames: new Set(i.contributions.tools.map((e) => e.name)),
-    extensionDynamicToolSlugs: new Set(
-      i.contributions.dynamicTools.map((e) => e.slug),
-    ),
+    extensionDynamicToolSlugs: new Set(i.contributions.dynamicTools.map((e) => e.slug)),
     namespace: t.namespace,
   });
 }
@@ -77,10 +75,7 @@ function mergeExtensionSubagentSources(e, t) {
 function scopeExtensionSubagents(e) {
   return e.manifest.subagents.map((n) => ({
     ...scopeExtensionSubagentSource(n, e.sourceRoot, e.sourceIdScope),
-    logicalPath: relative(e.consumerAgentRoot, n.entryPath).replaceAll(
-      `\\`,
-      `/`,
-    ),
+    logicalPath: relative(e.consumerAgentRoot, n.entryPath).replaceAll(`\\`, `/`),
     subagentId: `${e.namespace}__${n.subagentId}`,
   }));
 }
@@ -100,9 +95,7 @@ function scopeExtensionSubagentManifest(t, n, r) {
     ...t,
     channels: t.channels.map(scopeRef),
     connections: t.connections.map(scopeRef),
-    ...(t.configModule === void 0
-      ? {}
-      : { configModule: scopeRef(t.configModule) }),
+    ...(t.configModule === void 0 ? {} : { configModule: scopeRef(t.configModule) }),
     extensions: t.extensions.map(scopeRef),
     hooks: t.hooks.map(scopeRef),
     instructions: t.instructions.map(scopeRef),
@@ -123,10 +116,7 @@ function applyOverrideDisables(e) {
   let t = e.namespace.length + 2,
     n = new Set();
   for (let r of e.disables) {
-    if (
-      !e.extensionToolNames.has(r.name) &&
-      !e.extensionDynamicToolSlugs.has(r.name)
-    ) {
+    if (!e.extensionToolNames.has(r.name) && !e.extensionDynamicToolSlugs.has(r.name)) {
       let n = [...e.extensionToolNames, ...e.extensionDynamicToolSlugs]
         .map((e) => e.slice(t))
         .sort();
@@ -155,11 +145,7 @@ async function composeManifestContributions(r) {
     p = `${s}__`,
     scopeSourceId = (e) => `${u}:${e}`,
     rebase = (n) => relative(c, join(f, n)).replaceAll(`\\`, `/`),
-    m = (
-      await Promise.all(
-        o.channels.map((e) => compileChannelDefinition(f, e, l)),
-      )
-    )
+    m = (await Promise.all(o.channels.map((e) => compileChannelDefinition(f, e, l))))
       .flat()
       .map((e) =>
         e.kind === `disabled`
@@ -233,16 +219,14 @@ async function composeManifestContributions(r) {
           logicalPath: rebase(t.definition.logicalPath),
         });
   }
-  let x = (
-      await Promise.all(
-        o.connections.map((e) => compileConnectionDefinition(f, e, l)),
-      )
-    ).map((e) => ({
-      ...e,
-      connectionName: `${p}${e.connectionName}`,
-      sourceId: scopeSourceId(e.sourceId),
-      logicalPath: rebase(e.logicalPath),
-    })),
+  let x = (await Promise.all(o.connections.map((e) => compileConnectionDefinition(f, e, l)))).map(
+      (e) => ({
+        ...e,
+        connectionName: `${p}${e.connectionName}`,
+        sourceId: scopeSourceId(e.sourceId),
+        logicalPath: rebase(e.logicalPath),
+      }),
+    ),
     S = [],
     C = [];
   for (let e of o.instructions) {
@@ -296,14 +280,8 @@ function mergeContributions(e, t) {
   return {
     channels: [...e.channels, ...t.channels.filter((e) => !n.has(e.name))],
     tools: dedupeBy([...e.tools, ...t.tools], (e) => e.name),
-    dynamicTools: dedupeBy(
-      [...e.dynamicTools, ...t.dynamicTools],
-      (e) => e.slug,
-    ),
-    connections: dedupeBy(
-      [...e.connections, ...t.connections],
-      (e) => e.connectionName,
-    ),
+    dynamicTools: dedupeBy([...e.dynamicTools, ...t.dynamicTools], (e) => e.slug),
+    connections: dedupeBy([...e.connections, ...t.connections], (e) => e.connectionName),
     skills: dedupeBy([...e.skills, ...t.skills], (e) => e.name),
     schedules: dedupeBy([...e.schedules, ...t.schedules], (e) => e.name),
     hooks: [...e.hooks, ...t.hooks],

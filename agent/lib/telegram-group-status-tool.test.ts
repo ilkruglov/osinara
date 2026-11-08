@@ -47,9 +47,11 @@ function context(): ToolContext {
 }
 
 function approvalFor(input: Record<string, unknown>) {
-  const approval = (manageTelegramGroup as unknown as {
-    approval: (context: { toolInput: Record<string, unknown> }) => unknown;
-  }).approval;
+  const approval = (
+    manageTelegramGroup as unknown as {
+      approval: (context: { toolInput: Record<string, unknown> }) => unknown;
+    }
+  ).approval;
   return approval({ toolInput: input });
 }
 
@@ -83,7 +85,8 @@ describe("manage_telegram_group.status", () => {
           builtInWorkspaceTools: ["glob", "grep", "read_file", "write_file"],
           effectiveConfiguredTools: ["glob", "grep", "read_file", "write_file", "search_memories"],
           memoryReview: "disabled",
-          policySummary: "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
+          policySummary:
+            "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
           toolAccessMode: "external_allowlist",
           toolAllowlist: ["search_memories"],
           startNewContextInput: {
@@ -93,7 +96,8 @@ describe("manage_telegram_group.status", () => {
         }),
         expect.objectContaining({
           builtInWorkspaceTools: [],
-          policySummary: "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
+          policySummary:
+            "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
           toolAccessMode: "family_policy",
           toolAllowlist: [],
           startNewContextInput: {
@@ -108,58 +112,72 @@ describe("manage_telegram_group.status", () => {
   });
 
   it("ignores known fields that MiniMax materializes for another action", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "status",
-      messageMode: "all",
-      registration: {
-        messageMode: "addressed_only",
-        telegramChatId: "-1009999999999",
-        title: "Не используется",
-        toolAllowlist: [],
-        type: "external",
-      },
-      telegramChatId: "-1009999999999",
-      toolAllowlist: ["search_memories"],
-    }, context())).resolves.toMatchObject({ total: 2 });
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "status",
+          messageMode: "all",
+          registration: {
+            messageMode: "addressed_only",
+            telegramChatId: "-1009999999999",
+            title: "Не используется",
+            toolAllowlist: [],
+            type: "external",
+          },
+          telegramChatId: "-1009999999999",
+          toolAllowlist: ["search_memories"],
+        },
+        context(),
+      ),
+    ).resolves.toMatchObject({ total: 2 });
     expect(listStatuses).toHaveBeenCalledTimes(1);
   });
 
   it("still rejects fields outside the published shared schema", async () => {
-    await expect(manageTelegramGroup.execute({
-      action: "status",
-      telegramChat: "-1001",
-    } as never, context())).rejects.toThrowError(
-      /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat.*telegramChatId/u,
-    );
+    await expect(
+      manageTelegramGroup.execute(
+        {
+          action: "status",
+          telegramChat: "-1001",
+        } as never,
+        context(),
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat.*telegramChatId/u);
     expect(listStatuses).not.toHaveBeenCalled();
   });
 
   it("skips HITL only for read-only status and non-destructive context rotation", () => {
     expect(approvalFor({ action: "status" })).toBe("not-applicable");
-    expect(approvalFor({ action: "start_new_context", telegramChatId: "-1001" })).toBe("not-applicable");
-    expect(approvalFor({
-      action: "update_policy",
-      messageMode: "all",
-      telegramChatId: "-1001",
-      toolAllowlist: [],
-    })).toBe("user-approval");
-    expect(approvalFor({ action: "remove", telegramChatId: "-1001" })).toBe("user-approval");
-    expect(approvalFor({
-      action: "register",
-      registration: {
+    expect(approvalFor({ action: "start_new_context", telegramChatId: "-1001" })).toBe(
+      "not-applicable",
+    );
+    expect(
+      approvalFor({
+        action: "update_policy",
         messageMode: "all",
         telegramChatId: "-1001",
-        title: "Семья",
-        type: "family_private",
-      },
-    })).toBe("user-approval");
+        toolAllowlist: [],
+      }),
+    ).toBe("user-approval");
+    expect(approvalFor({ action: "remove", telegramChatId: "-1001" })).toBe("user-approval");
+    expect(
+      approvalFor({
+        action: "register",
+        registration: {
+          messageMode: "all",
+          telegramChatId: "-1001",
+          title: "Семья",
+          type: "family_private",
+        },
+      }),
+    ).toBe("user-approval");
   });
 
   it("requires status before replacing an unknown current policy", () => {
     const instructions = modeInstructions({ environment: "private" });
 
     expect(instructions).toContain("Перед `update_policy` получи status");
-    expect(instructions).toContain("`{\"action\":\"status\"}`");
+    expect(instructions).toContain('`{"action":"status"}`');
     expect(instructions).toContain("команды `/status`");
   });
 });

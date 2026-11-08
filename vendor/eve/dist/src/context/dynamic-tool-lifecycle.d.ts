@@ -10,7 +10,10 @@ import type { DurableDynamicToolMetadata } from "#context/keys.js";
  * execute function is looked up by step ID and called with stored
  * closure vars.
  */
-export declare function replayDynamicSessionTools(metadata: readonly DurableDynamicToolMetadata[], _resolvers: readonly ResolvedDynamicToolResolver[]): readonly HarnessToolDefinition[];
+export declare function replayDynamicSessionTools(
+  metadata: readonly DurableDynamicToolMetadata[],
+  _resolvers: readonly ResolvedDynamicToolResolver[],
+): readonly HarnessToolDefinition[];
 /**
  * Dispatches a stream event to dynamic tool resolvers. Each
  * resolver's metadata replaces its slot (by slug) in the
@@ -19,16 +22,16 @@ export declare function replayDynamicSessionTools(metadata: readonly DurableDyna
  */
 /** Resolves step-scoped tools once for one internal policy/model pass. */
 export declare function resolveStepDynamicTools(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicToolResolver[];
-    readonly event: UnstampedMessageStreamEvent;
-    readonly messages: readonly ModelMessage[];
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicToolResolver[];
+  readonly event: UnstampedMessageStreamEvent;
+  readonly messages: readonly ModelMessage[];
 }): Promise<void>;
 export declare function dispatchDynamicToolEvent(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicToolResolver[];
-    readonly event: UnstampedMessageStreamEvent;
-    readonly messages: readonly ModelMessage[];
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicToolResolver[];
+  readonly event: UnstampedMessageStreamEvent;
+  readonly messages: readonly ModelMessage[];
 }): Promise<void>;
 /**
  * Re-resolves session-scoped dynamic tools when a durable session reaches a
@@ -36,16 +39,16 @@ export declare function dispatchDynamicToolEvent(input: {
  * still observe exactly one `session.started` event for the session.
  */
 export declare function refreshDynamicSessionToolsForRuntimeRevision(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicToolResolver[];
-    readonly event: SessionStartedStreamEvent;
-    readonly messages: readonly ModelMessage[];
-    readonly runtimeRevision: string;
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicToolResolver[];
+  readonly event: SessionStartedStreamEvent;
+  readonly messages: readonly ModelMessage[];
+  readonly runtimeRevision: string;
 }): Promise<void>;
 /** Re-registers missing process-local session callbacks in a fresh runtime. */
 export declare function hydrateDynamicSessionTools(input: {
-    readonly ctx: ContextContainer;
-    readonly resolvers: readonly ResolvedDynamicToolResolver[];
-    readonly event: SessionStartedStreamEvent;
-    readonly messages: readonly ModelMessage[];
+  readonly ctx: ContextContainer;
+  readonly resolvers: readonly ResolvedDynamicToolResolver[];
+  readonly event: SessionStartedStreamEvent;
+  readonly messages: readonly ModelMessage[];
 }): Promise<void>;

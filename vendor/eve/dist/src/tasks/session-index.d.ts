@@ -20,15 +20,15 @@ export declare const SESSION_TASKS_STATE_KEY = "eve.tasks";
  * `taskId` only, and lookup verifies ownership through this index.
  */
 export interface SessionTaskIndexEntry {
-    readonly taskId: string;
-    readonly taskRunId: string;
-    /** Immutable fallback once the owning workflow run expires. */
-    readonly terminalView?: TaskView;
-    readonly taskInboxToken: string;
-    readonly createdByStepIndex?: number;
-    readonly createdByTurnId: string;
-    readonly metadata: TaskMetadata;
-    readonly operationId: string;
+  readonly taskId: string;
+  readonly taskRunId: string;
+  /** Immutable fallback once the owning workflow run expires. */
+  readonly terminalView?: TaskView;
+  readonly taskInboxToken: string;
+  readonly createdByStepIndex?: number;
+  readonly createdByTurnId: string;
+  readonly metadata: TaskMetadata;
+  readonly operationId: string;
 }
 /**
  * Reads and validates the task index from session state.
@@ -36,13 +36,24 @@ export interface SessionTaskIndexEntry {
  * A present but invalid index throws: treating corruption as absence
  * would silently orphan every live task's routing credential.
  */
-export declare function getSessionTaskIndex(state: SessionStateMap | undefined): readonly SessionTaskIndexEntry[];
+export declare function getSessionTaskIndex(
+  state: SessionStateMap | undefined,
+): readonly SessionTaskIndexEntry[];
 /** Caches one terminal view beside its task-run address. */
-export declare function cacheTerminalTaskView(state: SessionStateMap | undefined, view: TaskView): SessionStateMap | undefined;
+export declare function cacheTerminalTaskView(
+  state: SessionStateMap | undefined,
+  view: TaskView,
+): SessionStateMap | undefined;
 /** Finds one owned task; `undefined` enforces parent-session ownership. */
-export declare function findSessionTaskEntry(state: SessionStateMap | undefined, taskId: string): SessionTaskIndexEntry | undefined;
+export declare function findSessionTaskEntry(
+  state: SessionStateMap | undefined,
+  taskId: string,
+): SessionTaskIndexEntry | undefined;
 /**
  * Records one task, replacing any entry with the same id so replayed
  * creation for the same originating call stays idempotent.
  */
-export declare function recordSessionTask(session: HarnessSession, entry: SessionTaskIndexEntry): HarnessSession;
+export declare function recordSessionTask(
+  session: HarnessSession,
+  entry: SessionTaskIndexEntry,
+): HarnessSession;

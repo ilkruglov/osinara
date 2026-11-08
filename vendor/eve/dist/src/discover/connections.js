@@ -38,8 +38,7 @@ async function discoverConnectionSources(c) {
   })) {
     let r = normalizeLogicalPath(join(l, n.slotName));
     if (n.moduleFileNames.length > 1) {
-      (h.add(n.slotName),
-        m.push(createModuleSlotCollisionDiagnostic(u, r, n.moduleFileNames)));
+      (h.add(n.slotName), m.push(createModuleSlotCollisionDiagnostic(u, r, n.moduleFileNames)));
       continue;
     }
     let [a] = n.moduleFileNames;
@@ -78,9 +77,7 @@ async function discoverConnectionSources(c) {
       m.push(d);
       continue;
     }
-    let f = collectFolderConnectionModuleCandidates(
-      await readSortedDirectoryEntries(c.source, s),
-    );
+    let f = collectFolderConnectionModuleCandidates(await readSortedDirectoryEntries(c.source, s));
     if (f.length > 1) {
       m.push(
         createDiscoverErrorDiagnostic({

@@ -26,7 +26,11 @@ const tls = vi.hoisted(() => ({ attempts: 0 }));
 vi.mock("node:tls", () => ({
   connect: () => {
     tls.attempts += 1;
-    return Object.assign(new EventEmitter(), { destroy: () => undefined, off: () => undefined, write: () => true });
+    return Object.assign(new EventEmitter(), {
+      destroy: () => undefined,
+      off: () => undefined,
+      write: () => true,
+    });
   },
 }));
 
@@ -37,7 +41,8 @@ afterEach(() => {
 
 let sessions = 0;
 const sessionId = () => (sessions += 1).toString(16).padStart(32, "0");
-const stealth = (session = sessionId()) => `/browserless/chromium/stealth?solveCaptchas=true&timeout=120000&session=${session}`;
+const stealth = (session = sessionId()) =>
+  `/browserless/chromium/stealth?solveCaptchas=true&timeout=120000&session=${session}`;
 
 async function proxyWith(
   apiKey?: string,
@@ -55,13 +60,18 @@ async function proxyWith(
 
 async function upgrade(port: number, path: string): Promise<{ status: number; body: string }> {
   const req = request({
-    headers: { Connection: "Upgrade", "Sec-WebSocket-Key": "dGVzdA==", "Sec-WebSocket-Version": "13", Upgrade: "websocket" },
+    headers: {
+      Connection: "Upgrade",
+      "Sec-WebSocket-Key": "dGVzdA==",
+      "Sec-WebSocket-Version": "13",
+      Upgrade: "websocket",
+    },
     hostname: "127.0.0.1",
     path,
     port,
   });
   req.end();
-  const [response] = await once(req, "response") as [import("node:http").IncomingMessage];
+  const [response] = (await once(req, "response")) as [import("node:http").IncomingMessage];
   let body = "";
   for await (const chunk of response) body += chunk;
   return { body, status: response.statusCode ?? 0 };
@@ -71,7 +81,9 @@ async function upgrade(port: number, path: string): Promise<{ status: number; bo
 function rawUpgrade(port: number, path: string): Socket {
   const socket = connect({ allowHalfOpen: true, host: "127.0.0.1", port });
   socket.on("error", () => undefined);
-  socket.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  socket.write(
+    `GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+  );
   return socket;
 }
 
@@ -104,7 +116,9 @@ describe("Browserless endpoint", () => {
   });
 
   it("answers a provider that refuses with a bare 502, never its body", async () => {
-    const port = await proxyWith("secret-key", async () => { throw new Error("AGENT_SANDBOX_EGRESS_DNS_FAILED"); });
+    const port = await proxyWith("secret-key", async () => {
+      throw new Error("AGENT_SANDBOX_EGRESS_DNS_FAILED");
+    });
     const answer = await upgrade(port, stealth());
     expect(answer.status).toBe(502);
     expect(answer.body).not.toContain("secret-key");

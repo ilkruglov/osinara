@@ -8,9 +8,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 // These tables are introduced by the unshipped memory migrations 045-050. Every foreign-key
 // lookup must have a valid child index whose leading key can serve parent cleanup and retention.
@@ -73,7 +72,28 @@ describeWithDatabase("memory schema supporting indexes", () => {
     const indexes = await database().query<{ indexname: string }>(
       `SELECT indexname FROM pg_indexes
        WHERE schemaname = 'public' AND indexname = ANY($1::text[])`,
-      [[
+      [
+        [
+          "claim_evidence_timeline_entry",
+          "confirmed_outcome_source_claims_claim",
+          "memory_extraction_snapshot_timeline_entry",
+          "memory_items_duplicate_of",
+          "memory_items_origin_conversation",
+          "memory_items_subject_participant",
+          "memory_items_superseded_by",
+          "memory_thread_brief_block_sources_entry",
+          "memory_thread_discovery_group",
+          "memory_turn_source_sets_current_timeline_entry",
+          "memory_turn_sources_timeline_entry",
+          "memory_threads_completion_outcome",
+          "memory_threads_group",
+          "profile_view_claims_claim",
+          "telegram_group_message_ids_entry_conversation",
+        ],
+      ],
+    );
+    expect(indexes.rows.map((row) => row.indexname).sort()).toEqual(
+      [
         "claim_evidence_timeline_entry",
         "confirmed_outcome_source_claims_claim",
         "memory_extraction_snapshot_timeline_entry",
@@ -89,25 +109,8 @@ describeWithDatabase("memory schema supporting indexes", () => {
         "memory_threads_group",
         "profile_view_claims_claim",
         "telegram_group_message_ids_entry_conversation",
-      ]],
+      ].sort(),
     );
-    expect(indexes.rows.map((row) => row.indexname).sort()).toEqual([
-      "claim_evidence_timeline_entry",
-      "confirmed_outcome_source_claims_claim",
-      "memory_extraction_snapshot_timeline_entry",
-      "memory_items_duplicate_of",
-      "memory_items_origin_conversation",
-      "memory_items_subject_participant",
-      "memory_items_superseded_by",
-      "memory_thread_brief_block_sources_entry",
-      "memory_thread_discovery_group",
-      "memory_turn_source_sets_current_timeline_entry",
-      "memory_turn_sources_timeline_entry",
-      "memory_threads_completion_outcome",
-      "memory_threads_group",
-      "profile_view_claims_claim",
-      "telegram_group_message_ids_entry_conversation",
-    ].sort());
   });
 
   it("gives every new memory-table foreign key a leading child index", async () => {

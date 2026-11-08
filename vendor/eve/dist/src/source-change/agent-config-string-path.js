@@ -74,11 +74,8 @@ function findProperty(e, t) {
       kind: `bail`,
       reason: `\`${t}\` may be supplied by a spread or computed property`,
     };
-  let n = e.properties.filter(
-    (e) => e.type === `Property` && !e.computed && keyMatches(e.key, t),
-  );
-  if (n.length > 1)
-    return { kind: `bail`, reason: `\`${t}\` is defined more than once` };
+  let n = e.properties.filter((e) => e.type === `Property` && !e.computed && keyMatches(e.key, t));
+  if (n.length > 1) return { kind: `bail`, reason: `\`${t}\` is defined more than once` };
   let i = n[0];
   return i !== void 0 && i.start !== void 0 && i.end !== void 0
     ? { kind: `ok`, property: i }
@@ -99,12 +96,7 @@ function propertyStringValue(e) {
   let t = e.value;
   if (!isAstNode(t)) return;
   let r = unwrapExpression(t);
-  if (
-    r.type !== `Literal` ||
-    typeof r.value != `string` ||
-    r.start === void 0 ||
-    r.end === void 0
-  )
+  if (r.type !== `Literal` || typeof r.value != `string` || r.start === void 0 || r.end === void 0)
     return;
   let i = { start: r.start, end: r.end, value: r.value };
   return r.raw === void 0 ? i : { ...i, raw: r.raw };
@@ -117,8 +109,7 @@ function nestedObjectSource(e, t) {
 function insertProperty(e, t, n, r) {
   let i = t.end - 1,
     a = t.properties.at(-1);
-  if (a === void 0 || a.end === void 0)
-    return e.slice(0, i) + ` ${n}: ${r} ` + e.slice(i);
+  if (a === void 0 || a.end === void 0) return e.slice(0, i) + ` ${n}: ${r} ` + e.slice(i);
   let o =
     e.lastIndexOf(
       `

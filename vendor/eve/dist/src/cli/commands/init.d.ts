@@ -9,32 +9,32 @@ import { confirmInitInNonEmptyDirectory } from "./init-confirm.js";
 import { tryInitializeGit } from "./init-git.js";
 import { selectInitHandoff, spawnCodingAgentRepl } from "./init-repl.js";
 export interface InitCliLogger {
-    error(message: string): void;
-    log(message: string): void;
+  error(message: string): void;
+  log(message: string): void;
 }
 export interface InitCommandOptions {
-    /** Add the Web Chat channel (a Next.js app). Set by `--channel-web-nextjs`. */
-    channelWebNextjs?: boolean;
-    /** Model id written to the root agent config. Set by `--model`. */
-    model?: string;
-    /** Reasoning effort written to the root agent config. Set by `--reasoning`. */
-    reasoning?: AgentReasoningDefinition;
+  /** Add the Web Chat channel (a Next.js app). Set by `--channel-web-nextjs`. */
+  channelWebNextjs?: boolean;
+  /** Model id written to the root agent config. Set by `--model`. */
+  model?: string;
+  /** Reasoning effort written to the root agent config. Set by `--reasoning`. */
+  reasoning?: AgentReasoningDefinition;
 }
 export interface InitCommandDependencies {
-    addAgentToProject: typeof addAgentToProject;
-    confirmInitInNonEmptyDirectory: typeof confirmInitInNonEmptyDirectory;
-    detectInvokingPackageManager: typeof detectInvokingPackageManager;
-    detectPackageManager: typeof detectPackageManager;
-    ensureChannel: typeof ensureChannel;
-    isCodingAgentLaunch: typeof isCodingAgentLaunch;
-    now: () => number;
-    runPackageManagerInstall: typeof runPackageManagerInstall;
-    scaffoldBaseProject: typeof scaffoldBaseProject;
-    selectInitHandoff: typeof selectInitHandoff;
-    spawnCodingAgentRepl: typeof spawnCodingAgentRepl;
-    spawnPackageManager: typeof spawnPackageManager;
-    tryInitializeGit: typeof tryInitializeGit;
-    validateModelSlug: typeof validateModelSlug;
+  addAgentToProject: typeof addAgentToProject;
+  confirmInitInNonEmptyDirectory: typeof confirmInitInNonEmptyDirectory;
+  detectInvokingPackageManager: typeof detectInvokingPackageManager;
+  detectPackageManager: typeof detectPackageManager;
+  ensureChannel: typeof ensureChannel;
+  isCodingAgentLaunch: typeof isCodingAgentLaunch;
+  now: () => number;
+  runPackageManagerInstall: typeof runPackageManagerInstall;
+  scaffoldBaseProject: typeof scaffoldBaseProject;
+  selectInitHandoff: typeof selectInitHandoff;
+  spawnCodingAgentRepl: typeof spawnCodingAgentRepl;
+  spawnPackageManager: typeof spawnPackageManager;
+  tryInitializeGit: typeof tryInitializeGit;
+  validateModelSlug: typeof validateModelSlug;
 }
 export declare const EVE_INIT_PACKAGE_SPEC_ENV = "EVE_INIT_PACKAGE_SPEC";
 /**
@@ -49,4 +49,10 @@ export declare const EVE_INIT_PACKAGE_SPEC_ENV = "EVE_INIT_PACKAGE_SPEC";
  *
  * For extension packages, use `eve extension init` instead.
  */
-export declare function runInitCommand(logger: InitCliLogger, parentDirectory: string, target: string | undefined, options: InitCommandOptions, dependencies?: InitCommandDependencies): Promise<void>;
+export declare function runInitCommand(
+  logger: InitCliLogger,
+  parentDirectory: string,
+  target: string | undefined,
+  options: InitCommandOptions,
+  dependencies?: InitCommandDependencies,
+): Promise<void>;

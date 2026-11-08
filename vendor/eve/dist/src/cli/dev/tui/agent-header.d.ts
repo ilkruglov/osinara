@@ -8,15 +8,15 @@
 import type { AgentInfoResult } from "#client/index.js";
 import type { Theme } from "./theme.js";
 export interface AgentHeaderInput {
-    /** Resolved display name (e.g. "weather-agent"). */
-    name: string;
-    /** Agent inspection payload, or `undefined` when it could not be fetched. */
-    info?: AgentInfoResult;
-    theme: Theme;
-    /** Available terminal width. */
-    width: number;
-    /** Message-of-the-day line rendered under the brand line, when present. */
-    tip?: string;
+  /** Resolved display name (e.g. "weather-agent"). */
+  name: string;
+  /** Agent inspection payload, or `undefined` when it could not be fetched. */
+  info?: AgentInfoResult;
+  theme: Theme;
+  /** Available terminal width. */
+  width: number;
+  /** Message-of-the-day line rendered under the brand line, when present. */
+  tip?: string;
 }
 /**
  * The header's message-of-the-day pool. All entries reference local-only

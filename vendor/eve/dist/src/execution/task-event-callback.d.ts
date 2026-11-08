@@ -9,4 +9,7 @@ import type { UnstampedMessageStreamEvent } from "#protocol/message.js";
  * decision and only the parent channel owns the interaction. Returns whether
  * the event was forwarded and must therefore be suppressed locally.
  */
-export declare function forwardTaskEventToSessionCallback(ctx: ContextContainer, event: UnstampedMessageStreamEvent): Promise<boolean>;
+export declare function forwardTaskEventToSessionCallback(
+  ctx: ContextContainer,
+  event: UnstampedMessageStreamEvent,
+): Promise<boolean>;

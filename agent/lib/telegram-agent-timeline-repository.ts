@@ -46,10 +46,10 @@ export async function nextTelegramGroupSequence(
   );
   const sequence = result.rows[0]?.sequence_id;
   if (!sequence) throw new Error("AGENT_TELEGRAM_GROUP_NOT_FOUND: Группа не зарегистрирована");
-  await client.query(
-    "UPDATE telegram_groups SET next_timeline_sequence = $2 WHERE id = $1",
-    [groupId, sequence],
-  );
+  await client.query("UPDATE telegram_groups SET next_timeline_sequence = $2 WHERE id = $1", [
+    groupId,
+    sequence,
+  ]);
   return sequence;
 }
 
@@ -62,7 +62,7 @@ export async function recordTelegramAgentResponse(
     );
   }
   const messageIds = input.telegramMessageIds.map((id) =>
-    requireTelegramPositiveBigint(id, "message_id")
+    requireTelegramPositiveBigint(id, "message_id"),
   );
   if (new Set(messageIds).size !== messageIds.length) {
     throw new Error(
@@ -88,9 +88,11 @@ export async function recordTelegramAgentResponse(
     );
     if (existing.rows.length > 0) {
       const row = existing.rows[0]!;
-      const aliasesMatch = existing.rows.length === messageIds.length &&
-        existing.rows.every((candidate) =>
-          candidate.actor_kind === "agent_self" && candidate.entry_id === row.entry_id
+      const aliasesMatch =
+        existing.rows.length === messageIds.length &&
+        existing.rows.every(
+          (candidate) =>
+            candidate.actor_kind === "agent_self" && candidate.entry_id === row.entry_id,
         );
       if (!aliasesMatch) {
         throw new Error(
@@ -114,11 +116,22 @@ export async function recordTelegramAgentResponse(
                (SELECT sequence_id FROM telegram_group_messages WHERE id = $8 AND group_id = $1),
                $9, $10, $11, $12, $13, $14)
        RETURNING id`,
-      [input.groupId, sequenceId, AGENT_ACTOR_ID, messageIds[0], input.messageThreadId,
-        AGENT_DISPLAY_NAME, input.contentText, input.replyToEntryId, input.deliveredAt,
-        input.applicationSessionId, input.attachment?.fileName ?? null,
-        input.attachment?.mediaType ?? null, input.attachment?.size ?? null,
-        input.attachment?.kind ?? null],
+      [
+        input.groupId,
+        sequenceId,
+        AGENT_ACTOR_ID,
+        messageIds[0],
+        input.messageThreadId,
+        AGENT_DISPLAY_NAME,
+        input.contentText,
+        input.replyToEntryId,
+        input.deliveredAt,
+        input.applicationSessionId,
+        input.attachment?.fileName ?? null,
+        input.attachment?.mediaType ?? null,
+        input.attachment?.size ?? null,
+        input.attachment?.kind ?? null,
+      ],
     );
     const entryId = inserted.rows[0]!.id;
     await client.query(

@@ -41,13 +41,15 @@ describe("createTelegramMessageHandler", () => {
     try {
       const result = await handler(telegramContext().context, privateMessage("Который час?"));
 
-      expect(result?.context).toContain([
-        "<current_time>",
-        "captured_at_utc: 2026-07-30T15:24:18.000Z",
-        "local: timezone не настроена, при необходимости уточни её",
-        "precision: turn_start",
-        "</current_time>",
-      ].join("\n"));
+      expect(result?.context).toContain(
+        [
+          "<current_time>",
+          "captured_at_utc: 2026-07-30T15:24:18.000Z",
+          "local: timezone не настроена, при необходимости уточни её",
+          "precision: turn_start",
+          "</current_time>",
+        ].join("\n"),
+      );
       expect(repository.session.prepareTurn).toHaveBeenCalledWith(
         expect.objectContaining({ now: new Date("2026-07-30T15:24:18.000Z") }),
       );
@@ -74,7 +76,9 @@ describe("createTelegramMessageHandler", () => {
       const result = await handler(telegramContext().context, privateMessage("Который час?"));
 
       expect(repository.currentTime.findTurnTimezone).toHaveBeenCalledWith("user-1", "family-1");
-      expect(result?.context?.join("\n")).toContain("local: 2026-07-30 18:24 четверг, Europe/Moscow (+03:00)");
+      expect(result?.context?.join("\n")).toContain(
+        "local: 2026-07-30 18:24 четверг, Europe/Moscow (+03:00)",
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -94,7 +98,9 @@ describe("createTelegramMessageHandler", () => {
       const result = await handler(telegramContext().context, privateMessage("Который час?"));
 
       expect(result?.context?.join("\n")).toContain("local: timezone не настроена");
-      expect(log).toHaveBeenCalledWith(expect.stringContaining("AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED"));
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining("AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED"),
+      );
     } finally {
       log.mockRestore();
     }
@@ -117,7 +123,11 @@ describe("createTelegramMessageHandler", () => {
     const result = await handler(telegramContext().context, privateMessage("что купить на ужин?"));
 
     expect(repository.memory.retrieve).toHaveBeenCalledWith(
-      expect.objectContaining({ familyId: "family-1", scopes: ["personal", "family"], userId: "user-1" }),
+      expect.objectContaining({
+        familyId: "family-1",
+        scopes: ["personal", "family"],
+        userId: "user-1",
+      }),
       "что купить на ужин?",
       [],
       { excludeMemoryRefs: expect.any(Set) },
@@ -169,14 +179,15 @@ describe("createTelegramMessageHandler", () => {
     const result = await handler(context, privateMessage(`/start ${code}`));
 
     expect(result).toBeNull();
-    expect(sendMessage).toHaveBeenCalledWith(
-      "Владелец создан. Семейный агент готов к настройке.",
-    );
+    expect(sendMessage).toHaveBeenCalledWith("Владелец создан. Семейный агент готов к настройке.");
     expect(repository.telegram.findIdentity).toHaveBeenCalledTimes(1);
     expect(repository.family.claimInvitation).not.toHaveBeenCalled();
-    expect(repository.telegram.claimFirstOwner).toHaveBeenCalledWith(code, expect.objectContaining({
-      telegramUserId: "telegram-101",
-    }));
+    expect(repository.telegram.claimFirstOwner).toHaveBeenCalledWith(
+      code,
+      expect.objectContaining({
+        telegramUserId: "telegram-101",
+      }),
+    );
   });
 
   it("does not spend bootstrap attempts on an ordinary private message", async () => {
@@ -256,22 +267,26 @@ describe("createTelegramMessageHandler", () => {
       role: "owner",
       userId: "user-1",
     });
-    repository.attachments.persist.mockResolvedValue([{
-      mediaType: "application/pdf",
-      path: "inbox/1/договор.pdf",
-      scope: "personal",
-      telegramMessageId: "1",
-    }]);
+    repository.attachments.persist.mockResolvedValue([
+      {
+        mediaType: "application/pdf",
+        path: "inbox/1/договор.pdf",
+        scope: "personal",
+        telegramMessageId: "1",
+      },
+    ]);
     const handler = createTelegramMessageHandler(repository);
     const message = {
       ...privateMessage("Сохрани договор"),
-      attachments: [{
-        fileId: "telegram-file-1",
-        fileName: "договор.pdf",
-        kind: "document" as const,
-        mediaType: "application/pdf",
-        size: 1_024,
-      }],
+      attachments: [
+        {
+          fileId: "telegram-file-1",
+          fileName: "договор.pdf",
+          kind: "document" as const,
+          mediaType: "application/pdf",
+          size: 1_024,
+        },
+      ],
     };
 
     const result = await handler(telegramContext().context, message);
@@ -302,33 +317,39 @@ describe("createTelegramMessageHandler", () => {
       role: "owner",
       userId: "user-1",
     });
-    repository.attachments.persist.mockResolvedValue([{
-      mediaType: "image/jpeg",
-      path: "inbox/42/photo-unique-photo.jpg",
-      scope: "personal",
-      telegramMessageId: "42",
-    }]);
+    repository.attachments.persist.mockResolvedValue([
+      {
+        mediaType: "image/jpeg",
+        path: "inbox/42/photo-unique-photo.jpg",
+        scope: "personal",
+        telegramMessageId: "42",
+      },
+    ]);
     const handler = createTelegramMessageHandler(repository);
     const message: TelegramMessage = {
       ...privateMessage(""),
-      attachments: [{
-        fileId: "telegram-photo-1",
-        fileUniqueId: "unique-photo",
-        kind: "photo",
-        mediaType: "image/jpeg",
-        size: 1_024,
-      }],
+      attachments: [
+        {
+          fileId: "telegram-photo-1",
+          fileUniqueId: "unique-photo",
+          kind: "photo",
+          mediaType: "image/jpeg",
+          size: 1_024,
+        },
+      ],
       messageId: "42",
       raw: { photo: [{ file_id: "telegram-photo-1" }] },
     };
 
     const result = await handler(telegramContext().context, message);
 
-    expect(repository.attachments.persist).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: message.attachments,
-      messageId: "42",
-      scope: "personal",
-    }));
+    expect(repository.attachments.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: message.attachments,
+        messageId: "42",
+        scope: "personal",
+      }),
+    );
     expect(result?.context?.join("\n")).toContain("inbox/42/photo-unique-photo.jpg");
     expect(result?.context?.join("\n")).toContain("image/jpeg");
     expect(result?.context?.join("\n")).toContain('"telegramMessageId":"42"');
@@ -338,44 +359,43 @@ describe("createTelegramMessageHandler", () => {
   it.each([
     ["external", false],
     ["family_private", true],
-  ] as const)(
-    "%s group %s an addressed inbound document",
-    async (groupType, shouldPersist) => {
-      const repository = repositories();
-      repository.telegram.findGroup.mockResolvedValue({
-        familyId: "family-1",
-        groupId: "group-1",
-        messageMode: "addressed_only",
-        telegramChatId: "group-101",
-        toolAllowlist: [],
-        type: groupType,
-      });
-      repository.telegram.findIdentity.mockResolvedValue({
-        familyId: "family-1",
-        role: "member",
-        userId: "user-1",
-      });
-      const handler = createTelegramMessageHandler(repository);
-      const message: TelegramMessage = {
-        ...groupMessage(`@${BOT_USERNAME} посмотри документ`),
-        attachments: [{
+  ] as const)("%s group %s an addressed inbound document", async (groupType, shouldPersist) => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: groupType,
+    });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} посмотри документ`),
+      attachments: [
+        {
           fileId: "telegram-file-1",
           fileName: "документ.pdf",
           kind: "document",
           mediaType: "application/pdf",
-        }],
-        raw: { document: { file_id: "telegram-file-1" } },
-      };
+        },
+      ],
+      raw: { document: { file_id: "telegram-file-1" } },
+    };
 
-      const result = await handler(telegramContext().context, message);
+    const result = await handler(telegramContext().context, message);
 
-      expect(repository.attachments.persist).not.toHaveBeenCalled();
-      expect(repository.attachmentReferences.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
-      expect(repository.journal.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
-      expect(repository.session.prepareTurn).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
-      expect(result === null).toBe(!shouldPersist);
-    },
-  );
+    expect(repository.attachments.persist).not.toHaveBeenCalled();
+    expect(repository.attachmentReferences.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
+    expect(repository.journal.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
+    expect(repository.session.prepareTurn).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
+    expect(result === null).toBe(!shouldPersist);
+  });
 
   it("records an allowlisted external text document as a lazy readable attachment", async () => {
     const repository = repositories();
@@ -401,12 +421,14 @@ describe("createTelegramMessageHandler", () => {
     });
     const message: TelegramMessage = {
       ...groupMessage(`@${BOT_USERNAME} прочитай файл`),
-      attachments: [{
-        fileId: "telegram-text-1",
-        fileName: "notes.md",
-        kind: "document",
-        mediaType: "text/markdown",
-      }],
+      attachments: [
+        {
+          fileId: "telegram-text-1",
+          fileName: "notes.md",
+          kind: "document",
+          mediaType: "text/markdown",
+        },
+      ],
       raw: {
         document: {
           file_id: "telegram-text-1",
@@ -416,7 +438,10 @@ describe("createTelegramMessageHandler", () => {
       },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
     expect(repository.attachments.persist).not.toHaveBeenCalled();
@@ -441,18 +466,23 @@ describe("createTelegramMessageHandler", () => {
     });
     const message: TelegramMessage = {
       ...groupMessage(""),
-      attachments: [{
-        fileId: "telegram-file-secret",
-        fileName: "семейный файл.pdf",
-        fileUniqueId: "stable-file-id",
-        kind: "document",
-        mediaType: "application/pdf",
-        size: 1_024,
-      }],
+      attachments: [
+        {
+          fileId: "telegram-file-secret",
+          fileName: "семейный файл.pdf",
+          fileUniqueId: "stable-file-id",
+          kind: "document",
+          mediaType: "application/pdf",
+          size: 1_024,
+        },
+      ],
       raw: { date: 1_700_000_000, document: { file_id: "telegram-file-secret" } },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(result).toBeNull();
     expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
@@ -477,18 +507,23 @@ describe("createTelegramMessageHandler", () => {
     });
     const message: TelegramMessage = {
       ...groupMessage(`@${BOT_USERNAME} посмотри файл`),
-      attachments: [{
-        fileId: "telegram-file-secret",
-        fileName: "семейный файл.pdf",
-        fileUniqueId: "stable-file-id",
-        kind: "document",
-        mediaType: "application/pdf",
-        size: 1_024,
-      }],
+      attachments: [
+        {
+          fileId: "telegram-file-secret",
+          fileName: "семейный файл.pdf",
+          fileUniqueId: "stable-file-id",
+          kind: "document",
+          mediaType: "application/pdf",
+          size: 1_024,
+        },
+      ],
       raw: { date: 1_700_000_000, document: { file_id: "telegram-file-secret" } },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
     const modelContext = result?.context?.join("\n") ?? "";
 
     expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
@@ -526,7 +561,10 @@ describe("createTelegramMessageHandler", () => {
       raw: { date: 1_700_000_000, document: { file_id: "secret" } },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
     const modelContext = result?.context?.join("\n") ?? "";
 
     expect(modelContext.match(/<\/telegram_attachment_refs>/gu)).toHaveLength(1);
@@ -635,7 +673,11 @@ describe("createTelegramMessageHandler", () => {
 
   it("summarizes the session the turn limit retired before the new session's context is prepared", async () => {
     const repository = repositories();
-    repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "owner", userId: "user-1" });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
     const retiredSessionStartedAt = new Date("2026-10-10T10:00:00.000Z");
     repository.session.prepareTurn.mockResolvedValueOnce({
       continuationToken: "telegram-101:::osinara:1",
@@ -658,8 +700,9 @@ describe("createTelegramMessageHandler", () => {
       retiredSessionStartedAt,
       timezone: null,
     });
-    expect(repository.sessionHandoff.prepare.mock.invocationCallOrder[0]!)
-      .toBeLessThan(repository.groupContext.prepare.mock.invocationCallOrder[0]!);
+    expect(repository.sessionHandoff.prepare.mock.invocationCallOrder[0]!).toBeLessThan(
+      repository.groupContext.prepare.mock.invocationCallOrder[0]!,
+    );
 
     // The next turn resumes the session: nothing to hand over.
     await handler(telegramContext().context, privateMessage("И дальше"));
@@ -668,11 +711,16 @@ describe("createTelegramMessageHandler", () => {
 
   it("announces a carried handoff in the turn's trusted attributes for the hook that marks it shown", async () => {
     const repository = repositories();
-    repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "owner", userId: "user-1" });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
     repository.groupContext.prepare.mockResolvedValueOnce({
       cursorSequence: "1",
       currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
-      durableMessage: "<previous_context_summary>\nнить\n</previous_context_summary>\n\n<current_telegram_message>test</current_telegram_message>",
+      durableMessage:
+        "<previous_context_summary>\nнить\n</previous_context_summary>\n\n<current_telegram_message>test</current_telegram_message>",
       handoffBlock: "<previous_context_summary>\nнить\n</previous_context_summary>",
       omittedBeforeSequence: null,
       timelineOmission: null,

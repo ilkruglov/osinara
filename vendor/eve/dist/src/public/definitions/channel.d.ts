@@ -1,6 +1,13 @@
 import { type ChannelReference } from "#channel/compiled-channel.js";
 import { type ChannelCorsOptions } from "#channel/cors.js";
-import type { ChannelFrom, ChannelReceiveContext, ChannelResolveSession, ChannelRespondOptions, ChannelSendOptions, ChannelSource } from "#channel/channel-operations.js";
+import type {
+  ChannelFrom,
+  ChannelReceiveContext,
+  ChannelResolveSession,
+  ChannelRespondOptions,
+  ChannelSendOptions,
+  ChannelSource,
+} from "#channel/channel-operations.js";
 import type { RouteDefinition } from "#channel/routes.js";
 import type { Session } from "#channel/session.js";
 import type { TurnPolicy } from "#channel/types.js";
@@ -8,13 +15,40 @@ import type { UnstampedMessageStreamEvent } from "#protocol/message.js";
 import type { SessionContext } from "#public/definitions/callback-context.js";
 import type { GenericChannelDefinition, GenericReceiveInput } from "#shared/channel-definition.js";
 declare const CHANNEL_METADATA_TYPE: unique symbol;
-export type { CancelTurnResult, ClearSessionResult, CompactSessionResult, GetEventStreamOptions, ResetSessionResult, SessionCallback, TurnPolicy, } from "#channel/types.js";
+export type {
+  CancelTurnResult,
+  ClearSessionResult,
+  CompactSessionResult,
+  GetEventStreamOptions,
+  ResetSessionResult,
+  SessionCallback,
+  TurnPolicy,
+} from "#channel/types.js";
 export type { Session, SessionHandle } from "#channel/session.js";
 export type { SessionRespondOptions, SessionSendOptions } from "#channel/session.js";
-export type { ChannelFrom, ChannelReceiveContext, ChannelResolveSession, ChannelRespondOptions, ChannelSendOptions, ChannelSource, };
+export type {
+  ChannelFrom,
+  ChannelReceiveContext,
+  ChannelResolveSession,
+  ChannelRespondOptions,
+  ChannelSendOptions,
+  ChannelSource,
+};
 export type { ChannelCors, ChannelCorsOptions } from "#channel/cors.js";
 export { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, WS } from "#channel/routes.js";
-export type { AttachSessionFn, HttpRouteDefinition, RouteDefinition, RouteHandlerArgs, WebSocketMessage, WebSocketPeer, WebSocketRouteDefinition, WebSocketRouteHandler, WebSocketRouteHooks, WebSocketUpgradeRequest, WebSocketUpgradeResult, } from "#channel/routes.js";
+export type {
+  AttachSessionFn,
+  HttpRouteDefinition,
+  RouteDefinition,
+  RouteHandlerArgs,
+  WebSocketMessage,
+  WebSocketPeer,
+  WebSocketRouteDefinition,
+  WebSocketRouteHandler,
+  WebSocketRouteHooks,
+  WebSocketUpgradeRequest,
+  WebSocketUpgradeResult,
+} from "#channel/routes.js";
 /**
  * HTTP method a route handles. Defaults to `"POST"` — almost every route
  * is a webhook. Override only when authoring a non-webhook route such as a
@@ -36,30 +70,30 @@ export type ChannelRouteMethod = ChannelMethod | "WEBSOCKET";
  * Framework callback routes use this for request metadata and background work.
  */
 export interface RouteContext {
-    /**
-     * Hands a background promise to the request host so the serverless
-     * invocation stays alive until the promise resolves. Use this when the
-     * route responds to the platform immediately (e.g. a Slack `200 OK`
-     * acknowledgement) but still needs to finish background work.
-     */
-    readonly waitUntil: (task: Promise<unknown>) => void;
-    /**
-     * Path parameter values extracted from `[name]` segments in the route's
-     * filesystem path. For `agent/channels/sessions/[sessionId]/stream.ts`
-     * mounted at `GET /sessions/:sessionId/stream`, the matched value lives at
-     * `params.sessionId`.
-     * Empty for routes with no path parameters.
-     */
-    readonly params: Readonly<Record<string, string>>;
-    /**
-     * Trusted peer IP for this request, extracted by the host transport
-     * before the route handler runs. `null` when the host can't observe a
-     * peer address (e.g. unit tests calling `route.fetch` directly).
-     *
-     * Pass this to {@link isIpAllowed} from `eve/channels/auth`
-     * when implementing IP allowlisting in a route.
-     */
-    readonly requestIp: string | null;
+  /**
+   * Hands a background promise to the request host so the serverless
+   * invocation stays alive until the promise resolves. Use this when the
+   * route responds to the platform immediately (e.g. a Slack `200 OK`
+   * acknowledgement) but still needs to finish background work.
+   */
+  readonly waitUntil: (task: Promise<unknown>) => void;
+  /**
+   * Path parameter values extracted from `[name]` segments in the route's
+   * filesystem path. For `agent/channels/sessions/[sessionId]/stream.ts`
+   * mounted at `GET /sessions/:sessionId/stream`, the matched value lives at
+   * `params.sessionId`.
+   * Empty for routes with no path parameters.
+   */
+  readonly params: Readonly<Record<string, string>>;
+  /**
+   * Trusted peer IP for this request, extracted by the host transport
+   * before the route handler runs. `null` when the host can't observe a
+   * peer address (e.g. unit tests calling `route.fetch` directly).
+   *
+   * Pass this to {@link isIpAllowed} from `eve/channels/auth`
+   * when implementing IP allowlisting in a route.
+   */
+  readonly requestIp: string | null;
 }
 /**
  * Marker discriminator written into every {@link DisabledRouteSentinel}.
@@ -71,7 +105,7 @@ declare const DISABLED_ROUTE_SENTINEL_KIND = "eve:disabled-channel";
  * default route whose logical name matches the file's slug path.
  */
 export interface DisabledRouteSentinel {
-    readonly kind: typeof DISABLED_ROUTE_SENTINEL_KIND;
+  readonly kind: typeof DISABLED_ROUTE_SENTINEL_KIND;
 }
 /**
  * Returns a sentinel that disables the framework route whose logical name
@@ -85,25 +119,38 @@ export declare function disableRoute(): DisabledRouteSentinel;
  * produced by {@link disableRoute}.
  */
 export declare function isDisabledRouteSentinel(value: unknown): value is DisabledRouteSentinel;
-type EventData<T extends UnstampedMessageStreamEvent["type"]> = Extract<UnstampedMessageStreamEvent, {
-    type: T;
-}> extends {
+type EventData<T extends UnstampedMessageStreamEvent["type"]> =
+  Extract<
+    UnstampedMessageStreamEvent,
+    {
+      type: T;
+    }
+  > extends {
     data: infer D;
-} ? D : undefined;
+  }
+    ? D
+    : undefined;
 /** Continuation routing on the `channel` argument of every channel event handler. */
 export interface ChannelContinuationOps {
-    readonly continuation?: {
-        readonly token: string;
-        rekey(token: string): void;
-    };
+  readonly continuation?: {
+    readonly token: string;
+    rekey(token: string): void;
+  };
 }
 /**
  * Channel context passed to event handlers: `TCtx` intersected with
  * {@link ChannelContinuationOps}.
  */
 export type ChannelContext<TCtx> = TCtx & ChannelContinuationOps;
-type ChannelEventHandler<T extends UnstampedMessageStreamEvent["type"], TCtx> = (data: EventData<T>, channel: ChannelContext<TCtx>, ctx: SessionContext) => void | Promise<void>;
-type ChannelSessionFailedHandler<TCtx> = (data: EventData<"session.failed">, channel: ChannelContext<TCtx>) => void | Promise<void>;
+type ChannelEventHandler<T extends UnstampedMessageStreamEvent["type"], TCtx> = (
+  data: EventData<T>,
+  channel: ChannelContext<TCtx>,
+  ctx: SessionContext,
+) => void | Promise<void>;
+type ChannelSessionFailedHandler<TCtx> = (
+  data: EventData<"session.failed">,
+  channel: ChannelContext<TCtx>,
+) => void | Promise<void>;
 /**
  * Optional handlers keyed by session lifecycle event name. Each handler receives
  * the event `data`, the {@link ChannelContext}, and a {@link SessionContext}
@@ -111,34 +158,35 @@ type ChannelSessionFailedHandler<TCtx> = (data: EventData<"session.failed">, cha
  * and the channel context, with no `ctx`; its data includes `sessionId`.
  */
 export interface ChannelEvents<TCtx = void> {
-    readonly "approval.candidate"?: ChannelEventHandler<"approval.candidate", TCtx>;
-    readonly "approval.settled"?: ChannelEventHandler<"approval.settled", TCtx>;
-    readonly "context.cleared"?: ChannelEventHandler<"context.cleared", TCtx>;
-    readonly "compaction.requested"?: ChannelEventHandler<"compaction.requested", TCtx>;
-    readonly "compaction.completed"?: ChannelEventHandler<"compaction.completed", TCtx>;
-    readonly "turn.started"?: ChannelEventHandler<"turn.started", TCtx>;
-    readonly "actions.requested"?: ChannelEventHandler<"actions.requested", TCtx>;
-    readonly "action.partial"?: ChannelEventHandler<"action.partial", TCtx>;
-    readonly "action.result"?: ChannelEventHandler<"action.result", TCtx>;
-    readonly "message.completed"?: ChannelEventHandler<"message.completed", TCtx>;
-    readonly "message.appended"?: ChannelEventHandler<"message.appended", TCtx>;
-    readonly "reasoning.appended"?: ChannelEventHandler<"reasoning.appended", TCtx>;
-    readonly "reasoning.completed"?: ChannelEventHandler<"reasoning.completed", TCtx>;
-    readonly "input.requested"?: ChannelEventHandler<"input.requested", TCtx>;
-    readonly "turn.failed"?: ChannelEventHandler<"turn.failed", TCtx>;
-    readonly "turn.completed"?: ChannelEventHandler<"turn.completed", TCtx>;
-    readonly "turn.cancelled"?: ChannelEventHandler<"turn.cancelled", TCtx>;
-    readonly "session.failed"?: ChannelSessionFailedHandler<TCtx>;
-    readonly "session.completed"?: ChannelEventHandler<"session.completed", TCtx>;
-    readonly "session.waiting"?: ChannelEventHandler<"session.waiting", TCtx>;
-    readonly "authorization.required"?: ChannelEventHandler<"authorization.required", TCtx>;
-    readonly "authorization.completed"?: ChannelEventHandler<"authorization.completed", TCtx>;
+  readonly "approval.candidate"?: ChannelEventHandler<"approval.candidate", TCtx>;
+  readonly "approval.settled"?: ChannelEventHandler<"approval.settled", TCtx>;
+  readonly "context.cleared"?: ChannelEventHandler<"context.cleared", TCtx>;
+  readonly "compaction.requested"?: ChannelEventHandler<"compaction.requested", TCtx>;
+  readonly "compaction.completed"?: ChannelEventHandler<"compaction.completed", TCtx>;
+  readonly "turn.started"?: ChannelEventHandler<"turn.started", TCtx>;
+  readonly "actions.requested"?: ChannelEventHandler<"actions.requested", TCtx>;
+  readonly "action.partial"?: ChannelEventHandler<"action.partial", TCtx>;
+  readonly "action.result"?: ChannelEventHandler<"action.result", TCtx>;
+  readonly "message.completed"?: ChannelEventHandler<"message.completed", TCtx>;
+  readonly "message.appended"?: ChannelEventHandler<"message.appended", TCtx>;
+  readonly "reasoning.appended"?: ChannelEventHandler<"reasoning.appended", TCtx>;
+  readonly "reasoning.completed"?: ChannelEventHandler<"reasoning.completed", TCtx>;
+  readonly "input.requested"?: ChannelEventHandler<"input.requested", TCtx>;
+  readonly "turn.failed"?: ChannelEventHandler<"turn.failed", TCtx>;
+  readonly "turn.completed"?: ChannelEventHandler<"turn.completed", TCtx>;
+  readonly "turn.cancelled"?: ChannelEventHandler<"turn.cancelled", TCtx>;
+  readonly "session.failed"?: ChannelSessionFailedHandler<TCtx>;
+  readonly "session.completed"?: ChannelEventHandler<"session.completed", TCtx>;
+  readonly "session.waiting"?: ChannelEventHandler<"session.waiting", TCtx>;
+  readonly "authorization.required"?: ChannelEventHandler<"authorization.required", TCtx>;
+  readonly "authorization.completed"?: ChannelEventHandler<"authorization.completed", TCtx>;
 }
 /**
  * Input passed to a channel's `receive` callback when another channel or
  * schedule proactively routes a message to it.
  */
-export type ReceiveInput<TReceiveTarget = Record<string, unknown>> = GenericReceiveInput<TReceiveTarget>;
+export type ReceiveInput<TReceiveTarget = Record<string, unknown>> =
+  GenericReceiveInput<TReceiveTarget>;
 /**
  * The object passed to {@link defineChannel}. `routes` is required; `state`
  * seeds durable adapter state, `context` builds the per-step `channel` argument
@@ -150,7 +198,12 @@ export type ReceiveInput<TReceiveTarget = Record<string, unknown>> = GenericRece
  * `TReceiveTarget` (cross-channel target shape), `TMetadata` (instrumentation
  * projection).
  */
-export type ChannelDefinition<TState = undefined, TCtx = void, TReceiveTarget = Record<string, unknown>, TMetadata extends Record<string, unknown> = Record<string, unknown>> = GenericChannelDefinition<ChannelEvents<TCtx>, TState, TCtx, TReceiveTarget, TMetadata>;
+export type ChannelDefinition<
+  TState = undefined,
+  TCtx = void,
+  TReceiveTarget = Record<string, unknown>,
+  TMetadata extends Record<string, unknown> = Record<string, unknown>,
+> = GenericChannelDefinition<ChannelEvents<TCtx>, TState, TCtx, TReceiveTarget, TMetadata>;
 /**
  * Opaque channel value produced by {@link defineChannel} and exported from
  * `agent/channels/<name>.ts`. Exposes the channel's routes, an optional
@@ -158,22 +211,37 @@ export type ChannelDefinition<TState = undefined, TCtx = void, TReceiveTarget = 
  * {@link ChannelDefinition} it has no `TCtx` parameter: the context type is
  * internal to the definition.
  */
-export interface Channel<TState = undefined, TReceiveTarget = Record<string, unknown>, TMetadata extends Record<string, unknown> = Record<string, unknown>> extends ChannelReference<TReceiveTarget> {
-    readonly [CHANNEL_METADATA_TYPE]?: TMetadata;
-    readonly routes: readonly RouteDefinition<TState>[];
-    readonly cors?: ChannelCorsOptions;
-    readonly receive?: (input: ReceiveInput<TReceiveTarget>, ctx: ChannelReceiveContext<TState>) => Promise<Session>;
-    readonly turnPolicy?: TurnPolicy;
+export interface Channel<
+  TState = undefined,
+  TReceiveTarget = Record<string, unknown>,
+  TMetadata extends Record<string, unknown> = Record<string, unknown>,
+> extends ChannelReference<TReceiveTarget> {
+  readonly [CHANNEL_METADATA_TYPE]?: TMetadata;
+  readonly routes: readonly RouteDefinition<TState>[];
+  readonly cors?: ChannelCorsOptions;
+  readonly receive?: (
+    input: ReceiveInput<TReceiveTarget>,
+    ctx: ChannelReceiveContext<TState>,
+  ) => Promise<Session>;
+  readonly turnPolicy?: TurnPolicy;
 }
 /**
  * Extracts the metadata projection type (`TMetadata`) from a {@link Channel}.
  * Resolves to `Record<string, unknown>` when the value is not a Channel.
  */
-export type InferChannelMetadata<TChannel> = TChannel extends Channel<any, any, infer TMetadata> ? TMetadata : Record<string, unknown>;
+export type InferChannelMetadata<TChannel> =
+  TChannel extends Channel<any, any, infer TMetadata> ? TMetadata : Record<string, unknown>;
 /**
  * Builds a {@link Channel} from a {@link ChannelDefinition}. Returns a value
  * placed at `agent/channels/<name>.ts`; the file path supplies the channel name
  * (do not add a `name` field). `TCtx` (the context factory's return type) is
  * internal to the definition and is not part of the returned Channel signature.
  */
-export declare function defineChannel<TState = undefined, TCtx = void, TReceiveTarget = Record<string, unknown>, TMetadata extends Record<string, unknown> = Record<string, unknown>>(definition: ChannelDefinition<TState, TCtx, TReceiveTarget, TMetadata>): Channel<TState, TReceiveTarget, TMetadata>;
+export declare function defineChannel<
+  TState = undefined,
+  TCtx = void,
+  TReceiveTarget = Record<string, unknown>,
+  TMetadata extends Record<string, unknown> = Record<string, unknown>,
+>(
+  definition: ChannelDefinition<TState, TCtx, TReceiveTarget, TMetadata>,
+): Channel<TState, TReceiveTarget, TMetadata>;

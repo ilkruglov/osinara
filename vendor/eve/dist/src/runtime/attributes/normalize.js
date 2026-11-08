@@ -4,7 +4,7 @@ function truncateForTag(e, t = 256) {
   let n = new TextEncoder();
   if (n.encode(e).length <= t) return e;
   let r = e.length;
-  for (; r > 0; ) {
+  for (; r > 0;) {
     let i = e.charCodeAt(r - 1);
     if (i >= 55296 && i <= 56319) {
       --r;
@@ -19,12 +19,7 @@ function truncateForTag(e, t = 256) {
 function normalizeEveAttributes(e) {
   let t = {};
   for (let [n, r] of Object.entries(e))
-    r !== void 0 &&
-      (t[n] = truncateForTag(typeof r == `number` ? String(r) : r));
+    r !== void 0 && (t[n] = truncateForTag(typeof r == `number` ? String(r) : r));
   return t;
 }
-export {
-  EVE_ATTRIBUTE_VALUE_MAX_BYTES,
-  normalizeEveAttributes,
-  truncateForTag,
-};
+export { EVE_ATTRIBUTE_VALUE_MAX_BYTES, normalizeEveAttributes, truncateForTag };

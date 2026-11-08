@@ -60,9 +60,7 @@ function isTelegramGetMeResponse(value: unknown): value is TelegramGetMeResponse
   );
 }
 
-export function createTelegramGetMe(
-  fetchImplementation: typeof fetch = fetch,
-): GetTelegramMe {
+export function createTelegramGetMe(fetchImplementation: typeof fetch = fetch): GetTelegramMe {
   return async (token) => {
     let response: Response;
     try {

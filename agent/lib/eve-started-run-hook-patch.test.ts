@@ -15,11 +15,24 @@ import { codeText } from "./vendored-code.js";
 
 describe("Eve started run hook wait", () => {
   it("waits for both hooks of a started run through the live-run wait", async () => {
-    const code = codeText(await readFile(new URL("../../vendor/eve/dist/src/execution/workflow-runtime.js", import.meta.url), "utf8"));
+    const code = codeText(
+      await readFile(
+        new URL("../../vendor/eve/dist/src/execution/workflow-runtime.js", import.meta.url),
+        "utf8",
+      ),
+    );
 
-    expect(code).toContain(codeText('import { waitForStartedRunHook } from "./osinara-started-run-hook.js";'));
-    expect(code).toContain(codeText("let e = await waitStarted(() => waitForCommandHookOwner(i.continuationToken));"));
-    expect(code).toContain(codeText("await waitStarted(() => waitForOwnedCommandHook(sessionCommandHookToken(p.runId), p.runId));"));
+    expect(code).toContain(
+      codeText('import { waitForStartedRunHook } from "./osinara-started-run-hook.js";'),
+    );
+    expect(code).toContain(
+      codeText("let e = await waitStarted(() => waitForCommandHookOwner(i.continuationToken));"),
+    );
+    expect(code).toContain(
+      codeText(
+        "await waitStarted(() => waitForOwnedCommandHook(sessionCommandHookToken(p.runId), p.runId));",
+      ),
+    );
     expect(code).toContain(codeText("runStatus: () => getRun(p.runId).status,"));
   });
 });

@@ -8,12 +8,12 @@ export { AGENT_HANDLES_STATE_KEY };
  * child does and cannot collide on externally supplied session suffixes.
  */
 export interface AgentIdentity {
-    /** Model-visible identifier: `ag_<name>:<operation-hash>`. */
-    readonly id: string;
-    /** Subagent tool name. */
-    readonly name: string;
-    /** Agent-graph node used to re-resolve delivery configuration. */
-    readonly nodeId: string;
+  /** Model-visible identifier: `ag_<name>:<operation-hash>`. */
+  readonly id: string;
+  /** Subagent tool name. */
+  readonly name: string;
+  /** Agent-graph node used to re-resolve delivery configuration. */
+  readonly nodeId: string;
 }
 /**
  * One dispatch the parent intends to perform or has performed. Repeating
@@ -21,56 +21,62 @@ export interface AgentIdentity {
  * starting/running handle is a busy conflict.
  */
 export interface StartOperation {
-    readonly kind: "start";
-    /** Derived via {@link deriveAgentOperationId}; stable across replays. */
-    readonly id: string;
-    readonly callId: string;
-    readonly parentTurnId: string;
+  readonly kind: "start";
+  /** Derived via {@link deriveAgentOperationId}; stable across replays. */
+  readonly id: string;
+  readonly callId: string;
+  readonly parentTurnId: string;
 }
 /** A continuation delivery against a parked handle. */
 export interface ContinueOperation {
-    readonly kind: "continue";
-    /** Derived via {@link deriveAgentOperationId}; stable across replays. */
-    readonly id: string;
-    readonly callId: string;
-    readonly parentTurnId: string;
-    /**
-     * Status the handle showed before this delivery, restored when the
-     * delivery is rejected as retryable so the handle returns to `parked`
-     * without optional state.
-     */
-    readonly previousStatus: string;
+  readonly kind: "continue";
+  /** Derived via {@link deriveAgentOperationId}; stable across replays. */
+  readonly id: string;
+  readonly callId: string;
+  readonly parentTurnId: string;
+  /**
+   * Status the handle showed before this delivery, restored when the
+   * delivery is rejected as retryable so the handle returns to `parked`
+   * without optional state.
+   */
+  readonly previousStatus: string;
 }
 /** Where a fresh child will be started. No session exists yet. */
-export type AgentStartTarget = {
-    readonly kind: "agent/local";
-    /** Deterministic child continuation token chosen at dispatch. */
-    readonly continuationToken: string;
-} | {
-    readonly kind: "agent/self";
-    readonly continuationToken: string;
-} | {
-    readonly kind: "agent/remote";
-    /** Deliver target base URL; never model-visible. */
-    readonly url: string;
-    /** Callback base URL stub captured at dispatch; never model-visible. */
-    readonly callbackBaseUrl: string;
-};
+export type AgentStartTarget =
+  | {
+      readonly kind: "agent/local";
+      /** Deterministic child continuation token chosen at dispatch. */
+      readonly continuationToken: string;
+    }
+  | {
+      readonly kind: "agent/self";
+      readonly continuationToken: string;
+    }
+  | {
+      readonly kind: "agent/remote";
+      /** Deliver target base URL; never model-visible. */
+      readonly url: string;
+      /** Callback base URL stub captured at dispatch; never model-visible. */
+      readonly callbackBaseUrl: string;
+    };
 /** Confirmed delivery coordinates of a started child. */
-export type AgentAddress = {
-    readonly kind: "agent/local";
-    readonly sessionId: string;
-    readonly continuationToken: string;
-} | {
-    readonly kind: "agent/self";
-    readonly sessionId: string;
-    readonly continuationToken: string;
-} | {
-    readonly kind: "agent/remote";
-    readonly sessionId: string;
-    readonly url: string;
-    readonly callbackBaseUrl: string;
-};
+export type AgentAddress =
+  | {
+      readonly kind: "agent/local";
+      readonly sessionId: string;
+      readonly continuationToken: string;
+    }
+  | {
+      readonly kind: "agent/self";
+      readonly sessionId: string;
+      readonly continuationToken: string;
+    }
+  | {
+      readonly kind: "agent/remote";
+      readonly sessionId: string;
+      readonly url: string;
+      readonly callbackBaseUrl: string;
+    };
 /**
  * Durable ownership record for one delegated child.
  *
@@ -86,32 +92,36 @@ export type AgentAddress = {
  * instead keeps an `addressed` record whose availability is derived from the
  * tasks bound to its persistent child session.
  */
-export type AgentHandle = {
-    readonly phase: "starting";
-    readonly identity: AgentIdentity;
-    readonly operation: StartOperation;
-    readonly target: AgentStartTarget;
-} | {
-    readonly phase: "running";
-    readonly identity: AgentIdentity;
-    readonly operation: StartOperation | ContinueOperation;
-    readonly address: AgentAddress;
-} | {
-    readonly phase: "parked";
-    readonly identity: AgentIdentity;
-    readonly address: AgentAddress;
-    readonly lastStatus: string;
-} | {
-    /** Persistent task-mode identity and routing, with no execution claim. */
-    readonly phase: "addressed";
-    readonly identity: AgentIdentity;
-    readonly address: AgentAddress;
-};
+export type AgentHandle =
+  | {
+      readonly phase: "starting";
+      readonly identity: AgentIdentity;
+      readonly operation: StartOperation;
+      readonly target: AgentStartTarget;
+    }
+  | {
+      readonly phase: "running";
+      readonly identity: AgentIdentity;
+      readonly operation: StartOperation | ContinueOperation;
+      readonly address: AgentAddress;
+    }
+  | {
+      readonly phase: "parked";
+      readonly identity: AgentIdentity;
+      readonly address: AgentAddress;
+      readonly lastStatus: string;
+    }
+  | {
+      /** Persistent task-mode identity and routing, with no execution claim. */
+      readonly phase: "addressed";
+      readonly identity: AgentIdentity;
+      readonly address: AgentAddress;
+    };
 /** Lifecycle phase of a delegated agent handle. */
 export type AgentHandlePhase = AgentHandle["phase"];
 /** Session-state collection of delegated agent handles. */
 export interface AgentHandleStore {
-    readonly handles: readonly AgentHandle[];
+  readonly handles: readonly AgentHandle[];
 }
 /** Derives the model-visible agent id from the first start operation. */
 export declare function deriveAgentId(name: string, startOperationId: string): string;
@@ -123,7 +133,9 @@ export declare function formatAgentStatus(output: unknown): string;
  * this on every write, which is the invariant that lets the schema-free
  * driver-side reader (`query.ts`) trust stored values without revalidating.
  */
-export declare function assertPersistableAgentHandleStore(store: AgentHandleStore): AgentHandleStore;
+export declare function assertPersistableAgentHandleStore(
+  store: AgentHandleStore,
+): AgentHandleStore;
 /**
  * Reads and validates the agent handle store from session state.
  *
@@ -131,4 +143,6 @@ export declare function assertPersistableAgentHandleStore(store: AgentHandleStor
  * invalid store throws: treating corruption as absence would let the next
  * transition silently replace every delegated child's delivery coordinates.
  */
-export declare function getAgentHandleStore(state: SessionStateMap | undefined): AgentHandleStore | undefined;
+export declare function getAgentHandleStore(
+  state: SessionStateMap | undefined,
+): AgentHandleStore | undefined;

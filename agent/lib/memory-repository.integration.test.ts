@@ -61,8 +61,9 @@ describeWithDatabase("memoryRepository", () => {
       telegramUserId: null,
       userId: first.owner.userId,
     });
-    await expect(memoryRepository.list(first.owner, { cursor: "invalid", limit: 20 }))
-      .rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
+    await expect(
+      memoryRepository.list(first.owner, { cursor: "invalid", limit: 20 }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
   });
   it("keeps the event date and the slot when a record is corrected", async () => {
     const family = await createFamily("family-correction-fields");
@@ -93,10 +94,11 @@ describeWithDatabase("memoryRepository", () => {
 
     // The corrected event stays in its date window; the corrected profile claim stays in its slot.
     expect(correctedEpisode.occurredAt).toBe("2026-09-08T00:00:00.000Z");
-    await expect(database().query(
-      "SELECT attribute, occurred_at FROM memory_items WHERE id = $1",
-      [correctedProfile.id],
-    )).resolves.toMatchObject({ rows: [{ attribute: "работа", occurred_at: null }] });
+    await expect(
+      database().query("SELECT attribute, occurred_at FROM memory_items WHERE id = $1", [
+        correctedProfile.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ attribute: "работа", occurred_at: null }] });
 
     // A kind change drops the metadata the new kind cannot carry: a fact has no event date,
     // an episode has no profile slot.
@@ -115,19 +117,21 @@ describeWithDatabase("memoryRepository", () => {
       source,
     });
     expect(episodeToFact.occurredAt).toBeNull();
-    await expect(database().query(
-      "SELECT kind, attribute, occurred_at FROM memory_items WHERE id = $1",
-      [profileToEpisode.id],
-    )).resolves.toMatchObject({ rows: [{ kind: "episode", attribute: null, occurred_at: null }] });
+    await expect(
+      database().query("SELECT kind, attribute, occurred_at FROM memory_items WHERE id = $1", [
+        profileToEpisode.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ kind: "episode", attribute: null, occurred_at: null }] });
   });
 
   it("keeps episodes with the same words on different dates apart", async () => {
     const family = await createFamily("family-episode-dates");
-    const trip = (operationKey: string, occurredAt: string) => memoryRepository.create(family.member, {
-      ...createInput("family", operationKey, "Анна ездила в Питер"),
-      kind: "episode",
-      occurredAt,
-    });
+    const trip = (operationKey: string, occurredAt: string) =>
+      memoryRepository.create(family.member, {
+        ...createInput("family", operationKey, "Анна ездила в Питер"),
+        kind: "episode",
+        occurredAt,
+      });
 
     const september = await trip("trip-september", "2026-09-08");
     const october = await trip("trip-october", "2026-10-01");
@@ -141,10 +145,11 @@ describeWithDatabase("memoryRepository", () => {
     expect(october.id).not.toBe(september.id);
     expect(septemberAgain.id).toBe(september.id);
     expect(fact.id).not.toBe(september.id);
-    await expect(database().query(
-      "SELECT reinforcement_count FROM memory_items WHERE id = $1",
-      [september.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1 }] });
+    await expect(
+      database().query("SELECT reinforcement_count FROM memory_items WHERE id = $1", [
+        september.id,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ reinforcement_count: 1 }] });
   });
 
   it("allows only the family author or current owner to update and delete a shared record", async () => {
@@ -176,23 +181,29 @@ describeWithDatabase("memoryRepository", () => {
        WHERE item.id IN ($1, $2) ORDER BY item.created_at, item.id`,
       [record.id, corrected.id],
     );
-    expect(versions.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        claim_status: "superseded", content: "Отпуск запланирован на август",
-        memory_ref: record.memoryRef,
-        relation_type: "correction",
+    expect(versions.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          claim_status: "superseded",
+          content: "Отпуск запланирован на август",
+          memory_ref: record.memoryRef,
+          relation_type: "correction",
+        }),
+        expect.objectContaining({
+          claim_status: "active",
+          content: "Отпуск запланирован на сентябрь",
+          memory_ref: corrected.memoryRef,
+        }),
+      ]),
+    );
+    await expect(
+      memoryRepository.updateByRef(family.owner, {
+        content: "Отпуск запланирован на сентябрь",
+        memoryRef: record.memoryRef,
+        operationKey: "family-owner-update",
+        source,
       }),
-      expect.objectContaining({
-        claim_status: "active", content: "Отпуск запланирован на сентябрь",
-        memory_ref: corrected.memoryRef,
-      }),
-    ]));
-    await expect(memoryRepository.updateByRef(family.owner, {
-      content: "Отпуск запланирован на сентябрь",
-      memoryRef: record.memoryRef,
-      operationKey: "family-owner-update",
-      source,
-    })).resolves.toEqual(corrected);
+    ).resolves.toEqual(corrected);
     const otherFamily = await createFamily("other-family");
     await expect(
       memoryRepository.updateByRef(otherFamily.owner, {
@@ -222,7 +233,9 @@ describeWithDatabase("memoryRepository", () => {
     expect(visible.items[0]).toMatchObject({
       id: record.id,
       author: {
-        status: "former_member", telegramUserId: null, userId: null,
+        status: "former_member",
+        telegramUserId: null,
+        userId: null,
       },
     });
   });
@@ -235,9 +248,14 @@ describeWithDatabase("memoryRepository", () => {
       [family.familyId],
     );
     const author: MemoryAuthorization = {
-      familyId: family.familyId, groupId: group.rows[0]!.id, role: "external",
-      scopes: ["group"], telegramActorId: "telegram-author", telegramActorKind: "telegram_user",
-      telegramUserId: "telegram-author", userId: null,
+      familyId: family.familyId,
+      groupId: group.rows[0]!.id,
+      role: "external",
+      scopes: ["group"],
+      telegramActorId: "telegram-author",
+      telegramActorKind: "telegram_user",
+      telegramUserId: "telegram-author",
+      userId: null,
     };
     const stranger = {
       ...author,
@@ -265,10 +283,12 @@ describeWithDatabase("memoryRepository", () => {
     await expect(
       memoryRepository.create(family.owner, { ...input, content: "Подменённое значение" }),
     ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
-    await expect(memoryRepository.create(family.owner, {
-      ...input,
-      provenance: { sessionId: "replayed-from-another-session", turnId: "other-turn" },
-    })).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
+    await expect(
+      memoryRepository.create(family.owner, {
+        ...input,
+        provenance: { sessionId: "replayed-from-another-session", turnId: "other-turn" },
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
     expect(first.memoryRef).toMatch(/^mem_[0-9a-f]{32}$/u);
   });
   it("reinforces an exact explicit remember without creating a second claim", async () => {
@@ -291,11 +311,13 @@ describeWithDatabase("memoryRepository", () => {
        FROM memory_items WHERE family_id = $1 AND owner_user_id = $2`,
       [family.familyId, family.owner.userId],
     );
-    expect(persisted.rows).toEqual([expect.objectContaining({
-      count: 1,
-      last_reinforced_at: expect.any(Date),
-      reinforcement_count: 1,
-    })]);
+    expect(persisted.rows).toEqual([
+      expect.objectContaining({
+        count: 1,
+        last_reinforced_at: expect.any(Date),
+        reinforcement_count: 1,
+      }),
+    ]);
   });
   it("records a system-authored exact reinforcement without the sponsor as audit actor", async () => {
     const family = await createFamily("system-exact");
@@ -308,30 +330,38 @@ describeWithDatabase("memoryRepository", () => {
       systemActor: true,
     });
 
-    await expect(database().query(
-      `SELECT audit.actor_user_id, operation.actor_user_id AS operation_actor_user_id,
+    await expect(
+      database().query(
+        `SELECT audit.actor_user_id, operation.actor_user_id AS operation_actor_user_id,
               operation.actor_telegram_user_id, operation.eve_session_id, operation.eve_turn_id
          FROM audit_events AS audit
          JOIN memory_mutation_operations AS operation ON operation.memory_item_id = audit.subject_id
           AND operation.operation_key = 'system-exact-second'
         WHERE audit.family_id = $1 AND audit.event_type = 'memory.reinforced'`,
-      [family.familyId],
-    )).resolves.toMatchObject({ rows: [{
-      actor_telegram_user_id: null,
-      actor_user_id: null,
-      eve_session_id: "session-current",
-      eve_turn_id: "turn-current",
-      operation_actor_user_id: null,
-    }] });
+        [family.familyId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          actor_telegram_user_id: null,
+          actor_user_id: null,
+          eve_session_id: "session-current",
+          eve_turn_id: "turn-current",
+          operation_actor_user_id: null,
+        },
+      ],
+    });
   });
   it("rejects a system-authored memory mutation without Eve provenance", async () => {
     const family = await createFamily("system-no-provenance");
 
-    await expect(memoryRepository.create(family.owner, {
-      ...createInput("personal", "system-no-provenance"),
-      provenance: undefined,
-      systemActor: true,
-    })).rejects.toThrowError(/AGENT_MEMORY_SYSTEM_PROVENANCE_REQUIRED/u);
+    await expect(
+      memoryRepository.create(family.owner, {
+        ...createInput("personal", "system-no-provenance"),
+        provenance: undefined,
+        systemActor: true,
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_SYSTEM_PROVENANCE_REQUIRED/u);
   });
   it("resolves opaque refs only inside the authorized scope", async () => {
     const family = await createFamily("ref-scope");
@@ -339,17 +369,16 @@ describeWithDatabase("memoryRepository", () => {
       family.owner,
       createInput("personal", "ref-personal"),
     );
-    const shared = await memoryRepository.create(
-      family.owner,
-      createInput("family", "ref-family"),
-    );
+    const shared = await memoryRepository.create(family.owner, createInput("family", "ref-family"));
     const otherFamily = await createFamily("ref-other-family");
-    await expect(memoryRepository.updateByRef(family.member, {
-      content: "Чужая личная запись",
-      memoryRef: personal.memoryRef,
-      operationKey: "ref-cross-user",
-      source: INVALID_SOURCE,
-    })).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
+    await expect(
+      memoryRepository.updateByRef(family.member, {
+        content: "Чужая личная запись",
+        memoryRef: personal.memoryRef,
+        operationKey: "ref-cross-user",
+        source: INVALID_SOURCE,
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
 
     const replayInput = {
       content: "Личная запись после исправления",
@@ -360,15 +389,17 @@ describeWithDatabase("memoryRepository", () => {
     await expect(memoryRepository.updateByRef(family.owner, replayInput)).resolves.toMatchObject({
       content: replayInput.content,
     });
+    await expect(memoryRepository.updateByRef(family.member, replayInput)).rejects.toThrowError(
+      /AGENT_MEMORY_NOT_FOUND/,
+    );
     await expect(
-      memoryRepository.updateByRef(family.member, replayInput),
+      memoryRepository.updateByRef(otherFamily.owner, {
+        content: "Чужая семейная запись",
+        memoryRef: shared.memoryRef,
+        operationKey: "ref-cross-family",
+        source: INVALID_SOURCE,
+      }),
     ).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
-    await expect(memoryRepository.updateByRef(otherFamily.owner, {
-      content: "Чужая семейная запись",
-      memoryRef: shared.memoryRef,
-      operationKey: "ref-cross-family",
-      source: INVALID_SOURCE,
-    })).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
     const firstGroup = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
        VALUES ($1, '-100201', 'Первая группа', 'external', 'addressed_only') RETURNING id`,
@@ -404,54 +435,78 @@ describeWithDatabase("memoryRepository", () => {
       family.owner,
       createInput("personal", "cursor-first", "Альфа"),
     );
-    await memoryRepository.create(
-      family.owner,
-      createInput("personal", "cursor-second", "Омега"),
-    );
+    await memoryRepository.create(family.owner, createInput("personal", "cursor-second", "Омега"));
     const page = await memoryRepository.list(family.owner, { limit: 1 });
     expect(page.nextCursor).not.toBeNull();
     expect(page.nextCursor).not.toContain(first.id);
     expect(page.nextCursor).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-/iu);
-    await expect(memoryRepository.list(family.owner, {
-      cursor: page.nextCursor!,
-      limit: 1,
-    })).resolves.toMatchObject({ items: [{ memoryRef: expect.stringMatching(/^mem_/u) }] });
-    await expect(memoryRepository.list(family.owner, {
-      cursor: page.nextCursor!, limit: 1, scope: "family",
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
+    await expect(
+      memoryRepository.list(family.owner, {
+        cursor: page.nextCursor!,
+        limit: 1,
+      }),
+    ).resolves.toMatchObject({ items: [{ memoryRef: expect.stringMatching(/^mem_/u) }] });
+    await expect(
+      memoryRepository.list(family.owner, {
+        cursor: page.nextCursor!,
+        limit: 1,
+        scope: "family",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
   });
 
   it("bounds immediate undo by unchanged create provenance and replays it safely", async () => {
     const family = await createFamily("undo-provenance");
     const provenance = { sessionId: "session-undo", turnId: "turn-undo" };
-    const record = await memoryRepository.create(family.owner,
-      createInput("personal", "undo-create", "Временная запись", provenance));
-    await expect(memoryRepository.canUndoCreate(family.owner, record.memoryRef, provenance))
-      .resolves.toBe(true);
-    await expect(memoryRepository.canUndoCreate(family.owner, record.memoryRef,
-      { sessionId: "other-session", turnId: provenance.turnId })).resolves.toBe(false);
-    await expect(memoryRepository.canUndoCreate(family.member, record.memoryRef, provenance))
-      .resolves.toBe(false);
+    const record = await memoryRepository.create(
+      family.owner,
+      createInput("personal", "undo-create", "Временная запись", provenance),
+    );
+    await expect(
+      memoryRepository.canUndoCreate(family.owner, record.memoryRef, provenance),
+    ).resolves.toBe(true);
+    await expect(
+      memoryRepository.canUndoCreate(family.owner, record.memoryRef, {
+        sessionId: "other-session",
+        turnId: provenance.turnId,
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      memoryRepository.canUndoCreate(family.member, record.memoryRef, provenance),
+    ).resolves.toBe(false);
     // A versioned correction records a mutation against the source claim and revokes immediate undo.
-    const updated = await memoryRepository.create(family.owner,
-      createInput("personal", "updated-create", "Любимый цвет пользователя синий", provenance));
+    const updated = await memoryRepository.create(
+      family.owner,
+      createInput("personal", "updated-create", "Любимый цвет пользователя синий", provenance),
+    );
     await memoryRepository.updateByRef(family.owner, {
-      content: "Изменённая запись", memoryRef: updated.memoryRef,
-      operationKey: "intervening-update", source: await correctionSource(family.owner, "personal"),
+      content: "Изменённая запись",
+      memoryRef: updated.memoryRef,
+      operationKey: "intervening-update",
+      source: await correctionSource(family.owner, "personal"),
     });
-    await expect(memoryRepository.canUndoCreate(family.owner, updated.memoryRef, provenance))
-      .resolves.toBe(false);
-    await expect(memoryRepository.undoCreate(family.owner, updated.memoryRef,
-      { operationKey: "denied-undo", ...provenance }))
-      .rejects.toThrowError(/AGENT_MEMORY_UNDO_DENIED/u);
+    await expect(
+      memoryRepository.canUndoCreate(family.owner, updated.memoryRef, provenance),
+    ).resolves.toBe(false);
+    await expect(
+      memoryRepository.undoCreate(family.owner, updated.memoryRef, {
+        operationKey: "denied-undo",
+        ...provenance,
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_UNDO_DENIED/u);
     const undo = { operationKey: "undo-call", ...provenance };
-    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef, undo))
-      .resolves.toEqual({ deleted: true });
-    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef, undo))
-      .resolves.toEqual({ deleted: true });
-    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef,
-      { ...undo, sessionId: "replayed-from-another-session" }))
-      .rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
+    await expect(
+      memoryRepository.undoCreate(family.owner, record.memoryRef, undo),
+    ).resolves.toEqual({ deleted: true });
+    await expect(
+      memoryRepository.undoCreate(family.owner, record.memoryRef, undo),
+    ).resolves.toEqual({ deleted: true });
+    await expect(
+      memoryRepository.undoCreate(family.owner, record.memoryRef, {
+        ...undo,
+        sessionId: "replayed-from-another-session",
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
     const audit = await database().query<{ metadata: Record<string, unknown> }>(
       "SELECT metadata FROM audit_events WHERE subject_id = $1 AND event_type = 'memory.deleted'",
       [record.id],
@@ -479,11 +534,12 @@ describeWithDatabase("memoryRepository", () => {
       "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
       [inserted.rows[0]!.id],
     );
-    await expect(memoryRepository.canUndoCreate(
-      family.owner,
-      reference.rows[0]!.memory_ref,
-      { sessionId: "legacy", turnId: "legacy" },
-    )).resolves.toBe(false);
+    await expect(
+      memoryRepository.canUndoCreate(family.owner, reference.rows[0]!.memory_ref, {
+        sessionId: "legacy",
+        turnId: "legacy",
+      }),
+    ).resolves.toBe(false);
   });
 
   it("enforces the configured personal quota before inserting another record", async () => {
@@ -495,7 +551,12 @@ describeWithDatabase("memoryRepository", () => {
        SELECT $1, $2, $2, $3, 'personal', 'fact', 'Факт ' || value::text,
               'test:quota', 'user_confirmed', 'normal', 'quota-' || value::text
        FROM generate_series(1, $4) AS value`,
-      [family.familyId, family.owner.userId, family.owner.telegramUserId, MEMORY_SCOPE_QUOTAS.personal],
+      [
+        family.familyId,
+        family.owner.userId,
+        family.owner.telegramUserId,
+        MEMORY_SCOPE_QUOTAS.personal,
+      ],
     );
 
     await expect(
@@ -513,10 +574,9 @@ describeWithDatabase("memoryRepository", () => {
     await expect(
       memoryRepository.deleteByRef(family.owner, record.memoryRef, "delete-call"),
     ).resolves.toEqual({ deleted: true });
-    const persisted = await database().query(
-      "SELECT 1 FROM memory_items WHERE id = $1",
-      [record.id],
-    );
+    const persisted = await database().query("SELECT 1 FROM memory_items WHERE id = $1", [
+      record.id,
+    ]);
     const jobs = await database().query(
       "SELECT 1 FROM memory_embedding_jobs WHERE memory_item_id = $1",
       [record.id],

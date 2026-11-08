@@ -7,12 +7,12 @@ import type { SpanProcessor } from "#compiled/@vercel/otel/index.js";
  * see them — and eve's accept filter never reaches an author's exporters.
  */
 export interface LocalTracesProcessor extends SpanProcessor {
-    /**
-     * Settles pending writes and drops one root session's liveness, then bounds
-     * the store. A subagent child owns no traces, so releasing one is a no-op
-     * and leaves the shared trace pinned until its root finishes.
-     */
-    releaseSession(sessionId: string): Promise<boolean>;
+  /**
+   * Settles pending writes and drops one root session's liveness, then bounds
+   * the store. A subagent child owns no traces, so releasing one is a no-op
+   * and leaves the shared trace pinned until its root finishes.
+   */
+  releaseSession(sessionId: string): Promise<boolean>;
 }
 /**
  * Reports whether a processor tracks which session owns which trace, so eve can
@@ -23,7 +23,9 @@ export interface LocalTracesProcessor extends SpanProcessor {
  *
  * @internal
  */
-export declare function hasSessionRelease(processor: SpanProcessor): processor is LocalTracesProcessor;
+export declare function hasSessionRelease(
+  processor: SpanProcessor,
+): processor is LocalTracesProcessor;
 /**
  * Writes the OTLP/JSON spool under `.eve/traces/v1`.
  *
@@ -35,7 +37,7 @@ export declare function hasSessionRelease(processor: SpanProcessor): processor i
  * `OtelIntegration`.
  */
 export declare function createLocalTracesProcessor(input?: {
-    readonly appRoot?: string;
+  readonly appRoot?: string;
 }): LocalTracesProcessor;
 /**
  * The local spool's content policy: its options, intersected with
@@ -48,9 +50,9 @@ export declare function createLocalTracesProcessor(input?: {
  * @internal
  */
 export declare function resolveLocalTracesContent(options?: {
-    readonly recordInputs?: boolean;
-    readonly recordOutputs?: boolean;
+  readonly recordInputs?: boolean;
+  readonly recordOutputs?: boolean;
 }): {
-    readonly recordInputs: boolean;
-    readonly recordOutputs: boolean;
+  readonly recordInputs: boolean;
+  readonly recordOutputs: boolean;
 };

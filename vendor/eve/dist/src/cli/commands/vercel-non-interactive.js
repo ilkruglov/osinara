@@ -13,9 +13,7 @@ async function runNonInteractiveLink(t) {
     return (r.error(NOT_AN_AGENT_MESSAGE), (process.exitCode = 1), !1);
   if (i.project === void 0)
     return (
-      r.error(
-        "`eve link --non-interactive` requires `--project <name-or-id>`.",
-      ),
+      r.error("`eve link --non-interactive` requires `--project <name-or-id>`."),
       (process.exitCode = 1),
       !1
     );
@@ -29,9 +27,7 @@ async function runNonInteractiveLink(t) {
   return (await a.runVercel(o, { cwd: n, nonInteractive: !0 }))
     ? (await a.runVercelEnvPull(n, void 0, void 0, !0))
       ? (r.log(`Project linked.`), !0)
-      : (r.error(
-          `Vercel project linked, but pulling environment variables did not complete.`,
-        ),
+      : (r.error(`Vercel project linked, but pulling environment variables did not complete.`),
         (process.exitCode = 1),
         !1)
     : ((process.exitCode = 1), !1);

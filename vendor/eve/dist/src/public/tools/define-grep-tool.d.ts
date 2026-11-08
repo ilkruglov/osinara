@@ -3,11 +3,11 @@ import type { ToolDefinition } from "#public/definitions/tool.js";
  * Input shape accepted by {@link defineGrepTool}.
  */
 export interface DefineGrepToolInput {
-    /**
-     * Optional model-facing description. Defaults to a generic
-     * "Search file contents by pattern in the workspace sandbox." line.
-     */
-    readonly description?: string;
+  /**
+   * Optional model-facing description. Defaults to a generic
+   * "Search file contents by pattern in the workspace sandbox." line.
+   */
+  readonly description?: string;
 }
 /**
  * Defines a model-visible content-search tool that searches file

@@ -14,9 +14,7 @@ async function waitForTaskCommandOwner(e) {
   return await waitForCommandHookOwner(e.taskInboxToken);
 }
 async function sendTaskCommand(e) {
-  return (await sendTaskCommandToOwner(e)) === void 0
-    ? `unreachable`
-    : `delivered`;
+  return (await sendTaskCommandToOwner(e)) === void 0 ? `unreachable` : `delivered`;
 }
 async function sendTaskCommandToOwner(e) {
   let t = { command: e.command, kind: `task-command` },
@@ -24,22 +22,13 @@ async function sendTaskCommandToOwner(e) {
   for (let r = 0; ; r += 1)
     try {
       let n = await resumeHook(e.taskInboxToken, t);
-      if (
-        typeof n != `object` ||
-        !n ||
-        !(`runId` in n) ||
-        typeof n.runId != `string`
-      )
-        throw Error(
-          `Task inbox hook "${e.taskInboxToken}" returned no owner run id.`,
-        );
+      if (typeof n != `object` || !n || !(`runId` in n) || typeof n.runId != `string`)
+        throw Error(`Task inbox hook "${e.taskInboxToken}" returned no owner run id.`);
       return { runId: n.runId };
     } catch (t) {
       if (!isTaskWorkflowTargetGone(t)) throw t;
       if (r + 1 >= n) return;
-      await new Promise((t) =>
-        setTimeout(t, e.retryUnreachable?.delayMs ?? 250),
-      );
+      await new Promise((t) => setTimeout(t, e.retryUnreachable?.delayMs ?? 250));
     }
 }
 async function sendTaskInboundPayload(e) {
@@ -60,8 +49,7 @@ async function readLatestTaskView(e) {
   try {
     return n < 0 ? void 0 : await readWithTimeout(i, `latest task view`);
   } finally {
-    (await i.cancel(`eve task view read complete`).catch(() => {}),
-      i.releaseLock());
+    (await i.cancel(`eve task view read complete`).catch(() => {}), i.releaseLock());
   }
 }
 async function readWithTimeout(e, t) {
@@ -74,9 +62,7 @@ async function readWithTimeout(e, t) {
       }),
     ]);
     if (r.kind === `timeout`)
-      throw Error(
-        `Timed out reading ${t} after ${TASK_VIEW_READ_TIMEOUT_MS}ms.`,
-      );
+      throw Error(`Timed out reading ${t} after ${TASK_VIEW_READ_TIMEOUT_MS}ms.`);
     return r.read.done ? void 0 : r.read.value;
   } finally {
     n !== void 0 && clearTimeout(n);

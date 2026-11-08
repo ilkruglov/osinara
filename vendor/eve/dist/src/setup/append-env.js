@@ -18,7 +18,7 @@ async function appendEnv(n, r, i = {}) {
         : c.push(e)
       : (o.push(`${e}=${t}`), s.push(e));
   }
-  for (; o.length > 0 && o[o.length - 1] === ``; ) o.pop();
+  for (; o.length > 0 && o[o.length - 1] === ``;) o.pop();
   return (
     await writeFile(
       n,

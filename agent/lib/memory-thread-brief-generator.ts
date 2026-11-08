@@ -64,7 +64,8 @@ export function buildMemoryThreadBrief(input: {
   entries: readonly MemoryThreadBriefSource[];
 }): MemoryThreadBriefBlock[] {
   const ordered = [...input.entries].sort((left, right) => {
-    const priority = THREAD_BRIEF_BLOCK_KINDS.indexOf(BLOCK_KIND_BY_ROLE[left.role]) -
+    const priority =
+      THREAD_BRIEF_BLOCK_KINDS.indexOf(BLOCK_KIND_BY_ROLE[left.role]) -
       THREAD_BRIEF_BLOCK_KINDS.indexOf(BLOCK_KIND_BY_ROLE[right.role]);
     return priority !== 0 ? priority : right.occurredAt.localeCompare(left.occurredAt);
   });
@@ -75,10 +76,17 @@ export function buildMemoryThreadBrief(input: {
   // Budgets skip oversized records whole; source text is never truncated or synthesized.
   for (const source of ordered) {
     const kind = BLOCK_KIND_BY_ROLE[source.role];
-    if (source.content.length > THREAD_BRIEF_MAX_CHARACTERS ||
-      characters + source.content.length > THREAD_BRIEF_MAX_CHARACTERS) continue;
-    if (kind === "episodes" && (source.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
-      episodes >= THREAD_CONTEXT_EPISODES_PER_THREAD)) continue;
+    if (
+      source.content.length > THREAD_BRIEF_MAX_CHARACTERS ||
+      characters + source.content.length > THREAD_BRIEF_MAX_CHARACTERS
+    )
+      continue;
+    if (
+      kind === "episodes" &&
+      (source.content.length > THREAD_EPISODE_MAX_CHARACTERS ||
+        episodes >= THREAD_CONTEXT_EPISODES_PER_THREAD)
+    )
+      continue;
     blocks.push({
       ...(source.conflictingEntryRefs === undefined
         ? {}

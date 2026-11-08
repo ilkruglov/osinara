@@ -14,4 +14,6 @@ export type EveAttributeValue = string | number | undefined;
  */
 export declare function truncateForTag(value: string, maxBytes?: number): string;
 /** Normalizes sparse eve attributes into Workflow's string-only shape. */
-export declare function normalizeEveAttributes(attrs: Record<string, EveAttributeValue>): Record<string, string>;
+export declare function normalizeEveAttributes(
+  attrs: Record<string, EveAttributeValue>,
+): Record<string, string>;

@@ -25,8 +25,7 @@ function closingPrefix(e, t) {
   return `  ${`${t.colors.dim(t.glyph.rule)} `.repeat(e - 1)}${t.colors.dim(t.glyph.corner)} `;
 }
 function renderBody(e, t, a, o) {
-  if (e.elided !== void 0 && e.kind === `subagent-step`)
-    return [` ${elisionText(e.elided, a)}`];
+  if (e.elided !== void 0 && e.kind === `subagent-step`) return [` ${elisionText(e.elided, a)}`];
   switch (e.kind) {
     case `user`:
       return renderUser(e, t, a);
@@ -78,11 +77,7 @@ function renderUser(e, t, n) {
   let r = n.colors.cyan(n.glyph.user),
     i = wrap(e.body ?? ``, t - 2).map((e) => `${r} ${e}`),
     a = n.colors.cyan(n.glyph.arrowUp);
-  return e.promptOrigin === `steer`
-    ? [a, ...i]
-    : e.promptOrigin === `queue`
-      ? [...i, a]
-      : i;
+  return e.promptOrigin === `steer` ? [a, ...i] : e.promptOrigin === `queue` ? [...i, a] : i;
 }
 function renderProse(e, n, r) {
   let i = [],
@@ -109,17 +104,13 @@ function renderProse(e, n, r) {
           )
           .flatMap((e) => wrapVisibleLine(e, n - l.length))
           .forEach((e, t) => {
-            t === 0 && !o && i.length === 0
-              ? i.push(`${c}${e}`)
-              : i.push(`${l}${e}`);
+            t === 0 && !o && i.length === 0 ? i.push(`${c}${e}`) : i.push(`${l}${e}`);
           }),
       i.length > 0 ? i : [`${c}`]);
 }
 function renderReasoning(e, t, n) {
   return e.collapsed
-    ? [
-        `${n.colors.gray(n.glyph.reasoning)} ${n.colors.dim(e.title ?? `thinking`)}`,
-      ]
+    ? [`${n.colors.gray(n.glyph.reasoning)} ${n.colors.dim(e.title ?? `thinking`)}`]
     : renderReasoningLines(e.body ?? ``, t, n, n.glyph.reasoning);
 }
 function renderReasoningLines(e, t, n, r) {
@@ -153,9 +144,7 @@ function renderErrorDetail(e, t, n) {
     o = r.length - i.length;
   return (
     o > 0 &&
-      a.push(
-        `  ${n.colors.dim(`${n.glyph.ellipsis} +${o} more line${o === 1 ? `` : `s`}`)}`,
-      ),
+      a.push(`  ${n.colors.dim(`${n.glyph.ellipsis} +${o} more line${o === 1 ? `` : `s`}`)}`),
     a
   );
 }
@@ -175,17 +164,13 @@ function renderNotice(e, t, n) {
 }
 function renderAttentionRows(e, t, n) {
   let r = n.colors.yellow(n.glyph.warning);
-  return wrap(e, t - 2).map(
-    (e, t) => `${t === 0 ? r : ` `} ${paintCommands(e, n)}`,
-  );
+  return wrap(e, t - 2).map((e, t) => `${t === 0 ? r : ` `} ${paintCommands(e, n)}`);
 }
 function renderWarning(e, t, n) {
   return renderAttentionRows(e.body ?? ``, t, n);
 }
 function paintCommands(t, n) {
-  return t.replace(/\/[a-z:-]+/g, (t) =>
-    isPromptControlCommand(t) ? n.colors.blue(t) : t,
-  );
+  return t.replace(/\/[a-z:-]+/g, (t) => (isPromptControlCommand(t) ? n.colors.blue(t) : t));
 }
 function renderCommand(e, t) {
   let n = t.colors,
@@ -217,9 +202,7 @@ function renderResult(e, t, n) {
     return r.length === 0
       ? [`   ${e}  ${t}`]
       : r.map((n, o) =>
-          o === 0
-            ? `   ${e}  ${t} ${n}`
-            : `      ${o === r.length - 1 ? a : i} ${n}`,
+          o === 0 ? `   ${e}  ${t} ${n}` : `      ${o === r.length - 1 ? a : i} ${n}`,
         );
   }
   let i = n.colors.dim(n.glyph.elbow);
@@ -237,13 +220,10 @@ function renderPreformatted(e, t, n) {
     o =
       a.length === 0
         ? [`${r} `]
-        : a.map((e, t) =>
-            t === 0 ? `${r} ${n.colors.bold(e)}` : `  ${n.colors.bold(e)}`,
-          );
+        : a.map((e, t) => (t === 0 ? `${r} ${n.colors.bold(e)}` : `  ${n.colors.bold(e)}`));
   for (let n of (e.body ?? ``).split(`
 `))
-    for (let e of wrapVisibleLine(n, Math.max(1, t - i.length)))
-      o.push(`${i}${e}`);
+    for (let e of wrapVisibleLine(n, Math.max(1, t - i.length))) o.push(`${i}${e}`);
   return o;
 }
 function renderSandbox(e, t, n, r) {
@@ -270,13 +250,10 @@ function renderLog(e, t, r) {
     o = r.colors.dim(r.glyph.rule),
     c = i ? `stderr` : `stdout`,
     l = [`${r.colors.dim(r.glyph.reasoning)} ${r.colors.dim(c)}`];
-  e.elided !== void 0 &&
-    e.elided > 0 &&
-    l.push(`${o} ${elisionText(e.elided, r)}`);
+  e.elided !== void 0 && e.elided > 0 && l.push(`${o} ${elisionText(e.elided, r)}`);
   for (let n of (e.body ?? ``).split(`
 `))
-    for (let e of wrapVisibleLine(n, Math.max(1, t - 2)))
-      l.push(`${o} ${r.colors.dim(a(e))}`);
+    for (let e of wrapVisibleLine(n, Math.max(1, t - 2))) l.push(`${o} ${r.colors.dim(a(e))}`);
   return l;
 }
 function renderTurnStats(e, t, n) {
@@ -292,10 +269,7 @@ function renderSubagentHeader(e, t, n, r) {
     o = a ? `:${e.subtitle.slice(1)}` : ``,
     s = `  ${e.status === `done` ? n.colors.green(n.glyph.subagent) : r.activityPulse.trim().length > 0 ? n.colors.orange(n.glyph.subagent) : n.colors.dim(n.glyph.subagent)} subagent(${i}${o})`;
   return (
-    !a &&
-      e.subtitle !== void 0 &&
-      e.subtitle.length > 0 &&
-      (s += ` ${n.colors.dim(e.subtitle)}`),
+    !a && e.subtitle !== void 0 && e.subtitle.length > 0 && (s += ` ${n.colors.dim(e.subtitle)}`),
     [s]
   );
 }

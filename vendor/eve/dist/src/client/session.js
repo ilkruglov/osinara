@@ -1,11 +1,5 @@
-import {
-  EVE_SESSION_ROUTE_PATH,
-  createEveSessionRoutePath,
-} from "#protocol/routes.js";
-import {
-  EVE_SESSION_ID_HEADER,
-  isCurrentTurnBoundaryEvent,
-} from "#protocol/message.js";
+import { EVE_SESSION_ROUTE_PATH, createEveSessionRoutePath } from "#protocol/routes.js";
+import { EVE_SESSION_ID_HEADER, isCurrentTurnBoundaryEvent } from "#protocol/message.js";
 import { ClientError } from "#client/client-error.js";
 import { createClientUrl } from "#client/url.js";
 import { MessageResponse } from "#client/message-response.js";
@@ -54,19 +48,12 @@ var ClientSession = class ClientSession {
   }
   async respond(e, t = {}) {
     if (e.length === 0)
-      throw Error(
-        `ClientSession.respond() requires at least one input response.`,
-      );
+      throw Error(`ClientSession.respond() requires at least one input response.`);
     return await this.#n({ ...t, inputResponses: e });
   }
   async #n(e) {
     let n = this.#t.streamIndex,
-      r = await postTurn(
-        this.#e,
-        createEveSessionRoutePath(this.#t.sessionId),
-        e,
-        !1,
-      );
+      r = await postTurn(this.#e, createEveSessionRoutePath(this.#t.sessionId), e, !1);
     if ((await readSessionId(r, this.#t.sessionId)) !== this.#t.sessionId)
       throw Error(`Message route returned a different session id.`);
     return this.#r(r, e, n);
@@ -141,8 +128,7 @@ var ClientSession = class ClientSession {
       }))
         ((n += 1), yield r);
     } finally {
-      t >= 0 &&
-        (this.#t = { sessionId: this.#t.sessionId, streamIndex: t + n });
+      t >= 0 && (this.#t = { sessionId: this.#t.sessionId, streamIndex: t + n });
     }
   }
   #o(e) {
@@ -160,9 +146,7 @@ var ClientSession = class ClientSession {
   }
 };
 function shouldKeepActiveTurnAlive(e) {
-  return e && `reconnect` in e
-    ? !1
-    : e?.streamIdleReconnectPolicy?.maxAttempts === void 0;
+  return e && `reconnect` in e ? !1 : e?.streamIdleReconnectPolicy?.maxAttempts === void 0;
 }
 async function postTurn(e, t, n, r) {
   let o = createMessageBody(n, r);
@@ -202,18 +186,12 @@ function createMessageBody(e, t) {
     e.inputResponses !== void 0 &&
       e.inputResponses.length > 0 &&
       (n.inputResponses = e.inputResponses),
-    !t &&
-      e.message !== void 0 &&
-      e.turnPolicy !== void 0 &&
-      (n.turnPolicy = e.turnPolicy),
+    !t && e.message !== void 0 && e.turnPolicy !== void 0 && (n.turnPolicy = e.turnPolicy),
     e.clientContext !== void 0 && (n.clientContext = e.clientContext));
   let r = serializeOutputSchema(e.outputSchema);
   return (
     r !== void 0 && (n.outputSchema = r),
-    (t && n.message === void 0) ||
-    (n.message === void 0 && n.inputResponses === void 0)
-      ? null
-      : n
+    (t && n.message === void 0) || (n.message === void 0 && n.inputResponses === void 0) ? null : n
   );
 }
 export { ClientSession };

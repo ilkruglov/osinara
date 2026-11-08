@@ -7,7 +7,10 @@ import type { OpenAPIConnectionDefinition } from "#public/definitions/connection
  * bridges the gap with runtime checks so authoring errors surface during
  * `eve build`.
  */
-export declare function normalizeMcpClientConnectionDefinition(value: unknown, message: string): McpClientConnectionDefinition;
+export declare function normalizeMcpClientConnectionDefinition(
+  value: unknown,
+  message: string,
+): McpClientConnectionDefinition;
 /**
  * Validates one authored OpenAPI connection module export at build time
  * and returns the public definition type. Mirrors
@@ -15,4 +18,7 @@ export declare function normalizeMcpClientConnectionDefinition(value: unknown, m
  * OpenAPI-specific `spec`/`baseUrl`/`operations` fields and reuses the
  * shared auth and headers validation.
  */
-export declare function normalizeOpenApiConnectionDefinition(value: unknown, message: string): OpenAPIConnectionDefinition;
+export declare function normalizeOpenApiConnectionDefinition(
+  value: unknown,
+  message: string,
+): OpenAPIConnectionDefinition;

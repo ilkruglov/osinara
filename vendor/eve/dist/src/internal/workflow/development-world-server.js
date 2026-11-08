@@ -33,9 +33,7 @@ var LocalParentDevelopmentWorkflowWorld = class {
   #o = !1;
   constructor(e) {
     if (e.transportSecret.length < 16)
-      throw Error(
-        `Development Workflow transport secret is too short to be trusted.`,
-      );
+      throw Error(`Development Workflow transport secret is too short to be trusted.`);
     ((this.#e = e.agentName),
       (this.#t = e.appRoot),
       (this.#n = e.resolveActiveGenerationId),
@@ -68,10 +66,8 @@ var LocalParentDevelopmentWorkflowWorld = class {
   }
   async handleRequest(e) {
     let t = new URL(e.url);
-    if (t.pathname === DEVELOPMENT_WORKFLOW_WORLD_ROUTE)
-      return await this.#c(e);
-    if (t.pathname === DEVELOPMENT_WORKFLOW_STREAM_ROUTE)
-      return await this.#l(e, t);
+    if (t.pathname === DEVELOPMENT_WORKFLOW_WORLD_ROUTE) return await this.#c(e);
+    if (t.pathname === DEVELOPMENT_WORKFLOW_STREAM_ROUTE) return await this.#l(e, t);
   }
   async #s() {
     let e = new Set();
@@ -92,8 +88,7 @@ var LocalParentDevelopmentWorkflowWorld = class {
           );
         }
         for (let t of i.data)
-          t.workflowName === turnWorkflowReference.workflowId &&
-            e.add(t.deploymentId);
+          t.workflowName === turnWorkflowReference.workflowId && e.add(t.deploymentId);
         n = i.hasMore ? (i.cursor ?? void 0) : void 0;
       } while (n !== void 0);
     }
@@ -101,48 +96,34 @@ var LocalParentDevelopmentWorkflowWorld = class {
   }
   async #c(e) {
     if (!this.#f(e) || e.method !== `POST`)
-      return Response.json(
-        { error: `Workflow World request is not trusted.` },
-        { status: 401 },
-      );
+      return Response.json({ error: `Workflow World request is not trusted.` }, { status: 401 });
     try {
       let t = decodeDevelopmentWorldValue(await e.text()),
         n = await this.#d(t);
       return new Response(encodeDevelopmentWorldValue(n));
     } catch (e) {
-      return new Response(
-        encodeDevelopmentWorldValue(serializeDevelopmentWorldError(e)),
-        { status: 500 },
-      );
+      return new Response(encodeDevelopmentWorldValue(serializeDevelopmentWorldError(e)), {
+        status: 500,
+      });
     }
   }
   async #l(e, t) {
     if (!this.#f(e) || e.method !== `GET`)
-      return Response.json(
-        { error: `Workflow World request is not trusted.` },
-        { status: 401 },
-      );
+      return Response.json({ error: `Workflow World request is not trusted.` }, { status: 401 });
     let n = t.searchParams.get(`runId`),
       r = t.searchParams.get(`name`),
       i = t.searchParams.get(`startIndex`);
     if (n === null || r === null)
-      return Response.json(
-        { error: `Workflow stream request is malformed.` },
-        { status: 400 },
-      );
+      return Response.json({ error: `Workflow stream request is malformed.` }, { status: 400 });
     let a = i === null || i === `` ? void 0 : Number(i);
     if (i === `` || (a !== void 0 && !Number.isInteger(a)))
-      return Response.json(
-        { error: `Workflow stream start index is invalid.` },
-        { status: 400 },
-      );
+      return Response.json({ error: `Workflow stream start index is invalid.` }, { status: 400 });
     try {
       return new Response(await this.#i.streams.get(n, r, a));
     } catch (e) {
-      return new Response(
-        encodeDevelopmentWorldValue(serializeDevelopmentWorldError(e)),
-        { status: 500 },
-      );
+      return new Response(encodeDevelopmentWorldValue(serializeDevelopmentWorldError(e)), {
+        status: 500,
+      });
     }
   }
   async #u(...e) {
@@ -156,19 +137,12 @@ var LocalParentDevelopmentWorkflowWorld = class {
     });
   }
   async #d(e) {
-    if (!isDevelopmentWorldCall(e))
-      throw Error(`Development Workflow World call is malformed.`);
+    if (!isDevelopmentWorldCall(e)) throw Error(`Development Workflow World call is malformed.`);
     let t = [...e.arguments];
-    if (
-      e.operation === `getDeploymentId` ||
-      e.operation === `resolveLatestDeploymentId`
-    )
+    if (e.operation === `getDeploymentId` || e.operation === `resolveLatestDeploymentId`)
       return this.#n();
     if (e.operation === `queue`) return await this.#u(...t);
-    if (
-      e.operation === `streams.writeMulti` &&
-      this.#i.streams.writeMulti === void 0
-    ) {
+    if (e.operation === `streams.writeMulti` && this.#i.streams.writeMulti === void 0) {
       for (let e of t[2]) await this.#i.streams.write(t[0], t[1], e);
       return;
     }
@@ -183,16 +157,7 @@ var LocalParentDevelopmentWorkflowWorld = class {
   }
   #p(e) {
     return isValidGenerationId(e)
-      ? existsSync(
-          join(
-            this.#t,
-            `.eve`,
-            `dev-runtime`,
-            `snapshots`,
-            e,
-            `generation.json`,
-          ),
-        )
+      ? existsSync(join(this.#t, `.eve`, `dev-runtime`, `snapshots`, e, `generation.json`))
       : !1;
   }
 };

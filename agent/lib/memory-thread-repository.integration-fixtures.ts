@@ -80,8 +80,15 @@ export async function createThreadRepositoryFixture(): Promise<ThreadRepositoryF
      VALUES ($1, $2, 'family', $2, 'primary', 'reported', $3, 'Family', $4, $5, $6,
              'Анна', now(), 'Будем продолжать ремонт и фиксировать решения', $7, 1, 701,
              '{"content":"Будем продолжать ремонт и фиксировать решения"}'::jsonb)`,
-    [claim.rows[0]!.id, family.rows[0]!.id, conversation.rows[0]!.id, group.rows[0]!.id,
-      participant.rows[0]!.id, user.rows[0]!.id, timeline.rows[0]!.id],
+    [
+      claim.rows[0]!.id,
+      family.rows[0]!.id,
+      conversation.rows[0]!.id,
+      group.rows[0]!.id,
+      participant.rows[0]!.id,
+      user.rows[0]!.id,
+      timeline.rows[0]!.id,
+    ],
   );
   return {
     auth: {
@@ -110,18 +117,23 @@ export async function createBroadThread(fixture: ThreadRepositoryFixture) {
      VALUES ($1, 'family', $1, $2) RETURNING id`,
     [fixture.familyId, fixture.projectTitle],
   );
-  await database().query(
-    "UPDATE memory_items SET memory_project_id = $2 WHERE id = $1",
-    [fixture.claimId, project.rows[0]!.id],
-  );
+  await database().query("UPDATE memory_items SET memory_project_id = $2 WHERE id = $1", [
+    fixture.claimId,
+    project.rows[0]!.id,
+  ]);
   const thread = await database().query<{ id: string }>(
     `INSERT INTO memory_threads
        (family_id, scope, scope_partition_key, memory_project_id, title, purpose,
         title_embedding, title_embedding_model)
      VALUES ($1, 'family', $1, $2, $3, 'Сохранять цели, решения и результаты ремонта',
              $4::vector, $5) RETURNING id`,
-    [fixture.familyId, project.rows[0]!.id, fixture.projectTitle,
-      `[${THREAD_TITLE_VECTOR.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+    [
+      fixture.familyId,
+      project.rows[0]!.id,
+      fixture.projectTitle,
+      `[${THREAD_TITLE_VECTOR.join(",")}]`,
+      MEMORY_EMBEDDING_MODEL_VERSION,
+    ],
   );
   await database().query(
     `INSERT INTO memory_thread_entries

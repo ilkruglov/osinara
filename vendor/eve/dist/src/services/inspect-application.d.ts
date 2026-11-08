@@ -4,17 +4,17 @@ import { type ApplicationInfo } from "#internal/application/paths.js";
  * Stable message-contract details surfaced to CLI consumers.
  */
 export interface ApplicationInspectionMessaging {
-    readonly createSessionRoutePath: string;
-    readonly sessionMessagesRoutePattern: string;
-    readonly streamRoutePattern: string;
+  readonly createSessionRoutePath: string;
+  readonly sessionMessagesRoutePattern: string;
+  readonly streamRoutePattern: string;
 }
 /**
  * Structured application inspection data for CLI surfaces.
  */
 export interface ApplicationInspection {
-    readonly application: ApplicationInfo;
-    readonly compiledState: CompileAgentResult | null;
-    readonly messaging: ApplicationInspectionMessaging;
+  readonly application: ApplicationInfo;
+  readonly compiledState: CompileAgentResult | null;
+  readonly messaging: ApplicationInspectionMessaging;
 }
 /**
  * Resolves application details, compile artifacts, and the active message

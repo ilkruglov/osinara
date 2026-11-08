@@ -86,13 +86,17 @@ describeWithDatabase("Telegram group context rotation repository", () => {
       requesterUserId: data.ownerId,
     });
     const topic = await sessionRepository.prepareTurn(canonicalInput(data, data.groupId, 77));
-    const other = await sessionRepository.prepareTurn(canonicalInput(data, data.otherGroupId, null));
+    const other = await sessionRepository.prepareTurn(
+      canonicalInput(data, data.otherGroupId, null),
+    );
 
-    await expect(telegramGroupAdministrationRepository.requestGroupSessionRotation({
-      familyId: data.familyId,
-      requestedBy: data.ownerId,
-      telegramChatId: "-100-rotation",
-    })).resolves.toEqual({
+    await expect(
+      telegramGroupAdministrationRepository.requestGroupSessionRotation({
+        familyId: data.familyId,
+        requestedBy: data.ownerId,
+        telegramChatId: "-100-rotation",
+      }),
+    ).resolves.toEqual({
       groupId: data.groupId,
       requestedCanonicalSessions: 2,
     });
@@ -131,26 +135,30 @@ describeWithDatabase("Telegram group context rotation repository", () => {
     const main = await sessionRepository.prepareTurn(mainInput);
     const lockClient = await database().connect();
     await lockClient.query("BEGIN");
-    await lockClient.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-      [data.groupId, SESSION_GROUP_ROTATION_LOCK_HASH_SEED],
-    );
+    await lockClient.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+      data.groupId,
+      SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
+    ]);
 
     let preparationSettled = false;
     let rotationSettled = false;
-    const preparation = sessionRepository.prepareTurn({
-      ...mainInput,
-      now: new Date("2026-08-04T08:00:30.000Z"),
-    }).finally(() => {
-      preparationSettled = true;
-    });
-    const rotation = telegramGroupAdministrationRepository.requestGroupSessionRotation({
-      familyId: data.familyId,
-      requestedBy: data.ownerId,
-      telegramChatId: "-100-rotation",
-    }).finally(() => {
-      rotationSettled = true;
-    });
+    const preparation = sessionRepository
+      .prepareTurn({
+        ...mainInput,
+        now: new Date("2026-08-04T08:00:30.000Z"),
+      })
+      .finally(() => {
+        preparationSettled = true;
+      });
+    const rotation = telegramGroupAdministrationRepository
+      .requestGroupSessionRotation({
+        familyId: data.familyId,
+        requestedBy: data.ownerId,
+        telegramChatId: "-100-rotation",
+      })
+      .finally(() => {
+        rotationSettled = true;
+      });
 
     try {
       // Both operations must wait behind the same cross-process group boundary.
@@ -174,11 +182,13 @@ describeWithDatabase("Telegram group context rotation repository", () => {
   it("treats a registered group without an active conversation as already fresh", async () => {
     const data = await fixture();
 
-    await expect(telegramGroupAdministrationRepository.requestGroupSessionRotation({
-      familyId: data.familyId,
-      requestedBy: data.ownerId,
-      telegramChatId: "-100-other",
-    })).resolves.toEqual({
+    await expect(
+      telegramGroupAdministrationRepository.requestGroupSessionRotation({
+        familyId: data.familyId,
+        requestedBy: data.ownerId,
+        telegramChatId: "-100-other",
+      }),
+    ).resolves.toEqual({
       groupId: data.otherGroupId,
       requestedCanonicalSessions: 0,
     });
@@ -187,26 +197,30 @@ describeWithDatabase("Telegram group context rotation repository", () => {
   it("rejects an unknown group without crossing the current family boundary", async () => {
     const data = await fixture();
 
-    await expect(telegramGroupAdministrationRepository.requestGroupSessionRotation({
-      familyId: data.familyId,
-      requestedBy: data.ownerId,
-      telegramChatId: "-100-missing",
-    })).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/);
+    await expect(
+      telegramGroupAdministrationRepository.requestGroupSessionRotation({
+        familyId: data.familyId,
+        requestedBy: data.ownerId,
+        telegramChatId: "-100-missing",
+      }),
+    ).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/);
   });
 
   it("rejects a stale owner snapshot before changing any session", async () => {
     const data = await fixture();
     const main = await sessionRepository.prepareTurn(canonicalInput(data, data.groupId, null));
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [data.familyId, data.ownerId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      data.familyId,
+      data.ownerId,
+    ]);
 
-    await expect(telegramGroupAdministrationRepository.requestGroupSessionRotation({
-      familyId: data.familyId,
-      requestedBy: data.ownerId,
-      telegramChatId: "-100-rotation",
-    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+    await expect(
+      telegramGroupAdministrationRepository.requestGroupSessionRotation({
+        familyId: data.familyId,
+        requestedBy: data.ownerId,
+        telegramChatId: "-100-rotation",
+      }),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
     const session = await database().query<{ rotation_requested: boolean }>(
       `SELECT rotation_requested_at IS NOT NULL AS rotation_requested
          FROM conversation_sessions

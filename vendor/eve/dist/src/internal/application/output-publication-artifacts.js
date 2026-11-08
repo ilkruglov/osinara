@@ -40,11 +40,7 @@ async function rollbackOutputPublication(e) {
       }),
     ])
   ).flatMap((e) => (e.status === `rejected` ? [e.reason] : []));
-  if (t.length > 0)
-    throw AggregateError(
-      t,
-      `Failed to restore the previous build publication.`,
-    );
+  if (t.length > 0) throw AggregateError(t, `Failed to restore the previous build publication.`);
 }
 async function removeOutputPublicationBackups(e) {
   await Promise.all([

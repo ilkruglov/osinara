@@ -1,14 +1,8 @@
 function createAuthorizationRequiredPart(e) {
-  let t =
-    e.data.authorization?.displayName ??
-    formatAuthorizationDisplayName(e.data.name);
+  let t = e.data.authorization?.displayName ?? formatAuthorizationDisplayName(e.data.name);
   return {
     authorization: e.data.authorization,
-    description: normalizeAuthorizationDescription(
-      e.data.description,
-      e.data.name,
-      t,
-    ),
+    description: normalizeAuthorizationDescription(e.data.description, e.data.name, t),
     displayName: t,
     name: e.data.name,
     state: `required`,
@@ -28,8 +22,7 @@ function createAuthorizationCompletedPart(e, t) {
         ? { ...t?.authorization, ...e.data.authorization }
         : void 0,
     description:
-      t?.description ??
-      buildCompletedAuthorizationDescription(n, e.data.outcome, e.data.reason),
+      t?.description ?? buildCompletedAuthorizationDescription(n, e.data.outcome, e.data.reason),
     displayName: n,
     name: e.data.name,
     outcome: e.data.outcome,
@@ -46,9 +39,7 @@ function buildCompletedAuthorizationDescription(e, t, n) {
     : `${e} authorization ${t}${n === void 0 ? `` : ` (${n})`}.`;
 }
 function normalizeAuthorizationDescription(e, t, n) {
-  return e === `Authorization required for ${t}`
-    ? `Authorization required for ${n}`
-    : e;
+  return e === `Authorization required for ${t}` ? `Authorization required for ${n}` : e;
 }
 function formatAuthorizationDisplayName(e) {
   return e.length === 0 ? e : `${e.charAt(0).toUpperCase()}${e.slice(1)}`;

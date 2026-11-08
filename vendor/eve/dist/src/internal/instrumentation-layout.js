@@ -12,10 +12,10 @@ function resolveInstrumentationLayout(e) {
   if (!e.providersEnabled)
     return (
       s &&
-        log.warn(
-          `ignoring instrumentation provider directory because providers are off`,
-          { agentRoot: e.agentRoot, flag: PROVIDERS_FLAG },
-        ),
+        log.warn(`ignoring instrumentation provider directory because providers are off`, {
+          agentRoot: e.agentRoot,
+          flag: PROVIDERS_FLAG,
+        }),
       r === void 0 ? void 0 : { kind: `file`, modulePath: r }
     );
   if (r !== void 0)

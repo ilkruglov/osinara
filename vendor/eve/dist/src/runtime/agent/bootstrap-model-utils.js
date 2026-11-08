@@ -35,8 +35,7 @@ function createBootstrapStreamResult(e) {
         let e = `text_${n}`;
         ((n += 1),
           t.push({ id: e, type: `text-start` }),
-          r.text.length > 0 &&
-            t.push({ delta: r.text, id: e, type: `text-delta` }),
+          r.text.length > 0 && t.push({ delta: r.text, id: e, type: `text-delta` }),
           t.push({ id: e, type: `text-end` }));
         break;
       }

@@ -9,22 +9,14 @@ function joinUserAgentProducts(...e) {
 function appendPackageUserAgent(e) {
   let t = buildPackageUserAgent(),
     n = e.get(`user-agent`);
-  return (
-    n?.split(/\s+/).includes(t) ||
-      e.set(`user-agent`, joinUserAgentProducts(n, t)),
-    e
-  );
+  return (n?.split(/\s+/).includes(t) || e.set(`user-agent`, joinUserAgentProducts(n, t)), e);
 }
 function withPackageUserAgent(e) {
   return (t, n) => {
     let r = new Headers(
-      n?.headers ??
-        (typeof t == `object` && `headers` in t ? t.headers : void 0),
+      n?.headers ?? (typeof t == `object` && `headers` in t ? t.headers : void 0),
     );
-    return (
-      appendPackageUserAgent(r),
-      (e ?? globalThis.fetch)(t, { ...n, headers: r })
-    );
+    return (appendPackageUserAgent(r), (e ?? globalThis.fetch)(t, { ...n, headers: r }));
   };
 }
 export { appendPackageUserAgent, buildPackageUserAgent, withPackageUserAgent };

@@ -1,14 +1,17 @@
-export type GitInitResult = {
-    kind: "initialized";
-} | {
-    kind: "skipped";
-    reason: "existing-metadata" | "git-unavailable" | "parent-repository";
-} | {
-    kind: "failed";
-    repositoryInitialized: boolean;
-    reason: string;
-    stage: "initialize" | "default-branch" | "stage" | "commit";
-};
+export type GitInitResult =
+  | {
+      kind: "initialized";
+    }
+  | {
+      kind: "skipped";
+      reason: "existing-metadata" | "git-unavailable" | "parent-repository";
+    }
+  | {
+      kind: "failed";
+      repositoryInitialized: boolean;
+      reason: string;
+      stage: "initialize" | "default-branch" | "stage" | "commit";
+    };
 /**
  * Initializes a Git repository and records the generated files in an initial
  * commit. Missing Git and parent repositories are skips. Repository metadata

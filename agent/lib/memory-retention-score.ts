@@ -41,7 +41,8 @@ export function memoryRetention(input: MemoryRetentionInput, now: Date): number 
   // An old event learned today is new knowledge. occurredAt is for event-window search only.
   const anchor = Math.max(input.createdAt.getTime(), input.lastReinforcedAt?.getTime() ?? 0);
   const ageDays = Math.max(0, now.getTime() - anchor) / DAY_MILLISECONDS;
-  const stability = memoryStabilityDays(input.kind, input.attribute) *
+  const stability =
+    memoryStabilityDays(input.kind, input.attribute) *
     (1 + Math.log(1 + Math.max(0, input.reinforcementCount)));
   return Math.exp(-ageDays / stability);
 }

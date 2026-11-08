@@ -16,8 +16,7 @@ async function emitTerminalSessionCompletionStep(e) {
   try {
     let n = await deserializeContext(e.serializedContext),
       r = n.get(ChannelKey);
-    r !== void 0 &&
-      (await callAdapterEventHandler(r, i, buildAdapterContext(r, n)));
+    r !== void 0 && (await callAdapterEventHandler(r, i, buildAdapterContext(r, n)));
   } catch (e) {
     log.error(`adapter failed to handle terminal session.completed event`, {
       error: e,
@@ -32,10 +31,10 @@ async function emitTerminalSessionCompletionStep(e) {
       t.releaseLock();
     }
   } catch (e) {
-    log.error(
-      `failed to write terminal session.completed event to durable stream`,
-      { error: e, sessionId: a },
-    );
+    log.error(`failed to write terminal session.completed event to durable stream`, {
+      error: e,
+      sessionId: a,
+    });
   }
 }
 export { emitTerminalSessionCompletionStep };

@@ -1,12 +1,5 @@
 import { mkdir, readdir, realpath, rm, stat, utimes } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { watch } from "node:fs";
 import { isErrnoCode } from "#shared/guards.js";
 import { pathExists } from "#shared/path-exists.js";
@@ -43,7 +36,7 @@ function startPublicationJournalHeartbeat(e) {
 async function acquireOutputPublicationLock(t, n, i) {
   let a = Date.now() + PUBLICATION_LOCK_TIMEOUT_MS,
     o = `${t}.recovery`;
-  for (await mkdir(dirname(t), { recursive: !0 }); ; ) {
+  for (await mkdir(dirname(t), { recursive: !0 }); ;) {
     if (await pathExists(o)) {
       if ((await i(), await recoverStalePublication(t, o, n))) continue;
       await waitForPublicationLockChange(t, a);
@@ -51,8 +44,7 @@ async function acquireOutputPublicationLock(t, n, i) {
     }
     try {
       if ((await mkdir(t), await pathExists(o))) {
-        (await rm(t, { force: !0, recursive: !0 }),
-          await waitForPublicationLockChange(t, a));
+        (await rm(t, { force: !0, recursive: !0 }), await waitForPublicationLockChange(t, a));
         continue;
       }
       try {
@@ -75,8 +67,7 @@ async function acquireOutputPublicationLock(t, n, i) {
       if (!isErrnoCode(e, `EEXIST`)) throw e;
     }
     (await i(),
-      !(await recoverStalePublication(t, o, n)) &&
-        (await waitForPublicationLockChange(t, a)));
+      !(await recoverStalePublication(t, o, n)) && (await waitForPublicationLockChange(t, a)));
   }
 }
 async function recoverStalePublication(e, n, r) {
@@ -116,7 +107,7 @@ async function recoverStalePublication(e, n, r) {
 async function acquireRecoveryLease(t, n) {
   let i = join(t, `lease`),
     a = { pid: process.pid, token: n };
-  for (await mkdir(t, { recursive: !0 }); ; ) {
+  for (await mkdir(t, { recursive: !0 }); ;) {
     try {
       await mkdir(i);
       try {
@@ -206,9 +197,7 @@ async function waitForPublicationLockChange(e, t) {
     let o = !1,
       s = setTimeout(settleResolve, Math.min(r, INCOMPLETE_LOCK_STALE_MS)),
       l = watch(i, (e, t) => {
-        e === `rename` &&
-          (t === null || t.toString().startsWith(a)) &&
-          settleResolve();
+        e === `rename` && (t === null || t.toString().startsWith(a)) && settleResolve();
       });
     function cleanup() {
       (clearTimeout(s), l.close());
@@ -220,13 +209,12 @@ async function waitForPublicationLockChange(e, t) {
       o || ((o = !0), cleanup(), n(e));
     }
     (l.once(`error`, settleReject),
-      Promise.all([
-        readPublicationLockState(e),
-        pathExists(e),
-        pathExists(`${e}.recovery`),
-      ]).then(([e, t, n]) => {
-        ((!t && !n) || e !== c) && settleResolve();
-      }, settleReject));
+      Promise.all([readPublicationLockState(e), pathExists(e), pathExists(`${e}.recovery`)]).then(
+        ([e, t, n]) => {
+          ((!t && !n) || e !== c) && settleResolve();
+        },
+        settleReject,
+      ));
   });
 }
 async function readPublicationLockState(e) {

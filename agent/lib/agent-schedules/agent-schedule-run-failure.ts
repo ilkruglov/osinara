@@ -68,8 +68,8 @@ async function failWithinTransaction(
   failedAt: Date,
   authorizeNotification: boolean,
 ): Promise<{ failed: boolean; notify: boolean }> {
-  const notify = authorizeNotification &&
-    await isAgentScheduleDeliveryAuthorized(client, authorization);
+  const notify =
+    authorizeNotification && (await isAgentScheduleDeliveryAuthorized(client, authorization));
   const failed = await finishActiveAgentScheduleRun(client, {
     applicationSessionId: authorization.applicationSessionId,
     completedAt: failedAt,

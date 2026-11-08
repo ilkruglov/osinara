@@ -1,42 +1,53 @@
 import { z } from "zod";
-declare const VercelOidcClaimsSchema: z.ZodObject<{
+declare const VercelOidcClaimsSchema: z.ZodObject<
+  {
     owner_id: z.ZodString;
     project_id: z.ZodString;
-}, z.core.$strip>;
+  },
+  z.core.$strip
+>;
 /** Vercel owner and project expected to have minted an OIDC token. */
 export interface DevelopmentOidcTarget {
-    readonly ownerId: string;
-    readonly projectId: string;
-    /** Ignore an ambient token and ask Vercel for this exact project. */
-    readonly forceRefresh?: boolean;
+  readonly ownerId: string;
+  readonly projectId: string;
+  /** Ignore an ambient token and ask Vercel for this exact project. */
+  readonly forceRefresh?: boolean;
 }
 type VercelOidcClaimName = keyof z.infer<typeof VercelOidcClaimsSchema>;
 type InvalidVercelOidcClaim = VercelOidcClaimName | "claims";
 /** Why eve could not use a locally resolved Vercel OIDC token. */
-export type DevelopmentOidcTokenFailure = {
-    readonly kind: "resolution-failed";
-    readonly message: string;
-} | {
-    readonly kind: "malformed-token";
-    readonly reason: "missing-payload" | "invalid-json-payload";
-} | {
-    readonly kind: "invalid-claims";
-    readonly invalidClaims: readonly InvalidVercelOidcClaim[];
-} | {
-    readonly kind: "target-mismatch";
-    readonly mismatchedClaims: readonly VercelOidcClaimName[];
-};
+export type DevelopmentOidcTokenFailure =
+  | {
+      readonly kind: "resolution-failed";
+      readonly message: string;
+    }
+  | {
+      readonly kind: "malformed-token";
+      readonly reason: "missing-payload" | "invalid-json-payload";
+    }
+  | {
+      readonly kind: "invalid-claims";
+      readonly invalidClaims: readonly InvalidVercelOidcClaim[];
+    }
+  | {
+      readonly kind: "target-mismatch";
+      readonly mismatchedClaims: readonly VercelOidcClaimName[];
+    };
 /** Result of resolving and checking a Vercel OIDC token for one target. */
-export type DevelopmentOidcTokenResolution = {
-    readonly kind: "resolved";
-    readonly token: string;
-} | DevelopmentOidcTokenFailure;
+export type DevelopmentOidcTokenResolution =
+  | {
+      readonly kind: "resolved";
+      readonly token: string;
+    }
+  | DevelopmentOidcTokenFailure;
 /**
  * Resolves and claim-checks the local Vercel OIDC token for a verified target.
  * It does not authorize a destination; callers must verify the exact origin
  * first and install the result in a `DevelopmentCredentialGate`.
  */
-export declare function resolveDevelopmentOidcToken(input: DevelopmentOidcTarget): Promise<DevelopmentOidcTokenResolution>;
+export declare function resolveDevelopmentOidcToken(
+  input: DevelopmentOidcTarget,
+): Promise<DevelopmentOidcTokenResolution>;
 /**
  * Resolves the current linked project's Vercel OIDC token for a local TUI request.
  *

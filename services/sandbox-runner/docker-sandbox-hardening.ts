@@ -51,36 +51,45 @@ function firewallFailed(reason: string): Error {
 
 /** The IPv4 subnet and gateway of the sandbox's egress network, checked before they reach a shell. */
 async function egressSubnet(docker: Docker, networkId: string): Promise<EgressSubnet> {
-  const network = await docker.getNetwork(networkId).inspect() as { IPAM?: { Config?: Array<{ Gateway?: string; Subnet?: string }> } };
-  const config = (network.IPAM?.Config ?? []).find((entry) => typeof entry.Subnet === "string" && entry.Subnet.includes("."));
-  if (!config?.Subnet || !IPV4_SUBNET_PATTERN.test(config.Subnet)) throw firewallFailed("The egress network has no IPv4 subnet");
+  const network = (await docker.getNetwork(networkId).inspect()) as {
+    IPAM?: { Config?: Array<{ Gateway?: string; Subnet?: string }> };
+  };
+  const config = (network.IPAM?.Config ?? []).find(
+    (entry) => typeof entry.Subnet === "string" && entry.Subnet.includes("."),
+  );
+  if (!config?.Subnet || !IPV4_SUBNET_PATTERN.test(config.Subnet))
+    throw firewallFailed("The egress network has no IPv4 subnet");
   const gateway = config.Gateway ?? "";
-  if (gateway !== "" && !IPV4_PATTERN.test(gateway)) throw firewallFailed("The egress network's gateway is not an IPv4 address");
+  if (gateway !== "" && !IPV4_PATTERN.test(gateway))
+    throw firewallFailed("The egress network's gateway is not an IPv4 address");
   return { gateway: gateway === "" ? null : gateway, subnet: config.Subnet };
 }
 
 // Idempotent: the chains are created once and flushed on every application. The policies go to
 // DROP first, so a re-application on a running container is closed while the chains are empty.
-const firewallScript = (network: EgressSubnet) => [
-  "set -e",
-  "for t in iptables ip6tables; do",
-  "  $t -P OUTPUT DROP",
-  "  $t -P INPUT DROP",
-  "  $t -N OSINARA-OUT 2>/dev/null || $t -F OSINARA-OUT",
-  "  $t -N OSINARA-IN 2>/dev/null || $t -F OSINARA-IN",
-  "  $t -C OUTPUT -j OSINARA-OUT 2>/dev/null || $t -I OUTPUT -j OSINARA-OUT",
-  "  $t -C INPUT -j OSINARA-IN 2>/dev/null || $t -I INPUT -j OSINARA-IN",
-  "  $t -A OSINARA-OUT -o lo -j ACCEPT",
-  "  $t -A OSINARA-OUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
-  "  $t -A OSINARA-IN -i lo -j ACCEPT",
-  "  $t -A OSINARA-IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
-  "  $t -A OSINARA-IN -j DROP",
-  "done",
-  ...(network.gateway === null ? [] : [`iptables -A OSINARA-OUT -d ${network.gateway} -j REJECT`]),
-  `iptables -A OSINARA-OUT -p tcp -d ${network.subnet} --dport ${EGRESS_PROXY_PORT} -m conntrack --ctstate NEW -j ACCEPT`,
-  "iptables -A OSINARA-OUT -j REJECT",
-  "ip6tables -A OSINARA-OUT -j REJECT",
-].join("\n");
+const firewallScript = (network: EgressSubnet) =>
+  [
+    "set -e",
+    "for t in iptables ip6tables; do",
+    "  $t -P OUTPUT DROP",
+    "  $t -P INPUT DROP",
+    "  $t -N OSINARA-OUT 2>/dev/null || $t -F OSINARA-OUT",
+    "  $t -N OSINARA-IN 2>/dev/null || $t -F OSINARA-IN",
+    "  $t -C OUTPUT -j OSINARA-OUT 2>/dev/null || $t -I OUTPUT -j OSINARA-OUT",
+    "  $t -C INPUT -j OSINARA-IN 2>/dev/null || $t -I INPUT -j OSINARA-IN",
+    "  $t -A OSINARA-OUT -o lo -j ACCEPT",
+    "  $t -A OSINARA-OUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+    "  $t -A OSINARA-IN -i lo -j ACCEPT",
+    "  $t -A OSINARA-IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+    "  $t -A OSINARA-IN -j DROP",
+    "done",
+    ...(network.gateway === null
+      ? []
+      : [`iptables -A OSINARA-OUT -d ${network.gateway} -j REJECT`]),
+    `iptables -A OSINARA-OUT -p tcp -d ${network.subnet} --dport ${EGRESS_PROXY_PORT} -m conntrack --ctstate NEW -j ACCEPT`,
+    "iptables -A OSINARA-OUT -j REJECT",
+    "ip6tables -A OSINARA-OUT -j REJECT",
+  ].join("\n");
 
 export async function applyEgressFirewall(
   docker: Docker,
@@ -112,10 +121,17 @@ export async function applyEgressFirewall(
     await helper.start();
     const result = await Promise.race([
       helper.wait() as Promise<{ StatusCode: number }>,
-      new Promise<never>((_, reject) => setTimeout(
-        () => reject(new Error("AGENT_SANDBOX_RUNNER_FIREWALL_TIMED_OUT: Network rules were not applied in time")),
-        FIREWALL_TIMEOUT_MS,
-      )),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "AGENT_SANDBOX_RUNNER_FIREWALL_TIMED_OUT: Network rules were not applied in time",
+              ),
+            ),
+          FIREWALL_TIMEOUT_MS,
+        ),
+      ),
     ]);
     if (result.StatusCode !== 0) {
       const logs = (await helper.logs({ stderr: true, stdout: true })).toString("utf8").slice(-400);
@@ -125,11 +141,13 @@ export async function applyEgressFirewall(
     await helper.remove({ force: true }).catch(() => undefined);
   }
   const address = Object.values(inspection.NetworkSettings?.Networks ?? {})[0]?.IPAddress ?? "";
-  console.info(JSON.stringify({
-    address,
-    code: "AGENT_SANDBOX_RUNNER_FIREWALL_APPLIED",
-    container: inspection.Name?.replace(/^\//u, ""),
-  }));
+  console.info(
+    JSON.stringify({
+      address,
+      code: "AGENT_SANDBOX_RUNNER_FIREWALL_APPLIED",
+      container: inspection.Name?.replace(/^\//u, ""),
+    }),
+  );
 }
 
 const MAX_TRACKED_RUNS = 2_000;
@@ -148,8 +166,11 @@ export function createStartBarrier(apply: (container: Docker.Container) => Promi
   // cap the least recently used settled run is forgotten, never one still being laid; seen
   // again, its rules are laid again, which the script does closed (DROP policies).
   const runs = new Map<string, { generation: string; ready: Promise<void>; settled: boolean }>();
-  return async (container: Docker.Container, inspection?: Docker.ContainerInspectInfo): Promise<void> => {
-    const info = inspection ?? await container.inspect();
+  return async (
+    container: Docker.Container,
+    inspection?: Docker.ContainerInspectInfo,
+  ): Promise<void> => {
+    const info = inspection ?? (await container.inspect());
     const generation = containerGeneration(info);
     const known = runs.get(info.Id);
     if (generation !== null && known?.generation === generation) {
@@ -158,12 +179,14 @@ export function createStartBarrier(apply: (container: Docker.Container) => Promi
       return await known.ready;
     }
     const run = { generation: generation ?? "", ready: Promise.resolve(), settled: false };
-    run.ready = apply(container).catch(async (error: unknown) => {
-      await container.stop({ t: 0 }).catch(() => undefined);
-      throw error;
-    }).finally(() => {
-      run.settled = true;
-    });
+    run.ready = apply(container)
+      .catch(async (error: unknown) => {
+        await container.stop({ t: 0 }).catch(() => undefined);
+        throw error;
+      })
+      .finally(() => {
+        run.settled = true;
+      });
     if (generation !== null) {
       runs.delete(info.Id);
       runs.set(info.Id, run);
@@ -249,7 +272,9 @@ export async function killStrayProcesses(container: Docker.Container): Promise<n
   });
   const { ExitCode } = await exec.inspect();
   if (ExitCode !== 0) {
-    throw new Error(`AGENT_SANDBOX_RUNNER_CLEANUP_FAILED: The stray process sweep exited with ${ExitCode}`);
+    throw new Error(
+      `AGENT_SANDBOX_RUNNER_CLEANUP_FAILED: The stray process sweep exited with ${ExitCode}`,
+    );
   }
   // Docker frames stdout with an 8-byte header; the count is the digits in it.
   const digits = Buffer.concat(chunks).toString("latin1").match(/\d+/gu);

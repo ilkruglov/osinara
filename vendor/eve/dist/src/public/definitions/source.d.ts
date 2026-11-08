@@ -5,4 +5,5 @@
  * export a zero-argument factory that returns the definition synchronously or
  * asynchronously when eve loads the module in Node.js at runtime.
  */
-export type ModuleDefinitionExport<TDefinition> = TDefinition | (() => TDefinition | Promise<TDefinition>);
+export type ModuleDefinitionExport<TDefinition> =
+  TDefinition | (() => TDefinition | Promise<TDefinition>);

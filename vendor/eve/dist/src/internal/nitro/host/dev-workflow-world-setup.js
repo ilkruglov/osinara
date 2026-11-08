@@ -12,8 +12,7 @@ const WORKFLOW_LOCAL_BASE_URL_ENV = `WORKFLOW_LOCAL_BASE_URL`,
 function createDevelopmentWorkflowWorld(t) {
   if (
     usesParentDevelopmentWorkflowWorld(
-      t.preparedHost.compileResult.manifest.config.experimental?.workflow
-        ?.world,
+      t.preparedHost.compileResult.manifest.config.experimental?.workflow?.world,
     )
   )
     return createParentDevelopmentWorkflowWorld({
@@ -21,8 +20,7 @@ function createDevelopmentWorkflowWorld(t) {
       appRoot: t.appRoot,
       resolveActiveGenerationId: () => {
         let n = readActiveDevelopmentRuntimeArtifactsSnapshot(t.appRoot);
-        if (n === void 0)
-          throw Error(`Development runtime generation is unavailable.`);
+        if (n === void 0) throw Error(`Development runtime generation is unavailable.`);
         return basename(n.snapshotRoot);
       },
       transportSecret: t.transportSecret,
@@ -55,9 +53,7 @@ function installWorkflowLocalQueueEnvironment(e) {
       (t === void 0
         ? delete process.env[WORKFLOW_LOCAL_BASE_URL_ENV]
         : (process.env[WORKFLOW_LOCAL_BASE_URL_ENV] = t),
-        n === void 0
-          ? delete process.env[PORT_ENV]
-          : (process.env[PORT_ENV] = n));
+        n === void 0 ? delete process.env[PORT_ENV] : (process.env[PORT_ENV] = n));
     }
   );
 }

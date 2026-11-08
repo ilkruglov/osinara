@@ -8,12 +8,12 @@
 import type { PromptCommandSpec } from "./prompt-commands.js";
 import type { Theme } from "./theme.js";
 export interface CommandTypeaheadState {
-    /** The prompt text the matches were derived from. */
-    readonly query: string;
-    readonly matches: readonly PromptCommandSpec[];
-    readonly selectedIndex: number;
-    /** Esc pressed; the list stays hidden until the query text changes. */
-    readonly dismissed: boolean;
+  /** The prompt text the matches were derived from. */
+  readonly query: string;
+  readonly matches: readonly PromptCommandSpec[];
+  readonly selectedIndex: number;
+  /** Esc pressed; the list stays hidden until the query text changes. */
+  readonly dismissed: boolean;
 }
 /**
  * Derives the typeahead for `text`, carrying the highlight and dismissal
@@ -23,15 +23,24 @@ export interface CommandTypeaheadState {
  * survives narrowing by identity, not index; dismissal survives only while
  * the text is unchanged, so caret moves keep it and any edit reopens.
  */
-export declare function typeaheadFor(commands: readonly PromptCommandSpec[], text: string, previous?: CommandTypeaheadState): CommandTypeaheadState;
+export declare function typeaheadFor(
+  commands: readonly PromptCommandSpec[],
+  text: string,
+  previous?: CommandTypeaheadState,
+): CommandTypeaheadState;
 /** True when the list should render and own the up/down/tab/enter keys. */
 export declare function isTypeaheadOpen(state: CommandTypeaheadState): boolean;
 /** Moves the highlight one row, wrapping at both ends. */
-export declare function moveTypeaheadSelection(state: CommandTypeaheadState, delta: 1 | -1): CommandTypeaheadState;
+export declare function moveTypeaheadSelection(
+  state: CommandTypeaheadState,
+  delta: 1 | -1,
+): CommandTypeaheadState;
 /** Hides the list until the input text changes. */
 export declare function dismissTypeahead(state: CommandTypeaheadState): CommandTypeaheadState;
 /** The highlighted command, when the list has one. */
-export declare function selectedTypeaheadCommand(state: CommandTypeaheadState): PromptCommandSpec | undefined;
+export declare function selectedTypeaheadCommand(
+  state: CommandTypeaheadState,
+): PromptCommandSpec | undefined;
 /**
  * The editor text accepting `spec` produces: the canonical invocation, plus
  * a trailing space when the command takes an argument so the caret lands
@@ -54,4 +63,8 @@ export declare function inlineCommandHint(state: CommandTypeaheadState): string 
  * hint is held back for the inline exact-match view ({@link inlineCommandHint})
  * — it only earns space once a single command is committed to.
  */
-export declare function renderCommandSuggestions(state: CommandTypeaheadState, theme: Theme, width: number): string[];
+export declare function renderCommandSuggestions(
+  state: CommandTypeaheadState,
+  theme: Theme,
+  width: number,
+): string[];

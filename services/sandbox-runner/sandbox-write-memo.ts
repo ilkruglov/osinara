@@ -24,7 +24,11 @@ const MAX_REMEMBERED_FILES = 512;
 export interface SandboxWriteMemo {
   /** True when this exact content already reached this exact container run. */
   readonly hasSkillFile: (generation: string | null, path: string, content: Uint8Array) => boolean;
-  readonly rememberSkillFile: (generation: string | null, path: string, content: Uint8Array) => void;
+  readonly rememberSkillFile: (
+    generation: string | null,
+    path: string,
+    content: Uint8Array,
+  ) => void;
 }
 
 /** Framework-owned skill package files, the only writes the runner may skip. */

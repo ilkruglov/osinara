@@ -1,14 +1,9 @@
 import { resolveAgentsAnnouncement } from "#harness/handles/prompt.js";
-import {
-  formatAgentStatus,
-  getAgentHandleStore,
-} from "#harness/handles/store.js";
+import { formatAgentStatus, getAgentHandleStore } from "#harness/handles/store.js";
 import { getSessionTaskIndex } from "#tasks/session-index.js";
 import { readTaskViews } from "#execution/tasks/parent/control-shared.js";
 async function readTaskAgentViews(e) {
-  let a = (getAgentHandleStore(e.state)?.handles ?? []).filter(
-    (e) => e.phase === `addressed`,
-  );
+  let a = (getAgentHandleStore(e.state)?.handles ?? []).filter((e) => e.phase === `addressed`);
   if (a.length === 0) return [];
   let o = await readTaskViews(getSessionTaskIndex(e.state)),
     s = new Map();
@@ -18,13 +13,8 @@ async function readTaskAgentViews(e) {
   }
   return a.map((e) => {
     let n = s.get(e.identity.id) ?? [],
-      r = n.filter(
-        (e) => e.status === `working` || e.status === `input_required`,
-      );
-    if (r.length > 1)
-      throw Error(
-        `Agent "${e.identity.id}" has more than one nonterminal task.`,
-      );
+      r = n.filter((e) => e.status === `working` || e.status === `input_required`);
+    if (r.length > 1) throw Error(`Agent "${e.identity.id}" has more than one nonterminal task.`);
     let i = r[0];
     if (i !== void 0) {
       let t = i.status === `input_required` ? `input_required` : `working`;
@@ -41,10 +31,7 @@ async function readTaskAgentViews(e) {
       availability: `available`,
       id: e.identity.id,
       name: e.identity.name,
-      statusLine:
-        a?.lastOutput === void 0
-          ? void 0
-          : formatAgentStatus(a.lastOutput.data),
+      statusLine: a?.lastOutput === void 0 ? void 0 : formatAgentStatus(a.lastOutput.data),
     };
   });
 }
@@ -54,8 +41,6 @@ async function appendTaskAgentAnnouncement(t) {
     messages: t.history,
     store: getAgentHandleStore(t.state),
   });
-  return r === void 0
-    ? t
-    : { ...t, history: [...t.history, { content: r, role: `user` }] };
+  return r === void 0 ? t : { ...t, history: [...t.history, { content: r, role: `user` }] };
 }
 export { appendTaskAgentAnnouncement, readTaskAgentViews };

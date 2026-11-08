@@ -38,10 +38,9 @@ export async function resolvePublicInternetAddress(
   try {
     addresses = await client.resolve4(hostname);
   } catch (error) {
-    throw new Error(
-      "AGENT_SANDBOX_EGRESS_IPV4_RESOLUTION_FAILED: IPv4 DNS resolution failed",
-      { cause: error },
-    );
+    throw new Error("AGENT_SANDBOX_EGRESS_IPV4_RESOLUTION_FAILED: IPv4 DNS resolution failed", {
+      cause: error,
+    });
   }
 
   // The selected address is pinned by the caller for the connection, preventing DNS rebinding.

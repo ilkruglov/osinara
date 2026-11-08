@@ -96,8 +96,7 @@ function readMap(e) {
 function writeMap(e, n) {
   let r = { ...e.state };
   return Object.keys(n).length === 0
-    ? (delete r[PROXY_INPUT_REQUESTS_KEY],
-      { ...e, state: Object.keys(r).length > 0 ? r : void 0 })
+    ? (delete r[PROXY_INPUT_REQUESTS_KEY], { ...e, state: Object.keys(r).length > 0 ? r : void 0 })
     : ((r[PROXY_INPUT_REQUESTS_KEY] = n), { ...e, state: r });
 }
 function parseProxyInputRequest(e, t) {
@@ -143,12 +142,7 @@ function parseProxyInputRequestBatch(e) {
   )
     return;
   let t = new Set(e.requestIds);
-  if (
-    !(
-      t.size !== e.requestIds.length ||
-      e.approvalRequestIds.some((e) => !t.has(e))
-    )
-  )
+  if (!(t.size !== e.requestIds.length || e.approvalRequestIds.some((e) => !t.has(e))))
     return {
       approvalRequestIds: e.approvalRequestIds,
       requestIds: e.requestIds,
@@ -164,10 +158,7 @@ function isAllowedChildResponseUrl(t) {
   } catch {
     return !1;
   }
-  return (
-    n.protocol === `https:` ||
-    (n.protocol === `http:` && isLoopbackHostname(n.hostname))
-  );
+  return n.protocol === `https:` || (n.protocol === `http:` && isLoopbackHostname(n.hostname));
 }
 function isInputRequestKind(e) {
   return typeof e == `string` && Object.hasOwn(PROXY_INPUT_REQUEST_KINDS, e);

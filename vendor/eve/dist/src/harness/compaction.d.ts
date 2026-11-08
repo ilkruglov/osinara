@@ -6,12 +6,18 @@ import type { CompactionConfig, ToolLoopHarnessConfig } from "#harness/types.js"
  * step, plus a rough character-based estimate of whatever messages have been
  * appended since.
  */
-export declare function getInputTokenCount(messages: readonly ModelMessage[], config: CompactionConfig): number;
+export declare function getInputTokenCount(
+  messages: readonly ModelMessage[],
+  config: CompactionConfig,
+): number;
 /**
  * Returns true when the message history and fixed compaction-prompt envelope
  * exceed the compaction threshold.
  */
-export declare function shouldCompact(messages: readonly ModelMessage[], config: CompactionConfig): boolean;
+export declare function shouldCompact(
+  messages: readonly ModelMessage[],
+  config: CompactionConfig,
+): boolean;
 /**
  * Resolves the model used to summarize older context during compaction.
  *
@@ -19,13 +25,13 @@ export declare function shouldCompact(messages: readonly ModelMessage[], config:
  * reference, and resolves the authored compaction model only when configured.
  */
 export declare function resolveCompactionModel(input: {
-    readonly compactionModelReference?: RuntimeModelReference;
-    readonly model: LanguageModel;
-    readonly modelReference: RuntimeModelReference;
-    readonly resolveModel: ToolLoopHarnessConfig["resolveModel"];
+  readonly compactionModelReference?: RuntimeModelReference;
+  readonly model: LanguageModel;
+  readonly modelReference: RuntimeModelReference;
+  readonly resolveModel: ToolLoopHarnessConfig["resolveModel"];
 }): Promise<{
-    readonly model: LanguageModel;
-    readonly providerOptions: Parameters<typeof generateText>[0]["providerOptions"];
+  readonly model: LanguageModel;
+  readonly providerOptions: Parameters<typeof generateText>[0]["providerOptions"];
 }>;
 /**
  * Compacts messages by escalation: try each {@link CompactionHeuristic} in
@@ -33,4 +39,13 @@ export declare function resolveCompactionModel(input: {
  * model — keeping the recent tail verbatim when it fits, degrading it to
  * text-only, then shrinking the window.
  */
-export declare function compactMessages(messages: ModelMessage[], model: LanguageModel, config: CompactionConfig, providerOptions?: Parameters<typeof generateText>[0]["providerOptions"], telemetry?: TelemetryOptions, headers?: Record<string, string>, abortSignal?: AbortSignal, forceSummary?: boolean): Promise<ModelMessage[]>;
+export declare function compactMessages(
+  messages: ModelMessage[],
+  model: LanguageModel,
+  config: CompactionConfig,
+  providerOptions?: Parameters<typeof generateText>[0]["providerOptions"],
+  telemetry?: TelemetryOptions,
+  headers?: Record<string, string>,
+  abortSignal?: AbortSignal,
+  forceSummary?: boolean,
+): Promise<ModelMessage[]>;

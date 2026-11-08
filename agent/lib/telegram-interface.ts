@@ -7,12 +7,8 @@
  * - `TelegramInputRequest`: stable structural input used by the secure HITL renderer.
  * - Failure formatters: hide internals while preserving stable support references.
  */
-import {
-  buildApprovalMessage,
-  genericApprovalFacts,
-} from "./telegram-hitl/approval-message.js";
+import { buildApprovalMessage, genericApprovalFacts } from "./telegram-hitl/approval-message.js";
 import { experimentApprovalSummary } from "./authored-skills/skill-experiment.js";
-
 
 const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
   remember: "сохранить запись в общей или чувствительной памяти",
@@ -67,8 +63,7 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
       "подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены",
     remove:
       "удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата",
-    update_policy:
-      "изменить политику внешней Telegram-группы. Группа и бот останутся подключены",
+    update_policy: "изменить политику внешней Telegram-группы. Группа и бот останутся подключены",
   },
   notification_settings: {
     set: "изменить настройки уведомлений",
@@ -137,10 +132,11 @@ function agentScheduleRecurrenceLines(value: unknown): string[] {
   const recurrence = value as Record<string, unknown>;
   if (recurrence.kind === "once") return ["Периодичность: один раз"];
   if (typeof recurrence.kind !== "string" || typeof recurrence.interval !== "number") return [];
-  const days = Array.isArray(recurrence.daysOfWeek) &&
-      recurrence.daysOfWeek.every((day) => typeof day === "number")
-    ? `, дни ${recurrence.daysOfWeek.join(", ")}`
-    : "";
+  const days =
+    Array.isArray(recurrence.daysOfWeek) &&
+    recurrence.daysOfWeek.every((day) => typeof day === "number")
+      ? `, дни ${recurrence.daysOfWeek.join(", ")}`
+      : "";
   return [`Периодичность: ${recurrence.kind}, интервал ${recurrence.interval}${days}`];
 }
 
@@ -161,11 +157,16 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
       if (input.action === "update_policy") {
         // An empty array is still a complete replacement and must be visible before approval.
         const allowlist = Array.isArray(input.toolAllowlist)
-          ? input.toolAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+          ? input.toolAllowlist
+              .filter((item): item is string => typeof item === "string")
+              .join(", ")
           : null;
-        const memoryReview = input.memoryReview === "enabled"
-          ? "включена"
-          : input.memoryReview === "disabled" ? "выключена" : null;
+        const memoryReview =
+          input.memoryReview === "enabled"
+            ? "включена"
+            : input.memoryReview === "disabled"
+              ? "выключена"
+              : null;
         return [
           ...line("Telegram chat ID", "telegramChatId"),
           ...line("Режим сообщений", "messageMode"),
@@ -230,7 +231,9 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
       ];
     case "manage_external_group_schedule": {
       const capabilities = Array.isArray(input.capabilityAllowlist)
-        ? input.capabilityAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+        ? input.capabilityAllowlist
+            .filter((item): item is string => typeof item === "string")
+            .join(", ")
         : null;
       return [
         ...line("ID", "id"),
@@ -263,7 +266,11 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
     case "manage_skill":
       return [
         ...(input.action === "create_experiment" ? experimentApprovalSummary(input.protocol) : []),
-        ...(input.action === "publish" && input.experimentId ? ["Испытание: изолированные файлы и/или тестовые ответы инструментов. Работа внешних сервисов не проверялась."] : []),
+        ...(input.action === "publish" && input.experimentId
+          ? [
+              "Испытание: изолированные файлы и/или тестовые ответы инструментов. Работа внешних сервисов не проверялась.",
+            ]
+          : []),
         ...line("Эксперимент", "experimentId"),
         ...line("Навык", "name"),
         ...(typeof input.version === "number" ? [`Вернуться к версии: ${input.version}`] : []),
@@ -274,10 +281,18 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...(Array.isArray(input.trials) ? [`Прогнано примеров: ${input.trials.length}`] : []),
         ...line("Группа", "group"),
         ...(typeof input.markdown === "string"
-          ? [`Текст навыка: ${safe(input.markdown.split("\n").slice(0, 6).join(" ").slice(0, 300))}${input.markdown.length > 300 ? "…" : ""}`]
+          ? [
+              `Текст навыка: ${safe(input.markdown.split("\n").slice(0, 6).join(" ").slice(0, 300))}${input.markdown.length > 300 ? "…" : ""}`,
+            ]
           : []),
         ...(input.files && typeof input.files === "object"
-          ? [`Файлы: ${Object.keys(input.files as Record<string, unknown>).map(safe).join(", ") || "нет"}`]
+          ? [
+              `Файлы: ${
+                Object.keys(input.files as Record<string, unknown>)
+                  .map(safe)
+                  .join(", ") || "нет"
+              }`,
+            ]
           : []),
       ];
     case "remove_group_file":
@@ -288,8 +303,8 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...(input.quietStart === null && input.quietEnd === null
           ? ["Тихие часы: отключены"]
           : typeof input.quietStart === "string" && typeof input.quietEnd === "string"
-          ? [`Тихие часы: ${safe(input.quietStart)}–${safe(input.quietEnd)}`]
-          : []),
+            ? [`Тихие часы: ${safe(input.quietStart)}–${safe(input.quietEnd)}`]
+            : []),
       ];
     default:
       return [];
@@ -300,7 +315,7 @@ function approvalActionLabel(toolName: string, input: Record<string, unknown>): 
   const direct = TOOL_ACTION_LABELS[toolName];
   if (direct) return direct;
   const action = input.action;
-  return typeof action === "string" ? MANAGED_ACTION_LABELS[toolName]?.[action] ?? null : null;
+  return typeof action === "string" ? (MANAGED_ACTION_LABELS[toolName]?.[action] ?? null) : null;
 }
 
 function supportReference(details: FailureData["details"]): string | null {
@@ -313,8 +328,10 @@ function supportReference(details: FailureData["details"]): string | null {
  * AI SDK refuses the prompt before the provider sees it. Only a new session recovers from that.
  */
 export function isUnrecoverableHistoryFailure(data: FailureData): boolean {
-  return data.code === "MODEL_CALL_FAILED" &&
-    JSON.stringify(data.details ?? {}).includes("AI_MissingToolResultsError");
+  return (
+    data.code === "MODEL_CALL_FAILED" &&
+    JSON.stringify(data.details ?? {}).includes("AI_MissingToolResultsError")
+  );
 }
 
 function publicFailureExplanation(data: FailureData): string | null {
@@ -356,9 +373,10 @@ export function localizeTelegramInputRequest<T extends TelegramInputRequest>(req
       actionLabel,
       // A reviewed tool that shows no parameters chose that deliberately. Only a tool with no
       // description at all falls back to bounded scalar fields instead of an empty confirmation.
-      facts: reviewed.length || actionLabel !== null
-        ? reviewed
-        : genericApprovalFacts(request.action.input),
+      facts:
+        reviewed.length || actionLabel !== null
+          ? reviewed
+          : genericApprovalFacts(request.action.input),
     }),
   };
 }

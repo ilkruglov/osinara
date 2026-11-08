@@ -1,12 +1,7 @@
 import { createChannelDeliveryMetadata } from "#channel/delivery-metadata.js";
 import { serializeUrlFilePartsInMessage } from "#channel/send-input.js";
 import { DEFAULT_TURN_POLICY } from "#channel/types.js";
-import {
-  AuthKey,
-  ContinuationTokenKey,
-  InitiatorAuthKey,
-  SessionIdKey,
-} from "#context/keys.js";
+import { AuthKey, ContinuationTokenKey, InitiatorAuthKey, SessionIdKey } from "#context/keys.js";
 import { toChannelLocalContinuationToken } from "#shared/continuation-token.js";
 function createSession(e, r, i = {}) {
   return {
@@ -31,8 +26,7 @@ function createSession(e, r, i = {}) {
       });
     },
     async respond(t, n) {
-      if (t.length === 0)
-        throw Error(`respond() requires at least one input response.`);
+      if (t.length === 0) throw Error(`respond() requires at least one input response.`);
       let a = sessionCallbackToTurnCaller(n.callback),
         o = createDelivery(i),
         s = { inputResponses: t };
@@ -132,9 +126,4 @@ function sessionCallbackToTurnCaller(e) {
         taskId: e.taskId,
       };
 }
-export {
-  buildSessionHandle,
-  createAttachSessionFn,
-  createSession,
-  sessionCallbackToTurnCaller,
-};
+export { buildSessionHandle, createAttachSessionFn, createSession, sessionCallbackToTurnCaller };

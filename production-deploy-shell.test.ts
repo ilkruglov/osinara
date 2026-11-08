@@ -51,11 +51,14 @@ describe("production deploy shell policies", () => {
   });
 
   it("rejects a release image exported by the server environment", () => {
-    const result = runShell(`
+    const result = runShell(
+      `
       source scripts/production-deploy/common.sh
       log_event() { printf '%s\\n' "$1" >&2; }
       require_release_environment_clean
-    `, { OSINARA_APP_IMAGE: "attacker-controlled" });
+    `,
+      { OSINARA_APP_IMAGE: "attacker-controlled" },
+    );
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("DEPLOY_RELEASE_ENV_EXPORTED");
@@ -101,13 +104,17 @@ describe("production deploy shell policies", () => {
     };
     const validate = (manifestImages: Record<string, string>, storedMemoryEmbedding = "") => {
       const path = join(directory, `manifest-${Object.keys(manifestImages).join("-")}.json`);
-      writeFileSync(path, JSON.stringify({
-        commitSha: "b".repeat(40),
-        composeSha256: "c".repeat(64),
-        images: manifestImages,
-        schemaVersion: 1,
-        version: "1.8.10",
-      }), "utf8");
+      writeFileSync(
+        path,
+        JSON.stringify({
+          commitSha: "b".repeat(40),
+          composeSha256: "c".repeat(64),
+          images: manifestImages,
+          schemaVersion: 1,
+          version: "1.8.10",
+        }),
+        "utf8",
+      );
       return runShell(`
         source scripts/production-deploy/common.sh
         source scripts/production-deploy/release.sh
@@ -122,10 +129,16 @@ describe("production deploy shell policies", () => {
     };
 
     const exact = validate(images);
-    const withEmbedder = validate({ ...images, memoryEmbedding: digest("memory-embedding") }, digest("memory-embedding"));
+    const withEmbedder = validate(
+      { ...images, memoryEmbedding: digest("memory-embedding") },
+      digest("memory-embedding"),
+    );
     const nullEmbedder = validate({ ...images, memoryEmbedding: null as unknown as string });
     const emptyEmbedder = validate({ ...images, memoryEmbedding: "" });
-    const embedderNotApproved = validate({ ...images, memoryEmbedding: digest("memory-embedding") });
+    const embedderNotApproved = validate({
+      ...images,
+      memoryEmbedding: digest("memory-embedding"),
+    });
     const foreignEmbedder = validate({ ...images, memoryEmbedding: digest("app") }, digest("app"));
     const withGateway = validate({ ...images, cliProxy: digest("cli-proxy") });
     const unknown = validate({ ...images, extra: digest("app") });
@@ -153,7 +166,8 @@ describe("production deploy shell policies", () => {
   // after the manifest started naming it; the installed controller must approve both composes.
   it("approves the embedder from the public TEI image or from the image the manifest names", () => {
     const digest = (name: string) => `ghcr.io/ilkruglov/osinara-${name}@sha256:${"a".repeat(64)}`;
-    const resolve = (embedder: string, manifestEmbedder: string) => runShell(`
+    const resolve = (embedder: string, manifestEmbedder: string) =>
+      runShell(`
       source scripts/production-deploy/common.sh
       source scripts/production-deploy/release.sh
       log_event() { printf '%s\\n' "$1" >&2; }
@@ -174,10 +188,17 @@ describe("production deploy shell policies", () => {
       rm -rf "$WORK_DIR"
     `);
 
-    const tei = "ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07";
+    const tei =
+      "ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07";
     expect(resolve(tei, "").status, "TEI without a manifest image").toBe(0);
-    expect(resolve(tei, digest("memory-embedding")).status, "TEI while the manifest names the image").toBe(0);
-    expect(resolve(digest("memory-embedding"), digest("memory-embedding")).status, "the named image").toBe(0);
+    expect(
+      resolve(tei, digest("memory-embedding")).status,
+      "TEI while the manifest names the image",
+    ).toBe(0);
+    expect(
+      resolve(digest("memory-embedding"), digest("memory-embedding")).status,
+      "the named image",
+    ).toBe(0);
     const unnamed = resolve(digest("memory-embedding"), "");
     expect(unnamed.status).toBe(1);
     expect(unnamed.stderr).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
@@ -295,8 +316,9 @@ describe("production deploy shell policies", () => {
       deployScript.indexOf("handle_failure()"),
       deployScript.indexOf("handle_signal()"),
     );
-    expect(failureHandler.indexOf("cleanup_created_candidate_volumes"))
-      .toBeGreaterThan(failureHandler.indexOf("restart_current_release"));
+    expect(failureHandler.indexOf("cleanup_created_candidate_volumes")).toBeGreaterThan(
+      failureHandler.indexOf("restart_current_release"),
+    );
   });
 
   it("does not clean an attempt-created candidate volume after migration starts", () => {
@@ -381,7 +403,11 @@ describe("production deploy shell policies", () => {
     `);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(readdirSync(directory).sort()).toEqual(["20260714T090552Z-to-v0.2.3", "20260714T113003Z-to-v0.2.4", "initial-migration-v0.1.1"]);
+    expect(readdirSync(directory).sort()).toEqual([
+      "20260714T090552Z-to-v0.2.3",
+      "20260714T113003Z-to-v0.2.4",
+      "initial-migration-v0.1.1",
+    ]);
   });
 
   it("removes only non-retained Osinara release image references", () => {
@@ -419,8 +445,11 @@ describe("production deploy shell policies", () => {
     expect(calls).toContain(`image rm ghcr.io/ilkruglov/osinara-app@sha256:${"a".repeat(64)}`);
     expect(calls).not.toContain(`image rm ghcr.io/ilkruglov/osinara-app@sha256:${"b".repeat(64)}`);
     expect(calls).not.toContain(`image rm ghcr.io/ilkruglov/osinara-app@sha256:${"c".repeat(64)}`);
-    expect(readdirSync(directory).filter((name) => name.startsWith("v")).sort())
-      .toEqual(["v0.2.10", "v0.2.9"]);
+    expect(
+      readdirSync(directory)
+        .filter((name) => name.startsWith("v"))
+        .sort(),
+    ).toEqual(["v0.2.10", "v0.2.9"]);
   });
 
   // 26 September 2026: three sets of images (previous, current, the one just pulled) plus a
@@ -430,9 +459,16 @@ describe("production deploy shell policies", () => {
     const directory = mkdtempSync(join(tmpdir(), "osinara-image-prepull-"));
     temporaryDirectories.push(directory);
     const callsPath = join(directory, "docker-calls.log");
-    for (const [version, digest] of [["v0.2.9", "b".repeat(64)], ["v0.2.10", "c".repeat(64)]]) {
+    for (const [version, digest] of [
+      ["v0.2.9", "b".repeat(64)],
+      ["v0.2.10", "c".repeat(64)],
+    ]) {
       mkdirSync(join(directory, version));
-      writeFileSync(join(directory, version, "release.env"), `OSINARA_APP_IMAGE=ghcr.io/ilkruglov/osinara-app@sha256:${digest}\n`, "utf8");
+      writeFileSync(
+        join(directory, version, "release.env"),
+        `OSINARA_APP_IMAGE=ghcr.io/ilkruglov/osinara-app@sha256:${digest}\n`,
+        "utf8",
+      );
     }
     const result = runShell(`
       RELEASES_DIR=${JSON.stringify(directory)}
@@ -462,7 +498,11 @@ describe("production deploy shell policies", () => {
     writeFileSync(join(source, "osinara-deployment.json"), manifest, "utf8");
     writeFileSync(join(source, "production-deploy.sh"), "#!/bin/bash\necho new-main\n", "utf8");
     for (const module of ["common", "database", "release", "backup"]) {
-      writeFileSync(join(source, "production-deploy", `${module}.sh`), `#!/bin/bash\n# ${module} new\n`, "utf8");
+      writeFileSync(
+        join(source, "production-deploy", `${module}.sh`),
+        `#!/bin/bash\n# ${module} new\n`,
+        "utf8",
+      );
     }
     spawnSync("tar", ["-czf", join(directory, "archive.tgz"), "-C", directory, "installation"]);
     writeFileSync(join(directory, "approved.json"), manifest, "utf8");
@@ -471,7 +511,11 @@ describe("production deploy shell policies", () => {
     mkdirSync(join(bin, "production-deploy"), { recursive: true });
     writeFileSync(join(bin, "production-deploy.sh"), "#!/bin/bash\necho old-main\n", "utf8");
     for (const module of ["common", "database", "release", "backup"]) {
-      writeFileSync(join(bin, "production-deploy", `${module}.sh`), `#!/bin/bash\n# ${module} ${module === "backup" ? "new" : "old"}\n`, "utf8");
+      writeFileSync(
+        join(bin, "production-deploy", `${module}.sh`),
+        `#!/bin/bash\n# ${module} ${module === "backup" ? "new" : "old"}\n`,
+        "utf8",
+      );
     }
     const environment = `
       source scripts/production-deploy/release.sh
@@ -492,7 +536,9 @@ describe("production deploy shell policies", () => {
     `);
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(join(bin, "production-deploy.sh"), "utf8")).toContain("new-main");
-    expect(readFileSync(join(bin, "production-deploy", "common.sh"), "utf8")).toContain("common new");
+    expect(readFileSync(join(bin, "production-deploy", "common.sh"), "utf8")).toContain(
+      "common new",
+    );
     expect(result.stderr).toContain("DEPLOY_CONTROLLER_UPDATED production-deploy.sh");
     expect(result.stderr).toContain("DEPLOY_CONTROLLER_UPDATED production-deploy/common.sh");
     expect(result.stderr).not.toContain("DEPLOY_CONTROLLER_UPDATED production-deploy/backup.sh");

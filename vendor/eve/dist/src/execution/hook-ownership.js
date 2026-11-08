@@ -5,8 +5,7 @@ async function claimHookOwnership(e) {
   } catch (t) {
     return await disposeAndThrow(e, normalizeHookClaimError(t, e.token));
   }
-  if (t !== null)
-    return await disposeAndThrow(e, createHookConflictError(e.token, t.runId));
+  if (t !== null) return await disposeAndThrow(e, createHookConflictError(e.token, t.runId));
 }
 async function closeHookIterator(e) {
   typeof e.return == `function` && (await e.return(void 0));
@@ -35,9 +34,7 @@ function normalizeHookClaimError(e, t) {
     : e;
 }
 function isHookConflictError(e) {
-  return (
-    typeof e == `object` && !!e && `name` in e && e.name === `HookConflictError`
-  );
+  return typeof e == `object` && !!e && `name` in e && e.name === `HookConflictError`;
 }
 function createHookConflictError(e, t) {
   let n = t === void 0 ? `` : ` (run "${t}")`;
@@ -47,9 +44,4 @@ function createHookConflictError(e, t) {
     token: e,
   });
 }
-export {
-  claimHookOwnership,
-  closeHookIterator,
-  disposeHook,
-  isHookConflictError,
-};
+export { claimHookOwnership, closeHookIterator, disposeHook, isHookConflictError };

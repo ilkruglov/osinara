@@ -42,15 +42,19 @@ describe("createWorkspaceImageInspector", () => {
       findTelegramAttachment: vi.fn(),
     });
 
-    await expect(inspect(auth, {
-      path: "photos/calendar.png",
-      question: "Что изображено?",
-      scope: "personal",
-    })).resolves.toMatchObject({ analysis: "На изображении семейный календарь." });
-    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({
-      mediaType: "image/png",
-      question: "Что изображено?",
-    }));
+    await expect(
+      inspect(auth, {
+        path: "photos/calendar.png",
+        question: "Что изображено?",
+        scope: "personal",
+      }),
+    ).resolves.toMatchObject({ analysis: "На изображении семейный календарь." });
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mediaType: "image/png",
+        question: "Что изображено?",
+      }),
+    );
   });
 
   it("rejects a document instead of sending unsupported content to the vision model", async () => {
@@ -69,11 +73,13 @@ describe("createWorkspaceImageInspector", () => {
       findTelegramAttachment: vi.fn(),
     });
 
-    await expect(inspect(auth, {
-      path: "docs/report.pdf",
-      question: "Что внутри?",
-      scope: "personal",
-    })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    await expect(
+      inspect(auth, {
+        path: "docs/report.pdf",
+        question: "Что внутри?",
+        scope: "personal",
+      }),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
     expect(analyze).not.toHaveBeenCalled();
   });
 
@@ -93,11 +99,13 @@ describe("createWorkspaceImageInspector", () => {
       findTelegramAttachment: vi.fn(),
     });
 
-    await expect(inspect(auth, {
-      path: "photos/oversized.png",
-      question: "Что изображено?",
-      scope: "personal",
-    })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_FILE_TOO_LARGE/);
+    await expect(
+      inspect(auth, {
+        path: "photos/oversized.png",
+        question: "Что изображено?",
+        scope: "personal",
+      }),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_FILE_TOO_LARGE/);
     expect(analyze).not.toHaveBeenCalled();
   });
 
@@ -122,11 +130,13 @@ describe("createWorkspaceImageInspector", () => {
       findTelegramAttachment: vi.fn(),
     });
 
-    await expect(inspect(auth, {
-      question: "Что изображено?",
-      scope: "personal",
-      telegramMessageId: "773",
-    })).resolves.toMatchObject({
+    await expect(
+      inspect(auth, {
+        question: "Что изображено?",
+        scope: "personal",
+        telegramMessageId: "773",
+      }),
+    ).resolves.toMatchObject({
       analysis: "На изображении человек.",
       path: "inbox/773/очень-длинное-имя.jpg",
     });
@@ -135,9 +145,9 @@ describe("createWorkspaceImageInspector", () => {
 
   it("analyzes an opaque Telegram attachment entirely in memory", async () => {
     const analyze = vi.fn().mockResolvedValue("На изображении схема.");
-    const downloadTelegramAttachment = vi.fn().mockResolvedValue(
-      Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
-    );
+    const downloadTelegramAttachment = vi
+      .fn()
+      .mockResolvedValue(Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"));
     const inspect = createWorkspaceImageInspector({
       analyze,
       authorizeScope,
@@ -158,18 +168,23 @@ describe("createWorkspaceImageInspector", () => {
       readTelegramInboxAttachment: vi.fn(),
     });
 
-    await expect(inspect({
-      ...auth,
-      groupId: "group-1",
-      groupType: "external",
-      role: "external",
-      telegramChatType: "supergroup",
-      userId: null,
-    }, {
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "group",
-    })).resolves.toEqual({
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "external",
+          role: "external",
+          telegramChatType: "supergroup",
+          userId: null,
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+      ),
+    ).resolves.toEqual({
       analysis: "На изображении схема.",
       scope: "group",
       source: {
@@ -191,24 +206,31 @@ describe("createWorkspaceImageInspector", () => {
       analyze,
       authorizeScope,
       downloadTelegramAttachment,
-      findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
-        "AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED: Доступ к вложению был отозван",
-      )),
+      findTelegramAttachment: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED: Доступ к вложению был отозван"),
+        ),
       readBinary: vi.fn(),
       readTelegramInboxAttachment: vi.fn(),
       supportsImageInput: true,
     });
 
-    await expect(inspect({
-      ...auth,
-      groupId: "group-1",
-      groupType: "family_private",
-      telegramChatType: "supergroup",
-    }, {
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "family",
-    })).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "family_private",
+          telegramChatType: "supergroup",
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "family",
+        },
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
     expect(downloadTelegramAttachment).not.toHaveBeenCalled();
     expect(analyze).not.toHaveBeenCalled();
   });
@@ -220,26 +242,33 @@ describe("createWorkspaceImageInspector", () => {
       analyze,
       authorizeScope,
       downloadTelegramAttachment,
-      findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
-        "AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND: Trust zone группы больше не существует",
-      )),
+      findTelegramAttachment: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND: Trust zone группы больше не существует"),
+        ),
       readBinary: vi.fn(),
       readTelegramInboxAttachment: vi.fn(),
       supportsImageInput: true,
     });
 
-    await expect(inspect({
-      ...auth,
-      groupId: "group-1",
-      groupType: "external",
-      role: "external",
-      telegramChatType: "supergroup",
-      userId: null,
-    }, {
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "group",
-    })).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "external",
+          role: "external",
+          telegramChatType: "supergroup",
+          userId: null,
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
     expect(downloadTelegramAttachment).not.toHaveBeenCalled();
     expect(analyze).not.toHaveBeenCalled();
   });
@@ -265,18 +294,23 @@ describe("createWorkspaceImageInspector", () => {
       readTelegramInboxAttachment: vi.fn(),
     });
 
-    await expect(inspect({
-      ...auth,
-      groupId: "group-1",
-      groupType: "external",
-      role: "external",
-      telegramChatType: "supergroup",
-      userId: null,
-    }, {
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "group",
-    })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "external",
+          role: "external",
+          telegramChatType: "supergroup",
+          userId: null,
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+      ),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
     expect(analyze).not.toHaveBeenCalled();
   });
 
@@ -297,13 +331,16 @@ describe("createWorkspaceImageInspector", () => {
       supportsImageInput: false,
     });
 
-    await expect(inspect(auth, {
-      path: "photos/calendar.png",
-      question: "Что изображено?",
-      scope: "personal",
-    })).resolves.toEqual({
+    await expect(
+      inspect(auth, {
+        path: "photos/calendar.png",
+        question: "Что изображено?",
+        scope: "personal",
+      }),
+    ).resolves.toEqual({
       code: "AGENT_MODEL_IMAGE_INPUT_UNSUPPORTED",
-      message: "Подключённая модель не поддерживает анализ изображений. Опишите содержимое изображения текстом",
+      message:
+        "Подключённая модель не поддерживает анализ изображений. Опишите содержимое изображения текстом",
       supported: false,
     });
     expect(readBinary).not.toHaveBeenCalled();
@@ -326,11 +363,13 @@ describe("createWorkspaceImageInspector", () => {
       supportsImageInput: false,
     });
 
-    await expect(inspect(auth, {
-      path: "photos/calendar.png",
-      question: "Что изображено?",
-      scope: "group",
-    })).rejects.toBe(denied);
+    await expect(
+      inspect(auth, {
+        path: "photos/calendar.png",
+        question: "Что изображено?",
+        scope: "group",
+      }),
+    ).rejects.toBe(denied);
   });
 
   it("normalizes a raw vision provider failure without exposing provider internals", async () => {
@@ -347,11 +386,13 @@ describe("createWorkspaceImageInspector", () => {
       supportsImageInput: true,
     });
 
-    await expect(inspect(auth, {
-      path: "image.png",
-      question: "Что изображено?",
-      scope: "personal",
-    })).rejects.toMatchObject({
+    await expect(
+      inspect(auth, {
+        path: "image.png",
+        question: "Что изображено?",
+        scope: "personal",
+      }),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
         retryable: false,
@@ -364,9 +405,9 @@ describe("createWorkspaceImageInspector", () => {
     const inspect = createWorkspaceImageInspector({
       analyze: vi.fn().mockRejectedValue(new Error("upstream API key invalid")),
       authorizeScope: vi.fn(async () => undefined),
-      downloadTelegramAttachment: vi.fn().mockResolvedValue(
-        Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
-      ),
+      downloadTelegramAttachment: vi
+        .fn()
+        .mockResolvedValue(Buffer.from("89504e470d0a1a0a0000000d49484452", "hex")),
       findTelegramAttachment: vi.fn().mockResolvedValue({
         attachment: {
           fileId: "secret-file-id",
@@ -383,18 +424,23 @@ describe("createWorkspaceImageInspector", () => {
       supportsImageInput: true,
     });
 
-    await expect(inspect({
-      ...auth,
-      groupId: "group-1",
-      groupType: "external",
-      role: "external",
-      telegramChatType: "supergroup",
-      userId: null,
-    }, {
-      attachmentId: "00000000-0000-4000-8000-000000000041",
-      question: "Что изображено?",
-      scope: "group",
-    })).rejects.toMatchObject({
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "external",
+          role: "external",
+          telegramChatType: "supergroup",
+          userId: null,
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+      ),
+    ).rejects.toMatchObject({
       contract: {
         code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
         retryable: false,

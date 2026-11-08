@@ -87,7 +87,8 @@ function timelineClock(timezone: string | null): TimelineClock {
       timeZoneName: "longOffset",
       year: "numeric",
     });
-    const offset = format.formatToParts(new Date(0)).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const offset =
+      format.formatToParts(new Date(0)).find((part) => part.type === "timeZoneName")?.value ?? "";
     const normalized = offset === "GMT" ? "+00:00" : offset.replace(/^GMT/u, "");
     return { format, label: `${timezone} (${normalized})` };
   } catch {
@@ -100,7 +101,10 @@ function timelineClock(timezone: string | null): TimelineClock {
  * twenty characters per entry buy nothing that the sequence number and the day separator below do
  * not already give. Stored values come from `Date.toISOString`, hence the exact expected shape.
  */
-function stamp(entry: TelegramGroupJournalEntry, clock: TimelineClock): { date: string; time: string } {
+function stamp(
+  entry: TelegramGroupJournalEntry,
+  clock: TimelineClock,
+): { date: string; time: string } {
   const parsed = ISO_STAMP_PATTERN.exec(entry.sentAt);
   if (!parsed) {
     throw new Error(
@@ -122,27 +126,33 @@ function daySeparator(date: string, clock: TimelineClock): string {
 }
 
 function renderEntry(entry: TelegramGroupJournalEntry, clock: TimelineClock): string {
-  const actor = entry.actorKind === "agent_self"
-    ? "agent:self"
-    : entry.actorKind === "telegram_channel"
-      ? "telegram:channel"
-      : entry.actorKind === "telegram_bot"
-        ? "telegram:bot"
-        : "user";
+  const actor =
+    entry.actorKind === "agent_self"
+      ? "agent:self"
+      : entry.actorKind === "telegram_channel"
+        ? "telegram:channel"
+        : entry.actorKind === "telegram_bot"
+          ? "telegram:bot"
+          : "user";
   // Mia's own entries keep her name; people and bots carry their username next to it.
-  const name = entry.actorKind === "agent_self"
-    ? entry.senderDisplayName ?? actor
-    : participantLabel(entry.senderDisplayName, entry.senderUsername) ?? actor;
+  const name =
+    entry.actorKind === "agent_self"
+      ? (entry.senderDisplayName ?? actor)
+      : (participantLabel(entry.senderDisplayName, entry.senderUsername) ?? actor);
   const reply = entry.replyToSequenceId === null ? "" : ` reply:#${entry.replyToSequenceId}`;
-  const attachment = entry.attachment === undefined
-    ? ""
-    : ` attachment:${escapeUntrustedContextJson(entry.attachment)}`;
+  const attachment =
+    entry.attachment === undefined
+      ? ""
+      : ` attachment:${escapeUntrustedContextJson(entry.attachment)}`;
   const tag = entry.senderTag ? ` tag:${escapeUntrustedContextJson(entry.senderTag)}` : "";
   return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${tag}${reply} ${stamp(entry, clock).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
 }
 
 /** Entries are chronological, so one dated line per calendar day carries the missing date. */
-function renderEntries(entries: readonly TelegramGroupJournalEntry[], clock: TimelineClock): string[] {
+function renderEntries(
+  entries: readonly TelegramGroupJournalEntry[],
+  clock: TimelineClock,
+): string[] {
   const lines: string[] = [];
   let currentDate: string | null = null;
   for (const entry of entries) {
@@ -162,11 +172,12 @@ export function renderTelegramGroupJournalContext(
   timezone: string | null = null,
 ): string {
   const clock = timelineClock(timezone);
-  const gap = omission === null
-    ? ""
-    : omission.beforeSequence === null
-    ? "\nЧасть истории пропущена; при необходимости вызови list_group_history, если инструмент доступен."
-    : `\nЧасть истории пропущена перед #${omission.beforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
+  const gap =
+    omission === null
+      ? ""
+      : omission.beforeSequence === null
+        ? "\nЧасть истории пропущена; при необходимости вызови list_group_history, если инструмент доступен."
+        : `\nЧасть истории пропущена перед #${omission.beforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
   const notice = omission === null ? JOURNAL_NOTICE : JOURNAL_TRUNCATED_NOTICE;
   return `${JOURNAL_OPEN_TAG}\n${notice}\n${renderEntries(entries, clock).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
 }
@@ -189,17 +200,19 @@ function protectedReplyAncestry(
 }
 
 function terminalReplyTargets(entries: readonly TelegramGroupJournalEntry[]): Set<string> {
-  const referencedSequences = new Set(entries.flatMap((entry) =>
-    entry.replyToSequenceId === null ? [] : [entry.replyToSequenceId]
-  ));
+  const referencedSequences = new Set(
+    entries.flatMap((entry) => (entry.replyToSequenceId === null ? [] : [entry.replyToSequenceId])),
+  );
 
   // A terminal reply and its direct target form useful local context. Unlike every recursively
   // referenced entry, this does not pin the oldest prefix of a long reply chain.
-  return new Set(entries.flatMap((entry) =>
-    entry.replyToSequenceId !== null && !referencedSequences.has(entry.sequenceId)
-      ? [entry.replyToSequenceId]
-      : []
-  ));
+  return new Set(
+    entries.flatMap((entry) =>
+      entry.replyToSequenceId !== null && !referencedSequences.has(entry.sequenceId)
+        ? [entry.replyToSequenceId]
+        : [],
+    ),
+  );
 }
 
 export function formatTelegramGroupJournalContext(
@@ -250,18 +263,21 @@ export function selectTelegramGroupJournalContext(
 
   // Inputs are chronological; removing from the front preserves the most recent useful context.
   while (messages.length > 0) {
-    const omission = omittedBeforeSequence !== null || truncated
-      ? { beforeSequence: omittedBeforeSequence }
-      : null;
+    const omission =
+      omittedBeforeSequence !== null || truncated
+        ? { beforeSequence: omittedBeforeSequence }
+        : null;
     const context = renderTelegramGroupJournalContext(messages, omission, timezone);
     if (context.length <= maxCharacters && (maxEntries === null || messages.length <= maxEntries)) {
       return { context, entries: messages, omission };
     }
     // Preserve a coherent reply/target pair when the gap marker alone would evict conversation
     // content from an exceptionally tight budget. The normal production budget retains both.
-    if ((truncated || omittedBeforeSequence !== null) &&
+    if (
+      (truncated || omittedBeforeSequence !== null) &&
       renderTelegramGroupJournalContext(messages, null, timezone).length <= maxCharacters &&
-      (maxEntries === null || messages.length <= maxEntries)) {
+      (maxEntries === null || messages.length <= maxEntries)
+    ) {
       return {
         context: renderTelegramGroupJournalContext(messages, null, timezone),
         entries: messages,
@@ -269,8 +285,9 @@ export function selectTelegramGroupJournalContext(
       };
     }
     const terminalTargets = terminalReplyTargets(messages);
-    const removableIndex = messages.findIndex((entry) =>
-      !terminalTargets.has(entry.sequenceId) && !protectedSequences.has(entry.sequenceId)
+    const removableIndex = messages.findIndex(
+      (entry) =>
+        !terminalTargets.has(entry.sequenceId) && !protectedSequences.has(entry.sequenceId),
     );
     // If explicit ancestry alone exceeds the budget, chronological input makes its oldest entry
     // the farthest ancestor. Dropping it preserves the suffix nearest the current reply root.

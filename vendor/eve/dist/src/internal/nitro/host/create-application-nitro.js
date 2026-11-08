@@ -58,19 +58,13 @@ function resolveProductionNitroPreset() {
   return process.env.VERCEL ? `vercel` : void 0;
 }
 function manifestEnablesWorkflow(e) {
-  return [e, ...e.subagents.map((e) => e.agent)].some(
-    (e) => e.workflowTool !== void 0,
-  );
+  return [e, ...e.subagents.map((e) => e.agent)].some((e) => e.workflowTool !== void 0);
 }
 function manifestHasWebSocketChannel(e) {
-  return e.channels.some(
-    (e) => e.kind === `channel` && e.method === `WEBSOCKET`,
-  );
+  return e.channels.some((e) => e.kind === `channel` && e.method === `WEBSOCKET`);
 }
 function collectHostedTraceDependencies(e, t) {
-  let n = new Set(
-      collectExtensionExternalDependencies(e.compileResult.manifest),
-    ),
+  let n = new Set(collectExtensionExternalDependencies(e.compileResult.manifest)),
     r = [
       ...(e.compileResult.manifest.config.build?.externalDependencies ?? []),
       ...e.compileResult.manifest.subagents.flatMap((e) =>
@@ -80,12 +74,7 @@ function collectHostedTraceDependencies(e, t) {
       ),
     ];
   return [
-    ...new Set([
-      ...FRAMEWORK_HOSTED_EXTERNAL_PACKAGES,
-      ...t,
-      ...r,
-      ...[...n].map((e) => `${e}*`),
-    ]),
+    ...new Set([...FRAMEWORK_HOSTED_EXTERNAL_PACKAGES, ...t, ...r, ...[...n].map((e) => `${e}*`)]),
   ].filter((e) => e !== EVE_PACKAGE_NAME && e !== `${EVE_PACKAGE_NAME}*`);
 }
 function collectExtensionExternalDependencies(e) {
@@ -95,16 +84,12 @@ function collectExtensionExternalDependencies(e) {
 }
 function collectConfiguredSandboxBackendNames(e) {
   let t = [e, ...e.subagents.map((e) => e.agent)];
-  return new Set(
-    t.map((e) => e.sandbox?.backendName).filter((e) => typeof e == `string`),
-  );
+  return new Set(t.map((e) => e.sandbox?.backendName).filter((e) => typeof e == `string`));
 }
 function shouldPruneLocalSandboxBackends(e) {
   return (
     e.preset === `vercel` &&
-    ![...e.configuredBackendNames].some((e) =>
-      LOCAL_SANDBOX_BACKEND_NAMES.has(e),
-    )
+    ![...e.configuredBackendNames].some((e) => LOCAL_SANDBOX_BACKEND_NAMES.has(e))
   );
 }
 function createDevelopmentWatchOptions(e) {
@@ -124,14 +109,10 @@ function stripFileSystemPrefix(e) {
 }
 function resolveNitroModuleComparisonPath(e, t) {
   return t.startsWith(`file://`)
-    ? normalizePath(
-        stripFileSystemPrefix(stripPathQueryAndHash(fileURLToPath(t))),
-      )
+    ? normalizePath(stripFileSystemPrefix(stripPathQueryAndHash(fileURLToPath(t))))
     : isAbsolute(t)
       ? normalizePath(stripFileSystemPrefix(stripPathQueryAndHash(t)))
-      : normalizePath(
-          stripFileSystemPrefix(stripPathQueryAndHash(resolve(e, t))),
-        );
+      : normalizePath(stripFileSystemPrefix(stripPathQueryAndHash(resolve(e, t))));
 }
 function isWorkflowBundlePath(e, t) {
   let n = normalizePath(e);
@@ -178,9 +159,7 @@ async function addNitroStepNoExternals(e, t) {
     if (e instanceof Error && `code` in e && e.code === `ENOENT`) return;
     throw e;
   }
-  let r = Array.isArray(e.options.noExternals)
-    ? [...e.options.noExternals]
-    : [];
+  let r = Array.isArray(e.options.noExternals) ? [...e.options.noExternals] : [];
   e.options.noExternals = [...new Set([...r, ...n])];
 }
 function createRelativeTransformFilename(e, t) {
@@ -241,10 +220,7 @@ function addNitroStepModuleSideEffectsPlugin(e, t) {
   let n = null,
     getStepTransformTargets = async () => (
       n === null &&
-        (n = await collectNitroStepTransformTargets(
-          t.stepEntrypointPath,
-          e.options.rootDir,
-        )),
+        (n = await collectNitroStepTransformTargets(t.stepEntrypointPath, e.options.rootDir)),
       n
     ),
     clearCachedStepTransformTargets = () => {
@@ -259,9 +235,7 @@ function addNitroStepModuleSideEffectsPlugin(e, t) {
           async resolveId(t, n) {
             let r = resolveNitroImportPath(e.options.rootDir, t, n);
             return r === null ||
-              !(await getStepTransformTargets()).has(
-                normalizeStepTransformComparisonPath(r),
-              )
+              !(await getStepTransformTargets()).has(normalizeStepTransformComparisonPath(r))
               ? null
               : { id: r, moduleSideEffects: `no-treeshake` };
           },
@@ -274,10 +248,7 @@ function addNitroStepTransformPlugin(e, t) {
   let n = null,
     getStepTransformTargets = async () => (
       n === null &&
-        (n = await collectNitroStepTransformTargets(
-          t.stepEntrypointPath,
-          e.options.rootDir,
-        )),
+        (n = await collectNitroStepTransformTargets(t.stepEntrypointPath, e.options.rootDir)),
       n
     ),
     clearCachedStepTransformTargets = () => {
@@ -314,8 +285,7 @@ function addNitroStepTransformPlugin(e, t) {
 }
 function addDynamicCapabilityTransformPlugin(e) {
   e.hooks.hook(`rollup:before`, (e, t) => {
-    Array.isArray(t.plugins) &&
-      t.plugins.unshift(createDynamicCapabilityTransformPlugin());
+    Array.isArray(t.plugins) && t.plugins.unshift(createDynamicCapabilityTransformPlugin());
   });
 }
 function addInstrumentationModuleSideEffectsPlugin(e, t) {
@@ -325,9 +295,7 @@ function addInstrumentationModuleSideEffectsPlugin(e, t) {
       t.plugins.unshift({
         name: `eve:instrumentation-module-side-effects`,
         resolveId(e) {
-          return n.has(normalizePath(e))
-            ? { id: e, moduleSideEffects: `no-treeshake` }
-            : null;
+          return n.has(normalizePath(e)) ? { id: e, moduleSideEffects: `no-treeshake` } : null;
         },
       });
   });
@@ -366,14 +334,12 @@ function createApplicationNitroBundlerConfiguration(e, t) {
   for (let [e, t] of Object.entries(OPTIONAL_ENGINE_PACKAGES_BY_BACKEND_NAME))
     (n.has(e) ? i : a).push(t);
   let o = createExtensionScopePlugin(
-      [
-        e.compileResult.manifest,
-        ...e.compileResult.manifest.subagents.map((e) => e.agent),
-      ].flatMap((e) =>
-        e.extensionMounts.map((e) => ({
-          sourceRoot: e.sourceRoot,
-          packageNamespace: e.packageNamespace,
-        })),
+      [e.compileResult.manifest, ...e.compileResult.manifest.subagents.map((e) => e.agent)].flatMap(
+        (e) =>
+          e.extensionMounts.map((e) => ({
+            sourceRoot: e.sourceRoot,
+            packageNamespace: e.packageNamespace,
+          })),
       ),
     ),
     s = [
@@ -394,16 +360,11 @@ function createApplicationNitroBundlerConfiguration(e, t) {
   };
 }
 function createApplicationNitroPlugins(e) {
-  let t = [
-    e.compiledArtifacts.bootstrapPath,
-    e.compiledArtifacts.workflowWorldPluginPath,
-  ];
+  let t = [e.compiledArtifacts.bootstrapPath, e.compiledArtifacts.workflowWorldPluginPath];
   return (
     manifestEnablesWorkflow(e.compileResult.manifest) &&
       t.push(
-        resolvePackageSourceFilePath(
-          `src/internal/nitro/host/workflow-sandbox-runtime-plugin.ts`,
-        ),
+        resolvePackageSourceFilePath(`src/internal/nitro/host/workflow-sandbox-runtime-plugin.ts`),
       ),
     e.compiledArtifacts.instrumentationPluginPath !== void 0 &&
       t.push(e.compiledArtifacts.instrumentationPluginPath),
@@ -418,10 +379,7 @@ function configureSharedApplicationNitro(e, t) {
     patchWorkflowTransformExcludePath(e, t.workflowBuildDir),
     addDynamicCapabilityTransformPlugin(e),
     t.compiledArtifacts.instrumentationSourcePaths !== void 0 &&
-      addInstrumentationModuleSideEffectsPlugin(
-        e,
-        t.compiledArtifacts.instrumentationSourcePaths,
-      ));
+      addInstrumentationModuleSideEffectsPlugin(e, t.compiledArtifacts.instrumentationSourcePaths));
 }
 function configureNitroStepPlugins(e, t) {
   return [
@@ -445,9 +403,7 @@ async function createDevelopmentApplicationNitro(e) {
     i = createApplicationNitroPlugins(e);
   (e.compiledArtifacts.instrumentationPluginPath === void 0 &&
     i.unshift(
-      resolvePackageSourceFilePath(
-        `src/internal/nitro/host/local-tracing-runtime-plugin.ts`,
-      ),
+      resolvePackageSourceFilePath(`src/internal/nitro/host/local-tracing-runtime-plugin.ts`),
     ),
     await prepareEveVersionedCacheDirectory(t));
   let a = await createNitro(
@@ -493,11 +449,7 @@ async function createProductionApplicationNitro(e, t) {
   let n = resolveProductionNitroPreset(),
     i = createApplicationNitroBundlerConfiguration(e, n),
     a = createApplicationNitroPlugins(e);
-  (a.push(
-    resolvePackageSourceFilePath(
-      `src/internal/nitro/host/sandbox-shutdown-plugin.ts`,
-    ),
-  ),
+  (a.push(resolvePackageSourceFilePath(`src/internal/nitro/host/sandbox-shutdown-plugin.ts`)),
     await prepareEveVersionedCacheDirectory(t.buildDir));
   let o = await createNitro({
     _cli: { command: `build` },

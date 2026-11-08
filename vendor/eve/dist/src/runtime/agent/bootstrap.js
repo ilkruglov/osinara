@@ -1,7 +1,4 @@
-import {
-  AGENT_TOOL_NAME,
-  isImplicitAgentToolAvailable,
-} from "#runtime/framework-tools/agent.js";
+import { AGENT_TOOL_NAME, isImplicitAgentToolAvailable } from "#runtime/framework-tools/agent.js";
 import { composeRuntimeBasePrompt } from "#runtime/prompt/compose.js";
 const BOOTSTRAP_RUNTIME_MODEL_ID = `eve-bootstrap-model`,
   BOOTSTRAP_RUNTIME_SYSTEM_PROMPT = `You are the eve bootstrap agent. Be concise, stay grounded in the current conversation, and do not assume tools are available unless the runtime provides them.`;
@@ -10,9 +7,7 @@ function createResolvedRuntimeTurnAgent(n) {
     i = r.config,
     a = n.id ?? i?.name;
   if (a === void 0)
-    throw Error(
-      `Expected a path-derived agent id while resolving agent resources.`,
-    );
+    throw Error(`Expected a path-derived agent id while resolving agent resources.`);
   let o = n.tools.some((e) => e.kind === `subagent` || e.kind === `remote`),
     s = isImplicitAgentToolAvailable({
       disabledFrameworkTools: r.disabledFrameworkTools,
@@ -32,8 +27,7 @@ function createResolvedRuntimeTurnAgent(n) {
         connections: r.connections,
         instructions: r.instructions,
         persistentSubagentSessions:
-          i?.experimental?.tasks === !0 ||
-          i?.experimental?.subagentPersistentSessions === !0,
+          i?.experimental?.tasks === !0 || i?.experimental?.subagentPersistentSessions === !0,
         subagentsAvailable: o || s,
         tasksEnabled: i?.experimental?.tasks === !0,
         toolsAvailable: n.tools.length > 0 || s,

@@ -24,8 +24,7 @@ function startDevelopmentSandboxPrewarmInBackground(n) {
       onPrewarmSignature: (e) => {
         completedDevelopmentPrewarmSignatures.set(c, e);
       },
-      shouldPrewarmSignature: (e) =>
-        completedDevelopmentPrewarmSignatures.get(c) !== e,
+      shouldPrewarmSignature: (e) => completedDevelopmentPrewarmSignatures.get(c) !== e,
     });
   ((s.promise = l),
     registerPrewarmAliases(r, s),
@@ -39,8 +38,7 @@ function startDevelopmentSandboxPrewarmInBackground(n) {
       })
       .finally(() => {
         for (let e of r)
-          (pendingDevelopmentPrewarms.get(e) === s &&
-            pendingDevelopmentPrewarms.delete(e),
+          (pendingDevelopmentPrewarms.get(e) === s && pendingDevelopmentPrewarms.delete(e),
             s.subscribers.size === 0 &&
               s.logs.length > 0 &&
               retainedDevelopmentPrewarmLogs.set(e, [...s.logs]));
@@ -65,8 +63,7 @@ async function waitForDevelopmentSandboxPrewarm(e) {
   if (e.log !== void 0) {
     for (let n of t.logs) e.log(n);
     let subscriber = (t) => e.log?.(t);
-    (t.subscribers.add(subscriber),
-      (unsubscribe = () => t.subscribers.delete(subscriber)));
+    (t.subscribers.add(subscriber), (unsubscribe = () => t.subscribers.delete(subscriber)));
   }
   try {
     await withProgressHeartbeat(
@@ -86,10 +83,7 @@ function resolvePrewarmKeys(e) {
   return (a !== void 0 && t.add(a), [...t]);
 }
 function resolvePrewarmSignatureCacheKey(e) {
-  return (
-    getRuntimeCompiledArtifactsSandboxAppRoot(e.compiledArtifactsSource) ??
-    e.appRoot
-  );
+  return getRuntimeCompiledArtifactsSandboxAppRoot(e.compiledArtifactsSource) ?? e.appRoot;
 }
 function findPendingPrewarm(e) {
   for (let t of e) {
@@ -101,9 +95,7 @@ function registerPrewarmAliases(e, t) {
   for (let n of e) pendingDevelopmentPrewarms.set(n, t);
 }
 function recordPrewarmLog(e, t, n) {
-  (e.logs.push(t),
-    e.logs.length > 50 && e.logs.splice(0, e.logs.length - 50),
-    n?.(t));
+  (e.logs.push(t), e.logs.length > 50 && e.logs.splice(0, e.logs.length - 50), n?.(t));
   for (let n of e.subscribers) n(t);
 }
 async function withProgressHeartbeat(e, t, n) {

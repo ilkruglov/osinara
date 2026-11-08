@@ -30,16 +30,12 @@ function markdownToSlack(e) {
   return (
     (n = n.replace(/__([^_\n]+)__/gu, `*$1*`)),
     (n = n.replace(/~~([^~\n]+)~~/gu, `~$1~`)),
-    (n = n.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/gu, (e, t, n) =>
-      formatMarkdownLink(e, t, n),
-    )),
+    (n = n.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/gu, (e, t, n) => formatMarkdownLink(e, t, n))),
     n
   );
 }
 function slackToMarkdown(e) {
-  return slackMrkdwnToMarkdown(
-    e.replace(/<!(channel|here|everyone)>/gu, `@$1`),
-  );
+  return slackMrkdwnToMarkdown(e.replace(/<!(channel|here|everyone)>/gu, `@$1`));
 }
 function formatMarkdownLink(t, n, r) {
   try {

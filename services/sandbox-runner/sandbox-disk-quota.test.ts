@@ -44,9 +44,14 @@ afterEach(async () => {
 
 describe("createSandboxDiskQuota", () => {
   it("refuses past the workspace budget or below the host's free floor", async () => {
-    const probe = { freeBytes: vi.fn(async () => 10 * GIB), usedBytes: vi.fn(async () => SANDBOX_WORKSPACE_QUOTA_BYTES + 1) };
+    const probe = {
+      freeBytes: vi.fn(async () => 10 * GIB),
+      usedBytes: vi.fn(async () => SANDBOX_WORKSPACE_QUOTA_BYTES + 1),
+    };
     const quota = createSandboxDiskQuota({ now: () => 0, probe });
-    await expect(quota.refusal([workspace])).resolves.toMatch(/^AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED: .*rm/u);
+    await expect(quota.refusal([workspace])).resolves.toMatch(
+      /^AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED: .*rm/u,
+    );
 
     probe.usedBytes.mockResolvedValue(GIB);
     const fresh = createSandboxDiskQuota({ now: () => 0, probe });
@@ -82,20 +87,29 @@ describe("createSandboxDiskQuota", () => {
 });
 
 describe("isCleanupCommand", () => {
-  it.each(["rm -rf /workspace/personal/big", "ls -la /workspace", "du -sh /workspace/* /tools/*", "df -h"])(
-    "lets %s pass a refusal",
-    (command) => expect(isCleanupCommand(command)).toBe(true),
-  );
+  it.each([
+    "rm -rf /workspace/personal/big",
+    "ls -la /workspace",
+    "du -sh /workspace/* /tools/*",
+    "df -h",
+  ])("lets %s pass a refusal", (command) => expect(isCleanupCommand(command)).toBe(true));
 
   it.each([
-    "rm x; dd if=/dev/zero of=y", "ls > list.txt", "rm $(cat list)", "rmx", "python3 clean.py",
-    "find / -exec sh {} \\;", "rm\nprintf CLEANUP_BYPASS", "find /workspace -fprint /workspace/big",
-    "find /workspace -fprintf /workspace/x %p", "find . -execdir sh {} +", "rm a\\\nb",
-    "find /workspace -name '*.tmp' -delete", "find /workspace '-fprint' /workspace/list", "rm 'a b'",
-  ])(
-    "refuses %s",
-    (command) => expect(isCleanupCommand(command)).toBe(false),
-  );
+    "rm x; dd if=/dev/zero of=y",
+    "ls > list.txt",
+    "rm $(cat list)",
+    "rmx",
+    "python3 clean.py",
+    "find / -exec sh {} \\;",
+    "rm\nprintf CLEANUP_BYPASS",
+    "find /workspace -fprint /workspace/big",
+    "find /workspace -fprintf /workspace/x %p",
+    "find . -execdir sh {} +",
+    "rm a\\\nb",
+    "find /workspace -name '*.tmp' -delete",
+    "find /workspace '-fprint' /workspace/list",
+    "rm 'a b'",
+  ])("refuses %s", (command) => expect(isCleanupCommand(command)).toBe(false));
 });
 
 describe("createHostDiskProbe", () => {
@@ -123,7 +137,9 @@ describe("disk budget in the engine", () => {
   };
   const exec = vi.fn(async () => ({
     inspect: vi.fn(async () => ({ ExitCode: 0 })),
-    start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])),
+    start: vi.fn(async (options?: { stdin?: boolean }) =>
+      options?.stdin ? new PassThrough() : Readable.from([]),
+    ),
   }));
   const docker = {
     getContainer: vi.fn(() => ({
@@ -148,14 +164,22 @@ describe("disk budget in the engine", () => {
   it("refuses Bash and workspace writes past the budget and still runs cleanup", async () => {
     const usedBytes = vi.fn(async () => SANDBOX_WORKSPACE_QUOTA_BYTES + 1);
     const engine = createDockerSandboxEngine({
-      diskQuota: createSandboxDiskQuota({ now: () => 0, probe: { freeBytes: async () => 10 * GIB, usedBytes } }),
+      diskQuota: createSandboxDiskQuota({
+        now: () => 0,
+        probe: { freeBytes: async () => 10 * GIB, usedBytes },
+      }),
       docker,
       roots: { toolsRoot: "/tools-root", workspaceRoot: "/workspace-root" },
       runtime,
     });
 
-    const refused = await engine.runProcess("session", { command: "dd if=/dev/zero of=big bs=1M count=100" });
-    expect(refused).toMatchObject({ exitCode: 125, stderr: expect.stringMatching(/^AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED/u) });
+    const refused = await engine.runProcess("session", {
+      command: "dd if=/dev/zero of=big bs=1M count=100",
+    });
+    expect(refused).toMatchObject({
+      exitCode: 125,
+      stderr: expect.stringMatching(/^AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED/u),
+    });
     expect(exec).not.toHaveBeenCalled();
     expect(usedBytes).toHaveBeenCalledWith([
       `/workspace-root/${PERSONAL}`,
@@ -163,32 +187,62 @@ describe("disk budget in the engine", () => {
       `/tools-root/browser/${PERSONAL}`,
     ]);
 
-    await expect(engine.runProcess("session", { command: "rm -rf /workspace/personal/big" })).resolves.toMatchObject({ exitCode: 0 });
+    await expect(
+      engine.runProcess("session", { command: "rm -rf /workspace/personal/big" }),
+    ).resolves.toMatchObject({ exitCode: 0 });
     expect(exec).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(exec.mock.calls[0])).toContain("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+    expect(JSON.stringify(exec.mock.calls[0])).toContain(
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    );
 
     // A skill package in HOME passes a refusal while small; one inside a workspace never does.
     exec.mockClear();
     const quotaSkill = "/tools/personal/home/.agents/skills/x/SKILL.md";
-    await expect(engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024))).resolves.toBeUndefined();
+    await expect(
+      engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024)),
+    ).resolves.toBeUndefined();
     // The same bytes again are the same materialization: no write and nothing spent.
-    for (let index = 0; index < 30; index += 1) await engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024));
-    await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/SKILL.md", Buffer.alloc(10)))
-      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    for (let index = 0; index < 30; index += 1)
+      await engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024));
+    await expect(
+      engine.writeFile(
+        "session",
+        "/workspace/personal/.agents/skills/x/SKILL.md",
+        Buffer.alloc(10),
+      ),
+    ).rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // And only up to 2 MiB per container run.
     for (let index = 0; index < 20; index += 1) {
-      await engine.writeFile("session", `/tools/personal/home/.agents/skills/x/f${index}.md`, Buffer.alloc(200 * 1024)).catch(() => undefined);
+      await engine
+        .writeFile(
+          "session",
+          `/tools/personal/home/.agents/skills/x/f${index}.md`,
+          Buffer.alloc(200 * 1024),
+        )
+        .catch(() => undefined);
     }
-    await expect(engine.writeFile("session", "/tools/personal/home/.agents/skills/x/last.md", Buffer.alloc(200 * 1024)))
-      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    await expect(
+      engine.writeFile(
+        "session",
+        "/tools/personal/home/.agents/skills/x/last.md",
+        Buffer.alloc(200 * 1024),
+      ),
+    ).rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // A skill package path does not exempt a large file.
-    await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/payload.bin", Buffer.alloc(300 * 1024)))
-      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    await expect(
+      engine.writeFile(
+        "session",
+        "/workspace/personal/.agents/skills/x/payload.bin",
+        Buffer.alloc(300 * 1024),
+      ),
+    ).rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // Every file the model writes counts, not only /workspace.
-    await expect(engine.writeFile("session", "/tools/personal/big.bin", Buffer.from("x")))
-      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    await expect(
+      engine.writeFile("session", "/tools/personal/big.bin", Buffer.from("x")),
+    ).rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
 
-    await expect(engine.writeFile("session", "/workspace/personal/new.txt", Buffer.from("x")))
-      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    await expect(
+      engine.writeFile("session", "/workspace/personal/new.txt", Buffer.from("x")),
+    ).rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
   });
 });

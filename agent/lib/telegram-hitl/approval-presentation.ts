@@ -27,10 +27,7 @@ import { yandexTaxiApprovalPrompt } from "../yandex-taxi/yandex-taxi-approval.js
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
-import {
-  localizeTelegramInputRequest,
-  type TelegramInputRequest,
-} from "../telegram-interface.js";
+import { localizeTelegramInputRequest, type TelegramInputRequest } from "../telegram-interface.js";
 import {
   BROWSER_CONFIRM_CONSEQUENCE,
   GOOGLE_WORKSPACE_CONSEQUENCE,
@@ -44,9 +41,14 @@ import {
 } from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
-  findBrowserConfirm(input: { epoch: string; n: number }, ctx: Pick<SessionContext, "session">): Promise<BrowserConfirmApprovalSubject>;
+  findBrowserConfirm(
+    input: { epoch: string; n: number },
+    ctx: Pick<SessionContext, "session">,
+  ): Promise<BrowserConfirmApprovalSubject>;
   /** The label of the requester's Lavka delivery point, or null when none is chosen. */
-  findLavkaDeliveryPoint?(ctx: Pick<SessionContext, "session">): Promise<{ key: string; label: string } | null>;
+  findLavkaDeliveryPoint?(
+    ctx: Pick<SessionContext, "session">,
+  ): Promise<{ key: string; label: string } | null>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -63,22 +65,22 @@ export type TelegramApprovalPresenter = (
 const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string }>> = {
   create: {
     action: "Создать агентное расписание",
-      },
+  },
   delete: {
     action: "Удалить агентное расписание",
-      },
+  },
   pause: {
     action: "Приостановить агентное расписание",
-      },
+  },
   resume: {
     action: "Возобновить агентное расписание",
-      },
+  },
   run_now: {
     action: "Запустить агентное расписание сейчас",
-      },
+  },
   update: {
     action: "Изменить агентное расписание",
-      },
+  },
 };
 
 const GMAIL_MESSAGE_ACTIONS = {
@@ -145,11 +147,12 @@ function gmailMessageOptions(
   };
   return request.options?.map((option) => ({
     ...option,
-    label: option.id === "approve"
-      ? approveLabels[actionName]
-      : option.id === "deny" || option.id === "cancel"
-        ? "Отменить"
-        : option.label,
+    label:
+      option.id === "approve"
+        ? approveLabels[actionName]
+        : option.id === "deny" || option.id === "cancel"
+          ? "Отменить"
+          : option.label,
   }));
 }
 
@@ -244,16 +247,12 @@ function lowerFirst(value: string): string {
   return value.charAt(0).toLowerCase() + value.slice(1);
 }
 
-
 export function createTelegramApprovalPresenter(
   dependencies: ApprovalPresentationDependencies,
 ): TelegramApprovalPresenter {
   return async (request, ctx) => {
     const localized = localizeTelegramInputRequest(request);
-    if (
-      request.display === "confirmation" &&
-      request.action.toolName === "manage_gmail_message"
-    ) {
+    if (request.display === "confirmation" && request.action.toolName === "manage_gmail_message") {
       const input = requireGmailMessageInput(request.action.input);
       const message = await dependencies.findGmailMessage(input.messageId, input.profileRef, ctx);
       return {
@@ -262,13 +261,13 @@ export function createTelegramApprovalPresenter(
         prompt: gmailMessagePrompt(input.action, message),
       };
     }
-    if (
-      request.display === "confirmation" &&
-      request.action.toolName === "browser_confirm"
-    ) {
+    if (request.display === "confirmation" && request.action.toolName === "browser_confirm") {
       const { epoch, n } = request.action.input;
       if (typeof epoch !== "string" || !epoch || typeof n !== "number") {
-        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить шаг в браузере для подтверждения");
+        throw new AppError(
+          "AGENT_APPROVAL_SUBJECT_INVALID",
+          "Не удалось определить шаг в браузере для подтверждения",
+        );
       }
       const subject = await dependencies.findBrowserConfirm({ epoch, n }, ctx);
       return {
@@ -280,40 +279,61 @@ export function createTelegramApprovalPresenter(
             ...approvalFact("Сайт", subject.site),
             ...approvalFact("Кнопка", subject.button),
             ...approvalFact("Страница", subject.url),
-            ...approvalFact("Введено в форму", subject.entered.length > 0 ? subject.entered.join(", ") : "ничего"),
+            ...approvalFact(
+              "Введено в форму",
+              subject.entered.length > 0 ? subject.entered.join(", ") : "ничего",
+            ),
           ],
         }),
       };
     }
-    if (
-      request.display === "confirmation" &&
-      request.action.toolName === "yandex_lavka"
-    ) {
-      const input = request.action.input as { action?: unknown; addressKey?: unknown; cartVersion?: unknown; orderId?: unknown; total?: unknown };
+    if (request.display === "confirmation" && request.action.toolName === "yandex_lavka") {
+      const input = request.action.input as {
+        action?: unknown;
+        addressKey?: unknown;
+        cartVersion?: unknown;
+        orderId?: unknown;
+        total?: unknown;
+      };
       if (input.action === "cancel") {
         return {
           ...localized,
           prompt: buildApprovalMessage({
             actionLabel: "отменить заказ в Яндекс Лавке",
-            consequence: "Заказ будет отменён в аккаунте Лавки. Деньги вернёт Лавка по своим правилам.",
+            consequence:
+              "Заказ будет отменён в аккаунте Лавки. Деньги вернёт Лавка по своим правилам.",
             facts: approvalFact("Заказ", typeof input.orderId === "string" ? input.orderId : null),
           }),
         };
       }
-      if (input.action !== "order" || typeof input.total !== "number" || typeof input.cartVersion !== "number" || typeof input.addressKey !== "string") {
-        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить заказ в Лавке для подтверждения");
+      if (
+        input.action !== "order" ||
+        typeof input.total !== "number" ||
+        typeof input.cartVersion !== "number" ||
+        typeof input.addressKey !== "string"
+      ) {
+        throw new AppError(
+          "AGENT_APPROVAL_SUBJECT_INVALID",
+          "Не удалось определить заказ в Лавке для подтверждения",
+        );
       }
-      const point = dependencies.findLavkaDeliveryPoint ? await dependencies.findLavkaDeliveryPoint(ctx) : null;
+      const point = dependencies.findLavkaDeliveryPoint
+        ? await dependencies.findLavkaDeliveryPoint(ctx)
+        : null;
       // The window shows only the address the order will carry: another one means a stale preview.
       if (point !== null && point.key !== input.addressKey) {
-        throw new AppError("AGENT_LAVKA_ADDRESS_CHANGED", "Адрес доставки изменился после предпросмотра. Сделайте новый preview");
+        throw new AppError(
+          "AGENT_LAVKA_ADDRESS_CHANGED",
+          "Адрес доставки изменился после предпросмотра. Сделайте новый preview",
+        );
       }
       const address = point?.label ?? null;
       return {
         ...localized,
         prompt: buildApprovalMessage({
           actionLabel: `оформить заказ в Яндекс Лавке на ${input.total} ₽`,
-          consequence: "Лавка спишет эту сумму с карты аккаунта и начнёт сборку. Если сумма или корзина изменились после предпросмотра, заказ не уйдёт.",
+          consequence:
+            "Лавка спишет эту сумму с карты аккаунта и начнёт сборку. Если сумма или корзина изменились после предпросмотра, заказ не уйдёт.",
           facts: [
             ...approvalFact("Сумма", `${input.total} ₽`),
             ...approvalFact("Адрес", address ?? "не выбран"),
@@ -338,10 +358,8 @@ export function createTelegramApprovalPresenter(
         }),
       };
     }
-    if (
-      request.display !== "confirmation" ||
-      request.action.toolName !== "manage_agent_schedule"
-    ) return localized;
+    if (request.display !== "confirmation" || request.action.toolName !== "manage_agent_schedule")
+      return localized;
 
     const actionName = request.action.input.action;
     if (typeof actionName !== "string" || !SCHEDULE_ACTIONS[actionName]) {

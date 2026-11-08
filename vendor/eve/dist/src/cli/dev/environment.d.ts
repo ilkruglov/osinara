@@ -3,10 +3,15 @@
  * `eve dev`, `eve build`, and `eve eval`, ordered from highest to lowest
  * precedence.
  */
-export declare const DEVELOPMENT_ENV_FILE_NAMES: readonly [".env.development.local", ".env.local", ".env.development", ".env"];
+export declare const DEVELOPMENT_ENV_FILE_NAMES: readonly [
+  ".env.development.local",
+  ".env.local",
+  ".env.development",
+  ".env",
+];
 export interface DevelopmentEnvironmentReload {
-    commit(): void;
-    rollback(): void;
+  commit(): void;
+  rollback(): void;
 }
 /**
  * Returns the local development environment files eve loads from an
@@ -22,5 +27,9 @@ export declare function getDevelopmentEnvironmentFilePaths(appRoot: string): str
  * reloads so dev-mode file watching can pick up changed values.
  */
 export declare function loadDevelopmentEnvironmentFiles(appRoot: string): void;
-export declare function stageDevelopmentEnvironmentFiles(appRoot: string): DevelopmentEnvironmentReload;
-export declare function readDevelopmentEnvironmentHostValues(appRoot: string): Readonly<Record<string, string | null>>;
+export declare function stageDevelopmentEnvironmentFiles(
+  appRoot: string,
+): DevelopmentEnvironmentReload;
+export declare function readDevelopmentEnvironmentHostValues(
+  appRoot: string,
+): Readonly<Record<string, string | null>>;

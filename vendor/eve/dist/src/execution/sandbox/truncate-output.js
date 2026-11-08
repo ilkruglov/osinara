@@ -39,9 +39,7 @@ function truncateByDirection(e, t) {
   );
 }
 function capLineLength(e) {
-  return e.length <= 2e3
-    ? e
-    : e.slice(0, MAX_LINE_LENGTH) + LINE_TRUNCATION_SUFFIX;
+  return e.length <= 2e3 ? e : e.slice(0, MAX_LINE_LENGTH) + LINE_TRUNCATION_SUFFIX;
 }
 function countLogicalLines(e) {
   return e.length > 0 && e[e.length - 1] === `` ? e.length - 1 : e.length;

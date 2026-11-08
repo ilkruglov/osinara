@@ -6,14 +6,7 @@ import { STABLE_WORKFLOW_NAMES } from "#execution/workflow-runtime.js";
 import { EVE_PACKAGE_NAME } from "#internal/package-name.js";
 const packageJsonCache = new Map(),
   projectDepsCache = new Map();
-async function applyWorkflowTransform(
-  t,
-  n,
-  a,
-  o,
-  s,
-  c = STABLE_WORKFLOW_NAMES,
-) {
+async function applyWorkflowTransform(t, n, a, o, s, c = STABLE_WORKFLOW_NAMES) {
   let l = s ?? process.cwd(),
     { moduleSpecifier: u, stableModuleSpecifier: d } = resolveModuleSpecifier(
       o === void 0 ? (isAbsolute(t) ? t : join(l, t)) : o,
@@ -46,8 +39,7 @@ function getImportPath(e, t) {
     let n = findPackageJson(e);
     if (n !== null) {
       let i = getProjectDependencies(t).has(n.name);
-      if (!(r || i))
-        return { importPath: toRelativeImportPath(e, t), isPackage: !1 };
+      if (!(r || i)) return { importPath: toRelativeImportPath(e, t), isPackage: !1 };
       let a = resolveExportSubpath(e, n);
       return a
         ? { importPath: `${n.name}${a}`, isPackage: !0 }
@@ -65,11 +57,9 @@ function resolveModuleSpecifier(e, t) {
   if (!n && !r)
     return {
       moduleSpecifier: void 0,
-      stableModuleSpecifier:
-        i?.name === EVE_PACKAGE_NAME ? EVE_PACKAGE_NAME : void 0,
+      stableModuleSpecifier: i?.name === EVE_PACKAGE_NAME ? EVE_PACKAGE_NAME : void 0,
     };
-  if (i === null)
-    return { moduleSpecifier: void 0, stableModuleSpecifier: void 0 };
+  if (i === null) return { moduleSpecifier: void 0, stableModuleSpecifier: void 0 };
   let a = resolveExportSubpath(e, i),
     o = a ? `${i.name}${a}` : i.name;
   return { moduleSpecifier: `${o}@${i.version}`, stableModuleSpecifier: o };
@@ -77,7 +67,7 @@ function resolveModuleSpecifier(e, t) {
 function findPackageJson(e) {
   let t = dirname(e),
     r = [];
-  for (; t !== dirname(t); ) {
+  for (; t !== dirname(t);) {
     let e = packageJsonCache.get(t);
     if (e !== void 0) {
       for (let t of r) packageJsonCache.set(t, e);
@@ -108,20 +98,14 @@ function findPackageJson(e) {
   return null;
 }
 function resolveExportSubpath(e, t) {
-  if (
-    t.exports === null ||
-    typeof t.exports != `object` ||
-    Array.isArray(t.exports)
-  )
-    return ``;
+  if (t.exports === null || typeof t.exports != `object` || Array.isArray(t.exports)) return ``;
   let n = e.replace(/\\/g, `/`),
     r = t.dir.replace(/\\/g, `/`),
     i = n.startsWith(`${r}/`) ? `./${n.substring(r.length + 1)}` : null;
   if (i === null) return ``;
   for (let [e, n] of Object.entries(t.exports)) {
     let t = resolveExportTarget(n);
-    if (t !== null && normalizeExportPath(t) === i)
-      return e === `.` ? `` : e.substring(1);
+    if (t !== null && normalizeExportPath(t) === i) return e === `.` ? `` : e.substring(1);
   }
   return ``;
 }
@@ -163,8 +147,7 @@ function getProjectDependencies(e) {
         `optionalDependencies`,
       ]) {
         let r = e[t];
-        if (typeof r == `object` && r && !Array.isArray(r))
-          for (let e of Object.keys(r)) n.add(e);
+        if (typeof r == `object` && r && !Array.isArray(r)) for (let e of Object.keys(r)) n.add(e);
       }
     } catch {}
   return (projectDepsCache.set(e, n), n);
@@ -172,16 +155,12 @@ function getProjectDependencies(e) {
 function isWorkspacePackage(e, t) {
   if (isInNodeModules(e)) return !1;
   let n = findPackageJson(e);
-  return n === null || resolve(n.dir) === resolve(t)
-    ? !1
-    : getProjectDependencies(t).has(n.name);
+  return n === null || resolve(n.dir) === resolve(t) ? !1 : getProjectDependencies(t).has(n.name);
 }
 function toRelativeImportPath(e, t) {
   let n = t.replace(/\\/g, `/`),
     r = e.replace(/\\/g, `/`),
-    i = r.startsWith(`${n}/`)
-      ? r.substring(n.length + 1)
-      : relative(t, e).replace(/\\/g, `/`);
+    i = r.startsWith(`${n}/`) ? r.substring(n.length + 1) : relative(t, e).replace(/\\/g, `/`);
   return (i.startsWith(`.`) || (i = `./${i}`), i);
 }
 function hasRootExport(e) {
@@ -192,11 +171,7 @@ function hasRootExport(e) {
 }
 function normalizePackageTargetPath(e) {
   let t = e.replace(/\\/g, `/`);
-  return t.startsWith(`./`)
-    ? t.substring(2)
-    : t.startsWith(`/`)
-      ? t.substring(1)
-      : t;
+  return t.startsWith(`./`) ? t.substring(2) : t.startsWith(`/`) ? t.substring(1) : t;
 }
 function isRootEntrypointFile(e, t) {
   let n = e.replace(/\\/g, `/`),
@@ -205,8 +180,7 @@ function isRootEntrypointFile(e, t) {
   let i = n.substring(r.length + 1);
   if (t.exports !== void 0) {
     let e;
-    if (t.exports !== null && typeof t.exports == `object` && `.` in t.exports)
-      e = t.exports[`.`];
+    if (t.exports !== null && typeof t.exports == `object` && `.` in t.exports) e = t.exports[`.`];
     else if (hasRootExport(t.exports)) e = t.exports;
     else return !1;
     let n = resolveExportTarget(e);
@@ -222,17 +196,10 @@ function isRootEntrypointFile(e, t) {
     `index.mts`,
     `index.cts`,
   ]
-    .flatMap((e) =>
-      typeof e == `string` ? [normalizePackageTargetPath(e)] : [],
-    )
+    .flatMap((e) => (typeof e == `string` ? [normalizePackageTargetPath(e)] : []))
     .includes(i);
 }
 async function readSourceFile(e) {
   return await readFile(e, `utf8`);
 }
-export {
-  applyWorkflowTransform,
-  detectWorkflowPatterns,
-  getImportPath,
-  readSourceFile,
-};
+export { applyWorkflowTransform, detectWorkflowPatterns, getImportPath, readSourceFile };

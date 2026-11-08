@@ -28,9 +28,11 @@ const familyAuth = {
 };
 
 function approval(argv: string[]) {
-  return (executeGoogleWorkspace as unknown as {
-    approval: (context: { toolInput?: { argv: string[] } }) => unknown;
-  }).approval({ toolInput: { argv } });
+  return (
+    executeGoogleWorkspace as unknown as {
+      approval: (context: { toolInput?: { argv: string[] } }) => unknown;
+    }
+  ).approval({ toolInput: { argv } });
 }
 
 function toolDescription(): string {
@@ -38,9 +40,11 @@ function toolDescription(): string {
 }
 
 async function executeRaw(input: { argv: string[] }) {
-  return await (executeGoogleWorkspace as unknown as {
-    execute: (input: { argv: string[] }, ctx: unknown) => Promise<unknown>;
-  }).execute(input, {});
+  return await (
+    executeGoogleWorkspace as unknown as {
+      execute: (input: { argv: string[] }, ctx: unknown) => Promise<unknown>;
+    }
+  ).execute(input, {});
 }
 
 function dependencies(auth: GoogleIntegrationAuthorization = personalAuth) {
@@ -48,30 +52,30 @@ function dependencies(auth: GoogleIntegrationAuthorization = personalAuth) {
   return {
     resolveAuthorization: vi.fn().mockResolvedValue(auth),
     run: vi.fn().mockResolvedValue({ exitCode: 0, stderr: "", stdout: "{}" }),
-    withAuthorizedExecution: vi.fn(async <T>(
-      _auth: GoogleIntegrationAuthorization,
-      operation: (accessToken: string, currentProfile: typeof profile) => Promise<T>,
-    ): Promise<T> => await operation("live-access-token", profile)),
+    withAuthorizedExecution: vi.fn(
+      async <T>(
+        _auth: GoogleIntegrationAuthorization,
+        operation: (accessToken: string, currentProfile: typeof profile) => Promise<T>,
+      ): Promise<T> => await operation("live-access-token", profile),
+    ),
   };
 }
 
 describe("execute_google_workspace approval", () => {
   it("requires approval for every mutation and denies unreviewed commands", () => {
-    expect(approval(["calendar", "events", "list", "--params", "{}"])).toBe(
-      "not-applicable",
-    );
-    expect(approval(["calendar", "events", "insert", "--json", "{}"])).toBe(
-      "user-approval",
-    );
+    expect(approval(["calendar", "events", "list", "--params", "{}"])).toBe("not-applicable");
+    expect(approval(["calendar", "events", "insert", "--json", "{}"])).toBe("user-approval");
     expect(approval(["auth", "export"])).toMatchObject({ type: "denied" });
-    expect(approval([
-      "gmail",
-      "users",
-      "messages",
-      "trash",
-      "--params",
-      '{"userId":"me","id":"message-id"}',
-    ])).toMatchObject({
+    expect(
+      approval([
+        "gmail",
+        "users",
+        "messages",
+        "trash",
+        "--params",
+        '{"userId":"me","id":"message-id"}',
+      ]),
+    ).toMatchObject({
       reason: expect.stringMatching(/manage_gmail_message/u),
       type: "denied",
     });
@@ -84,16 +88,18 @@ describe("execute_google_workspace approval", () => {
   });
 
   it("denies a replayed raw Gmail deletion before resolving credentials", async () => {
-    await expect(executeRaw({
-      argv: [
-        "gmail",
-        "users",
-        "messages",
-        "delete",
-        "--params",
-        '{"userId":"me","id":"message-id"}',
-      ],
-    })).rejects.toThrowError(/manage_gmail_message/u);
+    await expect(
+      executeRaw({
+        argv: [
+          "gmail",
+          "users",
+          "messages",
+          "delete",
+          "--params",
+          '{"userId":"me","id":"message-id"}',
+        ],
+      }),
+    ).rejects.toThrowError(/manage_gmail_message/u);
   });
 });
 
@@ -105,8 +111,9 @@ describe("createGoogleWorkspaceExecutor", () => {
     );
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await expect(execute({ argv: ["calendar", "events", "insert", "--json", "{}"] }, {} as never))
-      .rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_ACCESS_DENIED/u);
+    await expect(
+      execute({ argv: ["calendar", "events", "insert", "--json", "{}"] }, {} as never),
+    ).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_ACCESS_DENIED/u);
     expect(deps.run).not.toHaveBeenCalled();
   });
 
@@ -133,11 +140,14 @@ describe("createGoogleWorkspaceExecutor", () => {
   it("passes shell metacharacters as one unchanged argument", async () => {
     const deps = dependencies();
     const execute = createGoogleWorkspaceExecutor(deps as never);
-    const dangerous = '$(touch /tmp/pwned); `id`; a && rm -rf /';
+    const dangerous = "$(touch /tmp/pwned); `id`; a && rm -rf /";
 
-    await execute({
-      argv: ["gmail", "+send", "--to", "a@example.com", "--subject", dangerous],
-    }, {} as never);
+    await execute(
+      {
+        argv: ["gmail", "+send", "--to", "a@example.com", "--subject", dangerous],
+      },
+      {} as never,
+    );
 
     expect(deps.run.mock.calls[0]?.[0][5]).toBe(dangerous);
   });
@@ -163,10 +173,9 @@ describe("createGoogleWorkspaceExecutor", () => {
     }));
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await expect(execute(
-      { argv: ["calendar", "events", "list", "--params", "{}"] },
-      {} as never,
-    )).resolves.toMatchObject({ stdout: "{\"authorizationActive\":true}" });
+    await expect(
+      execute({ argv: ["calendar", "events", "list", "--params", "{}"] }, {} as never),
+    ).resolves.toMatchObject({ stdout: '{"authorizationActive":true}' });
     expect(authorizationActive).toBe(false);
   });
 
@@ -179,10 +188,9 @@ describe("createGoogleWorkspaceExecutor", () => {
     });
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await expect(execute(
-      { argv: ["calendar", "events", "list", "--params", "{}"] },
-      {} as never,
-    )).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_OUTPUT_TOO_LARGE/u);
+    await expect(
+      execute({ argv: ["calendar", "events", "list", "--params", "{}"] }, {} as never),
+    ).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_OUTPUT_TOO_LARGE/u);
   });
 
   it("reports bounded success after an oversized mutation result", async () => {
@@ -194,10 +202,9 @@ describe("createGoogleWorkspaceExecutor", () => {
     });
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await expect(execute(
-      { argv: ["calendar", "events", "insert", "--json", "{}"] },
-      {} as never,
-    )).resolves.toEqual({
+    await expect(
+      execute({ argv: ["calendar", "events", "insert", "--json", "{}"] }, {} as never),
+    ).resolves.toEqual({
       completed: true,
       kind: "mutation",
       outputBytes: expect.any(Number),
@@ -213,10 +220,15 @@ describe("createGoogleWorkspaceExecutor", () => {
     const deps = dependencies();
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await expect(execute({
-      argv: ["gmail", "users", "messages", "trash", "--params", "{}"],
-      expectedProfileRef: "old-profile",
-    }, {} as never)).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_PROFILE_CHANGED/u);
+    await expect(
+      execute(
+        {
+          argv: ["gmail", "users", "messages", "trash", "--params", "{}"],
+          expectedProfileRef: "old-profile",
+        },
+        {} as never,
+      ),
+    ).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_PROFILE_CHANGED/u);
     expect(deps.run).not.toHaveBeenCalled();
   });
 });

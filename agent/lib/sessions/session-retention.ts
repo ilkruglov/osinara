@@ -53,19 +53,27 @@ async function deleteExpiredSessionsUnderLock(): Promise<number> {
       if (errorCode === "AGENT_EVE_SESSION_STORAGE_MISSING") {
         await sessionRepository.completeDeletion(claim.id, claim.leaseToken);
         deleted += 1;
-        console.info(JSON.stringify({ applicationSessionId: claim.id, code: "AGENT_SESSION_RETENTION_STORAGE_ABSENT", eveSessionId: claim.eveSessionId }));
+        console.info(
+          JSON.stringify({
+            applicationSessionId: claim.id,
+            code: "AGENT_SESSION_RETENTION_STORAGE_ABSENT",
+            eveSessionId: claim.eveSessionId,
+          }),
+        );
         continue;
       }
       // This schedule is the boundary: persist the context (the row gets its retry moment) and
       // keep sweeping. Rethrowing left every later expired session untouched for the minute.
       await sessionRepository.failDeletion(claim.id, claim.leaseToken, errorCode, new Date());
-      console.error(JSON.stringify({
-        applicationSessionId: claim.id,
-        code: "AGENT_SESSION_RETENTION_DELETE_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-        errorCode,
-        eveSessionId: claim.eveSessionId,
-      }));
+      console.error(
+        JSON.stringify({
+          applicationSessionId: claim.id,
+          code: "AGENT_SESSION_RETENTION_DELETE_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+          errorCode,
+          eveSessionId: claim.eveSessionId,
+        }),
+      );
     }
   }
 }

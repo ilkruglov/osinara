@@ -19,23 +19,42 @@ function pacer(accepts = true) {
   };
 }
 
-const tooMany = (seconds?: number) => new Response(JSON.stringify({
-  description: "Too Many Requests", error_code: 429, ok: false, ...(seconds === undefined ? {} : { parameters: { retry_after: seconds } }),
-}), { status: 429 });
-const sent = () => new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), { status: 200 });
+const tooMany = (seconds?: number) =>
+  new Response(
+    JSON.stringify({
+      description: "Too Many Requests",
+      error_code: 429,
+      ok: false,
+      ...(seconds === undefined ? {} : { parameters: { retry_after: seconds } }),
+    }),
+    { status: 429 },
+  );
+const sent = () =>
+  new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), { status: 200 });
 
 type FetchMock = ReturnType<typeof vi.fn<(url: string, init: RequestInit) => Promise<Response>>>;
 
 function upload(fetchMock: FetchMock, paced: ReturnType<typeof pacer>) {
   const form = new FormData();
   form.set("chat_id", "101");
-  return postTelegramMultipart({ chatId: "101", fetch: fetchMock, form, method: "sendDocument", pacer: paced, timeoutMs: 1_000, token: "123:t" });
+  return postTelegramMultipart({
+    chatId: "101",
+    fetch: fetchMock,
+    form,
+    method: "sendDocument",
+    pacer: paced,
+    timeoutMs: 1_000,
+    token: "123:t",
+  });
 }
 
 describe("postTelegramMultipart", () => {
   it("pauses every call after a 429 and tries the upload once more with its own slot", async () => {
     const paced = pacer();
-    const fetchMock: FetchMock = vi.fn().mockResolvedValueOnce(tooMany(3)).mockResolvedValueOnce(sent());
+    const fetchMock: FetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(tooMany(3))
+      .mockResolvedValueOnce(sent());
 
     const response = await upload(fetchMock, paced);
 
@@ -50,7 +69,10 @@ describe("postTelegramMultipart", () => {
 
   it("pauses the others after a second 429 and gives it back", async () => {
     const paced = pacer();
-    const fetchMock: FetchMock = vi.fn().mockResolvedValueOnce(tooMany(3)).mockResolvedValueOnce(tooMany(9));
+    const fetchMock: FetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(tooMany(3))
+      .mockResolvedValueOnce(tooMany(9));
 
     const response = await upload(fetchMock, paced);
 

@@ -19,13 +19,14 @@ function boundedStderrDiagnostic(stderr: readonly Buffer[]): string | null {
   if (bytes.byteLength === 0) return null;
 
   // Preserve both command startup context and the terminal failure while bounding disclosure.
-  const selected = bytes.byteLength <= MAX_DIAGNOSTIC_BYTES
-    ? bytes
-    : Buffer.concat([
-        bytes.subarray(0, DIAGNOSTIC_EDGE_BYTES),
-        Buffer.from("\n...[диагностика сокращена]...\n", "utf8"),
-        bytes.subarray(-DIAGNOSTIC_EDGE_BYTES),
-      ]);
+  const selected =
+    bytes.byteLength <= MAX_DIAGNOSTIC_BYTES
+      ? bytes
+      : Buffer.concat([
+          bytes.subarray(0, DIAGNOSTIC_EDGE_BYTES),
+          Buffer.from("\n...[диагностика сокращена]...\n", "utf8"),
+          bytes.subarray(-DIAGNOSTIC_EDGE_BYTES),
+        ]);
   const sanitized = redactSecrets(selected.toString("utf8")).trim();
   return sanitized || null;
 }
@@ -54,25 +55,29 @@ export async function runHostCommand(input: {
       child.kill("SIGKILL");
     }, input.timeoutMs);
 
-    const collect = (target: Buffer[]) => (chunk: Buffer): void => {
-      outputBytes += chunk.byteLength;
-      if (outputBytes > MAX_OUTPUT_BYTES) {
-        child.kill("SIGKILL");
-        return;
-      }
-      target.push(Buffer.from(chunk));
-    };
+    const collect =
+      (target: Buffer[]) =>
+      (chunk: Buffer): void => {
+        outputBytes += chunk.byteLength;
+        if (outputBytes > MAX_OUTPUT_BYTES) {
+          child.kill("SIGKILL");
+          return;
+        }
+        target.push(Buffer.from(chunk));
+      };
     child.stdout.on("data", collect(stdout));
     child.stderr.on("data", collect(stderr));
     child.on("error", (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      reject(new InstallerError(
-        "OSINARA_INSTALL_HOST_COMMAND_FAILED",
-        `Не удалось запустить обязательную команду ${input.command}`,
-        { cause: error },
-      ));
+      reject(
+        new InstallerError(
+          "OSINARA_INSTALL_HOST_COMMAND_FAILED",
+          `Не удалось запустить обязательную команду ${input.command}`,
+          { cause: error },
+        ),
+      );
     });
     child.on("close", (code, signal) => {
       if (settled) return;
@@ -85,11 +90,13 @@ export async function runHostCommand(input: {
           : outputBytes > MAX_OUTPUT_BYTES
             ? "превысила допустимый объём вывода"
             : `завершилась с кодом ${code ?? "unknown"}`;
-        reject(new InstallerError(
-          "OSINARA_INSTALL_HOST_COMMAND_FAILED",
-          `Команда ${input.command} ${reason}.${diagnostic ? ` stderr: ${diagnostic}` : " Проверьте системный журнал"}`,
-          { cause: new Error(`exit=${code ?? "null"} signal=${signal ?? "none"}`) },
-        ));
+        reject(
+          new InstallerError(
+            "OSINARA_INSTALL_HOST_COMMAND_FAILED",
+            `Команда ${input.command} ${reason}.${diagnostic ? ` stderr: ${diagnostic}` : " Проверьте системный журнал"}`,
+            { cause: new Error(`exit=${code ?? "null"} signal=${signal ?? "none"}`) },
+          ),
+        );
         return;
       }
       resolve(Buffer.concat(stdout));

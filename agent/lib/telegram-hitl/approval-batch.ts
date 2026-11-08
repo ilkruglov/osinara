@@ -36,10 +36,11 @@ function pluralActions(count: number): string {
 
 export function isBatchedApprovalStep(requests: readonly PresentedInputRequest[]): boolean {
   if (requests.length < 2) return false;
-  return requests.every(({ kind, request }) =>
-    kind === "tool-approval" &&
-    (request.options?.length ?? 0) > 0 &&
-    request.options!.every((option) => option.id in BATCH_OPTION_LABELS)
+  return requests.every(
+    ({ kind, request }) =>
+      kind === "tool-approval" &&
+      (request.options?.length ?? 0) > 0 &&
+      request.options!.every((option) => option.id in BATCH_OPTION_LABELS),
   );
 }
 

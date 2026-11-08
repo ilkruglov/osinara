@@ -14,13 +14,7 @@ export type ProviderId = "deepseek";
 
 export type ProviderProtocol = "anthropic-messages" | "openai-chat-completions";
 
-export type ReasoningEffort =
-  | "max"
-  | "xhigh"
-  | "high"
-  | "medium"
-  | "low"
-  | "minimal";
+export type ReasoningEffort = "max" | "xhigh" | "high" | "medium" | "low" | "minimal";
 
 export type ReasoningSelection =
   | { type: "none" }

@@ -1,6 +1,6 @@
 /** Terminal outcome of a cancelled turn. */
 export declare class TurnCancelledError extends Error {
-    constructor(message?: string);
+  constructor(message?: string);
 }
 /**
  * A turn cancellation raised when the user declines a session-limit
@@ -10,8 +10,8 @@ export declare class TurnCancelledError extends Error {
  * cross-session cancellation authority.
  */
 export declare class SessionLimitDeclinedError extends TurnCancelledError {
-    readonly sessionLimitDeclined = true;
-    constructor();
+  readonly sessionLimitDeclined = true;
+  constructor();
 }
 /** True when the error, or one of its causes, marks a session-limit decline. */
 export declare function isSessionLimitDecline(error: unknown): boolean;

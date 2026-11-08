@@ -26,10 +26,12 @@ const externalInput = {
 
 describe("telegramGroupRegistrationInputSchema", () => {
   it("rejects numeric Telegram group IDs to prevent JSON precision loss", () => {
-    expect(() => telegramGroupRegistrationInputSchema.parse({
-      ...baseInput,
-      telegramChatId: -1001234567890,
-    })).toThrow();
+    expect(() =>
+      telegramGroupRegistrationInputSchema.parse({
+        ...baseInput,
+        telegramChatId: -1001234567890,
+      }),
+    ).toThrow();
   });
 
   it("keeps a canonical string Telegram group ID", () => {
@@ -108,11 +110,13 @@ describe("telegramGroupRegistrationInputSchema", () => {
   it.each(["external_private", "external_public"])(
     "rejects the removed legacy group type %s",
     (type) => {
-      expect(() => telegramGroupRegistrationInputSchema.parse({
-        ...externalInput,
-        telegramChatId: "-1001234567890",
-        type,
-      })).toThrow();
+      expect(() =>
+        telegramGroupRegistrationInputSchema.parse({
+          ...externalInput,
+          telegramChatId: "-1001234567890",
+          type,
+        }),
+      ).toThrow();
     },
   );
 
@@ -130,7 +134,7 @@ describe("telegramGroupRegistrationInputSchema", () => {
         ...baseInput,
         messageMode: "owner_only",
         telegramChatId: "-1001234567890",
-      })
+      }),
     ).toThrow();
   });
 

@@ -31,17 +31,28 @@ describe("formatTurnQuality", () => {
       text: "Ходы: 50, сбоев 1 (2 %), с упавшим инструментом 2, тяжёлых 4; процесс: циклов 1, повторов после ошибки 0, запрещённых инструментов 0; отклик: реакций +7 −1 ~2, ответов Мие 9, поправок 3 из 40 доставленных.",
       warning: false,
     });
-    expect(formatTurnQuality({ ...quiet, turns: 0 })).toEqual({ text: "Ходы: за сутки ни одного.", warning: false });
+    expect(formatTurnQuality({ ...quiet, turns: 0 })).toEqual({
+      text: "Ходы: за сутки ни одного.",
+      warning: false,
+    });
   });
 
   it("warns on failures, process signals and corrections above the thresholds", () => {
     expect(formatTurnQuality({ ...quiet, failed: 6 }).warning).toBe(true);
     expect(formatTurnQuality({ ...quiet, loops: 2, repeatAfterError: 1 }).warning).toBe(true);
-    expect(formatTurnQuality({ ...quiet, followUps: { corrections: 9, repliesToMia: 9 } }).warning).toBe(true);
+    expect(
+      formatTurnQuality({ ...quiet, followUps: { corrections: 9, repliesToMia: 9 } }).warning,
+    ).toBe(true);
   });
 
   it("names the versions when the window spans a release", () => {
-    const text = formatTurnQuality({ ...quiet, versions: [{ failed: 1, softwareVersion: "1.8.34", turns: 20 }, { failed: 0, softwareVersion: "1.8.35", turns: 30 }] }).text;
+    const text = formatTurnQuality({
+      ...quiet,
+      versions: [
+        { failed: 1, softwareVersion: "1.8.34", turns: 20 },
+        { failed: 0, softwareVersion: "1.8.35", turns: 30 },
+      ],
+    }).text;
     expect(text).toContain("версии: 1.8.34 20/1, 1.8.35 30/0.");
   });
 });

@@ -29,9 +29,7 @@ var __create = Object.create,
   __toESM = (n, r, a) => (
     (a = n == null ? {} : __create(__getProtoOf(n))),
     __copyProps(
-      r || !n || !n.__esModule
-        ? __defProp(a, `default`, { value: n, enumerable: !0 })
-        : a,
+      r || !n || !n.__esModule ? __defProp(a, `default`, { value: n, enumerable: !0 }) : a,
       n,
     )
   );

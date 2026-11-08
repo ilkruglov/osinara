@@ -23,9 +23,7 @@ A single tool or subagent call runs as one serial action. If you call multiple i
   ];
 }
 function createInstructionsPromptBlocks(e) {
-  let t = (e ?? []).filter(
-    (e) => e.role === `system` && e.content.trim().length > 0,
-  );
+  let t = (e ?? []).filter((e) => e.role === `system` && e.content.trim().length > 0);
   if (t.length === 0) return [];
   let n = t.length === 1 ? t[0] : void 0;
   return [

@@ -4,7 +4,6 @@ function createEveCronHandlerRoute() {
   return `${EVE_ROUTE_PREFIX}/cron/${randomBytes(32).toString(`base64url`)}`;
 }
 function applyEveCronHandlerRoute(e) {
-  e.options.vercel !== void 0 &&
-    (e.options.vercel.cronHandlerRoute = createEveCronHandlerRoute());
+  e.options.vercel !== void 0 && (e.options.vercel.cronHandlerRoute = createEveCronHandlerRoute());
 }
 export { applyEveCronHandlerRoute, createEveCronHandlerRoute };

@@ -6,9 +6,7 @@ function createDevelopmentCredentialGate(t) {
   return {
     authorize: (e) => {
       if (e.target.origin !== n)
-        throw Error(
-          `Verified Vercel origin ${e.target.origin} does not match client origin ${n}.`,
-        );
+        throw Error(`Verified Vercel origin ${e.target.origin} does not match client origin ${n}.`);
       let t = r,
         a = i,
         o = { kind: `vercel`, resolveToken: e.resolveToken };
@@ -33,11 +31,7 @@ function createDevelopmentCredentialGate(t) {
         n = typeof t == `string` || t.kind === `resolved` ? void 0 : t;
       return (
         r === e && (i = n),
-        typeof t == `string`
-          ? t.trim()
-          : t.kind === `resolved`
-            ? t.token.trim()
-            : ``
+        typeof t == `string` ? t.trim() : t.kind === `resolved` ? t.token.trim() : ``
       );
     },
     serverOrigin: n,

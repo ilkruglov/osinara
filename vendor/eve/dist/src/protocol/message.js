@@ -8,10 +8,7 @@ import {
   createEveSubagentStreamRoutePath,
 } from "#protocol/routes.js";
 import { toChannelLocalContinuationToken } from "#shared/continuation-token.js";
-import {
-  decodeSandboxRef,
-  isSandboxRefUrl,
-} from "#internal/attachments/sandbox-refs.js";
+import { decodeSandboxRef, isSandboxRefUrl } from "#internal/attachments/sandbox-refs.js";
 import { createEventId } from "#protocol/event-id.js";
 const EVE_SESSION_ID_HEADER = `x-eve-session-id`,
   EVE_STREAM_FORMAT_HEADER = `x-eve-stream-format`,
@@ -23,17 +20,11 @@ const EVE_SESSION_ID_HEADER = `x-eve-session-id`,
   textEncoder = new TextEncoder();
 function isCurrentTurnBoundaryEvent(e) {
   return (
-    e.type === `session.completed` ||
-    e.type === `session.failed` ||
-    e.type === `session.waiting`
+    e.type === `session.completed` || e.type === `session.failed` || e.type === `session.waiting`
   );
 }
 function isTurnFailureEvent(e) {
-  return (
-    e.type === `session.failed` ||
-    e.type === `step.failed` ||
-    e.type === `turn.failed`
-  );
+  return e.type === `session.failed` || e.type === `step.failed` || e.type === `turn.failed`;
 }
 function createSessionStartedEvent(e) {
   let t = {};
@@ -46,10 +37,7 @@ function createSessionStartedEvent(e) {
 }
 function createTurnStartedEvent(e) {
   let t = { sequence: e.sequence, turnId: e.turnId };
-  return (
-    e.trace !== void 0 && (t.trace = e.trace),
-    { data: t, type: `turn.started` }
-  );
+  return (e.trace !== void 0 && (t.trace = e.trace), { data: t, type: `turn.started` });
 }
 function createMessageReceivedEvent(e) {
   return {
@@ -83,13 +71,7 @@ function projectUserContentParts(e) {
       : n.type === `file`
         ? t.push(projectFileLikePart(n.data, n.mediaType, n.filename))
         : n.type === `image` &&
-          t.push(
-            projectFileLikePart(
-              n.image,
-              n.mediaType ?? `application/octet-stream`,
-              void 0,
-            ),
-          );
+          t.push(projectFileLikePart(n.image, n.mediaType ?? `application/octet-stream`, void 0));
   return t;
 }
 function projectFileLikePart(e, t, n) {
@@ -116,9 +98,7 @@ function projectTaggedFileData(e, t, n) {
       case `data`: {
         let r = byteLengthOf(e.data);
         return createProjectedFilePart(
-          r === void 0
-            ? { filename: n, mediaType: t }
-            : { filename: n, mediaType: t, size: r },
+          r === void 0 ? { filename: n, mediaType: t } : { filename: n, mediaType: t, size: r },
         );
       }
       case `reference`:
@@ -168,9 +148,7 @@ function clientUrlFragment(r) {
   }
 }
 function isClientResolvableUrl(e) {
-  return (
-    e.protocol === `http:` || e.protocol === `https:` || e.protocol === `data:`
-  );
+  return e.protocol === `http:` || e.protocol === `https:` || e.protocol === `data:`;
 }
 function basenameOf(e) {
   let t = e.replaceAll(`\\`, `/`),
@@ -478,12 +456,9 @@ function encodeMessageStreamEvent(e) {
   return textEncoder.encode(`${JSON.stringify(e)}\n`);
 }
 function normalizeActionResultOutcome(e) {
-  if (e.isError === !0)
-    return { error: buildActionResultError(e), status: `failed` };
+  if (e.isError === !0) return { error: buildActionResultError(e), status: `failed` };
   let t = readActionResultOutputError(e.output);
-  return t === void 0
-    ? { status: `completed` }
-    : { error: t, status: `failed` };
+  return t === void 0 ? { status: `completed` } : { error: t, status: `failed` };
 }
 function buildActionResultError(e) {
   let t = readActionResultOutputError(e.output);
@@ -498,8 +473,7 @@ function readActionResultOutputError(e) {
   let t = parseActionResultOutputRecord(e);
   if (t === void 0) return;
   let n = typeof t.code == `string` && t.code.length > 0 ? t.code : void 0,
-    r =
-      typeof t.message == `string` && t.message.length > 0 ? t.message : void 0;
+    r = typeof t.message == `string` && t.message.length > 0 ? t.message : void 0;
   if (!(n === void 0 || r === void 0)) return { code: n, message: r };
 }
 function parseActionResultOutputRecord(e) {

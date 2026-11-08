@@ -31,8 +31,12 @@ describe("installation bundle", () => {
     const composePath = join(directory, "compose.installation.json");
     await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1 }));
     await writeFile(composePath, JSON.stringify({ name: "osinara-production", services: {} }));
-    const firstBuild = spawnSync("bash", [buildScript, first, manifestPath, composePath], { encoding: "utf8" });
-    const secondBuild = spawnSync("bash", [buildScript, second, manifestPath, composePath], { encoding: "utf8" });
+    const firstBuild = spawnSync("bash", [buildScript, first, manifestPath, composePath], {
+      encoding: "utf8",
+    });
+    const secondBuild = spawnSync("bash", [buildScript, second, manifestPath, composePath], {
+      encoding: "utf8",
+    });
     expect(firstBuild.status, firstBuild.stderr).toBe(0);
     expect(secondBuild.status, secondBuild.stderr).toBe(0);
     const firstBytes = await readFile(first);
@@ -40,7 +44,17 @@ describe("installation bundle", () => {
     expect(firstBytes.equals(secondBytes)).toBe(true);
     await expect(validateInstallationBundle(firstBytes)).resolves.toBeUndefined();
     const files = await readInstallationBundle(firstBytes);
-    for (const name of ["production-deploy.sh", "production-deploy/common.sh", "production-deploy/database.sh", "production-deploy/release.sh", "production-deploy/backup.sh", "osinara-deploy.service", "osinara-deploy.timer", "LICENSE", "NOTICE"]) {
+    for (const name of [
+      "production-deploy.sh",
+      "production-deploy/common.sh",
+      "production-deploy/database.sh",
+      "production-deploy/release.sh",
+      "production-deploy/backup.sh",
+      "osinara-deploy.service",
+      "osinara-deploy.timer",
+      "LICENSE",
+      "NOTICE",
+    ]) {
       expect(files.has(`installation/${name}`), name).toBe(true);
     }
     expect(files.has("installation/production-deploy/bridge.sh")).toBe(false);
@@ -73,16 +87,20 @@ describe("installation bundle", () => {
     temporaryDirectories.push(directory);
     const archive = join(directory, "malicious.tar.gz");
     await symlink("/etc/passwd", join(directory, "production-deploy.sh"));
-    const result = spawnSync("tar", [
-      "--create",
-      "--gzip",
-      "--file",
-      archive,
-      "--directory",
-      directory,
-      "--transform=s|^|installation/|",
-      "production-deploy.sh",
-    ], { encoding: "utf8" });
+    const result = spawnSync(
+      "tar",
+      [
+        "--create",
+        "--gzip",
+        "--file",
+        archive,
+        "--directory",
+        directory,
+        "--transform=s|^|installation/|",
+        "production-deploy.sh",
+      ],
+      { encoding: "utf8" },
+    );
     expect(result.status, result.stderr).toBe(0);
 
     await expect(validateInstallationBundle(await readFile(archive))).rejects.toMatchObject({

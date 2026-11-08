@@ -1,19 +1,13 @@
 import { join } from "node:path";
 import { normalizeLogicalPath } from "#discover/filesystem.js";
 import { createDiscoverErrorDiagnostic } from "#discover/diagnostics.js";
-import {
-  createModuleSourceRef,
-  createPathDerivedSourceId,
-} from "#discover/manifest.js";
+import { createModuleSourceRef, createPathDerivedSourceId } from "#discover/manifest.js";
 import {
   DISCOVER_MODULE_SLOT_COLLISION,
   DISCOVER_SANDBOX_DIRECTORY_INVALID,
   readSortedDirectoryEntries,
 } from "#discover/grammar.js";
-import {
-  collectFlatSlotCandidates,
-  collectNamedSlotCandidates,
-} from "#discover/slots.js";
+import { collectFlatSlotCandidates, collectNamedSlotCandidates } from "#discover/slots.js";
 const SANDBOX_DIRECTORY_NAME = `sandbox`,
   SANDBOX_WORKSPACE_DIRECTORY_NAME = `workspace`,
   SANDBOX_DEFINITION_BASE_NAME = `sandbox`,
@@ -41,9 +35,7 @@ async function discoverSandboxSource(a) {
     );
   let l = await readSortedDirectoryEntries(a.source, c),
     u = collectFolderSandboxModuleCandidates(l),
-    d = l.find(
-      (e) => e.name === SANDBOX_WORKSPACE_DIRECTORY_NAME && e.isDirectory(),
-    );
+    d = l.find((e) => e.name === SANDBOX_WORKSPACE_DIRECTORY_NAME && e.isDirectory());
   if (u.length > 1)
     return (
       o.push(
@@ -79,9 +71,7 @@ async function discoverSandboxSource(a) {
   let g = null;
   if (m) {
     let n = join(c, SANDBOX_WORKSPACE_DIRECTORY_NAME),
-      r = normalizeLogicalPath(
-        join(SANDBOX_DIRECTORY_NAME, SANDBOX_WORKSPACE_DIRECTORY_NAME),
-      );
+      r = normalizeLogicalPath(join(SANDBOX_DIRECTORY_NAME, SANDBOX_WORKSPACE_DIRECTORY_NAME));
     g = {
       logicalPath: r,
       rootEntries: await collectWorkspaceRootEntries(a.source, n),

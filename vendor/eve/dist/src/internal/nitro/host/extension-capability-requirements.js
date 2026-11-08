@@ -10,27 +10,14 @@ async function deriveExtensionCapabilityRequirements(r) {
     a = { externalDependencies: r.runtimeDependencies },
     o = collectSubagentManifests(r.manifest),
     [s, c, l, u, d] = await Promise.all([
+      Promise.all(o.flatMap((e) => e.tools.map((t) => compileToolEntry(e.agentRoot, t, a)))),
+      Promise.all(o.flatMap((e) => e.skills.map((t) => compileSkillSource(e.agentRoot, t, a)))),
       Promise.all(
-        o.flatMap((e) =>
-          e.tools.map((t) => compileToolEntry(e.agentRoot, t, a)),
-        ),
+        o.flatMap((e) => e.instructions.map((n) => compileInstructionsEntry(e.agentRoot, n, a))),
       ),
-      Promise.all(
-        o.flatMap((e) =>
-          e.skills.map((t) => compileSkillSource(e.agentRoot, t, a)),
-        ),
-      ),
-      Promise.all(
-        o.flatMap((e) =>
-          e.instructions.map((n) =>
-            compileInstructionsEntry(e.agentRoot, n, a),
-          ),
-        ),
-      ),
-      loadAuthoredModuleNamespace(
-        join(r.sourceRoot, r.declarationModule.logicalPath),
-        { externalDependencies: r.runtimeDependencies },
-      ),
+      loadAuthoredModuleNamespace(join(r.sourceRoot, r.declarationModule.logicalPath), {
+        externalDependencies: r.runtimeDependencies,
+      }),
       extensionUsesState(r.sourceRoot),
     ]);
   (s.length > 0 && i.add(`tool`),
@@ -43,8 +30,7 @@ async function deriveExtensionCapabilityRequirements(r) {
     c.length > 0 && i.add(`skill`),
     c.some((e) => e.kind === `dynamic-skill`) && i.add(`dynamicSkill`),
     l.length > 0 && i.add(`instructions`),
-    l.some((e) => e.kind === `dynamic-instructions`) &&
-      i.add(`dynamicInstructions`));
+    l.some((e) => e.kind === `dynamic-instructions`) && i.add(`dynamicInstructions`));
   let f = u[r.declarationModule.exportName ?? `default`];
   return (
     (typeof f == `function` || (typeof f == `object` && f)) &&
@@ -60,9 +46,6 @@ async function deriveExtensionCapabilityRequirements(r) {
   );
 }
 function collectSubagentManifests(e) {
-  return [
-    e,
-    ...e.subagents.flatMap((e) => collectSubagentManifests(e.manifest)),
-  ];
+  return [e, ...e.subagents.flatMap((e) => collectSubagentManifests(e.manifest))];
 }
 export { deriveExtensionCapabilityRequirements };

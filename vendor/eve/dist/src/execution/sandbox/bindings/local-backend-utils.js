@@ -3,10 +3,7 @@ import { access, cp, mkdir, rename, rm, utimes } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveSandboxModelPath } from "#shared/skill-paths.js";
 import { WORKSPACE_ROOT } from "#runtime/workspace/types.js";
-import {
-  bufferToStream,
-  streamToBuffer,
-} from "#execution/sandbox/stream-utils.js";
+import { bufferToStream, streamToBuffer } from "#execution/sandbox/stream-utils.js";
 function createFileBackedInternalSandboxSession(e) {
   return {
     id: e.id,
@@ -39,16 +36,11 @@ async function pathExists(e) {
 }
 async function copyDirectoryAtomically(t, r) {
   let i = `${r}.${randomUUID()}.tmp`;
-  (await rm(i, { force: !0, recursive: !0 }),
-    await mkdir(dirname(r), { recursive: !0 }));
+  (await rm(i, { force: !0, recursive: !0 }), await mkdir(dirname(r), { recursive: !0 }));
   try {
     (await cp(t, i, { recursive: !0 }), await rename(i, r));
   } catch (e) {
-    if (
-      (await rm(i, { force: !0, recursive: !0 }).catch(() => {}),
-      await pathExists(r))
-    )
-      return;
+    if ((await rm(i, { force: !0, recursive: !0 }).catch(() => {}), await pathExists(r))) return;
     throw e;
   }
 }

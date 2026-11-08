@@ -14,7 +14,11 @@ const { orderCardSendFailure } = await import("./order-watch-production.js");
 
 describe("orderCardSendFailure", () => {
   it("names a refusal and an unknown outcome apart", () => {
-    expect(orderCardSendFailure({ ambiguous: false, status: 400 })).toMatchObject({ code: "AGENT_ORDER_WATCH_CARD_REFUSED" });
-    expect(orderCardSendFailure({ ambiguous: true, status: 502 })).toMatchObject({ code: "AGENT_ORDER_WATCH_CARD_AMBIGUOUS" });
+    expect(orderCardSendFailure({ ambiguous: false, status: 400 })).toMatchObject({
+      code: "AGENT_ORDER_WATCH_CARD_REFUSED",
+    });
+    expect(orderCardSendFailure({ ambiguous: true, status: 502 })).toMatchObject({
+      code: "AGENT_ORDER_WATCH_CARD_AMBIGUOUS",
+    });
   });
 });

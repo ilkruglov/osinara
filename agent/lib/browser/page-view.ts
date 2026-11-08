@@ -28,12 +28,22 @@ const viewSchema = z.object({
   epoch: z.string().min(1).max(64),
   stateHash: z.number().int().default(0),
   textHash: z.number().int().default(0),
-  title: z.string().default("").transform((t) => t.slice(0, 200)),
+  title: z
+    .string()
+    .default("")
+    .transform((t) => t.slice(0, 200)),
   url: z.string().min(1).max(2_048),
 });
 
 export type PageElement = z.infer<typeof elementSchema>;
-export interface PageView { elements: PageElement[]; epoch: string; stateHash: number; textHash: number; title: string; url: string; }
+export interface PageView {
+  elements: PageElement[];
+  epoch: string;
+  stateHash: number;
+  textHash: number;
+  title: string;
+  url: string;
+}
 
 export function parsePageView(json: string): PageView {
   let raw: unknown;
@@ -43,22 +53,36 @@ export function parsePageView(json: string): PageView {
     throw new AppError("AGENT_BROWSER_VIEW_INVALID", "Разметка страницы не читается как JSON");
   }
   const parsed = viewSchema.safeParse(raw);
-  if (!parsed.success) throw new AppError("AGENT_BROWSER_VIEW_INVALID", "Разметка страницы не соответствует форме");
+  if (!parsed.success)
+    throw new AppError("AGENT_BROWSER_VIEW_INVALID", "Разметка страницы не соответствует форме");
   const elements = parsed.data.elements.flatMap((row) => {
     const element = elementSchema.safeParse(row);
     return element.success ? [element.data] : [];
   });
-  return { elements, epoch: parsed.data.epoch, stateHash: parsed.data.stateHash, textHash: parsed.data.textHash, title: parsed.data.title, url: parsed.data.url };
+  return {
+    elements,
+    epoch: parsed.data.epoch,
+    stateHash: parsed.data.stateHash,
+    textHash: parsed.data.textHash,
+    title: parsed.data.title,
+    url: parsed.data.url,
+  };
 }
 
 export function renderElements(view: PageView): string {
-  return view.elements.map((e) => `[${e.n}] ${e.role} ${e.text}`
-    + `${e.value !== null && e.value !== "" ? ` · ${e.value}` : ""}`
-    + `${e.state.length > 0 ? ` (${e.state.join(", ")})` : ""}`).join("\n");
+  return view.elements
+    .map(
+      (e) =>
+        `[${e.n}] ${e.role} ${e.text}` +
+        `${e.value !== null && e.value !== "" ? ` · ${e.value}` : ""}` +
+        `${e.state.length > 0 ? ` (${e.state.join(", ")})` : ""}`,
+    )
+    .join("\n");
 }
 
 export function viewHash(view: PageView): string {
   const hash = createHash("sha256").update(view.url).update("\u0000").update(view.title);
-  for (const e of view.elements) hash.update(`\u0001${e.role}\u0002${e.text}\u0002${e.value ?? ""}\u0002${e.state.join(",")}`);
+  for (const e of view.elements)
+    hash.update(`\u0001${e.role}\u0002${e.text}\u0002${e.value ?? ""}\u0002${e.state.join(",")}`);
   return hash.digest("hex");
 }

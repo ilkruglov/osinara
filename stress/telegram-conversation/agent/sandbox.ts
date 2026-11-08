@@ -12,10 +12,20 @@ export default defineSandbox({
       ...input,
       async use(options) {
         const attrs = input.ctx.session.auth.current?.attributes;
-        const expected = attrs?.telegramChatType === "private" ? ["personal", "family"] :
-          attrs?.groupType === "family_private" ? ["family"] : ["group"];
-        if (!options || JSON.stringify(options.mounts.map((mount) => mount.mountPoint)) !== JSON.stringify(expected)) {
-          throw new Error(`TEST_GROUP_MOUNTS_INVALID: ${JSON.stringify(options?.mounts)} expected ${JSON.stringify(expected)}`);
+        const expected =
+          attrs?.telegramChatType === "private"
+            ? ["personal", "family"]
+            : attrs?.groupType === "family_private"
+              ? ["family"]
+              : ["group"];
+        if (
+          !options ||
+          JSON.stringify(options.mounts.map((mount) => mount.mountPoint)) !==
+            JSON.stringify(expected)
+        ) {
+          throw new Error(
+            `TEST_GROUP_MOUNTS_INVALID: ${JSON.stringify(options?.mounts)} expected ${JSON.stringify(expected)}`,
+          );
         }
         await database().query(
           "INSERT INTO telegram_conversation_test_sandboxes (eve_session_id, mounts) VALUES ($1, $2)",

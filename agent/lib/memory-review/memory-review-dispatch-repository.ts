@@ -112,16 +112,26 @@ async function insertBackgroundBatch(
        (lane_id, conversation_id, batch_kind, status, predecessor_sequence,
         from_sequence, through_sequence, source_count)
      VALUES ($1, $2, 'background', 'pending', $3, $4, $5, $6) RETURNING id`,
-    [lane.id, lane.conversation_id, lane.processed_through_sequence,
-      first.sequence_id, last.sequence_id, sources.length],
+    [
+      lane.id,
+      lane.conversation_id,
+      lane.processed_through_sequence,
+      first.sequence_id,
+      last.sequence_id,
+      sources.length,
+    ],
   );
   await client.query(
     `INSERT INTO memory_review_batch_sources
        (batch_id, conversation_id, timeline_entry_id, timeline_sequence)
      SELECT $1, $2, source.id, source.sequence_id
        FROM unnest($3::uuid[], $4::bigint[]) AS source(id, sequence_id)`,
-    [batch.rows[0]!.id, lane.conversation_id, sources.map((source) => source.id),
-      sources.map((source) => source.sequence_id)],
+    [
+      batch.rows[0]!.id,
+      lane.conversation_id,
+      sources.map((source) => source.id),
+      sources.map((source) => source.sequence_id),
+    ],
   );
 }
 
@@ -133,8 +143,12 @@ async function pendingSources(client: PoolClient, lane: LaneRow): Promise<Pendin
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id > $3::bigint
       ORDER BY message.sequence_id LIMIT $4`,
-    [lane.conversation_id, lane.message_thread_id, lane.processed_through_sequence,
-      MEMORY_REVIEW_BATCH_SIZE],
+    [
+      lane.conversation_id,
+      lane.message_thread_id,
+      lane.processed_through_sequence,
+      MEMORY_REVIEW_BATCH_SIZE,
+    ],
   );
   return result.rows;
 }
@@ -151,7 +165,12 @@ async function laneHasBatchAtCursor(client: PoolClient, lane: LaneRow): Promise<
 // Load run, 3 October 2026: locking every lane and querying each twice per minute made a turn wait
 // 30-100 s for its own lane at 20 000 chats, and replicas queued behind each other. The caller still
 // re-checks every locked lane with the exact batch rules; this only skips lanes that cannot qualify.
-async function lockedDueLanes(client: PoolClient, now: Date, groupOnly: boolean, laneLimit: number): Promise<LaneRow[]> {
+async function lockedDueLanes(
+  client: PoolClient,
+  now: Date,
+  groupOnly: boolean,
+  laneLimit: number,
+): Promise<LaneRow[]> {
   const result = await client.query<LaneRow>(
     `WITH due AS (
        SELECT lane.id, telegram_group.type::text AS group_type
@@ -187,22 +206,32 @@ async function lockedDueLanes(client: PoolClient, now: Date, groupOnly: boolean,
        FROM memory_review_lanes AS lane
        JOIN due ON due.id = lane.id
       ORDER BY lane.created_at, lane.id FOR UPDATE OF lane SKIP LOCKED LIMIT $11`,
-    [groupOnly, MEMORY_REVIEW_BATCH_SIZE,
+    [
+      groupOnly,
+      MEMORY_REVIEW_BATCH_SIZE,
       groupOnly ? MEMORY_REVIEW_BATCH_SIZE : MEMORY_REVIEW_IDLE_MIN_SOURCES,
-      MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES, MEMORY_REVIEW_IDLE_MILLISECONDS, now,
+      MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES,
+      MEMORY_REVIEW_IDLE_MILLISECONDS,
+      now,
       MEMORY_REVIEW_LONG_IDLE_MILLISECONDS,
       groupOnly ? MEMORY_REVIEW_BATCH_SIZE : MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
-      MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES, MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS, laneLimit],
+      MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES,
+      MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS,
+      laneLimit,
+    ],
   );
   return result.rows;
 }
 
-async function loadReviewMemoryContext(client: PoolClient, input: {
-  authorTelegramUserIds: readonly string[];
-  familyId: string;
-  scope: "family" | "group" | "personal";
-  scopePartitionKey: string;
-}): Promise<ReviewMemoryContextItem[]> {
+async function loadReviewMemoryContext(
+  client: PoolClient,
+  input: {
+    authorTelegramUserIds: readonly string[];
+    familyId: string;
+    scope: "family" | "group" | "personal";
+    scopePartitionKey: string;
+  },
+): Promise<ReviewMemoryContextItem[]> {
   // Claims about the batch authors plus subject-less claims of the same partition.
   const result = await client.query<ReviewMemoryContextItem>(
     `SELECT ref.memory_ref AS "memoryRef", item.kind::text AS kind, item.attribute, item.content,
@@ -215,19 +244,27 @@ async function loadReviewMemoryContext(client: PoolClient, input: {
         AND item.claim_status = 'active' AND item.sensitivity = 'normal'
         AND (participant.telegram_user_id = ANY($4::text[]) OR item.subject_participant_id IS NULL)
       ORDER BY item.updated_at DESC LIMIT $5`,
-    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds,
-      MEMORY_REVIEW_CONTEXT_LIMIT],
+    [
+      input.familyId,
+      input.scope,
+      input.scopePartitionKey,
+      input.authorTelegramUserIds,
+      MEMORY_REVIEW_CONTEXT_LIMIT,
+    ],
   );
   return result.rows;
 }
 
-async function loadReviewSubjectSlots(client: PoolClient, input: {
-  authorTelegramUserIds: readonly string[];
-  authorUsernames: readonly string[];
-  familyId: string;
-  scope: "family" | "group" | "personal";
-  scopePartitionKey: string;
-}): Promise<ReviewSubjectSlots[]> {
+async function loadReviewSubjectSlots(
+  client: PoolClient,
+  input: {
+    authorTelegramUserIds: readonly string[];
+    authorUsernames: readonly string[];
+    familyId: string;
+    scope: "family" | "group" | "personal";
+    scopePartitionKey: string;
+  },
+): Promise<ReviewSubjectSlots[]> {
   // The slots of the batch authors only, the most recently touched first and at most
   // MEMORY_REVIEW_SLOTS_PER_SUBJECT per author: the records block is capped at forty and shows
   // only a few of them. Label-only subjects stay out: the largest group holds 1 553 slots, 748
@@ -259,17 +296,27 @@ async function loadReviewSubjectSlots(client: PoolClient, input: {
               GROUP BY subject_key, attribute) AS slot
       WHERE rank <= $5 AND overall_rank <= $7
       GROUP BY subject_key ORDER BY 1`,
-    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds, MEMORY_REVIEW_SLOTS_PER_SUBJECT,
-      input.authorUsernames, MEMORY_REVIEW_SLOTS_TOTAL],
+    [
+      input.familyId,
+      input.scope,
+      input.scopePartitionKey,
+      input.authorTelegramUserIds,
+      MEMORY_REVIEW_SLOTS_PER_SUBJECT,
+      input.authorUsernames,
+      MEMORY_REVIEW_SLOTS_TOTAL,
+    ],
   );
   return result.rows;
 }
 
-async function precedingContext(client: PoolClient, input: {
-  conversationId: string;
-  firstSequence: string;
-  messageThreadId: string | null;
-}): Promise<TelegramGroupJournalEntry[]> {
+async function precedingContext(
+  client: PoolClient,
+  input: {
+    conversationId: string;
+    firstSequence: string;
+    messageThreadId: string | null;
+  },
+): Promise<TelegramGroupJournalEntry[]> {
   // Both sides of the earlier conversation, newest first, then restored to timeline order.
   const result = await client.query<SourceRow>(
     `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
@@ -281,13 +328,21 @@ async function precedingContext(client: PoolClient, input: {
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id < $3::bigint AND message.content_text IS NOT NULL
       ORDER BY message.sequence_id DESC LIMIT $4`,
-    [input.conversationId, input.messageThreadId, input.firstSequence,
-      MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT],
+    [
+      input.conversationId,
+      input.messageThreadId,
+      input.firstSequence,
+      MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT,
+    ],
   );
   return result.rows.reverse().map(project);
 }
 
-async function materializeReadyBatches(client: PoolClient, now: Date, laneLimit: number): Promise<void> {
+async function materializeReadyBatches(
+  client: PoolClient,
+  now: Date,
+  laneLimit: number,
+): Promise<void> {
   // This is the crash-recovery path for a committed 50th message whose inline observer did not run.
   for (const lane of await lockedDueLanes(client, now, true, laneLimit)) {
     if (await laneHasBatchAtCursor(client, lane)) continue;
@@ -297,7 +352,11 @@ async function materializeReadyBatches(client: PoolClient, now: Date, laneLimit:
   }
 }
 
-async function materializeIdleBatches(client: PoolClient, now: Date, laneLimit: number): Promise<void> {
+async function materializeIdleBatches(
+  client: PoolClient,
+  now: Date,
+  laneLimit: number,
+): Promise<void> {
   // Personal conversations never had lanes; create them from sequence 0 so history is reviewed once.
   await client.query(
     `INSERT INTO memory_review_lanes (conversation_id, message_thread_id, processed_through_sequence)
@@ -318,8 +377,8 @@ async function materializeIdleBatches(client: PoolClient, now: Date, laneLimit: 
     const silence = now.getTime() - newest.sent_at.getTime();
     const thresholds = laneThresholds(lane);
     const full = sources.length >= thresholds.idleMinSources;
-    const idle = silence >= thresholds.idleMilliseconds &&
-      sources.length >= thresholds.idleMinBatchSources;
+    const idle =
+      silence >= thresholds.idleMilliseconds && sources.length >= thresholds.idleMinBatchSources;
     // A lone remark after a long silence still deserves one look; it just does not get its own call early.
     const longIdle = silence >= MEMORY_REVIEW_LONG_IDLE_MILLISECONDS;
     if (!full && !idle && !longIdle) continue;
@@ -357,17 +416,26 @@ export const memoryReviewDispatchRepository = {
       await materializeReadyBatches(client, input.now, laneLimit);
       await materializeIdleBatches(client, input.now, laneLimit);
       const claimed = await client.query<{
-        conversation_chat_id: string; conversation_id: string; family_id: string;
+        conversation_chat_id: string;
+        conversation_id: string;
+        family_id: string;
         scope_partition_key: string;
-        group_id: string | null; group_type: "external" | "family_private" | null; id: string;
-        lease_token: string; message_thread_id: string | null;
-        scope: "family" | "group" | "personal"; source_count: number;
-        sponsor_role: "member" | "owner" | "recovery_owner"; sponsor_telegram_user_id: string;
-        sponsor_user_id: string; telegram_chat_id: string | null;
-        telegram_chat_type: "group" | "supergroup" | null; through_sequence: string;
+        group_id: string | null;
+        group_type: "external" | "family_private" | null;
+        id: string;
+        lease_token: string;
+        message_thread_id: string | null;
+        scope: "family" | "group" | "personal";
+        source_count: number;
+        sponsor_role: "member" | "owner" | "recovery_owner";
+        sponsor_telegram_user_id: string;
+        sponsor_user_id: string;
+        telegram_chat_id: string | null;
+        telegram_chat_type: "group" | "supergroup" | null;
+        through_sequence: string;
         tool_allowlist: string[] | null;
       }>(
-         `WITH candidates AS (
+        `WITH candidates AS (
            SELECT batch.id FROM memory_review_batches AS batch
             JOIN memory_review_lanes AS candidate_lane ON candidate_lane.id = batch.lane_id
             JOIN application_conversations AS candidate_conversation
@@ -426,10 +494,11 @@ export const memoryReviewDispatchRepository = {
       const claims: MemoryReviewClaim[] = [];
       for (const row of claimed.rows) {
         const personal = row.scope === "personal";
-        if (!personal && (row.group_id === null || row.group_type === null)) throw new AppError(
-          "AGENT_MEMORY_REVIEW_SPONSOR_INVALID",
-          "Не удалось определить владельца проверки памяти",
-        );
+        if (!personal && (row.group_id === null || row.group_type === null))
+          throw new AppError(
+            "AGENT_MEMORY_REVIEW_SPONSOR_INVALID",
+            "Не удалось определить владельца проверки памяти",
+          );
         const sources = await client.query<SourceRow>(
           `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
                   message.message_thread_id::text, message.sender_username,
@@ -440,10 +509,11 @@ export const memoryReviewDispatchRepository = {
             WHERE source.batch_id = $1 ORDER BY source.timeline_sequence`,
           [row.id],
         );
-        if (sources.rows.length !== row.source_count) throw new AppError(
-          "AGENT_MEMORY_REVIEW_SOURCE_SET_INVALID",
-          "Пакет проверки памяти не содержит ожидаемые сообщения",
-        );
+        if (sources.rows.length !== row.source_count)
+          throw new AppError(
+            "AGENT_MEMORY_REVIEW_SOURCE_SET_INVALID",
+            "Пакет проверки памяти не содержит ожидаемые сообщения",
+          );
         const entries = sources.rows.map(project);
         const preceding = await precedingContext(client, {
           conversationId: row.conversation_id,
@@ -451,8 +521,13 @@ export const memoryReviewDispatchRepository = {
           messageThreadId: row.message_thread_id,
         });
         const contextInput = {
-          authorTelegramUserIds: [...new Set(sources.rows.flatMap((source) =>
-            source.telegram_user_id === null ? [] : [source.telegram_user_id]))],
+          authorTelegramUserIds: [
+            ...new Set(
+              sources.rows.flatMap((source) =>
+                source.telegram_user_id === null ? [] : [source.telegram_user_id],
+              ),
+            ),
+          ],
           familyId: row.family_id,
           scope: row.scope,
           scopePartitionKey: row.scope_partition_key,
@@ -460,30 +535,44 @@ export const memoryReviewDispatchRepository = {
         const existing = await loadReviewMemoryContext(client, contextInput);
         const slots = await loadReviewSubjectSlots(client, {
           ...contextInput,
-          authorUsernames: [...new Set(sources.rows.flatMap((source) =>
-            source.sender_username === null ? [] : [source.sender_username]))],
+          authorUsernames: [
+            ...new Set(
+              sources.rows.flatMap((source) =>
+                source.sender_username === null ? [] : [source.sender_username],
+              ),
+            ),
+          ],
         });
         claims.push({
-          batchId: row.id, conversationId: row.conversation_id, entries,
+          batchId: row.id,
+          conversationId: row.conversation_id,
+          entries,
           familyId: row.family_id,
           groupId: personal ? null : row.group_id,
           groupType: personal ? null : row.group_type,
-          leaseToken: row.lease_token, messageThreadId: row.message_thread_id,
+          leaseToken: row.lease_token,
+          messageThreadId: row.message_thread_id,
           // A personal silent review writes personal memory only: its sources come from one
           // person's chat, and the explicit-source check would reject a family claim anyway.
           memoryScopes: [row.scope],
-          ownerTelegramUserId: row.sponsor_telegram_user_id, ownerUserId: row.sponsor_user_id,
+          ownerTelegramUserId: row.sponsor_telegram_user_id,
+          ownerUserId: row.sponsor_user_id,
           prompt: [
             formatExistingMemoryForReview(existing, slots),
             formatPrecedingContextForReview(preceding),
             formatMemoryReviewBatchPrompt(entries),
-          ].filter((block) => block.length > 0).join("\n\n"),
+          ]
+            .filter((block) => block.length > 0)
+            .join("\n\n"),
           role: row.group_type === "external" ? "external" : personal ? row.sponsor_role : "owner",
           scope: row.scope,
-          sourceCount: entries.length, sourceEntryIds: sources.rows.map((source) => source.id),
+          sourceCount: entries.length,
+          sourceEntryIds: sources.rows.map((source) => source.id),
           status: "pending",
-          telegramChatId: personal ? row.conversation_chat_id : row.telegram_chat_id ?? row.conversation_chat_id,
-          telegramChatType: personal ? "private" : row.telegram_chat_type ?? "supergroup",
+          telegramChatId: personal
+            ? row.conversation_chat_id
+            : (row.telegram_chat_id ?? row.conversation_chat_id),
+          telegramChatType: personal ? "private" : (row.telegram_chat_type ?? "supergroup"),
           toolAllowlist: row.tool_allowlist ?? [],
           throughSequence: row.through_sequence,
         });
@@ -530,9 +619,10 @@ export const memoryReviewDispatchRepository = {
                (status = 'running' AND eve_session_id = $4))`,
       [batch.batchId, batch.leaseToken, input.applicationSessionId, input.eveSessionId],
     );
-    if (result.rowCount !== 1) throw new AppError(
-      "AGENT_MEMORY_REVIEW_RUNNING_STATE_INVALID", "Не удалось подтвердить запуск проверки памяти",
-    );
+    if (result.rowCount !== 1)
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_RUNNING_STATE_INVALID",
+        "Не удалось подтвердить запуск проверки памяти",
+      );
   },
-
 };

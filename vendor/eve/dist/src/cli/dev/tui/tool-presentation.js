@@ -125,13 +125,7 @@ function presentWriteFileTool(a, o, s) {
   };
 }
 function readWriteFileInput(e, t) {
-  if (
-    toolBaseName(e) !== `write_file` ||
-    typeof t != `object` ||
-    !t ||
-    Array.isArray(t)
-  )
-    return;
+  if (toolBaseName(e) !== `write_file` || typeof t != `object` || !t || Array.isArray(t)) return;
   let n = t,
     r = n.filePath,
     i = n.content;
@@ -264,10 +258,4 @@ function salientLine(e) {
       ?.trim() ?? ``;
   return t.length > 0 ? t : void 0;
 }
-export {
-  isPanelRoutedTool,
-  presentPreparingTool,
-  presentTool,
-  readWriteFileInput,
-  toolBaseName,
-};
+export { isPanelRoutedTool, presentPreparingTool, presentTool, readWriteFileInput, toolBaseName };

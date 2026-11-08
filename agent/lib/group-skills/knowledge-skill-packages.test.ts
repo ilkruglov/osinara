@@ -17,7 +17,18 @@ import { KNOWLEDGE_SKILL_DEFINITIONS } from "./knowledge-skill-packages.js";
 function externalAuth(toolAllowlist: string[]): SessionAuth {
   return {
     current: {
-      attributes: { familyId: "family-1", groupId: "group-1", groupType: "external", memoryScopes: ["group"], role: "external", telegramActorId: "101", telegramActorKind: "telegram_user", telegramChatType: "supergroup", telegramUserId: "101", toolAllowlist },
+      attributes: {
+        familyId: "family-1",
+        groupId: "group-1",
+        groupType: "external",
+        memoryScopes: ["group"],
+        role: "external",
+        telegramActorId: "101",
+        telegramActorKind: "telegram_user",
+        telegramChatType: "supergroup",
+        telegramUserId: "101",
+        toolAllowlist,
+      },
       authenticator: "telegram",
       principalId: "user-1",
       principalType: "user",
@@ -33,16 +44,24 @@ describe("knowledge skill packages", () => {
       expect(definition.description.length).toBeGreaterThan(40);
       expect(definition.markdown.startsWith("---")).toBe(false);
       expect(definition.markdown).toContain("# ");
-      expect(Object.keys(definition.files ?? {}).some((path) => path.startsWith("references/") && path.endsWith(".md"))).toBe(true);
+      expect(
+        Object.keys(definition.files ?? {}).some(
+          (path) => path.startsWith("references/") && path.endsWith(".md"),
+        ),
+      ).toBe(true);
     }
   });
 
   it("reaches the external sandbox only with the web_search grant", async () => {
     const resolve = createExternalTurnSkillResolver({ packagesForGroup: async () => [] });
     const granted = await resolve(externalAuth(["web_search", "remember"]));
-    expect(Object.keys(granted)).toEqual(expect.arrayContaining(["auto-analyst", "car-diagnostics", "policy-finance-analyst"]));
+    expect(Object.keys(granted)).toEqual(
+      expect.arrayContaining(["auto-analyst", "car-diagnostics", "policy-finance-analyst"]),
+    );
     const revoked = await resolve(externalAuth(["remember"]));
     expect(Object.keys(revoked)).not.toContain("auto-analyst");
-    expect(Object.keys(await resolve(externalAuth(["web_search"]), { subagent: true }))).not.toContain("auto-analyst");
+    expect(
+      Object.keys(await resolve(externalAuth(["web_search"]), { subagent: true })),
+    ).not.toContain("auto-analyst");
   });
 });

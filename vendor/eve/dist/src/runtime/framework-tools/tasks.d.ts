@@ -18,47 +18,75 @@ export declare const TASK_UPDATE_TOOL_NAME = "task_update";
 export declare const TASK_TOOL_NAMES: ReadonlySet<string>;
 /** Task-control tools executed by the runtime-action dispatch step. */
 export declare const TASK_CONTROL_TOOL_NAMES: ReadonlySet<string>;
-export declare const TASK_CANCEL_INPUT_SCHEMA: z.ZodObject<{
+export declare const TASK_CANCEL_INPUT_SCHEMA: z.ZodObject<
+  {
     taskIds: z.ZodArray<z.ZodString>;
-}, z.core.$strict>;
-export declare const TASK_UPDATE_INPUT_SCHEMA: z.ZodObject<{
+  },
+  z.core.$strict
+>;
+export declare const TASK_UPDATE_INPUT_SCHEMA: z.ZodObject<
+  {
     message: z.ZodString;
-}, z.core.$strict>;
-export declare const TASK_SLEEP_INPUT_SCHEMA: z.ZodObject<{
+  },
+  z.core.$strict
+>;
+export declare const TASK_SLEEP_INPUT_SCHEMA: z.ZodObject<
+  {
     seconds: z.ZodNumber;
-}, z.core.$strict>;
-export declare const TASK_VIEWS_OUTPUT_SCHEMA: z.ZodObject<{
-    tasks: z.ZodArray<z.ZodObject<{
-        inputRequests: z.ZodOptional<z.ZodArray<z.ZodUnknown>>;
-        lastOutput: z.ZodOptional<z.ZodObject<{
-            data: z.ZodUnknown;
-            type: z.ZodEnum<{
-                error: "error";
-                result: "result";
-            }>;
-        }, z.core.$strip>>;
-        metadata: z.ZodObject<{
-            agentId: z.ZodString;
-            kind: z.ZodLiteral<"subagent">;
-            mode: z.ZodEnum<{
+  },
+  z.core.$strict
+>;
+export declare const TASK_VIEWS_OUTPUT_SCHEMA: z.ZodObject<
+  {
+    tasks: z.ZodArray<
+      z.ZodObject<
+        {
+          inputRequests: z.ZodOptional<z.ZodArray<z.ZodUnknown>>;
+          lastOutput: z.ZodOptional<
+            z.ZodObject<
+              {
+                data: z.ZodUnknown;
+                type: z.ZodEnum<{
+                  error: "error";
+                  result: "result";
+                }>;
+              },
+              z.core.$strip
+            >
+          >;
+          metadata: z.ZodObject<
+            {
+              agentId: z.ZodString;
+              kind: z.ZodLiteral<"subagent">;
+              mode: z.ZodEnum<{
                 local: "local";
                 remote: "remote";
-            }>;
-            name: z.ZodString;
-        }, z.core.$strip>;
-        status: z.ZodEnum<{
+              }>;
+              name: z.ZodString;
+            },
+            z.core.$strip
+          >;
+          status: z.ZodEnum<{
             cancelled: "cancelled";
             completed: "completed";
             failed: "failed";
             input_required: "input_required";
             working: "working";
-        }>;
-        taskId: z.ZodString;
-    }, z.core.$strip>>;
-}, z.core.$strip>;
-export declare const TASK_SLEEP_OUTPUT_SCHEMA: z.ZodObject<{
+          }>;
+          taskId: z.ZodString;
+        },
+        z.core.$strip
+      >
+    >;
+  },
+  z.core.$strip
+>;
+export declare const TASK_SLEEP_OUTPUT_SCHEMA: z.ZodObject<
+  {
     waitedSeconds: z.ZodNumber;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Builds the harness definitions injected when the root agent enables
  * `experimental.tasks`. Follows the implicit `agent` tool pattern:
@@ -77,10 +105,10 @@ export declare function createTaskToolHarnessDefinitions(): readonly HarnessTool
  * `task_update` to delegated task children.
  */
 export declare function isTaskToolAvailable(input: {
-    readonly disabledFrameworkTools: readonly string[];
-    readonly hasAuthoredTool: boolean;
-    readonly tasksEnabled: boolean;
-    readonly toolName: string;
+  readonly disabledFrameworkTools: readonly string[];
+  readonly hasAuthoredTool: boolean;
+  readonly tasksEnabled: boolean;
+  readonly toolName: string;
 }): boolean;
 /**
  * Registry-shaped metadata for the task tools. Not registered in the

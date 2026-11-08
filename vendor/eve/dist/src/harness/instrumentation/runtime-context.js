@@ -37,8 +37,7 @@ function buildInstrumentationStepStartedInput(e) {
   return {
     channel: {
       kind: normalizeInstrumentationChannelKind(r?.kind),
-      metadata:
-        snapshotForInstrumentation(r?.metadata, `channel.metadata`) ?? {},
+      metadata: snapshotForInstrumentation(r?.metadata, `channel.metadata`) ?? {},
     },
     modelInput: snapshotForInstrumentation(e.modelInput, `modelInput`) ?? {
       instructions: void 0,
@@ -47,10 +46,7 @@ function buildInstrumentationStepStartedInput(e) {
     session: {
       auth: projectSessionAuth(t),
       id: e.session.sessionId,
-      parent: snapshotForInstrumentation(
-        t?.get(ParentSessionKey),
-        `session.parent`,
-      ),
+      parent: snapshotForInstrumentation(t?.get(ParentSessionKey), `session.parent`),
     },
     step: { index: e.emissionState.stepIndex },
     turn: { id: e.emissionState.turnId, sequence: e.emissionState.sequence },
@@ -84,20 +80,19 @@ function resolveStepStartedRuntimeContext(e) {
     });
   if (a === void 0) return;
   if (!(`runtimeContext` in a)) {
-    log.warn(
-      `ignoring instrumentation event result because runtimeContext is missing`,
-      { source: i },
-    );
+    log.warn(`ignoring instrumentation event result because runtimeContext is missing`, {
+      source: i,
+    });
     return;
   }
   let o;
   try {
     o = parseJsonObject(a.runtimeContext);
   } catch (e) {
-    log.warn(
-      `ignoring instrumentation event result because runtimeContext is invalid`,
-      { error: formatError(e), source: i },
-    );
+    log.warn(`ignoring instrumentation event result because runtimeContext is invalid`, {
+      error: formatError(e),
+      source: i,
+    });
     return;
   }
   return filterAuthoredRuntimeContext(o, i);

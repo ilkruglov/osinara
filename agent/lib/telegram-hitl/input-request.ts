@@ -16,10 +16,7 @@ import {
 import type { InputRequestKind } from "eve/client";
 import type { SessionContext } from "eve/context";
 
-import {
-  localizeTelegramReplyMarkup,
-  type TelegramInputRequest,
-} from "../telegram-interface.js";
+import { localizeTelegramReplyMarkup, type TelegramInputRequest } from "../telegram-interface.js";
 import { AppError } from "../app-error.js";
 import { memoryOperationHash } from "../memory-record.js";
 import {
@@ -83,7 +80,8 @@ function toTelegramJson(value: unknown): TelegramJsonValue {
     typeof value === "boolean" ||
     typeof value === "number" ||
     typeof value === "string"
-  ) return value;
+  )
+    return value;
   if (Array.isArray(value)) return value.map(toTelegramJson);
   if (typeof value !== "object") {
     throw new AppError(
@@ -149,9 +147,10 @@ function assertInputRequestPolicy(data: InputRequestedData, ctx: Pick<SessionCon
   if (!externalGroup) return;
 
   // Eve authors this synthetic request outside the tool surface, so descriptor denials cannot stop it.
-  const requestsSessionBudget = data.requests.some((request) =>
-    request.kind === "session-limit" ||
-    request.action.toolName === SESSION_LIMIT_CONTINUATION_TOOL_NAME
+  const requestsSessionBudget = data.requests.some(
+    (request) =>
+      request.kind === "session-limit" ||
+      request.action.toolName === SESSION_LIMIT_CONTINUATION_TOOL_NAME,
   );
   if (!requestsSessionBudget) return;
   throw new AppError(
@@ -206,14 +205,17 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
     }
     // Several approvals of one step share one prompt; one tap answers every member request in a
     // single Eve delivery, which is the only way Eve 0.40.0 resolves a multi-request batch.
-    const presentations: Array<PresentedInputRequest & { members: readonly TelegramInputRequest[] }> =
-      isBatchedApprovalStep(localizedRequests)
-        ? [{
-          kind: "tool-approval",
-          members: localizedRequests.map(({ request }) => request),
-          request: combineApprovalRequests(localizedRequests),
-        }]
-        : localizedRequests.map((presented) => ({ ...presented, members: [presented.request] }));
+    const presentations: Array<
+      PresentedInputRequest & { members: readonly TelegramInputRequest[] }
+    > = isBatchedApprovalStep(localizedRequests)
+      ? [
+          {
+            kind: "tool-approval",
+            members: localizedRequests.map(({ request }) => request),
+            request: combineApprovalRequests(localizedRequests),
+          },
+        ]
+      : localizedRequests.map((presented) => ({ ...presented, members: [presented.request] }));
     await dependencies.parkSession({
       applicationSessionId: appSessionId,
       pendingRequestId: firstRequest.requestId,
@@ -223,15 +225,18 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
     for (const { kind, members, request: localizedRequest } of presentations) {
       const promptChunks = splitPrompt(localizedRequest.prompt);
       const finalChunkIndex = promptChunks.length - 1;
-      const rendered = renderTelegramInputRequest({
-        ...localizedRequest,
-        kind,
-        prompt: numberedPromptChunk(
-          promptChunks[finalChunkIndex]!,
-          finalChunkIndex,
-          promptChunks.length,
-        ),
-      }, channel.state);
+      const rendered = renderTelegramInputRequest(
+        {
+          ...localizedRequest,
+          kind,
+          prompt: numberedPromptChunk(
+            promptChunks[finalChunkIndex]!,
+            finalChunkIndex,
+            promptChunks.length,
+          ),
+        },
+        channel.state,
+      );
       const replyMarkup = localizeTelegramReplyMarkup(rendered.replyMarkup);
       const callbacks = callbackData(replyMarkup);
       const options = callbackOptions(localizedRequest, callbacks);
@@ -241,12 +246,14 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       // chunk carries callbacks, so the user cannot approve before seeing every material value.
       const detailMessageIds: string[] = [];
       for (let index = 0; index < finalChunkIndex; index += 1) {
-        detailMessageIds.push(await postTelegramMessageWithoutContinuationChange(channel, {
-          ...(index === 0 && replyParameters !== undefined
-            ? { reply_parameters: replyParameters }
-            : {}),
-          text: numberedPromptChunk(promptChunks[index]!, index, promptChunks.length),
-        }));
+        detailMessageIds.push(
+          await postTelegramMessageWithoutContinuationChange(channel, {
+            ...(index === 0 && replyParameters !== undefined
+              ? { reply_parameters: replyParameters }
+              : {}),
+            text: numberedPromptChunk(promptChunks[index]!, index, promptChunks.length),
+          }),
+        );
       }
 
       // The actionable prompt is revealed only after both the route and approver binding are durable.
@@ -271,12 +278,15 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
           promptText: localizedRequest.prompt,
           telegramChatId: chatId,
           telegramChatType: chatType,
-          ...(typeof caller.attributes.telegramConversationId === "string" ? { telegramConversationId: caller.attributes.telegramConversationId } : {}),
-          ...(typeof caller.attributes.telegramTimelineEntryId === "string" ? { telegramTimelineEntryId: caller.attributes.telegramTimelineEntryId } : {}),
+          ...(typeof caller.attributes.telegramConversationId === "string"
+            ? { telegramConversationId: caller.attributes.telegramConversationId }
+            : {}),
+          ...(typeof caller.attributes.telegramTimelineEntryId === "string"
+            ? { telegramTimelineEntryId: caller.attributes.telegramTimelineEntryId }
+            : {}),
           telegramMessageId: sentMessageId,
-          telegramMessageThreadId: channel.state.messageThreadId === null
-            ? null
-            : String(channel.state.messageThreadId),
+          telegramMessageThreadId:
+            channel.state.messageThreadId === null ? null : String(channel.state.messageThreadId),
           telegramUserId,
           toolCallId: member.action.callId,
           toolInputHash: memoryOperationHash(member.action.input),

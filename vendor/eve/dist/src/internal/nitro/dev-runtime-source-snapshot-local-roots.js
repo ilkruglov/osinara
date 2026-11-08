@@ -37,7 +37,7 @@ async function resolveNearestPackageRoot(r, i) {
   } catch {
     o = dirname(o);
   }
-  for (; isAuthoredSourcePath(o, i); ) {
+  for (; isAuthoredSourcePath(o, i);) {
     if (existsSync(join(o, `package.json`))) return o;
     let e = dirname(o);
     if (e === o) return;
@@ -45,9 +45,7 @@ async function resolveNearestPackageRoot(r, i) {
   }
 }
 function isAuthoredSourcePath(e, t) {
-  return isPathInsideOrEqual(e, t)
-    ? !relative(t, e).split(/[\\/]/).includes(`node_modules`)
-    : !1;
+  return isPathInsideOrEqual(e, t) ? !relative(t, e).split(/[\\/]/).includes(`node_modules`) : !1;
 }
 function isPathInsideOrEqual(e, t) {
   let n = resolve(e),
@@ -71,7 +69,7 @@ async function resolveLocalTsConfigPathTargetRoot(e) {
 }
 async function resolveExistingPathOrAncestor(e) {
   let n = resolve(e.path);
-  for (; isAuthoredSourcePath(n, e.stopDirectory); ) {
+  for (; isAuthoredSourcePath(n, e.stopDirectory);) {
     if (existsSync(n)) return n;
     let e = dirname(n);
     if (e === n) return;

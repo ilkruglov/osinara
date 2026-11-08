@@ -16,8 +16,7 @@ function renderAgentViewsSnippet(t) {
         e.taskId === void 0 || e.taskStatus === void 0
           ? ``
           : ` taskId="${escapeXml(e.taskId)}" taskStatus="${e.taskStatus}"`,
-      n =
-        e.statusLine ?? (e.availability === `busy` ? `(busy)` : `(available)`);
+      n = e.statusLine ?? (e.availability === `busy` ? `(busy)` : `(available)`);
     return `<agent id="${escapeXml(e.id)}" name="${escapeXml(e.name)}" availability="${e.availability}"${t}>${escapeXml(n)}</agent>`;
   });
   return [AGENTS_SNIPPET_LABEL, `<agents>`, ...n, `</agents>`].join(`
@@ -25,18 +24,12 @@ function renderAgentViewsSnippet(t) {
 }
 function resolveAgentsAnnouncement(e) {
   let t = e.messages.findLast(
-      (e) =>
-        e.role === `user` &&
-        typeof e.content == `string` &&
-        e.content.startsWith(`[Agents]`),
+      (e) => e.role === `user` && typeof e.content == `string` && e.content.startsWith(`[Agents]`),
     ),
     n = e.store ?? { handles: [] },
     r = e.agentViews?.length ?? projectParkedAgentHandles(n).length;
   if (t === void 0 && r === 0) return;
-  let i =
-    e.agentViews === void 0
-      ? renderAgentsSnippet(n)
-      : renderAgentViewsSnippet(e.agentViews);
+  let i = e.agentViews === void 0 ? renderAgentsSnippet(n) : renderAgentViewsSnippet(e.agentViews);
   return t?.content === i ? void 0 : i;
 }
 function escapeXml(e) {

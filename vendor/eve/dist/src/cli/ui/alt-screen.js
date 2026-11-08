@@ -32,9 +32,7 @@ var AltScreen = class {
   }
   exit() {
     this.#t &&=
-      (this.#e(
-        `${this.#n ? `\x1B[?1006l\x1B[?1002l` : ``}${SHOW_CURSOR}[?1049l`,
-      ),
+      (this.#e(`${this.#n ? `\x1B[?1006l\x1B[?1002l` : ``}${SHOW_CURSOR}[?1049l`),
       (this.#n = !1),
       !1);
   }

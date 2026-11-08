@@ -24,10 +24,10 @@ export declare const SUBAGENT_ADAPTER_KIND = "subagent";
  * child's parent-turn lineage.
  */
 export interface SubagentAdapterState extends Record<string, unknown> {
-    readonly callId: string;
-    readonly parentContinuationToken: string;
-    readonly parentSessionId: string;
-    readonly subagentName: string;
+  readonly callId: string;
+  readonly parentContinuationToken: string;
+  readonly parentSessionId: string;
+  readonly subagentName: string;
 }
 /**
  * Narrow runtime guard for {@link SubagentAdapterState}.

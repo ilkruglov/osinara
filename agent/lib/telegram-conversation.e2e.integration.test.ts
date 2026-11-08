@@ -12,10 +12,11 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 // The script resets and migrates the disposable workflow database, so it also needs its URL.
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" &&
-    typeof process.env.WORKFLOW_POSTGRES_URL === "string"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" &&
+  typeof process.env.WORKFLOW_POSTGRES_URL === "string"
+    ? describe
+    : describe.skip;
 const run = promisify(execFile);
 
 describeWithDatabase("Telegram conversation end-to-end", () => {
@@ -35,32 +36,56 @@ describeWithDatabase("Telegram conversation end-to-end", () => {
       WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "10",
       WORKFLOW_POSTGRES_MAX_POOL_SIZE: "12",
     };
-    await run(process.execPath, ["--experimental-strip-types", "scripts/reset-workflow-stress-database.ts"], { env });
-    await run(process.execPath, ["--experimental-strip-types", "scripts/migrate-workflow.ts"], { env });
+    await run(
+      process.execPath,
+      ["--experimental-strip-types", "scripts/reset-workflow-stress-database.ts"],
+      { env },
+    );
+    await run(process.execPath, ["--experimental-strip-types", "scripts/migrate-workflow.ts"], {
+      env,
+    });
     await cp(resolve("config"), resolve(root, "config"), { recursive: true });
     // Analyst skill packages are read from the working directory, exactly like the trusted config.
     for (const skill of ["auto-analyst", "car-diagnostics", "policy-finance-analyst"]) {
-      await cp(resolve("agent/skills", skill), resolve(root, "agent/skills", skill), { recursive: true });
+      await cp(resolve("agent/skills", skill), resolve(root, "agent/skills", skill), {
+        recursive: true,
+      });
     }
     try {
-      await run(resolve("node_modules/.bin/tsc"), ["--project", resolve(root, "tsconfig.json")], { env });
-      const result = await run(resolve("node_modules/.bin/eve"), [
-        "eval", "conversation", "--max-concurrency", "1", "--timeout", "480000", "--verbose",
-      ], {
-        cwd: root,
+      await run(resolve("node_modules/.bin/tsc"), ["--project", resolve(root, "tsconfig.json")], {
         env,
-        maxBuffer: 32 * 1024 * 1024,
-        timeout: 540_000,
       });
+      const result = await run(
+        resolve("node_modules/.bin/eve"),
+        ["eval", "conversation", "--max-concurrency", "1", "--timeout", "480000", "--verbose"],
+        {
+          cwd: root,
+          env,
+          maxBuffer: 32 * 1024 * 1024,
+          timeout: 540_000,
+        },
+      );
       expect(result.stdout).toContain("verified 56 turns, 4 sessions");
       expect(result.stderr).not.toContain("AGENT_MEMORY_UNAVAILABLE");
     } catch (error) {
       const output = error as { stdout?: string; stderr?: string };
-      throw new Error(`TEST_TELEGRAM_CONVERSATION_FAILED: ${output.stdout ?? ""}\n${output.stderr ?? ""}`, { cause: error });
+      throw new Error(
+        `TEST_TELEGRAM_CONVERSATION_FAILED: ${output.stdout ?? ""}\n${output.stderr ?? ""}`,
+        { cause: error },
+      );
     } finally {
-      await Promise.all([".eve", ".output", "eval-results", "reports", "config", "agent/skills/auto-analyst", "agent/skills/car-diagnostics", "agent/skills/policy-finance-analyst"].map((path) =>
-        rm(resolve(root, path), { recursive: true, force: true })
-      ));
+      await Promise.all(
+        [
+          ".eve",
+          ".output",
+          "eval-results",
+          "reports",
+          "config",
+          "agent/skills/auto-analyst",
+          "agent/skills/car-diagnostics",
+          "agent/skills/policy-finance-analyst",
+        ].map((path) => rm(resolve(root, path), { recursive: true, force: true })),
+      );
     }
   }, 600_000);
 });

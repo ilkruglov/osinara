@@ -31,14 +31,25 @@ describeWithDatabase("129 use reinforcement backfill", () => {
 
   it("replays the weekly rule over past uses and keeps a higher explicit count", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const insert = async (content: string, reinforcementCount: number, lastReinforcedAt: string | null) => {
+    const insert = async (
+      content: string,
+      reinforcementCount: number,
+      lastReinforcedAt: string | null,
+    ) => {
       const row = await database().query<{ id: string }>(
         `INSERT INTO memory_items_all
            (family_id, scope, kind, content, source, author_user_id, confirmation, sensitivity, operation_key,
             use_count, reinforcement_count, last_reinforced_at)
          VALUES ($1, 'family', 'fact', $2, 'test:129', $3, 'model_high', 'normal', $4, 3, $5, $6)
          RETURNING id`,
-        [fixture.familyId, content, fixture.userId, randomUUID(), reinforcementCount, lastReinforcedAt],
+        [
+          fixture.familyId,
+          content,
+          fixture.userId,
+          randomUUID(),
+          reinforcementCount,
+          lastReinforcedAt,
+        ],
       );
       return row.rows[0]!.id;
     };
@@ -72,11 +83,20 @@ describeWithDatabase("129 use reinforcement backfill", () => {
 
     await database().query(await readFile("migrations/129_backfill_use_reinforcement.sql", "utf8"));
 
-    const rows = await database().query<{ id: string; reinforcement_count: number; last_reinforced_at: Date }>(
+    const rows = await database().query<{
+      id: string;
+      reinforcement_count: number;
+      last_reinforced_at: Date;
+    }>(
       "SELECT id, reinforcement_count, last_reinforced_at FROM memory_items_all WHERE id = ANY($1::uuid[])",
       [[uncounted, explicit, mixed, exact]],
     );
-    const byId = Object.fromEntries(rows.rows.map((row) => [row.id, [row.reinforcement_count, row.last_reinforced_at.toISOString().slice(0, 10)]]));
+    const byId = Object.fromEntries(
+      rows.rows.map((row) => [
+        row.id,
+        [row.reinforcement_count, row.last_reinforced_at.toISOString().slice(0, 10)],
+      ]),
+    );
     expect(byId).toEqual({
       [uncounted]: [3, "2026-09-21"],
       [mixed]: [3, "2026-09-11"],
@@ -86,8 +106,14 @@ describeWithDatabase("129 use reinforcement backfill", () => {
     // Idempotent: a second run changes nothing.
     await database().query(await readFile("migrations/129_backfill_use_reinforcement.sql", "utf8"));
     const again = await database().query<{ id: string; reinforcement_count: number }>(
-      "SELECT id, reinforcement_count FROM memory_items_all WHERE id = ANY($1::uuid[])", [[uncounted, explicit, mixed, exact]],
+      "SELECT id, reinforcement_count FROM memory_items_all WHERE id = ANY($1::uuid[])",
+      [[uncounted, explicit, mixed, exact]],
     );
-    expect(Object.fromEntries(again.rows.map((row) => [row.id, row.reinforcement_count]))).toEqual({ [uncounted]: 3, [mixed]: 3, [exact]: 2, [explicit]: 5 });
+    expect(Object.fromEntries(again.rows.map((row) => [row.id, row.reinforcement_count]))).toEqual({
+      [uncounted]: 3,
+      [mixed]: 3,
+      [exact]: 2,
+      [explicit]: 5,
+    });
   });
 });

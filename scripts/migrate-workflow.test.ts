@@ -44,8 +44,7 @@ describe("Workflow database configuration", () => {
       workflowPassword: "workflow'secret",
       workflowUrl: process.env.WORKFLOW_POSTGRES_URL,
     });
-    process.env.WORKFLOW_POSTGRES_URL =
-      "postgresql://osinara:secret@postgres:5432/osinara";
+    process.env.WORKFLOW_POSTGRES_URL = "postgresql://osinara:secret@postgres:5432/osinara";
     expect(() => requireWorkflowDatabaseConfig()).toThrowError(
       /AGENT_WORKFLOW_DATABASE_BOUNDARY_INVALID/u,
     );
@@ -61,7 +60,8 @@ describe("Workflow database configuration", () => {
 
 describe("provisionWorkflowDatabase", () => {
   it("creates a least-privilege role and its dedicated database", async () => {
-    const query = vi.fn()
+    const query = vi
+      .fn()
       .mockResolvedValueOnce({ rows: [{ exists: false }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
@@ -72,11 +72,14 @@ describe("provisionWorkflowDatabase", () => {
       query,
     };
 
-    await provisionWorkflowDatabase({
-      adminUrl: "postgresql://osinara:secret@postgres:5432/osinara",
-      workflowPassword: "workflow-secret",
-      workflowUrl: "postgresql://osinara_workflow:workflow-secret@postgres:5432/osinara_workflow",
-    }, () => client);
+    await provisionWorkflowDatabase(
+      {
+        adminUrl: "postgresql://osinara:secret@postgres:5432/osinara",
+        workflowPassword: "workflow-secret",
+        workflowUrl: "postgresql://osinara_workflow:workflow-secret@postgres:5432/osinara_workflow",
+      },
+      () => client,
+    );
 
     expect(query.mock.calls[1]?.[0]).toContain(
       "CREATE ROLE osinara_workflow LOGIN PASSWORD 'workflow-secret' NOSUPERUSER",
@@ -88,7 +91,8 @@ describe("provisionWorkflowDatabase", () => {
   });
 
   it("rejects an existing Workflow database owned by another role", async () => {
-    const query = vi.fn()
+    const query = vi
+      .fn()
       .mockResolvedValueOnce({ rows: [{ exists: true }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ owner: "osinara" }] });
@@ -98,11 +102,17 @@ describe("provisionWorkflowDatabase", () => {
       query,
     };
 
-    await expect(provisionWorkflowDatabase({
-      adminUrl: "postgresql://osinara:secret@postgres:5432/osinara",
-      workflowPassword: "workflow-secret",
-      workflowUrl: "postgresql://osinara_workflow:workflow-secret@postgres:5432/osinara_workflow",
-    }, () => client)).rejects.toThrowError(/AGENT_WORKFLOW_DATABASE_OWNER_INVALID/u);
+    await expect(
+      provisionWorkflowDatabase(
+        {
+          adminUrl: "postgresql://osinara:secret@postgres:5432/osinara",
+          workflowPassword: "workflow-secret",
+          workflowUrl:
+            "postgresql://osinara_workflow:workflow-secret@postgres:5432/osinara_workflow",
+        },
+        () => client,
+      ),
+    ).rejects.toThrowError(/AGENT_WORKFLOW_DATABASE_OWNER_INVALID/u);
     expect(client.end).toHaveBeenCalledOnce();
   });
 });

@@ -20,7 +20,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 // Migration tests destroy an isolated schema and must never target a production database.
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -123,8 +125,14 @@ describeWithDatabase("074 empty model response recovery", () => {
             started_at, last_activity_at, retired_at, delete_after, memory_review_batch_id)
          VALUES ($1, gen_random_uuid(), 0, $2, $3, 'group', 'proactive', 'failed',
                  $4, $4, $5, false, now(), now(), now(), now() + interval '1 day', $6)`,
-        [APPLICATION_SESSION_ID, family.rows[0]!.id, group.rows[0]!.id,
-          `memory-review:${BATCH_ID}`, EVE_SESSION_ID, BATCH_ID],
+        [
+          APPLICATION_SESSION_ID,
+          family.rows[0]!.id,
+          group.rows[0]!.id,
+          `memory-review:${BATCH_ID}`,
+          EVE_SESSION_ID,
+          BATCH_ID,
+        ],
       );
       await client.query(
         "UPDATE memory_review_batches SET application_session_id = $2 WHERE id = $1",
@@ -166,45 +174,63 @@ describeWithDatabase("074 empty model response recovery", () => {
 
       await client.query(migration);
 
-      await expect(client.query(
-        `SELECT status::text, recovery_attempts, last_recovery_diagnostic_code,
+      await expect(
+        client.query(
+          `SELECT status::text, recovery_attempts, last_recovery_diagnostic_code,
                 application_session_id, eve_session_id, diagnostic_code
            FROM memory_review_batches WHERE id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{
-        application_session_id: null,
-        diagnostic_code: null,
-        eve_session_id: null,
-        last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_EMPTY_MODEL_RESPONSE",
-        recovery_attempts: 1,
-        status: "pending",
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            application_session_id: null,
+            diagnostic_code: null,
+            eve_session_id: null,
+            last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_EMPTY_MODEL_RESPONSE",
+            recovery_attempts: 1,
+            status: "pending",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
                 max(timeline_sequence)::text AS last
            FROM memory_review_batch_sources WHERE batch_id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 50, first: "7660", last: "7709" }] });
-      await expect(client.query(
-        `SELECT continuation_token, memory_review_batch_id, task_state::text, retired_at
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 50, first: "7660", last: "7709" }] });
+      await expect(
+        client.query(
+          `SELECT continuation_token, memory_review_batch_id, task_state::text, retired_at
            FROM conversation_sessions WHERE id = $1`,
-        [APPLICATION_SESSION_ID],
-      )).resolves.toMatchObject({ rows: [{
-        continuation_token: `retired-memory-review:${APPLICATION_SESSION_ID}`,
-        memory_review_batch_id: null,
-        retired_at: expect.any(Date),
-        task_state: "failed",
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS count FROM audit_events
+          [APPLICATION_SESSION_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            continuation_token: `retired-memory-review:${APPLICATION_SESSION_ID}`,
+            memory_review_batch_id: null,
+            retired_at: expect.any(Date),
+            task_state: "failed",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS count FROM audit_events
           WHERE event_type = 'memory_review.operator_recovered' AND subject_id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 1 }] });
-      await expect(client.query(
-        `SELECT recovery_generation, status::text FROM memory_review_owner_alerts
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 1 }] });
+      await expect(
+        client.query(
+          `SELECT recovery_generation, status::text FROM memory_review_owner_alerts
           WHERE batch_id = $1`,
-        [BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ recovery_generation: 0, status: "delivered" }] });
+          [BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ recovery_generation: 0, status: "delivered" }] });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

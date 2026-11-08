@@ -19,12 +19,13 @@ import {
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 
-
 // Image generation and widgets depend on configuration. Resolving the flags once at module load
 // matches the environment, which cannot change without a process restart.
 function isGrantableCapability(name: ExternalGroupToolName): boolean {
-  return (!requiresImageGenerationToolName(name) || IMAGE_GENERATION_AVAILABLE) &&
-    (!requiresTelegramWidgetsToolName(name) || TELEGRAM_WIDGETS_ENABLED);
+  return (
+    (!requiresImageGenerationToolName(name) || IMAGE_GENERATION_AVAILABLE) &&
+    (!requiresTelegramWidgetsToolName(name) || TELEGRAM_WIDGETS_ENABLED)
+  );
 }
 
 /**
@@ -34,13 +35,12 @@ function isGrantableCapability(name: ExternalGroupToolName): boolean {
 export const GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES: readonly [
   ExternalGroupToolName,
   ...ExternalGroupToolName[],
-] = EXTERNAL_GROUP_CAPABILITY_CATALOG
-  .map(({ name }) => name)
-  .filter(isGrantableCapability) as [ExternalGroupToolName, ...ExternalGroupToolName[]];
+] = EXTERNAL_GROUP_CAPABILITY_CATALOG.map(({ name }) => name).filter(isGrantableCapability) as [
+  ExternalGroupToolName,
+  ...ExternalGroupToolName[],
+];
 
-export function isGrantableExternalGroupToolName(
-  value: string,
-): value is ExternalGroupToolName {
+export function isGrantableExternalGroupToolName(value: string): value is ExternalGroupToolName {
   return (GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES as readonly string[]).includes(value);
 }
 

@@ -1,7 +1,4 @@
-import {
-  detectProjectResolution,
-  mergeProjectResolution,
-} from "../project-resolution.js";
+import { detectProjectResolution, mergeProjectResolution } from "../project-resolution.js";
 import { requireProjectPath } from "../state.js";
 import { linkProject, unresolvedProject } from "../vercel-project.js";
 import { createPromptCommandOutput } from "#setup/cli/index.js";

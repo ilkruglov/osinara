@@ -15,13 +15,13 @@
  * call arrives back on the listener within milliseconds.
  */
 export interface ParentDevelopmentWorkflowWorld {
-    close(): Promise<void>;
-    handleRequest(request: Request): Promise<Response | undefined>;
-    start(): Promise<void>;
+  close(): Promise<void>;
+  handleRequest(request: Request): Promise<Response | undefined>;
+  start(): Promise<void>;
 }
 export declare function createParentDevelopmentWorkflowWorld(input: {
-    readonly agentName: string;
-    readonly appRoot: string;
-    readonly resolveActiveGenerationId: () => string;
-    readonly transportSecret: string;
+  readonly agentName: string;
+  readonly appRoot: string;
+  readonly resolveActiveGenerationId: () => string;
+  readonly transportSecret: string;
 }): ParentDevelopmentWorkflowWorld;

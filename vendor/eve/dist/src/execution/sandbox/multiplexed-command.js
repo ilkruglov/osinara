@@ -28,8 +28,7 @@ function adaptMultiplexedCommandToSandboxProcess(e) {
     i = { stderr: r, stdout: n },
     a = (async () => {
       try {
-        for await (let n of e.command.logs())
-          i[e.getOutput(n)].enqueue(t.encode(n.data));
+        for await (let n of e.command.logs()) i[e.getOutput(n)].enqueue(t.encode(n.data));
         (n.close(), r.close());
       } catch (e) {
         throw (n.error(e), r.error(e), e);

@@ -89,7 +89,7 @@ async function readTemplate(
   templateKey: string,
   profile: BackendProfile,
 ): Promise<StoredTemplate> {
-  if (!await exists(path)) {
+  if (!(await exists(path))) {
     throw new SandboxTemplateNotProvisionedError({ backendName: profile.name, templateKey });
   }
   const template = JSON.parse(await readFile(path, "utf8")) as StoredTemplate;
@@ -158,7 +158,8 @@ function resolveSeedPath(
   mounts: readonly WorkspaceSandboxMount[],
 ): string {
   const homePrefix = "$HOME/";
-  if (path.startsWith(homePrefix)) return `${sandboxHome(access, mounts)}/${path.slice(homePrefix.length)}`;
+  if (path.startsWith(homePrefix))
+    return `${sandboxHome(access, mounts)}/${path.slice(homePrefix.length)}`;
   if (path.startsWith("$HOME")) {
     throw new Error("AGENT_SANDBOX_RUNNER_SEED_PATH_INVALID: HOME seed path is malformed");
   }
@@ -188,14 +189,23 @@ function buildSession(input: {
     const controller = new AbortController();
     let killed = false;
     const refused = refuseBrowserCommand(options.command);
-    const completion = refused !== null ? Promise.resolve({ ...refused, processId: "refused" }) : input.client.run(sessionId, {
-      command: options.command,
-      environment: options.env,
-      workingDirectory: options.workingDirectory,
-    }, controller.signal).catch((error: unknown) => {
-      if (killed) return { exitCode: 137, processId: "killed", stderr: "", stdout: "" };
-      throw error;
-    });
+    const completion =
+      refused !== null
+        ? Promise.resolve({ ...refused, processId: "refused" })
+        : input.client
+            .run(
+              sessionId,
+              {
+                command: options.command,
+                environment: options.env,
+                workingDirectory: options.workingDirectory,
+              },
+              controller.signal,
+            )
+            .catch((error: unknown) => {
+              if (killed) return { exitCode: 137, processId: "killed", stderr: "", stdout: "" };
+              throw error;
+            });
     options.abortSignal?.addEventListener("abort", () => controller.abort(), { once: true });
     return {
       stderr: resultStream(completion, "stderr"),
@@ -216,7 +226,11 @@ function buildSession(input: {
     return await input.client.readFile(await input.ensure(), resolveSandboxPath(path), signal);
   }
 
-  async function writeBytes(path: string, content: Uint8Array, signal?: AbortSignal): Promise<void> {
+  async function writeBytes(
+    path: string,
+    content: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<void> {
     await input.client.writeFile(await input.ensure(), resolveSandboxPath(path), content, signal);
   }
 
@@ -228,11 +242,15 @@ function buildSession(input: {
     async run(options) {
       const refused = refuseBrowserCommand(options.command);
       if (refused !== null) return refused;
-      const result = await input.client.run(await input.ensure(), {
-        command: options.command,
-        environment: options.env,
-        workingDirectory: options.workingDirectory,
-      }, options.abortSignal);
+      const result = await input.client.run(
+        await input.ensure(),
+        {
+          command: options.command,
+          environment: options.env,
+          workingDirectory: options.workingDirectory,
+        },
+        options.abortSignal,
+      );
       return { exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout };
     },
     spawn,
@@ -265,15 +283,20 @@ function buildSession(input: {
       await writeBytes(options.path, Buffer.from(options.content, encoding), options.abortSignal);
     },
     async removePath(options) {
-      await input.client.removePath(await input.ensure(), {
-        force: options.force,
-        path: resolveSandboxPath(options.path),
-        recursive: options.recursive,
-      }, options.abortSignal);
+      await input.client.removePath(
+        await input.ensure(),
+        {
+          force: options.force,
+          path: resolveSandboxPath(options.path),
+          recursive: options.recursive,
+        },
+        options.abortSignal,
+      );
     },
     async setNetworkPolicy(policy) {
       const access = input.access();
-      const valid = (access === "trusted" && policy === "allow-all") ||
+      const valid =
+        (access === "trusted" && policy === "allow-all") ||
         (access !== "trusted" && access !== null && policy === "deny-all");
       if (!valid) {
         throw new Error(
@@ -287,10 +310,7 @@ function buildSession(input: {
 function workspaceRunner(
   profile: BackendProfile,
   options: BackendOptions,
-): SandboxBackend<
-  Record<string, never>,
-  WorkspaceSandboxUseOptions
-> {
+): SandboxBackend<Record<string, never>, WorkspaceSandboxUseOptions> {
   const client = new SandboxRunnerClient(options.baseUrl ?? SANDBOX_RUNNER_BASE_URL);
   return {
     name: profile.name,
@@ -309,9 +329,10 @@ function workspaceRunner(
       return { reused: false };
     },
     async create(input) {
-      const template = input.templateKey === null
-        ? null
-        : await loadTemplate(input.runtimeContext.appRoot, input.templateKey, profile);
+      const template =
+        input.templateKey === null
+          ? null
+          : await loadTemplate(input.runtimeContext.appRoot, input.templateKey, profile);
       // A thread ID survives normal context rotation while a trust-zone replacement gets a new ID.
       const eveSessionId = parseSandboxEveSessionId(input.tags?.sessionId);
       const restored = parseStoredSandboxMetadata(
@@ -319,18 +340,17 @@ function workspaceRunner(
         eveSessionId,
         profile.stateSchemaVersion,
       );
-      let request: SandboxRunnerCreateRequest | null = restored && !restored.disabled
-        ? parseCreateSandboxRequest({
-          access: restored.access,
-          eveSessionId,
-          mounts: restored.mounts,
-          sandboxSessionId: restored.sandboxSessionId,
-          ...seedManifest(template, restored.access, restored.mounts),
-        })
-        : null;
-      let disabledSandboxSessionId = restored?.disabled
-        ? restored.sandboxSessionId
-        : null;
+      let request: SandboxRunnerCreateRequest | null =
+        restored && !restored.disabled
+          ? parseCreateSandboxRequest({
+              access: restored.access,
+              eveSessionId,
+              mounts: restored.mounts,
+              sandboxSessionId: restored.sandboxSessionId,
+              ...seedManifest(template, restored.access, restored.mounts),
+            })
+          : null;
+      let disabledSandboxSessionId = restored?.disabled ? restored.sandboxSessionId : null;
       const requireRequest = (): SandboxRunnerCreateRequest => {
         if (disabledSandboxSessionId) {
           throw new Error(
@@ -338,9 +358,7 @@ function workspaceRunner(
           );
         }
         if (!request) {
-          throw new Error(
-            "AGENT_SANDBOX_RUNNER_SESSION_MISSING: Sandbox session is not mounted",
-          );
+          throw new Error("AGENT_SANDBOX_RUNNER_SESSION_MISSING: Sandbox session is not mounted");
         }
         return request;
       };
@@ -372,11 +390,15 @@ function workspaceRunner(
       return {
         session,
         async useSessionFn(useOptions) {
-          if (!useOptions) throw new Error("AGENT_SANDBOX_RUNNER_MOUNTS_MISSING: Mounts are required");
+          if (!useOptions)
+            throw new Error("AGENT_SANDBOX_RUNNER_MOUNTS_MISSING: Mounts are required");
           const parsedOptions = parseWorkspaceSandboxUseOptions(useOptions);
           if (parsedOptions.mounts.length === 0) {
-            if (request || (disabledSandboxSessionId &&
-                disabledSandboxSessionId !== parsedOptions.sandboxSessionId)) {
+            if (
+              request ||
+              (disabledSandboxSessionId &&
+                disabledSandboxSessionId !== parsedOptions.sandboxSessionId)
+            ) {
               throw new Error("AGENT_SANDBOX_RUNNER_REMOUNT_DENIED: Session mounts are immutable");
             }
             disabledSandboxSessionId = parsedOptions.sandboxSessionId;
@@ -436,10 +458,9 @@ function workspaceRunner(
   };
 }
 
-export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBackend<
-  Record<string, never>,
-  WorkspaceSandboxUseOptions
-> {
+export function scopedWorkspaceRunner(
+  options: BackendOptions = {},
+): SandboxBackend<Record<string, never>, WorkspaceSandboxUseOptions> {
   return workspaceRunner(ROOT_RUNNER_PROFILE, options);
 }
 

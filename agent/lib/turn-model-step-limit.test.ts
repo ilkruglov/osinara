@@ -30,12 +30,14 @@ describe("resolveTurnModelStepLimitSelection", () => {
   it("allows every model call below the zero-based step boundary", () => {
     const model = modelFixture();
 
-    expect(resolveTurnModelStepLimitSelection({
-      event: { data: { stepIndex: 31 }, type: "step.started" },
-      maxModelSteps: 32,
-      model,
-      modelContextWindowTokens: 160_000,
-    })).toBeNull();
+    expect(
+      resolveTurnModelStepLimitSelection({
+        event: { data: { stepIndex: 31 }, type: "step.started" },
+        maxModelSteps: 32,
+        model,
+        modelContextWindowTokens: 160_000,
+      }),
+    ).toBeNull();
   });
 
   it("blocks the model call at the boundary without invoking the upstream", async () => {
@@ -67,7 +69,10 @@ describe("resolveTurnModelStepLimitSelection", () => {
   ])("fails closed for invalid step state %#", async ({ event, maxModelSteps }) => {
     const model = modelFixture();
     const selection = resolveTurnModelStepLimitSelection({
-      event, maxModelSteps, model, modelContextWindowTokens: 160_000,
+      event,
+      maxModelSteps,
+      model,
+      modelContextWindowTokens: 160_000,
     });
 
     expect(selection).not.toBeNull();

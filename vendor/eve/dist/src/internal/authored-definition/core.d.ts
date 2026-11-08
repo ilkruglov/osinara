@@ -2,9 +2,9 @@ import type { AgentDefinition, AgentBuildDefinition } from "#public/definitions/
 import type { ScheduleDefinition } from "#public/definitions/schedule.js";
 import type { SkillDefinition } from "#public/definitions/skill.js";
 type NormalizedAgentDefinition = Omit<AgentDefinition, "build"> & {
-    build?: {
-        externalDependencies?: Readonly<AgentBuildDefinition["externalDependencies"]>;
-    };
+  build?: {
+    externalDependencies?: Readonly<AgentBuildDefinition["externalDependencies"]>;
+  };
 };
 /**
  * Normalizes one authored agent definition into the canonical internal shape.
@@ -12,7 +12,10 @@ type NormalizedAgentDefinition = Omit<AgentDefinition, "build"> & {
  * Authored `name` fields are rejected — agent identity is derived at compile
  * time from `manifest.agentId` (package name or app-root basename).
  */
-export declare function normalizeAgentDefinition(value: unknown, message: string): Readonly<NormalizedAgentDefinition>;
+export declare function normalizeAgentDefinition(
+  value: unknown,
+  message: string,
+): Readonly<NormalizedAgentDefinition>;
 /**
  * Normalizes one authored instructions definition into the canonical
  * internal shape.
@@ -21,9 +24,12 @@ export declare function normalizeAgentDefinition(value: unknown, message: string
  * derived from the file path (`instructions.md` or
  * `instructions.{ts,...}`).
  */
-export declare function normalizeInstructionsDefinition(value: unknown, message: string): {
-    readonly content: string;
-    readonly role: "system" | "user";
+export declare function normalizeInstructionsDefinition(
+  value: unknown,
+  message: string,
+): {
+  readonly content: string;
+  readonly role: "system" | "user";
 };
 /**
  * Normalizes one authored skill definition into the canonical internal
@@ -42,5 +48,8 @@ export declare function normalizeSkillDefinition(value: unknown, message: string
  * fire-and-forget agent prompt) or `run` (the cron handler function)
  * must be provided.
  */
-export declare function normalizeScheduleDefinition(value: unknown, message: string): ScheduleDefinition;
+export declare function normalizeScheduleDefinition(
+  value: unknown,
+  message: string,
+): ScheduleDefinition;
 export {};

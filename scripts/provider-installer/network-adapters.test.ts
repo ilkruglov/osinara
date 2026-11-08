@@ -11,8 +11,9 @@ import { createPublicIpv4Sources, createTelegramGetMe } from "./network-adapters
 
 describe("provider installer network adapters", () => {
   it("builds three distinct public IPv4 observers and requires successful HTTP responses", async () => {
-    const fetchImplementation = vi.fn().mockImplementation(async () =>
-      new Response("8.8.8.8\n", { status: 200 }));
+    const fetchImplementation = vi
+      .fn()
+      .mockImplementation(async () => new Response("8.8.8.8\n", { status: 200 }));
     const sources = createPublicIpv4Sources(fetchImplementation);
 
     expect(sources.map(({ id }) => id)).toEqual(["ipify", "aws-checkip", "icanhazip"]);
@@ -21,8 +22,9 @@ describe("provider installer network adapters", () => {
       "8.8.8.8\n",
       "8.8.8.8\n",
     ]);
-    expect(new Set(fetchImplementation.mock.calls.map(([url]) => new URL(String(url)).hostname)).size)
-      .toBe(3);
+    expect(
+      new Set(fetchImplementation.mock.calls.map(([url]) => new URL(String(url)).hostname)).size,
+    ).toBe(3);
   });
 
   it("rejects a failed observation so it cannot count as agreement evidence", async () => {

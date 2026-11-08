@@ -2,9 +2,7 @@ const AGENT_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 function resolveEveAgentHost(e) {
   if (e.agent === void 0) return e.host ?? ``;
   if (e.host !== void 0)
-    throw Error(
-      `useEveAgent cannot combine agent and host. Use one target option.`,
-    );
+    throw Error(`useEveAgent cannot combine agent and host. Use one target option.`);
   return (assertValidAgentName(e.agent), `/eve/agents/${e.agent}`);
 }
 function assertValidAgentName(t) {

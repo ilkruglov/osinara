@@ -95,9 +95,7 @@ async function acknowledgeDelegatedTasksStep(e) {
       continue;
     let e = await readLatestTaskView({ taskRunId: t.taskRunId });
     if (!(e !== void 0 && isTerminalTaskStatus(e.status)))
-      throw Error(
-        `Task run "${t.taskId}" did not accept its readiness command.`,
-      );
+      throw Error(`Task run "${t.taskId}" did not accept its readiness command.`);
   }
 }
 async function failDelegatedDispatch(e) {

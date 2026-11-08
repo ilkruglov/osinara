@@ -16,11 +16,7 @@ const COMPACTION_PROMPT_OVERHEAD_TOKENS = estimateTokens([
 function getInputTokenCount(e, n) {
   let r = n.lastKnownInputTokens,
     i = n.lastKnownPromptMessageCount;
-  return r === void 0 ||
-    i === void 0 ||
-    !Number.isInteger(i) ||
-    i < 0 ||
-    i > e.length
+  return r === void 0 || i === void 0 || !Number.isInteger(i) || i < 0 || i > e.length
     ? estimateTokens(e)
     : r + estimateTokens(e.slice(i));
 }
@@ -75,8 +71,7 @@ function toolResultCapHeuristic(e) {
   console.info(
     JSON.stringify({
       code: "AGENT_COMPACTION_HEURISTIC",
-      realBefore:
-        typeof e.realBefore == `number` ? Math.round(e.realBefore) : null,
+      realBefore: typeof e.realBefore == `number` ? Math.round(e.realBefore) : null,
       savedTokens: Math.round(s),
       realAfter: Math.round(a),
       threshold: e.config.threshold,
@@ -140,9 +135,7 @@ async function compactMessages(t, r, i, a, o, c, l, d = !1) {
     console.error(
       JSON.stringify({
         code: "AGENT_COMPACTION_OUTPUT_OVER_LIMIT",
-        estimatedTokens: Math.round(
-          evaluateThreshold(v, i, `estimate`).estimatedTokens,
-        ),
+        estimatedTokens: Math.round(evaluateThreshold(v, i, `estimate`).estimatedTokens),
         threshold: i.threshold,
       }),
     );
@@ -183,15 +176,8 @@ function withResumptionGuard(e, t) {
   let n = e.at(-1)?.role;
   if (n !== void 0 && n !== `assistant`) return e;
   let r = findLastRealUserMessage(t),
-    a =
-      r !== void 0 &&
-      e.some((e) => e.role === `user` && e.content === r.content);
-  return [
-    ...e,
-    r !== void 0 && !a
-      ? r
-      : { content: COMPACTION_RESUMPTION_MESSAGE, role: `user` },
-  ];
+    a = r !== void 0 && e.some((e) => e.role === `user` && e.content === r.content);
+  return [...e, r !== void 0 && !a ? r : { content: COMPACTION_RESUMPTION_MESSAGE, role: `user` }];
 }
 function findLastRealUserMessage(e) {
   for (let t = e.length - 1; t >= 0; --t) {
@@ -210,9 +196,7 @@ function findLastRealUserMessage(e) {
 function extractPreviousCheckpoint(e) {
   let t = e[0],
     r = e[1];
-  return t?.role !== `user` ||
-    t.content !== COMPACTION_CHECKPOINT_MARKER ||
-    r?.role !== `assistant`
+  return t?.role !== `user` || t.content !== COMPACTION_CHECKPOINT_MARKER || r?.role !== `assistant`
     ? { conversation: [...e], previousCheckpoint: void 0 }
     : { conversation: e.slice(2), previousCheckpoint: assistantMessageText(r) };
 }
@@ -258,12 +242,7 @@ function resolveCompactionSummaryReserve(e) {
 function splitMessagesForCompaction(e, t) {
   if (t <= 0) return { older: [...e], recent: [] };
   let n = e.length - t;
-  for (; n < e.length && e[n]?.role === `tool`; ) n += 1;
+  for (; n < e.length && e[n]?.role === `tool`;) n += 1;
   return { older: e.slice(0, n), recent: e.slice(n) };
 }
-export {
-  compactMessages,
-  getInputTokenCount,
-  resolveCompactionModel,
-  shouldCompact,
-};
+export { compactMessages, getInputTokenCount, resolveCompactionModel, shouldCompact };

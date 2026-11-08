@@ -1,11 +1,5 @@
 import { coalesceTurnInputs } from "#harness/messages.js";
-const COALESCED_DELIVER_FIELDS = [
-  `context`,
-  `inputResponses`,
-  `message`,
-  `outputSchema`,
-  `task`,
-];
+const COALESCED_DELIVER_FIELDS = [`context`, `inputResponses`, `message`, `outputSchema`, `task`];
 function coalesceDeliverPayloads(n) {
   if (n.length === 0) return {};
   if (n.length === 1) return n[0] ?? {};

@@ -122,10 +122,7 @@ async function runRemoteAuthFlow(e) {
           s,
         );
       case `not-found`:
-        return failed(
-          `Vercel did not resolve ${a} for the selected Vercel team.`,
-          s,
-        );
+        return failed(`Vercel did not resolve ${a} for the selected Vercel team.`, s);
       case `project-mismatch`:
         return failed(
           `Could not verify ${a}: Vercel resolved project ${u.actualProjectId}, not ${u.expectedProjectId}.`,

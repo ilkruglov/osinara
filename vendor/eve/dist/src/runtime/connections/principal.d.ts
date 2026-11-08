@@ -66,6 +66,15 @@ export declare function principalKey(principal: ConnectionPrincipal): string;
  * {@link AuthorizationDefinition}. This helper does not validate
  * the definition shape beyond reading `principalType`.
  */
-export declare function resolveConnectionPrincipal(connectionName: string, authorization: AuthorizationDefinition, ctx?: AlsContext | undefined): ConnectionPrincipal;
+export declare function resolveConnectionPrincipal(
+  connectionName: string,
+  authorization: AuthorizationDefinition,
+  ctx?: AlsContext | undefined,
+): ConnectionPrincipal;
 /** Resolves a connection principal from an explicitly bound session identity. */
-export declare function resolveConnectionPrincipalFromAuth(connectionName: string, authorization: AuthorizationDefinition, current: SessionAuthContext | null | undefined, ctx?: AlsContext): ConnectionPrincipal;
+export declare function resolveConnectionPrincipalFromAuth(
+  connectionName: string,
+  authorization: AuthorizationDefinition,
+  current: SessionAuthContext | null | undefined,
+  ctx?: AlsContext,
+): ConnectionPrincipal;

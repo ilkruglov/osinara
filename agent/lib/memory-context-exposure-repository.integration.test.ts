@@ -13,9 +13,8 @@ import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-f
 import { MEMORY_EXPOSURE_WINDOW_TURNS, PROFILE_AUTHOR_CARD_WINDOW_TURNS } from "./memory-config.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 async function createSession(familyId: string, groupId: string): Promise<string> {
   const session = await database().query<{ id: string }>(
@@ -42,39 +41,58 @@ describeWithDatabase("memory context exposures", () => {
     await expect(memoryContextExposureRepository.sessionTurn(sessionId)).resolves.toBe(30);
 
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_old"], sessionTurn: 30 - MEMORY_EXPOSURE_WINDOW_TURNS,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_old"],
+      sessionTurn: 30 - MEMORY_EXPOSURE_WINDOW_TURNS,
     });
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_new", "mem_new"], sessionTurn: 29,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_new", "mem_new"],
+      sessionTurn: 29,
     });
 
     const shown = await memoryContextExposureRepository.recentlyShownMemoryRefs(sessionId, 30);
     expect([...shown]).toEqual(["mem_new"]);
-    await expect(database().query(
-      "SELECT shows FROM memory_context_exposures WHERE memory_ref = 'mem_new'",
-    )).resolves.toMatchObject({ rows: [{ shows: 1 }] });
+    await expect(
+      database().query("SELECT shows FROM memory_context_exposures WHERE memory_ref = 'mem_new'"),
+    ).resolves.toMatchObject({ rows: [{ shows: 1 }] });
 
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_new"], sessionTurn: 30,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_new"],
+      sessionTurn: 30,
     });
-    await expect(database().query(
-      "SELECT shows, session_turn FROM memory_context_exposures WHERE memory_ref = 'mem_new'",
-    )).resolves.toMatchObject({ rows: [{ session_turn: 30, shows: 2 }] });
+    await expect(
+      database().query(
+        "SELECT shows, session_turn FROM memory_context_exposures WHERE memory_ref = 'mem_new'",
+      ),
+    ).resolves.toMatchObject({ rows: [{ session_turn: 30, shows: 2 }] });
   });
 
   it("lists exactly the refs shown in one turn", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const sessionId = await createSession(fixture.familyId, fixture.groupId);
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_earlier"], sessionTurn: 29,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_earlier"],
+      sessionTurn: 29,
     });
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_block", "mem_search"], sessionTurn: 30,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_block", "mem_search"],
+      sessionTurn: 30,
     });
 
     const shown = await memoryContextExposureRepository.shownMemoryRefsForTurn(sessionId, 30);
     expect([...shown].sort()).toEqual(["mem_block", "mem_search"]);
-    await expect(memoryContextExposureRepository.shownMemoryRefsForTurn(sessionId, 31)).resolves.toEqual(new Set());
+    await expect(
+      memoryContextExposureRepository.shownMemoryRefsForTurn(sessionId, 31),
+    ).resolves.toEqual(new Set());
   });
 
   it("tracks the author card with its own window", async () => {
@@ -82,11 +100,24 @@ describeWithDatabase("memory context exposures", () => {
     const sessionId = await createSession(fixture.familyId, fixture.groupId);
 
     await memoryContextExposureRepository.record({
-      applicationSessionId: sessionId, authorTelegramUserId: "101", memoryRefs: [], sessionTurn: 30 - PROFILE_AUTHOR_CARD_WINDOW_TURNS + 1,
+      applicationSessionId: sessionId,
+      authorTelegramUserId: "101",
+      memoryRefs: [],
+      sessionTurn: 30 - PROFILE_AUTHOR_CARD_WINDOW_TURNS + 1,
     });
 
-    await expect(memoryContextExposureRepository.authorCardShownRecently(sessionId, "101", 30)).resolves.toBe(true);
-    await expect(memoryContextExposureRepository.authorCardShownRecently(sessionId, "202", 30)).resolves.toBe(false);
-    await expect(memoryContextExposureRepository.authorCardShownRecently(sessionId, "101", 30 + PROFILE_AUTHOR_CARD_WINDOW_TURNS)).resolves.toBe(false);
+    await expect(
+      memoryContextExposureRepository.authorCardShownRecently(sessionId, "101", 30),
+    ).resolves.toBe(true);
+    await expect(
+      memoryContextExposureRepository.authorCardShownRecently(sessionId, "202", 30),
+    ).resolves.toBe(false);
+    await expect(
+      memoryContextExposureRepository.authorCardShownRecently(
+        sessionId,
+        "101",
+        30 + PROFILE_AUTHOR_CARD_WINDOW_TURNS,
+      ),
+    ).resolves.toBe(false);
   });
 });

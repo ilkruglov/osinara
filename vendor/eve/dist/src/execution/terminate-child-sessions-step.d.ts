@@ -11,6 +11,6 @@ import { type DurableSessionState } from "#execution/durable-session-store.js";
  * remote-termination protocol exists.
  */
 export declare function terminateChildSessionsStep(input: {
-    readonly serializedContext?: Record<string, unknown>;
-    readonly sessionState: DurableSessionState;
+  readonly serializedContext?: Record<string, unknown>;
+  readonly sessionState: DurableSessionState;
 }): Promise<void>;

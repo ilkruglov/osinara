@@ -40,7 +40,7 @@ describeWithDatabase("032 Telegram forum topic normalization migration", () => {
       [family.rows[0]!.id],
     );
     await database().query(
-       `INSERT INTO telegram_group_messages
+      `INSERT INTO telegram_group_messages
           (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
            message_thread_id, telegram_user_id, sender_is_bot, message_kind, content_text, sent_at)
         VALUES

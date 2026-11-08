@@ -109,12 +109,13 @@ describeWithDatabase("scheduled group history snapshot repository", () => {
       sequence: 1,
     });
 
-    await expect(scheduledGroupHistorySnapshotRepository.prepare({
-      groupId,
-      runId: job.runId,
-      scheduleId: job.id,
-    }))
-      .resolves.toMatchObject({ chunkCount: 1, entryCount: 1 });
+    await expect(
+      scheduledGroupHistorySnapshotRepository.prepare({
+        groupId,
+        runId: job.runId,
+        scheduleId: job.id,
+      }),
+    ).resolves.toMatchObject({ chunkCount: 1, entryCount: 1 });
     await insertTimelineEntry({
       content: "Поздняя запись с временем внутри окна",
       groupId,
@@ -134,10 +135,7 @@ describeWithDatabase("scheduled group history snapshot repository", () => {
     expect(chunk.timeline).toContain("Сообщение до snapshot");
     expect(chunk.timeline).not.toContain("Поздняя запись");
 
-    await agentScheduleDispatchRepository.failClaim(
-      job,
-      "AGENT_SCHEDULE_TEST_TERMINAL_FAILURE",
-    );
+    await agentScheduleDispatchRepository.failClaim(job, "AGENT_SCHEDULE_TEST_TERMINAL_FAILURE");
     const persisted = await database().query(
       "SELECT 1 FROM agent_schedule_history_snapshots WHERE run_id = $1",
       [job.runId],
@@ -155,19 +153,23 @@ describeWithDatabase("scheduled group history snapshot repository", () => {
     });
     await database().query("UPDATE family_memberships SET role = 'member'");
 
-    await expect(agentScheduleDispatchRepository.claimDue({
-      leaseMilliseconds: 60_000,
-      limit: 1,
-      now: new Date(scheduledFor.getTime() + 61_000),
-    })).resolves.toEqual([]);
-    await expect(database().query(
-      "SELECT 1 FROM agent_schedule_history_snapshots WHERE run_id = $1",
-      [job.runId],
-    )).resolves.toMatchObject({ rowCount: 0 });
-    await expect(database().query(
-      "SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1",
-      [job.runId],
-    )).resolves.toMatchObject({
+    await expect(
+      agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 60_000,
+        limit: 1,
+        now: new Date(scheduledFor.getTime() + 61_000),
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      database().query("SELECT 1 FROM agent_schedule_history_snapshots WHERE run_id = $1", [
+        job.runId,
+      ]),
+    ).resolves.toMatchObject({ rowCount: 0 });
+    await expect(
+      database().query("SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1", [
+        job.runId,
+      ]),
+    ).resolves.toMatchObject({
       rows: [{ error_code: "AGENT_SCHEDULE_DESTINATION_REVOKED", status: "failed" }],
     });
   });

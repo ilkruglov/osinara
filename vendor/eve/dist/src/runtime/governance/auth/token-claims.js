@@ -1,12 +1,4 @@
-const STANDARD_PROJECTED_CLAIM_KEYS = new Set([
-  `aud`,
-  `exp`,
-  `iat`,
-  `iss`,
-  `jti`,
-  `nbf`,
-  `sub`,
-]);
+const STANDARD_PROJECTED_CLAIM_KEYS = new Set([`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`]);
 function normalizeJwtClaims(e) {
   let t = {};
   for (let [n, r] of Object.entries(e)) {
@@ -14,26 +6,21 @@ function normalizeJwtClaims(e) {
       t[n] = r;
       continue;
     }
-    Array.isArray(r) &&
-      r.every((e) => typeof e == `string`) &&
-      (t[n] = Object.freeze([...r]));
+    Array.isArray(r) && r.every((e) => typeof e == `string`) && (t[n] = Object.freeze([...r]));
   }
   return Object.freeze(t);
 }
 function createJwtAttributeProjection(t) {
   let n = normalizeJwtClaims(t);
   return Object.freeze(
-    Object.fromEntries(
-      Object.entries(n).filter(([t]) => !STANDARD_PROJECTED_CLAIM_KEYS.has(t)),
-    ),
+    Object.fromEntries(Object.entries(n).filter(([t]) => !STANDARD_PROJECTED_CLAIM_KEYS.has(t))),
   );
 }
 function areTokenClaimMatchersSatisfied(e, t) {
   let n = normalizeJwtClaims(e);
   if (t.subjects !== void 0) {
     let n = typeof e.sub == `string` ? e.sub : null;
-    if (n === null || !t.subjects.some((e) => matchesWildcardPattern(e, n)))
-      return !1;
+    if (n === null || !t.subjects.some((e) => matchesWildcardPattern(e, n))) return !1;
   }
   return (
     t.claims === void 0 ||
@@ -52,9 +39,7 @@ function createJwtAuthenticatedCallerPrincipal(e) {
     n = e.subjectClaim ?? `sub`,
     r = readFirstStringClaim(e.payload, [n]);
   if (t === void 0 || r === void 0)
-    throw Error(
-      `Expected verified JWT payloads to include string iss and ${n} claims.`,
-    );
+    throw Error(`Expected verified JWT payloads to include string iss and ${n} claims.`);
   let i = normalizeJwtClaims(e.payload);
   return {
     attributes: createJwtAttributeProjection(e.payload),
@@ -77,7 +62,4 @@ function matchesWildcardPattern(e, t) {
   let n = e.replaceAll(/[.+?^${}()|[\]\\]/g, `\\$&`).replaceAll(`*`, `.*`);
   return RegExp(`^${n}$`).test(t);
 }
-export {
-  areTokenClaimMatchersSatisfied,
-  createJwtAuthenticatedCallerPrincipal,
-};
+export { areTokenClaimMatchersSatisfied, createJwtAuthenticatedCallerPrincipal };

@@ -45,13 +45,15 @@ async function createOwnedFamily(suffix: string): Promise<{ familyId: string; ow
 
 function photoMessage(messageId: string, telegramChatId: string): TelegramMessage {
   return {
-    attachments: [{
-      fileId: `photo-${messageId}`,
-      fileUniqueId: `photo-unique-${messageId}`,
-      kind: "photo",
-      mediaType: "image/jpeg",
-      size: 2_048,
-    }],
+    attachments: [
+      {
+        fileId: `photo-${messageId}`,
+        fileUniqueId: `photo-unique-${messageId}`,
+        kind: "photo",
+        mediaType: "image/jpeg",
+        size: 2_048,
+      },
+    ],
     caption: "",
     chat: { id: telegramChatId, title: "Группа", type: "supergroup" },
     from: { firstName: "Анна", id: "101", isBot: false },
@@ -112,15 +114,14 @@ describeWithDatabase("Telegram attachment live authorization", () => {
     };
 
     // Simulate revocation after session authorization but before the tool resolves Telegram bytes.
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [familyId, ownerId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      familyId,
+      ownerId,
+    ]);
 
-    await expect(telegramGroupAttachmentRepository.find(
-      staleAuth,
-      reference.attachmentId,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
+    await expect(
+      telegramGroupAttachmentRepository.find(staleAuth, reference.attachmentId),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
   });
 
   it("rejects the family attachment list when membership was revoked", async () => {
@@ -139,15 +140,17 @@ describeWithDatabase("Telegram attachment live authorization", () => {
       telegramChatType: "supergroup" as const,
       userId: ownerId,
     };
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [familyId, ownerId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      familyId,
+      ownerId,
+    ]);
 
-    await expect(telegramGroupAttachmentRepository.list(staleAuth, {
-      limit: 10,
-      messageThreadId: null,
-    })).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
+    await expect(
+      telegramGroupAttachmentRepository.list(staleAuth, {
+        limit: 10,
+        messageThreadId: null,
+      }),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
   });
 
   it("rejects an external attachment after its registered group was removed", async () => {
@@ -169,10 +172,9 @@ describeWithDatabase("Telegram attachment live authorization", () => {
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [reference.groupId]);
 
-    await expect(telegramGroupAttachmentRepository.find(
-      staleAuth,
-      reference.attachmentId,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(
+      telegramGroupAttachmentRepository.find(staleAuth, reference.attachmentId),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
   });
 
   it("rejects an external attachment after the chat is retyped into a new trust zone", async () => {
@@ -204,9 +206,8 @@ describeWithDatabase("Telegram attachment live authorization", () => {
     });
     expect(replacement.groupId).not.toBe(reference.groupId);
 
-    await expect(telegramGroupAttachmentRepository.find(
-      staleAuth,
-      reference.attachmentId,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(
+      telegramGroupAttachmentRepository.find(staleAuth, reference.attachmentId),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
   });
 });

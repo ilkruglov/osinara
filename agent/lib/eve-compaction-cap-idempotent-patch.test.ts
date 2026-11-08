@@ -14,8 +14,15 @@
 import { describe, expect, it } from "vitest";
 
 // Eve does not export the harness; the patched runtime module is exercised directly.
-const { compactMessages } = await import(`${process.cwd()}/node_modules/eve/dist/src/harness/compaction.js`) as {
-  compactMessages(messages: unknown[], model: unknown, config: unknown, ...rest: unknown[]): Promise<unknown[]>;
+const { compactMessages } = (await import(
+  `${process.cwd()}/node_modules/eve/dist/src/harness/compaction.js`
+)) as {
+  compactMessages(
+    messages: unknown[],
+    model: unknown,
+    config: unknown,
+    ...rest: unknown[]
+  ): Promise<unknown[]>;
 };
 
 const MARKER = "[Truncated by eve:";
@@ -25,8 +32,21 @@ type ToolMessage = { content: Array<{ output: { type: string; value: string } }>
 function history(): unknown[] {
   return [
     { content: "привет", role: "user" },
-    { content: [{ input: {}, toolCallId: "c1", toolName: "list_group_history", type: "tool-call" }], role: "assistant" },
-    { content: [{ output: { type: "text", value: "x".repeat(5_000) }, toolCallId: "c1", toolName: "list_group_history", type: "tool-result" }], role: "tool" },
+    {
+      content: [{ input: {}, toolCallId: "c1", toolName: "list_group_history", type: "tool-call" }],
+      role: "assistant",
+    },
+    {
+      content: [
+        {
+          output: { type: "text", value: "x".repeat(5_000) },
+          toolCallId: "c1",
+          toolName: "list_group_history",
+          type: "tool-result",
+        },
+      ],
+      role: "tool",
+    },
     { content: "ок", role: "assistant" },
     ...Array.from({ length: 12 }, (_, i) => ({ content: `сообщение ${i}`, role: "user" })),
   ];
@@ -34,7 +54,8 @@ function history(): unknown[] {
 
 // A threshold nobody reaches keeps compaction on the tool-result cap heuristic, no model call.
 const CONFIG = { recentWindowSize: 10, threshold: 1e9, thresholdPercent: 0.75 };
-const toolOutput = (messages: unknown[]) => (messages.find((m) => (m as { role: string }).role === "tool") as ToolMessage).content[0]!.output;
+const toolOutput = (messages: unknown[]) =>
+  (messages.find((m) => (m as { role: string }).role === "tool") as ToolMessage).content[0]!.output;
 
 describe("Eve compaction tool-result cap", () => {
   it("truncates an oversized result once and leaves it byte-identical on later compactions", async () => {

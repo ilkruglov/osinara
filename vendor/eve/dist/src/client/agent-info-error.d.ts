@@ -11,7 +11,7 @@
  * let diagnostics name the offending fields instead of an opaque string.
  */
 export declare class AgentInfoResponseError extends Error {
-    /** Schema issue summaries, e.g. `"agent.model.id: Required"`. Empty when the body was not JSON. */
-    readonly issues: readonly string[];
-    constructor(issues?: readonly string[]);
+  /** Schema issue summaries, e.g. `"agent.model.id: Required"`. Empty when the body was not JSON. */
+  readonly issues: readonly string[];
+  constructor(issues?: readonly string[]);
 }

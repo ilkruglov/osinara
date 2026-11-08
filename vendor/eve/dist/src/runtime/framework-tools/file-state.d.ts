@@ -5,16 +5,16 @@ import { ContextKey } from "#context/key.js";
  * `write_file` to detect stale overwrites and enforce read-before-write.
  */
 export interface ReadFileStamp {
-    readonly byteLength: number;
-    readonly contentHash: string;
-    readonly filePath: string;
+  readonly byteLength: number;
+  readonly contentHash: string;
+  readonly filePath: string;
 }
 /**
  * Durable session state holding read-file stamps keyed by normalized
  * absolute path.
  */
 export interface ReadFileState {
-    readonly byTarget: Readonly<Record<string, ReadFileStamp>>;
+  readonly byTarget: Readonly<Record<string, ReadFileStamp>>;
 }
 /**
  * Durable context key for read-file stamps.
@@ -44,8 +44,8 @@ export declare function buildReadFileTargetKey(normalizedPath: string): string;
  * modifications without filesystem metadata.
  */
 export declare function createReadFileStamp(input: {
-    content: string;
-    filePath: string;
+  content: string;
+  filePath: string;
 }): ReadFileStamp;
 /**
  * Persists one read-file stamp into the durable context state.
@@ -53,7 +53,11 @@ export declare function createReadFileStamp(input: {
  * Centralizes the context read-update-write so callers in `read-file-tool`
  * and `write-file-tool` do not duplicate the state mutation pattern.
  */
-export declare function setReadFileStamp(ctx: AlsContext, targetKey: string, stamp: ReadFileStamp): void;
+export declare function setReadFileStamp(
+  ctx: AlsContext,
+  targetKey: string,
+  stamp: ReadFileStamp,
+): void;
 /**
  * Clears all read-file stamps from the context. The framework calls this on
  * context compaction so a write afterward must re-read the file whose read

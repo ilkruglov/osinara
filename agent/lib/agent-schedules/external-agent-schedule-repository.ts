@@ -107,7 +107,7 @@ async function requireCurrentOwner(
   client: PoolClient,
   auth: ExternalAgentScheduleAuthorization,
 ): Promise<void> {
-  if (!await lockCurrentOwner(client, auth.familyId, auth.requestedBy)) {
+  if (!(await lockCurrentOwner(client, auth.familyId, auth.requestedBy))) {
     throw new AppError(
       "AGENT_OWNER_REQUIRED",
       "Управление автоматизациями внешних групп доступно только текущему владельцу в личном чате",

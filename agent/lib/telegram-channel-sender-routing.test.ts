@@ -63,17 +63,22 @@ describe("Telegram channel sender routing", () => {
     repository.telegram.findGroup.mockResolvedValue(externalGroup());
     const message = channelMessage(`@${BOT_USERNAME} ты меня видишь?`);
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message, CHANNEL_ACTOR);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
     expect(repository.family.claimInvitation).not.toHaveBeenCalled();
     expect(repository.hitl.authorizeReply).not.toHaveBeenCalled();
     expect(repository.memoryReview.prepareInteractiveTurn).not.toHaveBeenCalled();
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      currentSenderDisplayName: "Pavel Zloi",
-      currentSenderUsername: "evilfreelancer",
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentSenderDisplayName: "Pavel Zloi",
+        currentSenderUsername: "evilfreelancer",
+      }),
+    );
     expect(result?.auth).toMatchObject({
       attributes: {
         groupId: "group-1",
@@ -114,10 +119,12 @@ describe("Telegram channel sender routing", () => {
       type,
     });
 
-    await expect(createTelegramMessageHandler(repository)(
-      telegramContext().context,
-      channelMessage(`@${BOT_USERNAME} ответь`),
-    )).resolves.toBeNull();
+    await expect(
+      createTelegramMessageHandler(repository)(
+        telegramContext().context,
+        channelMessage(`@${BOT_USERNAME} ответь`),
+      ),
+    ).resolves.toBeNull();
 
     expect(repository.journal.record).not.toHaveBeenCalled();
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
@@ -143,7 +150,10 @@ describe("Telegram channel sender routing", () => {
       },
     };
 
-    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      message,
+    );
 
     expect(repository.hitl.authorizeReply).not.toHaveBeenCalled();
     expect(result?.replyHandling).toBe("message");

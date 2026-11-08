@@ -109,9 +109,7 @@ async function deliverTaskInputResponsesStep(e) {
       auth: e.answer.auth,
       kind: `send`,
       payload: {
-        inputResponses: e.answer.inputResponses.filter((e) =>
-          n.has(e.requestId),
-        ),
+        inputResponses: e.answer.inputResponses.filter((e) => n.has(e.requestId)),
       },
       taskDeliveryId: `${e.answer.taskId}:${[...e.requestIds].sort().join(`,`)}`,
     };
@@ -124,17 +122,15 @@ async function deliverTaskInputResponsesStep(e) {
         redirect: `error`,
       });
       if (t.status === 404) return `unreachable`;
-      if (!t.ok)
-        throw Error(`Remote task input delivery failed with HTTP ${t.status}.`);
+      if (!t.ok) throw Error(`Remote task input delivery failed with HTTP ${t.status}.`);
     } else await resumeSessionInbox(e.answer.childContinuationToken, r);
     return `delivered`;
   } catch (t) {
     if (isTaskWorkflowTargetGone(t))
       return (
-        log.warn(
-          `task input answer target is gone; the child turn already ended`,
-          { taskId: e.answer.taskId },
-        ),
+        log.warn(`task input answer target is gone; the child turn already ended`, {
+          taskId: e.answer.taskId,
+        }),
         `unreachable`
       );
     throw t;

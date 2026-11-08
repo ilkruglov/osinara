@@ -17,12 +17,13 @@ function recordedCurrentTurn(
   toolResults: readonly { name: string; output: unknown }[],
   ordinal: number,
 ): boolean {
-  return toolResults.some(({ name, output }) =>
-    name === "record_turn" &&
-    typeof output === "object" &&
-    output !== null &&
-    "ordinal" in output &&
-    output.ordinal === ordinal
+  return toolResults.some(
+    ({ name, output }) =>
+      name === "record_turn" &&
+      typeof output === "object" &&
+      output !== null &&
+      "ordinal" in output &&
+      output.ordinal === ordinal,
   );
 }
 

@@ -61,12 +61,30 @@ export const TURN_LOOP_MIN_RUN = 3;
 export const TURN_HEAVY_MIN_STEPS = 8;
 const FOLLOW_UP_WINDOW_MINUTES = 10;
 const RETENTION_DAYS = 90;
-const POSITIVE_REACTIONS = ["👍", "❤", "❤️", "🔥", "🥰", "👏", "😁", "🤣", "😍", "🏆", "💯", "🙏", "❤‍🔥", "🤩", "😘", "🎉"];
+const POSITIVE_REACTIONS = [
+  "👍",
+  "❤",
+  "❤️",
+  "🔥",
+  "🥰",
+  "👏",
+  "😁",
+  "🤣",
+  "😍",
+  "🏆",
+  "💯",
+  "🙏",
+  "❤‍🔥",
+  "🤩",
+  "😘",
+  "🎉",
+];
 const NEGATIVE_REACTIONS = ["👎", "💩", "🤮", "🤬", "😡", "🥱", "🤡", "😐"];
 /** Phrases a person uses to say the answer missed; a measurement, not a verdict. */
 const CORRECTION_PATTERN = String.raw`(^|[^а-яё])(не то|не так|не об этом|не про то|неправ|ошиб|перепутал|путаешь|переделай|бред|чушь|неверно|ты о чём|при чём тут)`;
 
-const sum = (rows: readonly { count: string }[]) => rows.reduce((total, row) => total + Number(row.count), 0);
+const sum = (rows: readonly { count: string }[]) =>
+  rows.reduce((total, row) => total + Number(row.count), 0);
 
 export const turnEvaluationRepository = {
   async recordOutcome(identity: TurnEvaluationIdentity, input: TurnOutcomeInput): Promise<void> {
@@ -87,11 +105,27 @@ export const turnEvaluationRepository = {
          forbidden_tool = EXCLUDED.forbidden_tool,
          triggering_entry_id = coalesce(turn_evaluations.triggering_entry_id, EXCLUDED.triggering_entry_id),
          telegram_chat_id = coalesce(turn_evaluations.telegram_chat_id, EXCLUDED.telegram_chat_id)`,
-      [identity.familyId, identity.eveSessionId, identity.eveTurnId, identity.chatKind, identity.telegramChatId,
-        identity.triggeringEntryId, input.finishedAt, input.outcome, input.failureCode?.slice(0, 120) ?? null,
-        input.stepCount, JSON.stringify(input.toolCalls), input.failedToolCount, input.loadedSkills,
-        input.metrics.repeatedCallRun, input.metrics.repeatAfterError, input.metrics.forbiddenTool,
-        input.versions.softwareVersion, input.versions.modelConfigHash, input.versions.promptHash],
+      [
+        identity.familyId,
+        identity.eveSessionId,
+        identity.eveTurnId,
+        identity.chatKind,
+        identity.telegramChatId,
+        identity.triggeringEntryId,
+        input.finishedAt,
+        input.outcome,
+        input.failureCode?.slice(0, 120) ?? null,
+        input.stepCount,
+        JSON.stringify(input.toolCalls),
+        input.failedToolCount,
+        input.loadedSkills,
+        input.metrics.repeatedCallRun,
+        input.metrics.repeatAfterError,
+        input.metrics.forbiddenTool,
+        input.versions.softwareVersion,
+        input.versions.modelConfigHash,
+        input.versions.promptHash,
+      ],
     );
   },
 
@@ -109,9 +143,19 @@ export const turnEvaluationRepository = {
          reply_message_ids = EXCLUDED.reply_message_ids, delivered_at = EXCLUDED.delivered_at,
          telegram_chat_id = coalesce(turn_evaluations.telegram_chat_id, EXCLUDED.telegram_chat_id),
          triggering_entry_id = coalesce(turn_evaluations.triggering_entry_id, EXCLUDED.triggering_entry_id)`,
-      [identity.familyId, identity.eveSessionId, identity.eveTurnId, identity.chatKind, identity.telegramChatId,
-        identity.triggeringEntryId, input.replyMessageIds, input.deliveredAt,
-        input.versions.softwareVersion, input.versions.modelConfigHash, input.versions.promptHash],
+      [
+        identity.familyId,
+        identity.eveSessionId,
+        identity.eveTurnId,
+        identity.chatKind,
+        identity.telegramChatId,
+        identity.triggeringEntryId,
+        input.replyMessageIds,
+        input.deliveredAt,
+        input.versions.softwareVersion,
+        input.versions.modelConfigHash,
+        input.versions.promptHash,
+      ],
     );
   },
 
@@ -133,7 +177,14 @@ export const turnEvaluationRepository = {
          received_at = now()
        WHERE (telegram_message_reactions.changed_at, telegram_message_reactions.update_id)
            < (EXCLUDED.changed_at, EXCLUDED.update_id)`,
-      [input.telegramChatId, input.telegramMessageId, input.telegramUserId, input.emojis, input.changedAt, input.updateId],
+      [
+        input.telegramChatId,
+        input.telegramMessageId,
+        input.telegramUserId,
+        input.emojis,
+        input.changedAt,
+        input.updateId,
+      ],
     );
   },
 
@@ -160,7 +211,11 @@ export const turnEvaluationRepository = {
         WHERE family_id = $1 AND started_at >= $2 AND started_at < $5`,
       [familyId, windowStart, TURN_LOOP_MIN_RUN, TURN_HEAVY_MIN_STEPS, now],
     );
-    const versions = await client.query<{ failed: string; software_version: string; turns: string }>(
+    const versions = await client.query<{
+      failed: string;
+      software_version: string;
+      turns: string;
+    }>(
       `SELECT software_version, count(*)::text AS turns, count(*) FILTER (WHERE outcome = 'failed')::text AS failed
          FROM turn_evaluations
         WHERE family_id = $1 AND started_at >= $2 AND started_at < $3
@@ -214,7 +269,9 @@ export const turnEvaluationRepository = {
       repeatAfterError: Number(total.repeat_after_error ?? 0),
       turns: Number(total.turns ?? 0),
       versions: versions.rows.map((row) => ({
-        failed: Number(row.failed), softwareVersion: row.software_version, turns: Number(row.turns),
+        failed: Number(row.failed),
+        softwareVersion: row.software_version,
+        turns: Number(row.turns),
       })),
     };
   },

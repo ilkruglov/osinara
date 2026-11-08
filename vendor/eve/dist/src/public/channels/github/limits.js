@@ -3,7 +3,7 @@ function splitGitHubCommentBody(t, n = GITHUB_COMMENT_BODY_MAX_LENGTH) {
   if (t.length <= n) return [t];
   let r = [],
     i = t;
-  for (; i.length > n; ) {
+  for (; i.length > n;) {
     let e = findCommentSplitIndex(i, n);
     (r.push(i.slice(0, e).trimEnd()), (i = i.slice(e).trimStart()));
   }

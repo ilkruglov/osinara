@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_eve_turn_identity_migration";
 const MIGRATION_NAME = "058_scope_eve_turn_identity.sql";
 
@@ -77,41 +76,49 @@ describeWithDatabase("058 Eve turn identity migration", () => {
         { eve_session_id: null, turn_id: "catchup:2:2" },
         { eve_session_id: "wrun_existing", turn_id: "turn_0" },
       ]);
-      await expect(client.query(
-        `INSERT INTO memory_extraction_batches
+      await expect(
+        client.query(
+          `INSERT INTO memory_extraction_batches
            (id, conversation_id, application_session_id, batch_kind, eve_session_id,
             turn_id, extractor_version, schema_version)
          VALUES ('00000000-0000-4000-8000-000000000013',
                  '00000000-0000-4000-8000-000000000021',
                  '00000000-0000-4000-8000-000000000002', 'turn', 'wrun_second',
                  'turn_0', 'extractor-v1', 'schema-v1')`,
-      )).resolves.toHaveProperty("rowCount", 1);
-      await expect(client.query(
-        `INSERT INTO memory_extraction_batches
+        ),
+      ).resolves.toHaveProperty("rowCount", 1);
+      await expect(
+        client.query(
+          `INSERT INTO memory_extraction_batches
            (id, conversation_id, application_session_id, batch_kind, eve_session_id,
             turn_id, extractor_version, schema_version)
          VALUES ('00000000-0000-4000-8000-000000000014',
                  '00000000-0000-4000-8000-000000000021',
                  '00000000-0000-4000-8000-000000000002', 'turn', 'wrun_second',
                  'turn_0', 'extractor-v1', 'schema-v1')`,
-      )).rejects.toMatchObject({ code: "23505" });
+        ),
+      ).rejects.toMatchObject({ code: "23505" });
 
       const delivery = await client.query<{ eve_session_id: string }>(
         "SELECT eve_session_id FROM telegram_final_deliveries WHERE eve_turn_id = 'turn_0'",
       );
       expect(delivery.rows).toEqual([{ eve_session_id: "wrun_existing" }]);
-      await expect(client.query(
-        `INSERT INTO telegram_final_deliveries
+      await expect(
+        client.query(
+          `INSERT INTO telegram_final_deliveries
            (id, eve_session_id, eve_turn_id, application_session_id)
          VALUES ('00000000-0000-4000-8000-000000000032', 'wrun_second', 'turn_0',
                  '00000000-0000-4000-8000-000000000002')`,
-      )).resolves.toHaveProperty("rowCount", 1);
-      await expect(client.query(
-        `INSERT INTO telegram_final_deliveries
+        ),
+      ).resolves.toHaveProperty("rowCount", 1);
+      await expect(
+        client.query(
+          `INSERT INTO telegram_final_deliveries
            (id, eve_session_id, eve_turn_id, application_session_id)
          VALUES ('00000000-0000-4000-8000-000000000033', 'wrun_second', 'turn_0',
                  '00000000-0000-4000-8000-000000000002')`,
-      )).rejects.toMatchObject({ code: "23505" });
+        ),
+      ).rejects.toMatchObject({ code: "23505" });
     } finally {
       await client.query("RESET search_path");
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);

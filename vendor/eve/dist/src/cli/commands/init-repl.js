@@ -27,15 +27,11 @@ const positional = (e) => [e],
 function executableNames(e) {
   if (process.platform !== `win32`) return [e];
   let t = process.env.PATHEXT?.split(`;`).filter(Boolean);
-  return (t && t.length > 0 ? t : WINDOWS_EXECUTABLE_EXTENSIONS).map(
-    (t) => `${e}${t}`,
-  );
+  return (t && t.length > 0 ? t : WINDOWS_EXECUTABLE_EXTENSIONS).map((t) => `${e}${t}`);
 }
 async function isExecutable(e) {
   try {
-    return (await stat(e)).isFile()
-      ? (await access(e, constants.X_OK), !0)
-      : !1;
+    return (await stat(e)).isFile() ? (await access(e, constants.X_OK), !0) : !1;
   } catch {
     return !1;
   }
@@ -73,20 +69,16 @@ async function selectInitHandoff(e) {
   let t = { ...defaultDependencies, ...e.deps };
   if (!t.hasInteractiveTerminal()) return `eve-dev`;
   let n = await Promise.all(
-      CODING_AGENT_REPLS.map(({ command: e }) =>
-        t.isCodingAgentReplAvailable(e),
-      ),
+      CODING_AGENT_REPLS.map(({ command: e }) => t.isCodingAgentReplAvailable(e)),
     ),
     r = CODING_AGENT_REPLS.filter((e, t) => n[t]);
   return r.length === 0
     ? `eve-dev`
-    : t
-        .createPrompter()
-        .select({
-          message: `How would you like to continue?`,
-          options: handoffOptions(r, e.agentName),
-          initialValue: `eve-dev`,
-        });
+    : t.createPrompter().select({
+        message: `How would you like to continue?`,
+        options: handoffOptions(r, e.agentName),
+        initialValue: `eve-dev`,
+      });
 }
 function codingAgentRepl(e) {
   let t = CODING_AGENT_REPLS.find((t) => t.command === e);
@@ -118,8 +110,7 @@ async function spawnCodingAgentRepl(e) {
         settle = (e) => {
           i || ((i = !0), t(e));
         };
-      (r.once(`error`, () => settle(!1)),
-        r.once(`close`, (e) => settle(e === 0)));
+      (r.once(`error`, () => settle(!1)), r.once(`close`, (e) => settle(e === 0)));
     })
   );
 }

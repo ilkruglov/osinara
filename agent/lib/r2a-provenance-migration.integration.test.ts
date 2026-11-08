@@ -16,9 +16,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_r2a_provenance_migration";
 const MIGRATION_NAME = "051_r2a_provenance_extraction_foundation.sql";
 
@@ -170,15 +169,18 @@ describeWithDatabase("051 R2a provenance/extraction migration", () => {
         "SELECT id FROM application_conversations WHERE owner_user_id = $1",
         [exactUser.rows[0]!.id],
       );
-      await client.query("DELETE FROM family_memberships WHERE user_id = $1", [exactUser.rows[0]!.id]);
+      await client.query("DELETE FROM family_memberships WHERE user_id = $1", [
+        exactUser.rows[0]!.id,
+      ]);
       await client.query(
         "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'member')",
         [family.rows[0]!.id, exactUser.rows[0]!.id],
       );
-      await expect(client.query(
-        "SELECT id FROM application_conversations WHERE owner_user_id = $1",
-        [exactUser.rows[0]!.id],
-      )).resolves.toMatchObject({ rows: personalConversation.rows });
+      await expect(
+        client.query("SELECT id FROM application_conversations WHERE owner_user_id = $1", [
+          exactUser.rows[0]!.id,
+        ]),
+      ).resolves.toMatchObject({ rows: personalConversation.rows });
 
       const firstConversation = await client.query<{
         id: string;
@@ -204,58 +206,76 @@ describeWithDatabase("051 R2a provenance/extraction migration", () => {
          WHERE conversation_id = $1 AND telegram_user_id = '4800'`,
         [secondConversation.rows[0]!.id],
       );
-      const firstMessage = messages.rows.find((message) =>
-        message.group_id === firstGroup.id && message.sequence_id === "1"
+      const firstMessage = messages.rows.find(
+        (message) => message.group_id === firstGroup.id && message.sequence_id === "1",
       )!;
       const secondMessage = messages.rows.find((message) => message.group_id === secondGroup.id)!;
 
       // Redundant transport identities must agree with the exact application conversation. Neither
       // timeline entries nor aliases may combine a conversation from one group with another group.
-      await expect(client.query(
-        `INSERT INTO telegram_group_messages
+      await expect(
+        client.query(
+          `INSERT INTO telegram_group_messages
            (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
             telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
          VALUES ($1, $2, 9991, 99, 'user', 'telegram:4701', '4701', 'Анна', false,
                  'text', 'Смешанная зона', now())`,
-        [firstConversation.rows[0]!.id, secondGroup.id],
-      )).rejects.toThrow();
-      await expect(client.query(
-        `INSERT INTO telegram_group_message_ids
+          [firstConversation.rows[0]!.id, secondGroup.id],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        client.query(
+          `INSERT INTO telegram_group_message_ids
            (conversation_id, group_id, telegram_message_id, entry_id)
          VALUES ($1, $2, 9992, $3)`,
-        [firstConversation.rows[0]!.id, secondGroup.id, firstMessage.id],
-      )).rejects.toThrow();
+          [firstConversation.rows[0]!.id, secondGroup.id, firstMessage.id],
+        ),
+      ).rejects.toThrow();
 
       // A source from another group cannot be attached even when family_id is the same.
-      await client.query(
-        "UPDATE memory_items SET provenance_state = 'evidenced' WHERE id = $1",
-        [memory.rows[0]!.id],
-      );
-      await expect(client.query(
-        `INSERT INTO claim_evidence
+      await client.query("UPDATE memory_items SET provenance_state = 'evidenced' WHERE id = $1", [
+        memory.rows[0]!.id,
+      ]);
+      await expect(
+        client.query(
+          `INSERT INTO claim_evidence
            (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
             origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
             author_participant_id, observed_at, evidence_snippet, timeline_entry_id,
             timeline_sequence, source_message_id, source_snapshot)
          VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, 'Вторая R2a', $5,
                  $6, now(), 'Чужой источник', $7, 1, 474, '{}'::jsonb)`,
-        [memory.rows[0]!.id, family.rows[0]!.id, firstGroup.id,
-          secondConversation.rows[0]!.id, secondGroup.id,
-          secondParticipant.rows[0]!.id, secondMessage.id],
-      )).rejects.toThrow();
+          [
+            memory.rows[0]!.id,
+            family.rows[0]!.id,
+            firstGroup.id,
+            secondConversation.rows[0]!.id,
+            secondGroup.id,
+            secondParticipant.rows[0]!.id,
+            secondMessage.id,
+          ],
+        ),
+      ).rejects.toThrow();
 
       // MATCH SIMPLE must not let a group evidence row bypass conversation/group validation by
       // replacing the required Telegram group component with NULL.
-      await expect(client.query(
-        `INSERT INTO claim_evidence
+      await expect(
+        client.query(
+          `INSERT INTO claim_evidence
            (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
             origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
             author_participant_id, observed_at, evidence_snippet, timeline_sequence, source_snapshot)
          VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, 'Первая R2a', NULL,
                  $5, now(), 'Источник без transport identity', 1, '{}'::jsonb)`,
-        [memory.rows[0]!.id, family.rows[0]!.id, firstGroup.id,
-          firstConversation.rows[0]!.id, firstParticipant.rows[0]!.id],
-      )).rejects.toThrow();
+          [
+            memory.rows[0]!.id,
+            family.rows[0]!.id,
+            firstGroup.id,
+            firstConversation.rows[0]!.id,
+            firstParticipant.rows[0]!.id,
+          ],
+        ),
+      ).rejects.toThrow();
 
       await client.query(
         `INSERT INTO claim_evidence
@@ -267,20 +287,34 @@ describeWithDatabase("051 R2a provenance/extraction migration", () => {
          VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, $5, $3,
                  $6, $7, 'Анна', now(), 'Проверенный источник', $8, 1, 471, 10,
                  '{"contentHash":"durable","timelineSequence":"1"}'::jsonb)`,
-        [memory.rows[0]!.id, family.rows[0]!.id, firstGroup.id,
-          firstConversation.rows[0]!.id, firstConversation.rows[0]!.label,
-          firstParticipant.rows[0]!.id, exactUser.rows[0]!.id, firstMessage.id],
+        [
+          memory.rows[0]!.id,
+          family.rows[0]!.id,
+          firstGroup.id,
+          firstConversation.rows[0]!.id,
+          firstConversation.rows[0]!.label,
+          firstParticipant.rows[0]!.id,
+          exactUser.rows[0]!.id,
+          firstMessage.id,
+        ],
       );
-      await expect(client.query(
-        `INSERT INTO claim_evidence
+      await expect(
+        client.query(
+          `INSERT INTO claim_evidence
            (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
             origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
             author_participant_id, observed_at, evidence_snippet, timeline_sequence, source_snapshot)
          VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, 'Первая R2a', $3,
                  $5, now(), 'Второй primary', 1, '{}'::jsonb)`,
-        [memory.rows[0]!.id, family.rows[0]!.id, firstGroup.id,
-          firstConversation.rows[0]!.id, firstParticipant.rows[0]!.id],
-      )).rejects.toThrow();
+          [
+            memory.rows[0]!.id,
+            family.rows[0]!.id,
+            firstGroup.id,
+            firstConversation.rows[0]!.id,
+            firstParticipant.rows[0]!.id,
+          ],
+        ),
+      ).rejects.toThrow();
 
       await client.query("DELETE FROM telegram_group_messages WHERE id = $1", [firstMessage.id]);
       const pruned = await client.query<{
@@ -301,7 +335,7 @@ describeWithDatabase("051 R2a provenance/extraction migration", () => {
       });
 
       const batch = await client.query<{ id: string }>(
-         `INSERT INTO memory_extraction_batches
+        `INSERT INTO memory_extraction_batches
             (conversation_id, family_id, scope, scope_partition_key, turn_id,
              extractor_version, schema_version, request_identity_hash, input_payload_hash)
           VALUES ($1, $2, 'group', $3, 'migration-cascade', 'test-v1', 'schema-v1',
@@ -378,9 +412,15 @@ describeWithDatabase("051 R2a provenance/extraction migration", () => {
             evidence_snippet, timeline_entry_id, timeline_sequence, source_message_id, source_snapshot)
          VALUES ($1, $2, 'family', $2, 'primary', 'firsthand', $3, 'Семейная R2a', $4,
                  $5, $6, 'Анна', now(), 'Семейный источник', $7, 1, 475, '{}'::jsonb)`,
-        [familyClaim.rows[0]!.id, family.rows[0]!.id, familyConversation.rows[0]!.id,
-          familyGroup.rows[0]!.id, familyParticipant.rows[0]!.id,
-          exactUser.rows[0]!.id, familyMessage.rows[0]!.id],
+        [
+          familyClaim.rows[0]!.id,
+          family.rows[0]!.id,
+          familyConversation.rows[0]!.id,
+          familyGroup.rows[0]!.id,
+          familyParticipant.rows[0]!.id,
+          exactUser.rows[0]!.id,
+          familyMessage.rows[0]!.id,
+        ],
       );
       await client.query("DELETE FROM telegram_groups WHERE id = $1", [familyGroup.rows[0]!.id]);
       const survivingFamilyClaim = await client.query<{

@@ -28,10 +28,7 @@ export interface GoogleWorkspaceExecutionProfile {
   profileRef: string;
 }
 
-function modelFacingOutput(
-  kind: "mutation" | "read",
-  result: { stderr: string; stdout: string },
-) {
+function modelFacingOutput(kind: "mutation" | "read", result: { stderr: string; stdout: string }) {
   const byteLength = Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr);
   if (byteLength <= MODEL_FACING_OUTPUT_MAX_BYTES) {
     return { completed: true, stderr: result.stderr, stdout: result.stdout };
@@ -63,19 +60,13 @@ interface GoogleWorkspaceExecutorDependencies {
   ): ReturnType<typeof runGoogleWorkspaceCommand>;
   withAuthorizedExecution<T>(
     auth: GoogleIntegrationAuthorization,
-    operation: (
-      accessToken: string,
-      profile: GoogleWorkspaceExecutionProfile,
-    ) => Promise<T>,
+    operation: (accessToken: string, profile: GoogleWorkspaceExecutionProfile) => Promise<T>,
   ): Promise<T>;
 }
 
 export async function withAuthorizedGoogleWorkspaceExecution<T>(
   auth: GoogleIntegrationAuthorization,
-  operation: (
-    accessToken: string,
-    profile: GoogleWorkspaceExecutionProfile,
-  ) => Promise<T>,
+  operation: (accessToken: string, profile: GoogleWorkspaceExecutionProfile) => Promise<T>,
 ): Promise<T> {
   const config = requireGoogleOAuthEnvironment();
   return await withGoogleWorkspaceExecutionAccount(auth, config.encryptionKey, async (account) => {
@@ -88,7 +79,7 @@ export async function withAuthorizedGoogleWorkspaceExecution<T>(
     }
 
     const accessToken = (await refreshGoogleAccessToken(config, account.refreshToken)).accessToken;
-    if (!await googleWorkspaceProfileStore.exists(auth.workspaceId)) {
+    if (!(await googleWorkspaceProfileStore.exists(auth.workspaceId))) {
       throw new AppError(
         "AGENT_GOOGLE_WORKSPACE_PROFILE_CHANGED",
         "Профиль Google Workspace изменился во время подтверждения. Повторите запрос",

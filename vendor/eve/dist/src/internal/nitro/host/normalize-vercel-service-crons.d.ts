@@ -3,6 +3,6 @@
  * mount before the service Build Output is returned to Vercel for assembly.
  */
 export declare function normalizeVercelServiceCrons(input: {
-    readonly publicRoutePrefix?: string;
-    readonly serviceOutputDirectory: string;
+  readonly publicRoutePrefix?: string;
+  readonly serviceOutputDirectory: string;
 }): Promise<void>;

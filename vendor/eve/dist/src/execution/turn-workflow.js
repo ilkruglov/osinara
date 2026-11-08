@@ -4,16 +4,8 @@ import { dispatchRuntimeActionsStep } from "#execution/dispatch-runtime-actions-
 import { dispatchTaskStep } from "#execution/tasks/parent/dispatch-task-step.js";
 import { routeDeliverToChildren } from "#execution/route-child-delivery.js";
 import { runProxySubagentEventStep } from "#execution/subagent-event-proxy-step.js";
-import {
-  createHook,
-  getWorkflowMetadata,
-  sleep,
-} from "#compiled/@workflow/core/index.js";
-import {
-  claimHookOwnership,
-  disposeHook,
-  isHookConflictError,
-} from "#execution/hook-ownership.js";
+import { createHook, getWorkflowMetadata, sleep } from "#compiled/@workflow/core/index.js";
+import { claimHookOwnership, disposeHook, isHookConflictError } from "#execution/hook-ownership.js";
 import { activeTurnId } from "#harness/active-turn-id.js";
 import { acknowledgeDelegatedTasksStep } from "#execution/tasks/parent/delegate.js";
 import { normalizeSerializableError } from "#execution/workflow-errors.js";
@@ -27,8 +19,7 @@ import { TurnExecutionCursor } from "#execution/turn-execution-cursor.js";
 import { turnStep } from "#execution/workflow-steps.js";
 import { getRuntimeActionResultKey } from "#runtime/actions/keys.js";
 import { resolveRuntimeActionResultsForKeys } from "#runtime/actions/results.js";
-const TASK_MODE_WAIT_ERROR_MESSAGE =
-  "Task mode cannot wait for follow-up input (`next: null`).";
+const TASK_MODE_WAIT_ERROR_MESSAGE = "Task mode cannot wait for follow-up input (`next: null`).";
 async function turnWorkflow(e) {
   "use workflow";
   let n = migrateTurnWorkflowInput(e);
@@ -65,12 +56,10 @@ async function runTurnOwnedWorkflow(t) {
         expectedTurnId: activeTurnId(t.stepInput.sessionState.emissionState),
       }));
       ;
-
     ) {
       let o = await turnStep(c.createStepInput(g, v?.signal)),
         l =
-          o.action === `dispatch-workflow-runtime-actions` ||
-          o.action === `park`
+          o.action === `dispatch-workflow-runtime-actions` || o.action === `park`
             ? o.pendingRuntimeActionKeys
             : void 0;
       if (o.action === `cancelled`) {
@@ -134,17 +123,14 @@ async function runTurnOwnedWorkflow(t) {
               ? dispatchTaskStep
               : dispatchRuntimeActionsStep;
         let d = await u({
-            callbackBaseUrl: resolveWorkflowCallbackBaseUrl(
-              getWorkflowMetadata().url,
-            ),
+            callbackBaseUrl: resolveWorkflowCallbackBaseUrl(getWorkflowMetadata().url),
             parentContinuationToken: i.token,
             parentWritable: c.parentWritable,
             serializedContext: c.serializedContext,
             sessionState: c.sessionState,
           }),
           f = d.results.length === 0 ? void 0 : Date.now();
-        (await c.adopt(d),
-          await acknowledgeDelegatedTasksStep({ tasks: d.pendingTasks }));
+        (await c.adopt(d), await acknowledgeDelegatedTasksStep({ tasks: d.pendingTasks }));
         let p = await waitForRuntimeActionResults({
           bufferedDeliveries: h,
           cancellation: v,
@@ -172,13 +158,11 @@ async function runTurnOwnedWorkflow(t) {
         continue;
       }
       if (o.action === `park`) {
-        if (
-          !(
-            o.hasPendingAuthorization ||
-            (o.hasPendingInputBatch && t.capabilities?.requestInput === !0) ||
-            t.mode === `conversation`
-          )
-        )
+        if (!(
+          o.hasPendingAuthorization ||
+          (o.hasPendingInputBatch && t.capabilities?.requestInput === !0) ||
+          t.mode === `conversation`
+        ))
           throw Error(TASK_MODE_WAIT_ERROR_MESSAGE);
         (await v?.dispose(),
           await c.finish(
@@ -229,8 +213,7 @@ async function waitForRuntimeActionResults(e) {
     n = [...e.initialResults],
     r = new Map();
   if (e.initialAcceptedAtMs !== void 0)
-    for (let t of e.initialResults)
-      r.set(getRuntimeActionResultKey(t), e.initialAcceptedAtMs);
+    for (let t of e.initialResults) r.set(getRuntimeActionResultKey(t), e.initialAcceptedAtMs);
   for (;;) {
     let o = resolveRuntimeActionResultsForKeys({
       pendingKeys: e.pendingActionKeys,
@@ -261,9 +244,7 @@ async function waitForRuntimeActionResults(e) {
       }));
     let s = e.iterator.next();
     s.catch(() => {});
-    let c = await (e.cancellation === void 0
-      ? s
-      : Promise.race([s, e.cancellation.requested]));
+    let c = await (e.cancellation === void 0 ? s : Promise.race([s, e.cancellation.requested]));
     if (c === `cancel`)
       return (
         t !== void 0 &&
@@ -273,14 +254,11 @@ async function waitForRuntimeActionResults(e) {
           })),
         `cancelled`
       );
-    if (c.done)
-      throw Error(`Turn inbox closed before runtime actions completed.`);
+    if (c.done) throw Error(`Turn inbox closed before runtime actions completed.`);
     let l = c.value;
     if (l.kind === `runtime-action-result`) {
       let t = e.cursor.sessionState.snapshot?.session.state,
-        i = l.results.filter((e) =>
-          isInboxSubagentResultFromRunningHandle(t, e),
-        );
+        i = l.results.filter((e) => isInboxSubagentResultFromRunningHandle(t, e));
       if (i.length > 0) {
         let e = Date.now();
         n.push(...i);
@@ -288,10 +266,7 @@ async function waitForRuntimeActionResults(e) {
       }
       continue;
     }
-    if (
-      l.kind === `subagent-input-request` ||
-      l.kind === `subagent-authorization-event`
-    ) {
+    if (l.kind === `subagent-input-request` || l.kind === `subagent-authorization-event`) {
       let t = await runProxySubagentEventStep({
         hookPayload: l,
         parentWritable: e.cursor.parentWritable,
@@ -370,14 +345,12 @@ async function runLegacyTurnWorkflow(e) {
       }
       if (n.action === `park`) {
         let t = n.pendingRuntimeActionKeys;
-        if (
-          !(
-            t !== void 0 ||
-            n.hasPendingAuthorization ||
-            (n.hasPendingInputBatch && e.capabilities?.requestInput === !0) ||
-            e.mode === `conversation`
-          )
-        )
+        if (!(
+          t !== void 0 ||
+          n.hasPendingAuthorization ||
+          (n.hasPendingInputBatch && e.capabilities?.requestInput === !0) ||
+          e.mode === `conversation`
+        ))
           throw Error(TASK_MODE_WAIT_ERROR_MESSAGE);
         let r =
           t === void 0

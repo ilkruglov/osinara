@@ -29,8 +29,7 @@ function mergeApplicationChannelRouteRegistrations(e) {
       r.add(i.name);
       continue;
     }
-    (t.add(i.name),
-      n.push({ cors: i.cors, method: i.method, route: i.urlPath }));
+    (t.add(i.name), n.push({ cors: i.cors, method: i.method, route: i.urlPath }));
   }
   let i = e.frameworkChannels
       .filter((e) => !t.has(e.name) && !r.has(e.name))
@@ -58,9 +57,7 @@ function createApplicationRouteRegistryFromInput(n) {
     let t = { cors: e.cors, kind: `channel`, method: e.method, path: e.route };
     if (
       addRoute(t) &&
-      (s.push(e),
-      i.push(t),
-      e.method !== `WEBSOCKET` && e.cors !== void 0 && !l.has(e.route))
+      (s.push(e), i.push(t), e.method !== `WEBSOCKET` && e.cors !== void 0 && !l.has(e.route))
     ) {
       l.add(e.route);
       let t = {

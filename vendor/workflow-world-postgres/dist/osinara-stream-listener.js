@@ -15,9 +15,15 @@
                                  
                            
                        
-                                                                                                       
+     
+                                            
+                                                   
+             
                                         
-                                                                                                                   
+                 
+                                            
+                                                   
+             
  
 
                                  
@@ -88,10 +94,17 @@ export async function createStreamListener(input
   async function reconnect(reason         )                {
     if (closed || reconnecting) return;
     reconnecting = (async () => {
-      log(JSON.stringify({
-        code: "AGENT_WORKFLOW_STREAM_LISTENER_LOST",
-        error: reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "connection ended",
-      }));
+      log(
+        JSON.stringify({
+          code: "AGENT_WORKFLOW_STREAM_LISTENER_LOST",
+          error:
+            reason instanceof Error
+              ? reason.message
+              : typeof reason === "string"
+                ? reason
+                : "connection ended",
+        }),
+      );
       let delay = baseDelay;
       let attempts = 0;
       while (!closed) {
@@ -103,15 +116,19 @@ export async function createStreamListener(input
           log(JSON.stringify({ code: "AGENT_WORKFLOW_STREAM_LISTENER_RECONNECTED", attempts }));
           return;
         } catch (error) {
-          log(JSON.stringify({
-            attempts,
-            code: "AGENT_WORKFLOW_STREAM_LISTENER_RETRY_FAILED",
-            error: error instanceof Error ? error.message : String(error),
-          }));
+          log(
+            JSON.stringify({
+              attempts,
+              code: "AGENT_WORKFLOW_STREAM_LISTENER_RETRY_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
           delay = Math.min(maxDelay, delay * 2);
         }
       }
-    })().finally(() => { reconnecting = null; });
+    })().finally(() => {
+      reconnecting = null;
+    });
     await reconnecting;
   }
 

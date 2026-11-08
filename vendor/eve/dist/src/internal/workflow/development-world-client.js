@@ -48,10 +48,7 @@ function createDevelopmentWorkflowWorld() {
   return {
     specVersion: 6,
     async getDeploymentId() {
-      return (
-        getDevelopmentWorkflowGeneration()?.generationId ??
-        (await call(`getDeploymentId`))
-      );
+      return getDevelopmentWorkflowGeneration()?.generationId ?? (await call(`getDeploymentId`));
     },
     resolveLatestDeploymentId: e.topLevel.resolveLatestDeploymentId,
     queue: e.topLevel.queue,
@@ -69,8 +66,7 @@ function createDevelopmentWorkflowWorld() {
           r.searchParams.set(`name`, t),
           n !== void 0 && r.searchParams.set(`startIndex`, String(n)));
         let i = await fetchDevelopmentWorld(r, { method: `GET` });
-        if (i.body === null)
-          throw Error(`Development Workflow stream response had no body.`);
+        if (i.body === null) throw Error(`Development Workflow stream response had no body.`);
         return i.body;
       },
     },
@@ -84,9 +80,7 @@ function buildForwardedOperations() {
   for (let n of DEVELOPMENT_WORLD_OPERATIONS) {
     let forward = async (...e) => await call(n, e),
       r = n.indexOf(`.`);
-    r === -1
-      ? (t[n] = forward)
-      : ((e[n.slice(0, r)] ??= {})[n.slice(r + 1)] = forward);
+    r === -1 ? (t[n] = forward) : ((e[n.slice(0, r)] ??= {})[n.slice(r + 1)] = forward);
   }
   return { groups: e, topLevel: t };
 }
@@ -95,10 +89,7 @@ function createQueueHandler(e, t) {
     let i = readRequiredEnvironment(DEVELOPMENT_WORKFLOW_SECRET_ENV),
       a = n.headers.get(DEVELOPMENT_WORKFLOW_DELIVERY_HEADER);
     if (a === null || !timingSafeEqualStrings(a, i))
-      return Response.json(
-        { error: `Workflow delivery is not trusted.` },
-        { status: 401 },
-      );
+      return Response.json({ error: `Workflow delivery is not trusted.` }, { status: 401 });
     let c = n.headers.get(`x-vqs-queue-name`),
       l = n.headers.get(`x-vqs-message-id`),
       u = Number(n.headers.get(`x-vqs-message-attempt`));
@@ -110,10 +101,7 @@ function createQueueHandler(e, t) {
       u < 1 ||
       n.body === null
     )
-      return Response.json(
-        { error: `Workflow delivery is malformed.` },
-        { status: 400 },
-      );
+      return Response.json({ error: `Workflow delivery is malformed.` }, { status: 400 });
     let d = decodeDevelopmentWorldJson(await n.text());
     try {
       let e = readRequiredEnvironment(DEVELOPMENT_WORKER_APP_ROOT_ENV),
@@ -134,9 +122,7 @@ function createQueueHandler(e, t) {
           },
           async () => await t(d, { attempt: u, messageId: l, queueName: c }),
         );
-      return Response.json(
-        i === void 0 ? { ok: !0 } : { timeoutSeconds: i.timeoutSeconds },
-      );
+      return Response.json(i === void 0 ? { ok: !0 } : { timeoutSeconds: i.timeoutSeconds });
     } catch (e) {
       return e instanceof MissingDevelopmentGenerationError
         ? (console.error(`[eve:dev] ${e.message}`), Response.json({ ok: !0 }))
@@ -148,8 +134,7 @@ async function resolveDeliveryGenerationId(e) {
   if (!isRecord(e)) return await call(`resolveLatestDeploymentId`);
   let t = isRecord(e.runInput) ? e.runInput : void 0;
   if (t !== void 0)
-    return t.workflowName === turnWorkflowReference.workflowId &&
-      typeof t.deploymentId == `string`
+    return t.workflowName === turnWorkflowReference.workflowId && typeof t.deploymentId == `string`
       ? t.deploymentId
       : await call(`resolveLatestDeploymentId`);
   let n =
@@ -166,17 +151,13 @@ async function resolveDeliveryGenerationId(e) {
 }
 async function readGenerationRuntimeAppRoot(r, i) {
   if (i.length === 0 || i === `.` || i === `..` || basename(i) !== i)
-    throw Error(
-      `Workflow run references invalid development generation "${i}".`,
-    );
+    throw Error(`Workflow run references invalid development generation "${i}".`);
   let a = join(r, `.eve`, `dev-runtime`, `snapshots`, i, `generation.json`),
     o;
   try {
     o = await readFile(a, `utf8`);
   } catch (e) {
-    throw isFileNotFoundError(e)
-      ? new MissingDevelopmentGenerationError(i, e)
-      : e;
+    throw isFileNotFoundError(e) ? new MissingDevelopmentGenerationError(i, e) : e;
   }
   let s;
   try {
@@ -208,9 +189,7 @@ async function fetchDevelopmentWorld(e, t) {
     let e = await i.text(),
       t = readDevelopmentWorldError(e);
     throw t === void 0
-      ? Error(
-          `Development Workflow World request failed (${String(i.status)}): ${e}`,
-        )
+      ? Error(`Development Workflow World request failed (${String(i.status)}): ${e}`)
       : t;
   }
   return i;

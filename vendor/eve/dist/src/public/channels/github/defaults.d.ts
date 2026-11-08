@@ -1,8 +1,16 @@
 import type { SessionAuthContext } from "#channel/types.js";
 import type { GitHubApiOptions } from "#public/channels/github/api.js";
-import type { GitHubBotNameResolver, GitHubChannelCredentials } from "#public/channels/github/auth.js";
+import type {
+  GitHubBotNameResolver,
+  GitHubChannelCredentials,
+} from "#public/channels/github/auth.js";
 import { type GitHubComment } from "#public/channels/github/inbound.js";
-import type { GitHubChannelEvents, GitHubInboundContext, GitHubInboundResult, GitHubProgressConfig } from "#public/channels/github/githubChannel.js";
+import type {
+  GitHubChannelEvents,
+  GitHubInboundContext,
+  GitHubInboundResult,
+  GitHubProgressConfig,
+} from "#public/channels/github/githubChannel.js";
 /**
  * Projects a GitHub webhook actor into an eve {@link SessionAuthContext}. Sets `principalId` to
  * `github:<sender.id>`, `principalType` to `"service"` for bot senders and `"user"` otherwise, and
@@ -12,16 +20,22 @@ import type { GitHubChannelEvents, GitHubInboundContext, GitHubInboundResult, Gi
 export declare function defaultGitHubAuth(ctx: GitHubInboundContext): SessionAuthContext;
 /** Options used by the built-in GitHub comment dispatch hook. */
 export interface GitHubDefaultDispatchOptions {
-    readonly botName?: GitHubBotNameResolver;
+  readonly botName?: GitHubBotNameResolver;
 }
 /** Default comment hook: dispatch only when the comment `@mention`s the bot. */
-export declare function defaultOnComment(ctx: GitHubInboundContext, comment: GitHubComment, options: GitHubDefaultDispatchOptions): Promise<GitHubInboundResult>;
+export declare function defaultOnComment(
+  ctx: GitHubInboundContext,
+  comment: GitHubComment,
+  options: GitHubDefaultDispatchOptions,
+): Promise<GitHubInboundResult>;
 /** Options used by built-in GitHub event handlers. */
 export interface GitHubDefaultEventOptions {
-    readonly api?: GitHubApiOptions;
-    readonly botName?: GitHubBotNameResolver;
-    readonly credentials?: GitHubChannelCredentials;
-    readonly progress?: GitHubProgressConfig;
+  readonly api?: GitHubApiOptions;
+  readonly botName?: GitHubBotNameResolver;
+  readonly credentials?: GitHubChannelCredentials;
+  readonly progress?: GitHubProgressConfig;
 }
 /** Builds GitHub's built-in event handlers for acknowledgement and terminal output. */
-export declare function createDefaultEvents(options?: GitHubDefaultEventOptions): GitHubChannelEvents;
+export declare function createDefaultEvents(
+  options?: GitHubDefaultEventOptions,
+): GitHubChannelEvents;

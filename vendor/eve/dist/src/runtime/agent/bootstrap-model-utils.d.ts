@@ -8,16 +8,18 @@ type BootstrapStreamResult = Awaited<ReturnType<MockLanguageModelV3["doStream"]>
  * estimates. Shared by the real bootstrap model and the authored-model mock.
  */
 export declare function createBootstrapGenerateResult(input: {
-    readonly inputTokens: number;
-    readonly modelId: string;
-    readonly outputTokens: number;
-    readonly text: string;
+  readonly inputTokens: number;
+  readonly modelId: string;
+  readonly outputTokens: number;
+  readonly text: string;
 }): BootstrapGenerateResult;
 /**
  * Converts a `doGenerate` result into a synchronous `doStream` result by
  * replaying content parts through a `ReadableStream`.
  */
-export declare function createBootstrapStreamResult(result: BootstrapGenerateResult): BootstrapStreamResult;
+export declare function createBootstrapStreamResult(
+  result: BootstrapGenerateResult,
+): BootstrapStreamResult;
 /**
  * Rough token estimate based on character length (1 token per 4 chars).
  */

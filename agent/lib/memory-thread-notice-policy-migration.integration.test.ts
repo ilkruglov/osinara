@@ -12,9 +12,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "./database.js";
 
 const TEST_SCHEMA = "thread_notice_policy_migration_test";
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("private-only thread notice migration", () => {
   afterAll(closeDatabase);
@@ -77,28 +76,31 @@ describeWithDatabase("private-only thread notice migration", () => {
           ('40000000-0000-4000-8000-000000000004', 'pending', NULL, NULL);
       `);
 
-      await client.query(await readFile(
-        resolve("migrations/061_private_memory_thread_notices.sql"),
-        "utf8",
-      ));
+      await client.query(
+        await readFile(resolve("migrations/061_private_memory_thread_notices.sql"), "utf8"),
+      );
 
-      await expect(client.query(
-        `SELECT status, delivery_diagnostic_code, delivery_started_at IS NOT NULL AS started
+      await expect(
+        client.query(
+          `SELECT status, delivery_diagnostic_code, delivery_started_at IS NOT NULL AS started
          FROM memory_thread_creation_notices ORDER BY thread_id`,
-      )).resolves.toMatchObject({ rows: [
-        { delivery_diagnostic_code: null, started: false, status: "pending" },
-        {
-          delivery_diagnostic_code: "AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY",
-          started: true,
-          status: "failed",
-        },
-        { delivery_diagnostic_code: null, started: true, status: "presented" },
-        {
-          delivery_diagnostic_code: "AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY",
-          started: true,
-          status: "failed",
-        },
-      ] });
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          { delivery_diagnostic_code: null, started: false, status: "pending" },
+          {
+            delivery_diagnostic_code: "AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY",
+            started: true,
+            status: "failed",
+          },
+          { delivery_diagnostic_code: null, started: true, status: "presented" },
+          {
+            delivery_diagnostic_code: "AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY",
+            started: true,
+            status: "failed",
+          },
+        ],
+      });
     } finally {
       await client.query("RESET search_path");
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);

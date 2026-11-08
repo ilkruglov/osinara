@@ -8,22 +8,22 @@ import type { SandboxSession } from "#shared/sandbox-session.js";
  * resources.
  */
 export interface SandboxBackendHandle<SO = Record<string, never>> {
-    readonly session: SandboxSession;
-    readonly useSessionFn: SandboxSessionUseFn<SO>;
-    captureState(): Promise<SandboxBackendSessionState>;
-    /**
-     * Stops the underlying compute at an authored runtime boundary while
-     * preserving any backend state needed to reopen the durable session.
-     * Provider errors must reject this call.
-     */
-    stop(): Promise<void>;
-    /**
-     * Stops the underlying compute because the eve server is shutting
-     * down; nothing may be left running afterwards. The session must
-     * remain reattachable from persisted state on the next server start
-     * when the backend supports durable sessions.
-     */
-    shutdown(): Promise<void>;
+  readonly session: SandboxSession;
+  readonly useSessionFn: SandboxSessionUseFn<SO>;
+  captureState(): Promise<SandboxBackendSessionState>;
+  /**
+   * Stops the underlying compute at an authored runtime boundary while
+   * preserving any backend state needed to reopen the durable session.
+   * Provider errors must reject this call.
+   */
+  stop(): Promise<void>;
+  /**
+   * Stops the underlying compute because the eve server is shutting
+   * down; nothing may be left running afterwards. The session must
+   * remain reattachable from persisted state on the next server start
+   * when the backend supports durable sessions.
+   */
+  shutdown(): Promise<void>;
 }
 /**
  * Serializable per-sandbox reconnect record stored on the harness session.
@@ -34,16 +34,16 @@ export interface SandboxBackendHandle<SO = Record<string, never>> {
  * backend.
  */
 export interface SandboxBackendSessionState {
-    readonly backendName: string;
-    readonly metadata: Record<string, unknown>;
-    readonly sessionKey: string;
+  readonly backendName: string;
+  readonly metadata: Record<string, unknown>;
+  readonly sessionKey: string;
 }
 /**
  * One file written into a sandbox template before template state capture.
  */
 export interface SandboxSeedFile {
-    readonly path: string;
-    readonly content: string | Buffer;
+  readonly path: string;
+  readonly content: string | Buffer;
 }
 /**
  * Diagnostic tags attached to provider-owned sandbox resources.
@@ -64,28 +64,28 @@ export type SandboxBackendTags = Readonly<Record<string, string>>;
  * here may ignore the field entirely.
  */
 export interface SandboxBackendRuntimeContext {
-    readonly appRoot: string;
+  readonly appRoot: string;
 }
 /**
  * Input passed to {@link SandboxBackend.create} when the runtime needs a
  * live sandbox session.
  */
 export interface SandboxBackendCreateInput {
-    /**
-     * Reusable template key to open this session from. `null` means eve
-     * intentionally skipped template prewarm because the sandbox has no
-     * `bootstrap()` and no seed files, so the backend should create a
-     * fresh session from its default base runtime.
-     */
-    readonly templateKey: string | null;
-    readonly sessionKey: string;
-    readonly existingMetadata?: Record<string, unknown>;
-    /**
-     * Runtime tags the backend should attach to sandbox resources when
-     * the underlying provider supports tags.
-     */
-    readonly tags?: SandboxBackendTags;
-    readonly runtimeContext: SandboxBackendRuntimeContext;
+  /**
+   * Reusable template key to open this session from. `null` means eve
+   * intentionally skipped template prewarm because the sandbox has no
+   * `bootstrap()` and no seed files, so the backend should create a
+   * fresh session from its default base runtime.
+   */
+  readonly templateKey: string | null;
+  readonly sessionKey: string;
+  readonly existingMetadata?: Record<string, unknown>;
+  /**
+   * Runtime tags the backend should attach to sandbox resources when
+   * the underlying provider supports tags.
+   */
+  readonly tags?: SandboxBackendTags;
+  readonly runtimeContext: SandboxBackendRuntimeContext;
 }
 /**
  * Input passed to {@link SandboxBackend.prewarm} when the build pipeline
@@ -98,14 +98,14 @@ export interface SandboxBackendCreateInput {
  * durable sessions from that state.
  */
 export interface SandboxBackendPrewarmInput<BO = Record<string, never>> {
-    readonly templateKey: string;
-    readonly bootstrap?: (input: SandboxBootstrapContext<BO>) => void | Promise<void>;
-    /**
-     * Optional progress logger for backend-specific prewarm phases.
-     */
-    readonly log?: (message: string) => void;
-    readonly runtimeContext: SandboxBackendRuntimeContext;
-    readonly seedFiles: ReadonlyArray<SandboxSeedFile>;
+  readonly templateKey: string;
+  readonly bootstrap?: (input: SandboxBootstrapContext<BO>) => void | Promise<void>;
+  /**
+   * Optional progress logger for backend-specific prewarm phases.
+   */
+  readonly log?: (message: string) => void;
+  readonly runtimeContext: SandboxBackendRuntimeContext;
+  readonly seedFiles: ReadonlyArray<SandboxSeedFile>;
 }
 /**
  * Outcome of one {@link SandboxBackend.prewarm} call.
@@ -115,11 +115,11 @@ export interface SandboxBackendPrewarmInput<BO = Record<string, never>> {
  * a cache hit is distinguishable from an expensive rebuild.
  */
 export interface SandboxBackendPrewarmResult {
-    /**
-     * `true` when existing template state was reused without rebuilding it;
-     * `false` when the backend captured fresh template state.
-     */
-    readonly reused: boolean;
+  /**
+   * `true` when existing template state was reused without rebuilding it;
+   * `false` when the backend captured fresh template state.
+   */
+  readonly reused: boolean;
 }
 /**
  * Pluggable sandbox backend.
@@ -138,30 +138,30 @@ export interface SandboxBackendPrewarmResult {
  * live session from that template at runtime.
  */
 export interface SandboxBackend<BO = Record<string, never>, SO = Record<string, never>> {
-    /**
-     * Stable identifier for this backend implementation.
-     *
-     * Participates in cache-key derivation and the persisted reconnect
-     * state, so two backends that should not share template state
-     * must use distinct names. Built-in backends use `"vercel"` and
-     * `"local"`. Custom backends pick a unique string.
-     */
-    readonly name: string;
-    /**
-     * Creates or reattaches one live sandbox session from a template
-     * previously captured by {@link SandboxBackend.prewarm}. Throws
-     * {@link SandboxTemplateNotProvisionedError} when the requested
-     * template is missing.
-     */
-    create(input: SandboxBackendCreateInput): Promise<SandboxBackendHandle<SO>>;
-    /**
-     * Build-time prewarm hook. eve invokes this for every authored
-     * sandbox in the compiled graph before serving traffic so the backend
-     * can capture reusable template state. Idempotent against existing state
-     * keyed by `templateKey`.
-     *
-     * Returns whether the state was reused from a prior run or captured
-     * fresh so the build pipeline can surface that in its logs.
-     */
-    prewarm(input: SandboxBackendPrewarmInput<BO>): Promise<SandboxBackendPrewarmResult>;
+  /**
+   * Stable identifier for this backend implementation.
+   *
+   * Participates in cache-key derivation and the persisted reconnect
+   * state, so two backends that should not share template state
+   * must use distinct names. Built-in backends use `"vercel"` and
+   * `"local"`. Custom backends pick a unique string.
+   */
+  readonly name: string;
+  /**
+   * Creates or reattaches one live sandbox session from a template
+   * previously captured by {@link SandboxBackend.prewarm}. Throws
+   * {@link SandboxTemplateNotProvisionedError} when the requested
+   * template is missing.
+   */
+  create(input: SandboxBackendCreateInput): Promise<SandboxBackendHandle<SO>>;
+  /**
+   * Build-time prewarm hook. eve invokes this for every authored
+   * sandbox in the compiled graph before serving traffic so the backend
+   * can capture reusable template state. Idempotent against existing state
+   * keyed by `templateKey`.
+   *
+   * Returns whether the state was reused from a prior run or captured
+   * fresh so the build pipeline can surface that in its logs.
+   */
+  prewarm(input: SandboxBackendPrewarmInput<BO>): Promise<SandboxBackendPrewarmResult>;
 }

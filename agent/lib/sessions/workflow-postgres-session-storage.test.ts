@@ -45,7 +45,12 @@ describe("deletePostgresEveSession", () => {
     );
     expect(active.query).toHaveBeenLastCalledWith("ROLLBACK");
 
-    const retainedHook = clientWithRows([[], [{ parked: true, status: "completed" }], [{ exists: true }], []]);
+    const retainedHook = clientWithRows([
+      [],
+      [{ parked: true, status: "completed" }],
+      [{ exists: true }],
+      [],
+    ]);
     await expect(deletePostgresEveSession(runId, retainedHook)).rejects.toThrowError(
       /AGENT_EVE_SESSION_HOOK_RETENTION_ACTIVE/u,
     );
@@ -70,18 +75,35 @@ describe("deletePostgresEveSession", () => {
   // Review of 24 October 2026: a conversation deleted on request must not leave its text in payload
   // blobs until a later sweep. The blobs the run was the last to refer to go in the same transaction.
   it("deletes the payload blobs the run was the last to refer to, in the same transaction", async () => {
-    const client = clientWithRows([[], [{ parked: true, status: "failed" }], [{ exists: false }], [{ hash: "h-1" }, { hash: "h-2" }]]);
+    const client = clientWithRows([
+      [],
+      [{ parked: true, status: "failed" }],
+      [{ exists: false }],
+      [{ hash: "h-1" }, { hash: "h-2" }],
+    ]);
 
     await expect(deletePostgresEveSession(runId, client)).resolves.toBeUndefined();
 
     const statements = client.query.mock.calls.map(([sql]) => String(sql));
-    const blobDelete = client.query.mock.calls.find(([sql]) => String(sql).includes("DELETE FROM workflow.workflow_payload_blobs"));
+    const blobDelete = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes("DELETE FROM workflow.workflow_payload_blobs"),
+    );
     expect(blobDelete).toBeDefined();
-    expect(String(blobDelete![0])).toContain("NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs");
+    expect(String(blobDelete![0])).toContain(
+      "NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs",
+    );
     expect(blobDelete![1]).toEqual([["h-1", "h-2"]]);
-    const refsDelete = statements.indexOf("DELETE FROM workflow.workflow_payload_blob_refs WHERE run_id = $1");
-    const lock = statements.findIndex((sql) => sql.includes("FROM workflow.workflow_payload_blobs WHERE hash = ANY($1) ORDER BY hash FOR UPDATE"));
-    const blobsDelete = statements.findIndex((sql) => sql.includes("DELETE FROM workflow.workflow_payload_blobs"));
+    const refsDelete = statements.indexOf(
+      "DELETE FROM workflow.workflow_payload_blob_refs WHERE run_id = $1",
+    );
+    const lock = statements.findIndex((sql) =>
+      sql.includes(
+        "FROM workflow.workflow_payload_blobs WHERE hash = ANY($1) ORDER BY hash FOR UPDATE",
+      ),
+    );
+    const blobsDelete = statements.findIndex((sql) =>
+      sql.includes("DELETE FROM workflow.workflow_payload_blobs"),
+    );
     // The lock waits out a writer that touched a blob; the delete after it sees that writer's reference.
     expect(refsDelete).toBeLessThan(lock);
     expect(lock).toBeLessThan(blobsDelete);
@@ -113,7 +135,8 @@ describe("deletePostgresEveSession", () => {
 
   it("rolls back and rethrows the original deletion error", async () => {
     const databaseError = new Error("connection lost");
-    const query = vi.fn()
+    const query = vi
+      .fn()
       .mockResolvedValueOnce({ rowCount: null, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ status: "cancelled" }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ exists: false }] })

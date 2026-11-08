@@ -30,7 +30,10 @@ export function measureTelegramWidget(html: string): TelegramWidgetSize {
 
 export function requireTelegramWidgetSize(html: string): TelegramWidgetSize {
   const size = measureTelegramWidget(html);
-  if (size.bytes > TELEGRAM_WIDGET_MAX_BYTES || size.compressedBytes > TELEGRAM_WIDGET_MAX_COMPRESSED_BYTES) {
+  if (
+    size.bytes > TELEGRAM_WIDGET_MAX_BYTES ||
+    size.compressedBytes > TELEGRAM_WIDGET_MAX_COMPRESSED_BYTES
+  ) {
     throw new AppError(
       "AGENT_TELEGRAM_WIDGET_TOO_LARGE",
       `Виджет ${size.bytes} байт, после сжатия ${size.compressedBytes}; Telegram принимает до ${TELEGRAM_WIDGET_MAX_BYTES} и до ${TELEGRAM_WIDGET_MAX_COMPRESSED_BYTES} после сжатия`,

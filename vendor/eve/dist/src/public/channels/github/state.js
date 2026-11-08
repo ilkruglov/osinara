@@ -112,8 +112,7 @@ function stateFromReceiveTarget(e) {
     ...initialGitHubState(),
     conversationKind: n,
     installationId: t.installationId ?? null,
-    issueNumber:
-      n === `issue` ? (t.issueNumber ?? null) : (t.pullRequestNumber ?? null),
+    issueNumber: n === `issue` ? (t.issueNumber ?? null) : (t.pullRequestNumber ?? null),
     owner: e.owner,
     pullRequestNumber: t.pullRequestNumber ?? null,
     repo: e.repo,

@@ -7,11 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  compareSemver,
-  parseSemver,
-  stableVersionFromTag,
-} from "./semver.js";
+import { compareSemver, parseSemver, stableVersionFromTag } from "./semver.js";
 
 describe("software update semantic versions", () => {
   it.each([

@@ -10,14 +10,29 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { expectedTelegramWebhookUrl, sameTelegramWebhookUrl, telegramWebhookIpAddress } from "./webhook-target.js";
+import {
+  expectedTelegramWebhookUrl,
+  sameTelegramWebhookUrl,
+  telegramWebhookIpAddress,
+} from "./webhook-target.js";
 
 describe("expectedTelegramWebhookUrl", () => {
   it("builds the webhook URL from an https origin and refuses anything else", () => {
-    expect(expectedTelegramWebhookUrl("https://5-45-116-217.sslip.io/")).toBe("https://5-45-116-217.sslip.io/eve/v1/telegram");
-    expect(expectedTelegramWebhookUrl("https://bot.example.com")).toBe("https://bot.example.com/eve/v1/telegram");
-    for (const value of [undefined, "", "bot.example.com", "http://bot.example.com", "https://bot.example.com/base",
-      "https://bot.example.com/?x=1", "https://user:pass@bot.example.com"]) {
+    expect(expectedTelegramWebhookUrl("https://5-45-116-217.sslip.io/")).toBe(
+      "https://5-45-116-217.sslip.io/eve/v1/telegram",
+    );
+    expect(expectedTelegramWebhookUrl("https://bot.example.com")).toBe(
+      "https://bot.example.com/eve/v1/telegram",
+    );
+    for (const value of [
+      undefined,
+      "",
+      "bot.example.com",
+      "http://bot.example.com",
+      "https://bot.example.com/base",
+      "https://bot.example.com/?x=1",
+      "https://user:pass@bot.example.com",
+    ]) {
       expect(expectedTelegramWebhookUrl(value)).toBeNull();
     }
   });
@@ -42,7 +57,9 @@ describe("telegramWebhookIpAddress", () => {
     expect(telegramWebhookIpAddress("5.45.116.217")).toBe("5.45.116.217");
     expect(telegramWebhookIpAddress("2001:db8::1")).toBe("2001:db8::1");
     for (const value of ["5.45.116", "bot.example.com", " 5.45.116.217"]) {
-      expect(() => telegramWebhookIpAddress(value)).toThrow(expect.objectContaining({ code: "AGENT_TELEGRAM_WEBHOOK_IP_ADDRESS_INVALID" }));
+      expect(() => telegramWebhookIpAddress(value)).toThrow(
+        expect.objectContaining({ code: "AGENT_TELEGRAM_WEBHOOK_IP_ADDRESS_INVALID" }),
+      );
     }
   });
 });

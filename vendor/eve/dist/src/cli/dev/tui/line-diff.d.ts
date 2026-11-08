@@ -7,8 +7,8 @@
  */
 /** One rail row under a tool header. `kind` is unset for plain/context text. */
 export interface ToolDetailLine {
-    readonly text: string;
-    readonly kind?: "added" | "removed" | "gap";
+  readonly text: string;
+  readonly kind?: "added" | "removed" | "gap";
 }
 /**
  * Builds the write rail for `content` against what it replaced.
@@ -21,4 +21,8 @@ export interface ToolDetailLine {
  * - otherwise → plain content rows, because inventing `+` markers for an
  *   overwrite would misread as "everything changed".
  */
-export declare function diffWriteDetail(previous: string | undefined, content: string, existed?: boolean): ToolDetailLine[];
+export declare function diffWriteDetail(
+  previous: string | undefined,
+  content: string,
+  existed?: boolean,
+): ToolDetailLine[];

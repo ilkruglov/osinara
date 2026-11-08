@@ -31,8 +31,9 @@ export function verifiedTelegramProfileSignals(message: TelegramMessage): {
   }
   return {
     explicitMentionTelegramUserIds: [...ids].sort(),
-    replyTelegramUserId: message.replyToMessage?.from?.isBot === false
-      ? telegramId(message.replyToMessage.from.id)
-      : null,
+    replyTelegramUserId:
+      message.replyToMessage?.from?.isBot === false
+        ? telegramId(message.replyToMessage.from.id)
+        : null,
   };
 }

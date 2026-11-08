@@ -6,10 +6,7 @@ function optionByValue(e, t) {
 }
 function requiredOptionId(e, t, n) {
   let r = optionByValue(e, t);
-  if (r === void 0)
-    throw Error(
-      `Question "${e.key}" has a ${n} that is not one of its options.`,
-    );
+  if (r === void 0) throw Error(`Question "${e.key}" has a ${n} that is not one of its options.`);
   return r.id;
 }
 export { optionById, optionByValue, requiredOptionId };

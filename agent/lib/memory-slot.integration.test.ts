@@ -14,9 +14,8 @@ import type { CreateMemoryInput } from "./memory-record.js";
 import { memoryRepository } from "./memory-repository.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 function slotInput(
   fixture: { conversationId: string; timelineEntryId: string },
@@ -55,10 +54,9 @@ describeWithDatabase("memory slots", () => {
       slotInput(fixture, "Анна работает логистом", "slot-1"),
     );
 
-    await expect(database().query(
-      "SELECT attribute FROM memory_items WHERE id = $1",
-      [memory.id],
-    )).resolves.toMatchObject({ rows: [{ attribute: "работа" }] });
+    await expect(
+      database().query("SELECT attribute FROM memory_items WHERE id = $1", [memory.id]),
+    ).resolves.toMatchObject({ rows: [{ attribute: "работа" }] });
   });
 
   it("supersedes the previous claim in the same subject slot", async () => {
@@ -67,22 +65,31 @@ describeWithDatabase("memory slots", () => {
       fixture.auth,
       slotInput(fixture, "Анна работает логистом", "slot-a"),
     );
-    const second = await memoryRepository.create(
-      fixture.auth,
-      { ...slotInput(fixture, "Анна ушла в IT, теперь тестировщик", "slot-b"),
-        slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] } },
-    );
+    const second = await memoryRepository.create(fixture.auth, {
+      ...slotInput(fixture, "Анна ушла в IT, теперь тестировщик", "slot-b"),
+      slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] },
+    });
 
-    await expect(database().query(
-      "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
-      [first.id],
-    )).resolves.toMatchObject({ rows: [{ claim_status: "superseded", superseded_by: second.id }] });
-    await expect(database().query(
-      `SELECT relation_type::text, detection_method, detection_metadata->>'method' AS method
+    await expect(
+      database().query(
+        "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
+        [first.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ claim_status: "superseded", superseded_by: second.id }] });
+    await expect(
+      database().query(
+        `SELECT relation_type::text, detection_method, detection_metadata->>'method' AS method
          FROM claim_relations WHERE source_claim_id = $1 AND target_claim_id = $2`,
-      [first.id, second.id],
-    )).resolves.toMatchObject({
-      rows: [{ detection_method: "deterministic_exact", method: "slot_attribute", relation_type: "temporal_update" }],
+        [first.id, second.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          detection_method: "deterministic_exact",
+          method: "slot_attribute",
+          relation_type: "temporal_update",
+        },
+      ],
     });
     const active = await database().query<{ id: string }>(
       `SELECT id FROM memory_items WHERE family_id = $1 AND scope = 'family'
@@ -94,32 +101,62 @@ describeWithDatabase("memory slots", () => {
 
   it("rejects implicit replacement and leaves the original claim active", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом в компании Север с 2020 года", "guard-1"));
-    await expect(memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает удалённо", "guard-2")))
-      .rejects.toThrow("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
-    expect((await database().query("SELECT claim_status FROM memory_items WHERE id = $1", [first.id])).rows)
-      .toEqual([{ claim_status: "active" }]);
+    const first = await memoryRepository.create(
+      fixture.auth,
+      slotInput(fixture, "Анна работает логистом в компании Север с 2020 года", "guard-1"),
+    );
+    await expect(
+      memoryRepository.create(
+        fixture.auth,
+        slotInput(fixture, "Анна работает удалённо", "guard-2"),
+      ),
+    ).rejects.toThrow("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
+    expect(
+      (await database().query("SELECT claim_status FROM memory_items WHERE id = $1", [first.id]))
+        .rows,
+    ).toEqual([{ claim_status: "active" }]);
   });
 
   it("keeps independent slot details on add and rejects a stale replacement", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "add-1"));
+    const first = await memoryRepository.create(
+      fixture.auth,
+      slotInput(fixture, "Анна работает логистом", "add-1"),
+    );
     const second = await memoryRepository.create(fixture.auth, {
       ...slotInput(fixture, "Анна работает удалённо", "add-2"),
       slotUpdate: { action: "add", previousMemoryRefs: [first.memoryRef] },
     });
-    await expect(memoryRepository.create(fixture.auth, {
-      ...slotInput(fixture, "Анна перешла в IT", "add-3"),
-      slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] },
-    })).rejects.toThrow("AGENT_MEMORY_SLOT_CHANGED");
-    expect((await database().query("SELECT id FROM memory_items WHERE claim_status = 'active' AND id = ANY($1::uuid[])", [[first.id, second.id]])).rowCount).toBe(2);
+    await expect(
+      memoryRepository.create(fixture.auth, {
+        ...slotInput(fixture, "Анна перешла в IT", "add-3"),
+        slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] },
+      }),
+    ).rejects.toThrow("AGENT_MEMORY_SLOT_CHANGED");
+    expect(
+      (
+        await database().query(
+          "SELECT id FROM memory_items WHERE claim_status = 'active' AND id = ANY($1::uuid[])",
+          [[first.id, second.id]],
+        )
+      ).rowCount,
+    ).toBe(2);
   });
 
   it("can read exact slot refs without paging through unrelated memories", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "read-1"));
-    await memoryRepository.create(fixture.auth, { ...slotInput(fixture, "Анна живёт в Казани", "read-2"), attribute: "город" });
-    const page = await memoryRepository.list(fixture.auth, { limit: 20, memoryRefs: [first.memoryRef] });
+    const first = await memoryRepository.create(
+      fixture.auth,
+      slotInput(fixture, "Анна работает логистом", "read-1"),
+    );
+    await memoryRepository.create(fixture.auth, {
+      ...slotInput(fixture, "Анна живёт в Казани", "read-2"),
+      attribute: "город",
+    });
+    const page = await memoryRepository.list(fixture.auth, {
+      limit: 20,
+      memoryRefs: [first.memoryRef],
+    });
     expect(page.items.map((item) => item.memoryRef)).toEqual([first.memoryRef]);
     expect(page.items[0]?.attribute).toBe("работа");
   });
@@ -128,7 +165,10 @@ describeWithDatabase("memory slots", () => {
     const fixture = await createMainAgentMemoryFixture();
     const attempts = await Promise.allSettled([
       memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "race-1")),
-      memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает тестировщиком", "race-2")),
+      memoryRepository.create(
+        fixture.auth,
+        slotInput(fixture, "Анна работает тестировщиком", "race-2"),
+      ),
     ]);
     expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
@@ -136,7 +176,12 @@ describeWithDatabase("memory slots", () => {
 
   it("shares one slot across semantic kinds for a labelled subject, but not with episodes", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    const labelled = (content: string, kind: CreateMemoryInput["kind"], attribute: string, operationKey: string): CreateMemoryInput => ({
+    const labelled = (
+      content: string,
+      kind: CreateMemoryInput["kind"],
+      attribute: string,
+      operationKey: string,
+    ): CreateMemoryInput => ({
       ...slotInput(fixture, content, operationKey),
       attribute,
       explicitSource: {
@@ -146,20 +191,57 @@ describeWithDatabase("memory slots", () => {
       },
       kind,
     });
-    const fact = await memoryRepository.create(fixture.auth, labelled("Гоша живёт в клетке, но его выпускают", "fact", "содержание", "gosha-1"));
-    const shared = await memoryRepository.create(fixture.auth, { ...labelled("Гоша живёт не в клетке, а на жёрдочке", "family_shared", "содержание", "gosha-2"), slotUpdate: { action: "replace", previousMemoryRefs: [fact.memoryRef] } });
-    await expect(database().query(
-      "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
-      [fact.id],
-    )).resolves.toMatchObject({ rows: [{ claim_status: "superseded", superseded_by: shared.id }] });
+    const fact = await memoryRepository.create(
+      fixture.auth,
+      labelled("Гоша живёт в клетке, но его выпускают", "fact", "содержание", "gosha-1"),
+    );
+    const shared = await memoryRepository.create(fixture.auth, {
+      ...labelled(
+        "Гоша живёт не в клетке, а на жёрдочке",
+        "family_shared",
+        "содержание",
+        "gosha-2",
+      ),
+      slotUpdate: { action: "replace", previousMemoryRefs: [fact.memoryRef] },
+    });
+    await expect(
+      database().query(
+        "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
+        [fact.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ claim_status: "superseded", superseded_by: shared.id }] });
 
     // A discussion summary is an episode slot of its own and leaves the fact chain alone.
-    const summary = await memoryRepository.create(fixture.auth, labelled("Обсудили содержание Гоши: решили оставить жёрдочку", "episode", "итог обсуждения", "gosha-3"));
-    const summaryAgain = await memoryRepository.create(fixture.auth, { ...labelled("Обсудили содержание Гоши ещё раз: жёрдочка и клетка на ночь", "episode", "итог обсуждения", "gosha-4"), slotUpdate: { action: "replace", previousMemoryRefs: [summary.memoryRef] } });
-    await expect(database().query(
-      "SELECT claim_status::text FROM memory_items_all WHERE id = ANY($1::uuid[]) ORDER BY created_at",
-      [[shared.id, summary.id, summaryAgain.id]],
-    )).resolves.toMatchObject({ rows: [{ claim_status: "active" }, { claim_status: "superseded" }, { claim_status: "active" }] });
+    const summary = await memoryRepository.create(
+      fixture.auth,
+      labelled(
+        "Обсудили содержание Гоши: решили оставить жёрдочку",
+        "episode",
+        "итог обсуждения",
+        "gosha-3",
+      ),
+    );
+    const summaryAgain = await memoryRepository.create(fixture.auth, {
+      ...labelled(
+        "Обсудили содержание Гоши ещё раз: жёрдочка и клетка на ночь",
+        "episode",
+        "итог обсуждения",
+        "gosha-4",
+      ),
+      slotUpdate: { action: "replace", previousMemoryRefs: [summary.memoryRef] },
+    });
+    await expect(
+      database().query(
+        "SELECT claim_status::text FROM memory_items_all WHERE id = ANY($1::uuid[]) ORDER BY created_at",
+        [[shared.id, summary.id, summaryAgain.id]],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        { claim_status: "active" },
+        { claim_status: "superseded" },
+        { claim_status: "active" },
+      ],
+    });
   });
 
   it("reinforces an identical claim in the slot instead of creating a version", async () => {
@@ -174,10 +256,12 @@ describeWithDatabase("memory slots", () => {
     );
 
     expect(again.id).toBe(first.id);
-    await expect(database().query(
-      "SELECT claim_status::text, reinforcement_count FROM memory_items WHERE id = $1",
-      [first.id],
-    )).resolves.toMatchObject({ rows: [{ claim_status: "active", reinforcement_count: 1 }] });
+    await expect(
+      database().query(
+        "SELECT claim_status::text, reinforcement_count FROM memory_items WHERE id = $1",
+        [first.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ claim_status: "active", reinforcement_count: 1 }] });
   });
 
   it("stores the event date of an episode and filters retrieval by a date window", async () => {

@@ -4,6 +4,6 @@
  * fills the package-local config gap for sources outside the app root.
  */
 export declare function createAuthoredPackageTsConfigPathsPlugin(input: {
-    appPackageRoot: string;
-    extensions: readonly string[];
+  appPackageRoot: string;
+  extensions: readonly string[];
 }): Record<string, unknown>;

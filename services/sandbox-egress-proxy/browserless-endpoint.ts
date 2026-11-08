@@ -41,7 +41,10 @@ const MAX_USED_SESSIONS = 10_000;
  * forgotten; a full set refuses new sessions rather than forget a live id, whose reconnect would
  * then pass (Codex review, 5 October 2026).
  */
-export function createSessionClaims(now: () => number = Date.now, max = MAX_USED_SESSIONS): (id: string) => boolean {
+export function createSessionClaims(
+  now: () => number = Date.now,
+  max = MAX_USED_SESSIONS,
+): (id: string) => boolean {
   const used = new Map<string, number>();
   return (id) => {
     const at = now();
@@ -58,7 +61,9 @@ export function createSessionClaims(now: () => number = Date.now, max = MAX_USED
 
 /** Answers and closes; the socket is destroyed once the answer is out, half-open or not. */
 function refuse(socket: Duplex, status: number, reason: string): void {
-  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () => socket.destroy());
+  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () =>
+    socket.destroy(),
+  );
 }
 
 export function handleBrowserlessUpgrade(input: {
@@ -102,9 +107,19 @@ export function handleBrowserlessUpgrade(input: {
   const key = request.headers["sec-websocket-key"];
   const timeout = Number(url.searchParams.get("timeout") ?? MAX_SESSION_MS);
   const sessionId = url.searchParams.get("session") ?? "";
-  const allowedParameters = [...url.searchParams.keys()].every((name) => name === "solveCaptchas" || name === "timeout" || name === "session");
-  if (url.pathname !== PATH || request.method !== "GET" || typeof key !== "string" || !allowedParameters ||
-    !Number.isInteger(timeout) || timeout <= 0 || timeout > MAX_SESSION_MS || !SESSION_ID.test(sessionId)) {
+  const allowedParameters = [...url.searchParams.keys()].every(
+    (name) => name === "solveCaptchas" || name === "timeout" || name === "session",
+  );
+  if (
+    url.pathname !== PATH ||
+    request.method !== "GET" ||
+    typeof key !== "string" ||
+    !allowedParameters ||
+    !Number.isInteger(timeout) ||
+    timeout <= 0 ||
+    timeout > MAX_SESSION_MS ||
+    !SESSION_ID.test(sessionId)
+  ) {
     refuse(clientSocket, 404, "Not Found");
     return;
   }
@@ -126,7 +141,12 @@ export function handleBrowserlessUpgrade(input: {
     // The client left during the lookup: the provider is never asked.
     if (clientClosed) return;
     upstreamOpen = true;
-    const upstream = connectTls({ host: target.address, port: 443, rejectUnauthorized: true, servername: PROVIDER_HOST });
+    const upstream = connectTls({
+      host: target.address,
+      port: 443,
+      rejectUnauthorized: true,
+      servername: PROVIDER_HOST,
+    });
     upstream.once("close", () => {
       upstreamOpen = false;
       finishIfDone();
@@ -144,7 +164,7 @@ export function handleBrowserlessUpgrade(input: {
     upstream.once("secureConnect", () => {
       upstream.write(
         `GET /chromium/stealth?${query} HTTP/1.1\r\nHost: ${PROVIDER_HOST}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n` +
-        `Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key.replace(/[\r\n]/gu, "")}\r\n\r\n`,
+          `Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key.replace(/[\r\n]/gu, "")}\r\n\r\n`,
       );
     });
     // Only a 101 passes to the sandbox; the head is read whole before anything is forwarded.
@@ -163,8 +183,13 @@ export function handleBrowserlessUpgrade(input: {
         fail();
         return;
       }
-      const accept = /\r\nsec-websocket-accept:\s*([^\r\n]+)/iu.exec(head.subarray(0, end).toString("latin1"))?.[1] ?? "";
-      clientSocket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+      const accept =
+        /\r\nsec-websocket-accept:\s*([^\r\n]+)/iu.exec(
+          head.subarray(0, end).toString("latin1"),
+        )?.[1] ?? "";
+      clientSocket.write(
+        `HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+      );
       const rest = head.subarray(end + 4);
       if (rest.length > 0) clientSocket.write(rest);
       const closeAll = () => {
@@ -186,7 +211,9 @@ export function handleBrowserlessUpgrade(input: {
       clientSocket.pipe(upstream);
       upstream.once("close", closeAll);
       clientSocket.once("close", closeAll);
-      upstream.once("close", () => meter.close({ host: "browserless", kind: "browserless", port: 443 }));
+      upstream.once("close", () =>
+        meter.close({ host: "browserless", kind: "browserless", port: 443 }),
+      );
     };
     upstream.on("data", onData);
   })().catch(() => {

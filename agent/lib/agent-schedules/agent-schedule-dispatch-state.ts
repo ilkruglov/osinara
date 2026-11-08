@@ -63,7 +63,9 @@ export async function beginAgentScheduleDispatch(
           WHERE id = $1 AND schedule_id = $2 AND lease_token = $3 AND status = 'claimed'`,
         [job.runId, job.id, job.leaseToken],
       );
-      await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [job.runId]);
+      await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [
+        job.runId,
+      ]);
       await client.query(
         `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
          VALUES ($1, 'agent_schedule.failed', $2,

@@ -28,7 +28,14 @@ interface Faults {
   unlinkCode: string | null;
   writeFails: boolean;
 }
-const faults: Faults = { closeDirectoryFails: false, mkdirCode: null, statFails: false, statReportsSize: null, unlinkCode: null, writeFails: false };
+const faults: Faults = {
+  closeDirectoryFails: false,
+  mkdirCode: null,
+  statFails: false,
+  statReportsSize: null,
+  unlinkCode: null,
+  writeFails: false,
+};
 let opened = 0;
 let closed = 0;
 let bytesRead = 0;
@@ -40,18 +47,23 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     async open(...args: Parameters<typeof actual.open>) {
       const handle = await actual.open(...args);
       opened += 1;
-      const isDirectory = typeof args[1] === "number" && (args[1] & (await import("node:fs")).constants.O_DIRECTORY) !== 0;
+      const isDirectory =
+        typeof args[1] === "number" &&
+        (args[1] & (await import("node:fs")).constants.O_DIRECTORY) !== 0;
       const close = handle.close.bind(handle);
       handle.close = async () => {
         closed += 1;
         await close();
-        if (isDirectory && faults.closeDirectoryFails) throw Object.assign(new Error("EIO"), { code: "EIO" });
+        if (isDirectory && faults.closeDirectoryFails)
+          throw Object.assign(new Error("EIO"), { code: "EIO" });
       };
       const stat = handle.stat.bind(handle);
       handle.stat = (async (...statArgs: Parameters<typeof stat>) => {
-        if (faults.statFails && !isDirectory) throw Object.assign(new Error("EIO"), { code: "EIO" });
+        if (faults.statFails && !isDirectory)
+          throw Object.assign(new Error("EIO"), { code: "EIO" });
         const metadata = await stat(...statArgs);
-        if (faults.statReportsSize !== null && !isDirectory) Object.defineProperty(metadata, "size", { value: faults.statReportsSize });
+        if (faults.statReportsSize !== null && !isDirectory)
+          Object.defineProperty(metadata, "size", { value: faults.statReportsSize });
         return metadata;
       }) as typeof handle.stat;
       const readWhole = handle.readFile.bind(handle);
@@ -60,7 +72,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
         bytesRead += typeof content === "string" ? Buffer.byteLength(content) : content.byteLength;
         return content;
       }) as typeof handle.readFile;
-      const readPart = handle.read.bind(handle) as (...partArgs: unknown[]) => Promise<{ bytesRead: number }>;
+      const readPart = handle.read.bind(handle) as (
+        ...partArgs: unknown[]
+      ) => Promise<{ bytesRead: number }>;
       handle.read = (async (...partArgs: unknown[]) => {
         const result = await readPart(...partArgs);
         bytesRead += result.bytesRead;
@@ -81,13 +95,15 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       return await actual.mkdir(...args);
     },
     async unlink(path: Parameters<typeof actual.unlink>[0]) {
-      if (faults.unlinkCode) throw Object.assign(new Error(faults.unlinkCode), { code: faults.unlinkCode });
+      if (faults.unlinkCode)
+        throw Object.assign(new Error(faults.unlinkCode), { code: faults.unlinkCode });
       return await actual.unlink(path);
     },
   };
 });
 
-const { deleteWorkspaceFile, readWorkspaceFile, workspaceDirectory, writeWorkspaceFile } = await import("./workspace-storage.js");
+const { deleteWorkspaceFile, readWorkspaceFile, workspaceDirectory, writeWorkspaceFile } =
+  await import("./workspace-storage.js");
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000002";
 const roots: string[] = [];
@@ -102,7 +118,14 @@ async function workspace(): Promise<{ directory: string; root: string }> {
 }
 
 afterEach(async () => {
-  Object.assign(faults, { closeDirectoryFails: false, mkdirCode: null, statFails: false, statReportsSize: null, unlinkCode: null, writeFails: false });
+  Object.assign(faults, {
+    closeDirectoryFails: false,
+    mkdirCode: null,
+    statFails: false,
+    statReportsSize: null,
+    unlinkCode: null,
+    writeFails: false,
+  });
   opened = 0;
   closed = 0;
   bytesRead = 0;
@@ -123,7 +146,9 @@ describe("workspace storage under failures", () => {
     await truncate(join(directory, "docs", "file.txt"), 200 * 1024 * 1024);
     faults.statReportsSize = 6;
 
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow("AGENT_WORKSPACE_FILE_TOO_LARGE");
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow(
+      "AGENT_WORKSPACE_FILE_TOO_LARGE",
+    );
     expect(bytesRead).toBe(WORKSPACE_MAX_FILE_BYTES + 1);
     expect(closed).toBe(opened);
   });
@@ -132,20 +157,26 @@ describe("workspace storage under failures", () => {
     const { directory, root } = await workspace();
     await truncate(join(directory, "docs", "file.txt"), WORKSPACE_MAX_FILE_BYTES);
 
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).resolves.toHaveLength(WORKSPACE_MAX_FILE_BYTES);
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).resolves.toHaveLength(
+      WORKSPACE_MAX_FILE_BYTES,
+    );
   });
 
   it("closes every handle on the walk when closing a parent directory fails", async () => {
     const { root } = await workspace();
     faults.closeDirectoryFails = true;
-    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).resolves.toEqual(Buffer.from("inside"));
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).resolves.toEqual(
+      Buffer.from("inside"),
+    );
     expect(closed).toBe(opened);
   });
 
   it("removes the temporary file when the write fails", async () => {
     const { directory, root } = await workspace();
     faults.writeFails = true;
-    await expect(writeWorkspaceFile(root, WORKSPACE_ID, "docs/new.txt", Buffer.from("x"))).rejects.toThrow("ENOSPC");
+    await expect(
+      writeWorkspaceFile(root, WORKSPACE_ID, "docs/new.txt", Buffer.from("x")),
+    ).rejects.toThrow("ENOSPC");
     expect(await readdir(join(directory, "docs"))).toEqual(["file.txt"]);
     expect(closed).toBe(opened);
   });
@@ -153,15 +184,18 @@ describe("workspace storage under failures", () => {
   it("reports a directory removed during a nested write with the workspace code", async () => {
     const { root } = await workspace();
     faults.mkdirCode = "ENOENT";
-    await expect(writeWorkspaceFile(root, WORKSPACE_ID, "docs/a/b/new.txt", Buffer.from("x")))
-      .rejects.toThrow("AGENT_WORKSPACE_FILE_NOT_FOUND");
+    await expect(
+      writeWorkspaceFile(root, WORKSPACE_ID, "docs/a/b/new.txt", Buffer.from("x")),
+    ).rejects.toThrow("AGENT_WORKSPACE_FILE_NOT_FOUND");
     expect(closed).toBe(opened);
   });
 
   it("refuses a delete whose target became a directory with the workspace code", async () => {
     const { root } = await workspace();
     faults.unlinkCode = "EISDIR";
-    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow("AGENT_WORKSPACE_PATH_INVALID");
+    await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow(
+      "AGENT_WORKSPACE_PATH_INVALID",
+    );
     expect(closed).toBe(opened);
   });
 });

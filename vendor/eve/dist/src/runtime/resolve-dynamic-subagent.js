@@ -4,10 +4,7 @@ import {
   expectOnlyKnownKeys,
 } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
 async function resolveDynamicSubagentDefinition(e) {
   try {
     let t = await loadResolvedModuleExport({
@@ -32,10 +29,7 @@ async function resolveDynamicSubagentDefinition(e) {
 function normalizeResolvedDynamicSubagentDefinition(n, r) {
   let i = `Expected the dynamic subagent export "${n.exportName ?? `default`}" from "${n.logicalPath}" to provide defineDynamic({ events }).`,
     a = expectObjectRecord(r, i);
-  if (
-    (expectOnlyKnownKeys(a, [`build`, `events`, `kind`], i),
-    a.kind !== `eve:dynamic`)
-  )
+  if ((expectOnlyKnownKeys(a, [`build`, `events`, `kind`], i), a.kind !== `eve:dynamic`))
     throw Error(i);
   let o = expectObjectRecord(a.events, i),
     s = {};
@@ -49,7 +43,4 @@ function normalizeResolvedDynamicSubagentDefinition(n, r) {
     sourceKind: `module`,
   };
 }
-export {
-  normalizeResolvedDynamicSubagentDefinition,
-  resolveDynamicSubagentDefinition,
-};
+export { normalizeResolvedDynamicSubagentDefinition, resolveDynamicSubagentDefinition };

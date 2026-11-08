@@ -1,9 +1,6 @@
 import { formatAttributeContent } from "./trace-content.js";
 import { renderConversationItem } from "./trace-conversation.js";
-import {
-  orderedTextSelection,
-  selectedTraceViewerSpan,
-} from "./trace-viewer-state.js";
+import { orderedTextSelection, selectedTraceViewerSpan } from "./trace-viewer-state.js";
 import { formatElapsed } from "#cli/format-elapsed.js";
 import {
   clipVisible,
@@ -23,8 +20,7 @@ function renderTraceViewer(e, t) {
     l = panelDetailLines(e, s, i, t.surfaces),
     u = o,
     d = [];
-  if ((d.push(...renderHeader(e, t)), e.traces.length === 0))
-    d.push(...renderEmptyState(t, i, o));
+  if ((d.push(...renderHeader(e, t)), e.traces.length === 0)) d.push(...renderEmptyState(t, i, o));
   else if (e.trace === void 0) d.push(...center(o, a.muted(`Loading trace…`)));
   else {
     let r = renderConversation(e, t, c, o);
@@ -105,9 +101,7 @@ function renderSpanDetail(t, n, r, o) {
   let fact = (e, t) => `${l(e.padEnd(10))}${t}`,
     g = t.statusCode === 2;
   (p.push(fact(`status`, g ? s.red(`ERROR`) : s.green(`ok`))),
-    p.push(
-      fact(`duration`, formatElapsed(durationMs(t.startTimeNs, t.endTimeNs))),
-    ),
+    p.push(fact(`duration`, formatElapsed(durationMs(t.startTimeNs, t.endTimeNs)))),
     p.push(fact(`started`, clockTime(t.startTimeNs))),
     p.push(fact(`span`, t.spanId)),
     t.parentSpanId !== void 0 && p.push(fact(`parent`, t.parentSpanId)),
@@ -137,10 +131,8 @@ function renderHeader(e, t) {
     { muted: u, primary: d } = chromeStyles(n, t.surfaces),
     f = [];
   if (
-    (e.trace?.agentName !== void 0 &&
-      f.push(stripTerminalControls(e.trace.agentName)),
-    e.trace?.sessionId !== void 0 &&
-      f.push(`session ${stripTerminalControls(e.trace.sessionId)}`),
+    (e.trace?.agentName !== void 0 && f.push(stripTerminalControls(e.trace.agentName)),
+    e.trace?.sessionId !== void 0 && f.push(`session ${stripTerminalControls(e.trace.sessionId)}`),
     e.trace !== void 0)
   ) {
     let n =
@@ -154,23 +146,13 @@ function renderHeader(e, t) {
     );
   }
   let p = `${o.bold(d(`${s.brand} traces`))}${f.length === 0 ? `` : u(` · ${f.join(` · `)}`)}`,
-    m =
-      e.traces.length === 0
-        ? ``
-        : u(`[${e.traceIndex + 1}/${e.traces.length}]`),
+    m = e.traces.length === 0 ? `` : u(`[${e.traceIndex + 1}/${e.traces.length}]`),
     h = [t.activeWindowEndNs === void 0 ? `` : o.green(`● live`), m]
       .filter((e) => e.length > 0)
       .join(` `);
   return [
     ``,
-    clipVisible(
-      joinRight(
-        ` ${clipVisible(p, Math.max(0, r - visibleLength(h) - 2))}`,
-        h,
-        r,
-      ),
-      r,
-    ),
+    clipVisible(joinRight(` ${clipVisible(p, Math.max(0, r - visibleLength(h) - 2))}`, h, r), r),
     ``,
   ];
 }
@@ -182,15 +164,10 @@ function renderConversation(e, t, n, r) {
         `  No conversation content in this trace — content capture may be off (EVE_TRACES_CONTENT).`,
       ),
     ];
-  let a = conversationLines(e, n, i, t.surfaces).slice(
-    e.scrollRow,
-    e.scrollRow + r,
-  );
+  let a = conversationLines(e, n, i, t.surfaces).slice(e.scrollRow, e.scrollRow + r);
   return e.textSelection === void 0 || e.textSelection.region !== `conversation`
     ? a
-    : a.map((t, r) =>
-        highlightSelection(t, e.scrollRow + r, e.textSelection, n),
-      );
+    : a.map((t, r) => highlightSelection(t, e.scrollRow + r, e.textSelection, n));
 }
 function conversationLines(e, n, r, i) {
   let a = [];
@@ -224,10 +201,7 @@ function conversationSelectionText(e, t, n, r, i) {
   return selectionText(conversationLines(e, t, n, i), r);
 }
 function panelSelectionText(e, t, n, r) {
-  return selectionText(
-    panelDetailLines(e, e.panelOpen ? panelWidthFor(t) : 0, n),
-    r,
-  );
+  return selectionText(panelDetailLines(e, e.panelOpen ? panelWidthFor(t) : 0, n), r);
 }
 function selectionText(e, t) {
   let { start: r, end: i } = orderedTextSelection(t),
@@ -254,9 +228,7 @@ function highlightSelection(e, t, r, i) {
     m = sliceVisible(f, u),
     h = m.slice(p.length),
     g = f.slice(m.length);
-  return h.length === 0
-    ? e
-    : `${p}\x1b[7m${h.replaceAll(`\x1B[0m`, `\x1B[0m\x1B[7m`)}\x1b[27m${g}`;
+  return h.length === 0 ? e : `${p}\x1b[7m${h.replaceAll(`\x1B[0m`, `\x1B[0m\x1B[7m`)}\x1b[27m${g}`;
 }
 function renderFooter(e, t, n, r) {
   let { colors: i } = n,
@@ -270,24 +242,14 @@ function renderFooter(e, t, n, r) {
     f = [e.notice === void 0 ? `` : i.yellow(e.notice), d]
       .filter((e) => e.length > 0)
       .join(o(` · `));
-  return [
-    ``,
-    clipVisible(` ${o(l)}`, t),
-    clipVisible(f.length === 0 ? `` : ` ${f}`, t),
-  ];
+  return [``, clipVisible(` ${o(l)}`, t), clipVisible(f.length === 0 ? `` : ` ${f}`, t)];
 }
 function renderEmptyState(e, t, n) {
   let { muted: r, primary: i } = chromeStyles(t, e.surfaces),
     [a, o] =
       e.tracingDisabled === !0
-        ? [
-            `Tracing is disabled (EVE_TRACES=off).`,
-            `Re-enable it and spans stream in live.`,
-          ]
-        : [
-            `No local traces yet.`,
-            `Chat with your agent — spans stream in live.`,
-          ];
+        ? [`Tracing is disabled (EVE_TRACES=off).`, `Re-enable it and spans stream in live.`]
+        : [`No local traces yet.`, `Chat with your agent — spans stream in live.`];
   return center(n, t.colors.bold(i(a)), r(o));
 }
 function center(e, ...t) {
@@ -314,9 +276,7 @@ function padTo(e, t) {
   return n >= t ? clipVisible(e, t) : e + ` `.repeat(t - n);
 }
 function panelWidthFor(e) {
-  return e < 42
-    ? 0
-    : Math.min(64, Math.max(20, Math.floor(e * 0.42)), e - 20 - 1);
+  return e < 42 ? 0 : Math.min(64, Math.max(20, Math.floor(e * 0.42)), e - 20 - 1);
 }
 function durationMs(e, t) {
   return Math.max(0, Number(t - e) / 1e6);
@@ -326,9 +286,4 @@ function clockTime(e) {
     pad = (e, t = 2) => String(e).padStart(t, `0`);
   return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}.${pad(t.getMilliseconds(), 3)}`;
 }
-export {
-  conversationSelectionText,
-  panelSelectionText,
-  renderSpanDetail,
-  renderTraceViewer,
-};
+export { conversationSelectionText, panelSelectionText, renderSpanDetail, renderTraceViewer };

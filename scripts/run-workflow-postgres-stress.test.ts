@@ -17,7 +17,11 @@ describe("workflow stress runner", () => {
   it("names the missing internal token before starting the fixture", () => {
     const env = { ...process.env };
     delete env.AGENT_INTERNAL_TOKEN;
-    const result = spawnSync(process.execPath, ["--experimental-strip-types", RUNNER], { encoding: "utf8", env, timeout: 20_000 });
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", RUNNER], {
+      encoding: "utf8",
+      env,
+      timeout: 20_000,
+    });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("AGENT_INTERNAL_TOKEN_MISSING");
     expect(result.stderr).not.toContain("AGENT_WORKFLOW_STRESS_FAILED");

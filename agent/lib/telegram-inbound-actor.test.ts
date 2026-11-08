@@ -26,21 +26,23 @@ describe("telegramInboundActor", () => {
   });
 
   it("projects a verified channel sender instead of Channel_Bot", () => {
-    expect(telegramInboundActor({
-      ...groupMessage("@osinara_bot вопрос"),
-      chat: { id: "-1003576522523", title: "Остриков пилит агентов", type: "supergroup" },
-      from: { firstName: "Channel", id: "136817688", isBot: true, username: "Channel_Bot" },
-      raw: {
-        date: 1_787_000_000,
-        from: { first_name: "Channel", id: 136_817_688, is_bot: true, username: "Channel_Bot" },
-        sender_chat: {
-          id: -1_001_783_384_254,
-          title: "Pavel Zloi",
-          type: "channel",
-          username: "evilfreelancer",
+    expect(
+      telegramInboundActor({
+        ...groupMessage("@osinara_bot вопрос"),
+        chat: { id: "-1003576522523", title: "Остриков пилит агентов", type: "supergroup" },
+        from: { firstName: "Channel", id: "136817688", isBot: true, username: "Channel_Bot" },
+        raw: {
+          date: 1_787_000_000,
+          from: { first_name: "Channel", id: 136_817_688, is_bot: true, username: "Channel_Bot" },
+          sender_chat: {
+            id: -1_001_783_384_254,
+            title: "Pavel Zloi",
+            type: "channel",
+            username: "evilfreelancer",
+          },
         },
-      },
-    })).toEqual({
+      }),
+    ).toEqual({
       actorId: "telegram-channel:-1001783384254",
       displayName: "Pavel Zloi",
       id: "-1001783384254",
@@ -51,14 +53,16 @@ describe("telegramInboundActor", () => {
   });
 
   it("projects another bot as a participant that carries no identity", () => {
-    expect(telegramInboundActor({
-      ...groupMessage("сводка погоды"),
-      from: { firstName: "Погодный бот", id: "42", isBot: true, username: "weather_bot" },
-      raw: {
-        date: 1_787_000_000,
-        from: { first_name: "Погодный бот", id: 42, is_bot: true, username: "weather_bot" },
-      },
-    })).toEqual({
+    expect(
+      telegramInboundActor({
+        ...groupMessage("сводка погоды"),
+        from: { firstName: "Погодный бот", id: "42", isBot: true, username: "weather_bot" },
+        raw: {
+          date: 1_787_000_000,
+          from: { first_name: "Погодный бот", id: 42, is_bot: true, username: "weather_bot" },
+        },
+      }),
+    ).toEqual({
       actorId: "telegram-bot:42",
       displayName: "Погодный бот",
       id: "42",
@@ -123,7 +127,10 @@ describe("telegramInboundActor", () => {
 // 2 October 2026: supergroup members carry tags such as «Батя» or «Token Burner» in `sender_tag`,
 // and Mia did not see them, so «спроси у Бати» meant nothing to her.
 describe("telegramSenderTag", () => {
-  const withTag = (tag: unknown) => ({ ...groupMessage("Привет"), raw: { ...groupMessage("Привет").raw, sender_tag: tag } });
+  const withTag = (tag: unknown) => ({
+    ...groupMessage("Привет"),
+    raw: { ...groupMessage("Привет").raw, sender_tag: tag },
+  });
 
   it("reads the member tag of the message", () => {
     expect(telegramSenderTag(withTag("Батя"))).toBe("Батя");

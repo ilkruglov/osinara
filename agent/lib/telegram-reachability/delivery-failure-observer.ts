@@ -44,23 +44,34 @@ const OBSERVER_KEY = Symbol.for("osinara.telegramDeliveryFailureObserver");
 
 export async function recordTelegramDeliveryFailure(
   failure: TelegramDeliveryFailure,
-  repository: Pick<TelegramReachabilityRepository, "markUndeliverable"> = telegramReachabilityRepository,
+  repository: Pick<
+    TelegramReachabilityRepository,
+    "markUndeliverable"
+  > = telegramReachabilityRepository,
 ): Promise<TelegramRecipientUnreachableReason | null> {
   const reason = classifyTelegramRecipientFailure(failure.status, failure.body);
   if (reason === null) return null;
-  const marked = await repository.markUndeliverable(failure.chatId, reason, new Date(failure.startedAt));
-  console.warn(JSON.stringify({
-    chatId: failure.chatId,
-    code: marked ? TELEGRAM_RECIPIENT_UNREACHABLE_CODE : "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE_STALE",
-    method: failure.method,
-    providerDescription: telegramProviderDescription(failure.body),
-    providerStatus: failure.status,
+  const marked = await repository.markUndeliverable(
+    failure.chatId,
     reason,
-  }));
+    new Date(failure.startedAt),
+  );
+  console.warn(
+    JSON.stringify({
+      chatId: failure.chatId,
+      code: marked
+        ? TELEGRAM_RECIPIENT_UNREACHABLE_CODE
+        : "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE_STALE",
+      method: failure.method,
+      providerDescription: telegramProviderDescription(failure.body),
+      providerStatus: failure.status,
+      reason,
+    }),
+  );
   return reason;
 }
 
 export function installTelegramDeliveryFailureObserver(): void {
-  (globalThis as { [key: symbol]: unknown })[OBSERVER_KEY] =
-    (failure: TelegramDeliveryFailure) => recordTelegramDeliveryFailure(failure);
+  (globalThis as { [key: symbol]: unknown })[OBSERVER_KEY] = (failure: TelegramDeliveryFailure) =>
+    recordTelegramDeliveryFailure(failure);
 }

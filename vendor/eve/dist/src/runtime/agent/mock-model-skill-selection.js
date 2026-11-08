@@ -50,12 +50,7 @@ function getLoadedSkillIdsFromHistory(e) {
   for (let n of e)
     if (!(n.role !== `assistant` || typeof n.content == `string`))
       for (let e of n.content) {
-        if (
-          typeof e == `string` ||
-          e.type !== `tool-call` ||
-          e.toolName !== `load_skill`
-        )
-          continue;
+        if (typeof e == `string` || e.type !== `tool-call` || e.toolName !== `load_skill`) continue;
         let n = readSkillFromToolInput(e.input);
         n !== void 0 && t.push(n);
       }
@@ -63,8 +58,7 @@ function getLoadedSkillIdsFromHistory(e) {
 }
 function readSkillFromToolInput(e) {
   let t = typeof e == `string` ? safeJsonParse(e) : e;
-  if (typeof t == `object` && t && `skill` in t && typeof t.skill == `string`)
-    return t.skill;
+  if (typeof t == `object` && t && `skill` in t && typeof t.skill == `string`) return t.skill;
 }
 function safeJsonParse(e) {
   try {

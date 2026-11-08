@@ -12,26 +12,28 @@ import type { ToolExecuteOptions } from "#shared/tool-definition.js";
  * address of their own — the dispatch step resolves targets through the
  * session task index by tool name.
  */
-export type HarnessRuntimeActionDefinition = {
-    readonly kind: "remote-agent-call" | "subagent-call";
-    readonly nodeId: string;
-    readonly remoteAgentName?: string;
-    readonly subagentName: string;
-} | {
-    readonly kind: "task-control";
-};
+export type HarnessRuntimeActionDefinition =
+  | {
+      readonly kind: "remote-agent-call" | "subagent-call";
+      readonly nodeId: string;
+      readonly remoteAgentName?: string;
+      readonly subagentName: string;
+    }
+  | {
+      readonly kind: "task-control";
+    };
 /**
  * Unified harness-owned tool definition.
  */
 export interface HarnessToolDefinition {
-    readonly approvalKey?: (toolInput: Readonly<Record<string, unknown>>) => string;
-    readonly description: string;
-    readonly execute?: (input: any, options: ToolExecuteOptions) => any;
-    readonly frameworkAction?: "load-skill";
-    readonly inputSchema: FlexibleSchema;
-    readonly name: string;
-    readonly approval?: Approval;
-    readonly outputSchema?: FlexibleSchema;
-    readonly runtimeAction?: HarnessRuntimeActionDefinition;
-    readonly toModelOutput?: (output: unknown) => unknown;
+  readonly approvalKey?: (toolInput: Readonly<Record<string, unknown>>) => string;
+  readonly description: string;
+  readonly execute?: (input: any, options: ToolExecuteOptions) => any;
+  readonly frameworkAction?: "load-skill";
+  readonly inputSchema: FlexibleSchema;
+  readonly name: string;
+  readonly approval?: Approval;
+  readonly outputSchema?: FlexibleSchema;
+  readonly runtimeAction?: HarnessRuntimeActionDefinition;
+  readonly toModelOutput?: (output: unknown) => unknown;
 }

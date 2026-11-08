@@ -15,10 +15,7 @@
 import { createHash } from "node:crypto";
 
 import { buildModelProviderConfig } from "../../agent/lib/provider-catalog/model-provider-config-builder.js";
-import type {
-  InstallationExecutionInput,
-  InstallationExecutionResult,
-} from "./contracts.js";
+import type { InstallationExecutionInput, InstallationExecutionResult } from "./contracts.js";
 import { InstallerError } from "./errors.js";
 
 export interface HostInstallationStageInput {
@@ -77,8 +74,14 @@ function requireEnvironmentValue(value: string, name: string): string {
 function buildEnvironment(input: InstallationExecutionInput): Buffer {
   const values: Array<readonly [string, string]> = [
     ["AGENT_INTERNAL_TOKEN", input.internalSecrets.agentInternalToken],
-    ["APP_DATABASE_URL", `postgresql://osinara_app:${input.internalSecrets.appDatabasePassword}@postgres:5432/osinara`],
-    ["DATABASE_URL", `postgresql://osinara:${input.internalSecrets.postgresPassword}@postgres:5432/osinara`],
+    [
+      "APP_DATABASE_URL",
+      `postgresql://osinara_app:${input.internalSecrets.appDatabasePassword}@postgres:5432/osinara`,
+    ],
+    [
+      "DATABASE_URL",
+      `postgresql://osinara:${input.internalSecrets.postgresPassword}@postgres:5432/osinara`,
+    ],
     ["INVITATION_SIGNING_SECRET", input.internalSecrets.invitationSigningSecret],
     ["MODEL_API_KEY", input.modelApiKey],
     ["POSTGRES_PASSWORD", input.internalSecrets.postgresPassword],
@@ -93,7 +96,8 @@ function buildEnvironment(input: InstallationExecutionInput): Buffer {
   ];
   if (input.groqApiKey !== null) values.push(["GROQ_API_KEY", input.groqApiKey]);
   // The agent re-registers the update list with the same fixed IP (`webhook-subscription.ts`).
-  if (input.telegramWebhookIpAddress) values.push(["TELEGRAM_WEBHOOK_IP_ADDRESS", input.telegramWebhookIpAddress]);
+  if (input.telegramWebhookIpAddress)
+    values.push(["TELEGRAM_WEBHOOK_IP_ADDRESS", input.telegramWebhookIpAddress]);
   return Buffer.from(
     `${values.map(([name, value]) => `${name}=${requireEnvironmentValue(value, name)}`).join("\n")}\n`,
     "utf8",
@@ -101,10 +105,15 @@ function buildEnvironment(input: InstallationExecutionInput): Buffer {
 }
 
 function buildModelConfig(input: InstallationExecutionInput): Buffer {
-  const config = buildModelProviderConfig(input.provider, {
-    ...input.model,
-    reasoningOptions: [...input.model.reasoningOptions],
-  }, input.reasoning, input.groqApiKey !== null);
+  const config = buildModelProviderConfig(
+    input.provider,
+    {
+      ...input.model,
+      reasoningOptions: [...input.model.reasoningOptions],
+    },
+    input.reasoning,
+    input.groqApiKey !== null,
+  );
   return Buffer.from(`${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 

@@ -43,8 +43,7 @@ function parseRegistryMapping(e) {
   let t = e.indexOf(`=`),
     n = t === -1 ? e : e.slice(0, t),
     r = t === -1 ? `` : e.slice(t + 1);
-  if (!n.startsWith(`@`))
-    throw Error(`Registry namespaces must start with @: ${n}`);
+  if (!n.startsWith(`@`)) throw Error(`Registry namespaces must start with @: ${n}`);
   if (!r.includes(`{name}`))
     throw Error(
       `Pass a registry URL containing {name}, for example ${n}=https://example.com/r/{name}.json.`,

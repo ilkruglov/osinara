@@ -18,9 +18,7 @@ async function applyAgentModelSettingsToSource(n, r) {
     let t = await applyAgentConfigStringPath(
       i,
       [`reasoning`],
-      r.reasoning.kind === `set`
-        ? { kind: `set`, value: r.reasoning.value }
-        : { kind: `remove` },
+      r.reasoning.kind === `set` ? { kind: `set`, value: r.reasoning.value } : { kind: `remove` },
     );
     if (t.kind === `bail`) return t;
     (t.nextSource !== i && a.push(`reasoning`), (i = t.nextSource));

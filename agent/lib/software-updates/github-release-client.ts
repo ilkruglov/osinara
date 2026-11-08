@@ -31,12 +31,14 @@ const IMAGE_DIGEST = "[0-9a-f]{64}";
 const NO_RELEASE = Symbol("no-published-release");
 
 const releaseSchema = z.object({
-  assets: z.array(z.object({
-    browser_download_url: z.url(),
-    name: z.string(),
-    state: z.string(),
-    url: z.url(),
-  })),
+  assets: z.array(
+    z.object({
+      browser_download_url: z.url(),
+      name: z.string(),
+      state: z.string(),
+      url: z.url(),
+    }),
+  ),
   draft: z.boolean(),
   html_url: z.url(),
   immutable: z.boolean(),
@@ -44,29 +46,44 @@ const releaseSchema = z.object({
   tag_name: z.string(),
 });
 
-const manifestSchema = z.object({
-  commitSha: z.string().regex(/^[0-9a-f]{40}$/),
-  composeSha256: z.string().regex(/^[0-9a-f]{64}$/),
-  images: z.object({
-    app: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`)),
-    edge: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`)),
-    sandboxEgressProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`),
-    ),
-    sandboxRunner: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`),
-    ),
-    sandboxRuntime: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`),
-    ),
-    // Named by releases after 1.8.20 (BERTA exported to ONNX); a release without it still installs.
-    memoryEmbedding: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`),
-    ).optional(),
-  }).strict(),
-  schemaVersion: z.literal(1),
-  version: z.string(),
-}).strict();
+const manifestSchema = z
+  .object({
+    commitSha: z.string().regex(/^[0-9a-f]{40}$/),
+    composeSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    images: z
+      .object({
+        app: z
+          .string()
+          .regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`)),
+        edge: z
+          .string()
+          .regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`)),
+        sandboxEgressProxy: z
+          .string()
+          .regex(
+            new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`),
+          ),
+        sandboxRunner: z
+          .string()
+          .regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`)),
+        sandboxRuntime: z
+          .string()
+          .regex(
+            new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`),
+          ),
+        // Named by releases after 1.8.20 (BERTA exported to ONNX); a release without it still installs.
+        memoryEmbedding: z
+          .string()
+          .regex(
+            new RegExp(`^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`),
+          )
+          .optional(),
+      })
+      .strict(),
+    schemaVersion: z.literal(1),
+    version: z.string(),
+  })
+  .strict();
 
 export interface GitHubSoftwareReleaseClient {
   latestNewerThan(currentVersion: string): Promise<SoftwareRelease | null>;
@@ -79,7 +96,8 @@ interface GitHubSoftwareReleaseClientDependencies {
   token?: string | undefined;
 }
 
-const ASSET_API_URL = /^https:\/\/api\.github\.com\/repos\/ilkruglov\/osinara\/releases\/assets\/\d+$/u;
+const ASSET_API_URL =
+  /^https:\/\/api\.github\.com\/repos\/ilkruglov\/osinara\/releases\/assets\/\d+$/u;
 const TOKEN_FORMAT = /^[A-Za-z0-9_]{20,255}$/u;
 
 async function responseJson(
@@ -92,10 +110,12 @@ async function responseJson(
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch (error) {
-    console.error(JSON.stringify({
-      code,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     if (error instanceof Error) error.message = `${code}: ${message}`;
     throw error;
   }
@@ -121,10 +141,20 @@ export function createGitHubSoftwareReleaseClient(
 
   const token = dependencies.token?.trim() || undefined;
   if (token !== undefined && !TOKEN_FORMAT.test(token)) {
-    throw new AppError("AGENT_SOFTWARE_UPDATE_TOKEN_INVALID", "OSINARA_GITHUB_TOKEN имеет неожиданный формат");
+    throw new AppError(
+      "AGENT_SOFTWARE_UPDATE_TOKEN_INVALID",
+      "OSINARA_GITHUB_TOKEN имеет неожиданный формат",
+    );
   }
 
-  async function request(url: string, maxBytes: number, code: string, message: string, allowMissing = false, accept = "application/vnd.github+json") {
+  async function request(
+    url: string,
+    maxBytes: number,
+    code: string,
+    message: string,
+    allowMissing = false,
+    accept = "application/vnd.github+json",
+  ) {
     // Every endpoint is called exactly once with its own bounded signal.
     const response = await dependencies.fetch(url, {
       headers: {
@@ -174,8 +204,8 @@ export function createGitHubSoftwareReleaseClient(
         `/ilkruglov/osinara/releases/tag/${release.tag_name}`,
         "AGENT_SOFTWARE_RELEASE_URL_INVALID",
       );
-      const assets = release.assets.filter((asset) =>
-        asset.name === MANIFEST_ASSET_NAME && asset.state === "uploaded"
+      const assets = release.assets.filter(
+        (asset) => asset.name === MANIFEST_ASSET_NAME && asset.state === "uploaded",
       );
       if (assets.length !== 1) {
         throw new AppError(
@@ -189,7 +219,10 @@ export function createGitHubSoftwareReleaseClient(
         "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID",
       );
       if (!ASSET_API_URL.test(assets[0]!.url)) {
-        throw new AppError("AGENT_SOFTWARE_MANIFEST_ASSET_INVALID", "GitHub вернул ссылку на манифест из неожиданного источника");
+        throw new AppError(
+          "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID",
+          "GitHub вернул ссылку на манифест из неожиданного источника",
+        );
       }
       const manifestJson = await request(
         assets[0]!.url,

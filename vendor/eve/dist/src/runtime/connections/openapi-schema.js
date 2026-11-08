@@ -4,9 +4,7 @@ function buildInputSchema(e, t) {
     r = [];
   for (let t of e)
     ((n[t.name] =
-      t.description === void 0
-        ? t.schema
-        : { ...t.schema, description: t.description }),
+      t.description === void 0 ? t.schema : { ...t.schema, description: t.description }),
       t.required && r.push(t.name));
   t !== void 0 && ((n.body = t.schema), t.required && r.push(`body`));
   let i = { type: `object`, properties: n };
@@ -22,9 +20,7 @@ function derefSchema(t, n, r = 0, i = new Set()) {
   if (typeof n.$ref == `string`) {
     if (i.has(n.$ref)) return {};
     let e = resolveRef(t, n.$ref);
-    return e === void 0
-      ? {}
-      : derefSchema(t, e, r + 1, new Set([...i, n.$ref]));
+    return e === void 0 ? {} : derefSchema(t, e, r + 1, new Set([...i, n.$ref]));
   }
   let a = {};
   for (let [e, o] of Object.entries(n)) a[e] = derefSchema(t, o, r + 1, i);
@@ -43,9 +39,7 @@ function normalizeSchemaType(e) {
   let n = e.type;
   if (typeof n == `string` && !VALID_JSON_SCHEMA_TYPES.has(n)) delete e.type;
   else if (isArray(n)) {
-    let r = n.filter(
-      (e) => typeof e == `string` && VALID_JSON_SCHEMA_TYPES.has(e),
-    );
+    let r = n.filter((e) => typeof e == `string` && VALID_JSON_SCHEMA_TYPES.has(e));
     r.length === 0 ? delete e.type : (e.type = r);
   }
 }
@@ -58,9 +52,7 @@ function normalizeNullable(e) {
     ? n !== `null` && (e.type = [n, `null`])
     : isArray(n)
       ? n.includes(`null`) || (e.type = [...n, `null`])
-      : isArray(e.enum) &&
-        !e.enum.includes(null) &&
-        (e.enum = [...e.enum, null]);
+      : isArray(e.enum) && !e.enum.includes(null) && (e.enum = [...e.enum, null]);
 }
 function resolveRef(t, n) {
   if (!n.startsWith(`#/`)) return;

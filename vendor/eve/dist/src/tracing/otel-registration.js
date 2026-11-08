@@ -1,9 +1,5 @@
 import { createRequire } from "node:module";
-import {
-  context,
-  propagation,
-  trace,
-} from "#compiled/@opentelemetry/api/index.js";
+import { context, propagation, trace } from "#compiled/@opentelemetry/api/index.js";
 import { registerOTel } from "#compiled/@vercel/otel/index.js";
 import { AgentSpanIdGenerator } from "#tracing/agent-span-id-generator.js";
 const REGISTRATION_SPAN_NAME = `eve.otel.registration`,
@@ -21,11 +17,7 @@ var RegistrationMarkerPropagator = class {
       this.#e = !0;
     }
     isInstalled() {
-      return (
-        (this.#e = !1),
-        propagation.inject(context.active(), {}, { set: () => {} }),
-        this.#e
-      );
+      return ((this.#e = !1), propagation.inject(context.active(), {}, { set: () => {} }), this.#e);
     }
   },
   PrivateSpanFilteringProcessor = class {
@@ -52,11 +44,7 @@ var RegistrationMarkerPropagator = class {
         this.endedSpans.add(t);
       }
       let n = parentIdentity(e);
-      if (
-        n !== void 0 &&
-        this.startedSpans.has(n) &&
-        !this.forwardedSpans.has(n)
-      ) {
+      if (n !== void 0 && this.startedSpans.has(n) && !this.forwardedSpans.has(n)) {
         let t = this.pendingByParent.get(n) ?? [];
         (t.push(e), this.pendingByParent.set(n, t));
         return;
@@ -102,10 +90,7 @@ function registerOtelPipeline(e) {
   registerOTel(t.sampler === void 0 ? a : { ...a, traceSampler: t.sampler });
   let o = globalTracerUses(r),
     s = i.isInstalled();
-  if (
-    ((!o || !s) && rollbackRegistration({ ownsPropagator: s, ownsTracer: o }),
-    !o)
-  )
+  if (((!o || !s) && rollbackRegistration({ ownsPropagator: s, ownsTracer: o }), !o))
     throw Error(
       "eve could not register OpenTelemetry because another runtime already owns the global tracer provider. Remove the other `registerOTel` call, or move its exporters into eve's `otelIntegration({ spanProcessors: [...] })`.",
     );
@@ -117,9 +102,7 @@ function registerOtelPipeline(e) {
   if (typeof c.forceFlush != `function` || typeof c.shutdown != `function`)
     throw (
       rollbackRegistration({ ownsPropagator: s, ownsTracer: o }),
-      Error(
-        `The registered OpenTelemetry tracer provider has no lifecycle methods.`,
-      )
+      Error(`The registered OpenTelemetry tracer provider has no lifecycle methods.`)
     );
   return (
     n?.setDelegate(c),
@@ -156,27 +139,15 @@ function globalTracerUses(e) {
   let t = e.allocateSpanId();
   return (
     e
-      .withSpanId(t, () =>
-        trace.getTracer(`eve.registration`).startSpan(REGISTRATION_SPAN_NAME),
-      )
+      .withSpanId(t, () => trace.getTracer(`eve.registration`).startSpan(REGISTRATION_SPAN_NAME))
       .spanContext().spanId === t
   );
 }
 function isRegistrationSpan(e) {
-  return (
-    typeof e == `object` &&
-    !!e &&
-    `name` in e &&
-    e.name === REGISTRATION_SPAN_NAME
-  );
+  return typeof e == `object` && !!e && `name` in e && e.name === REGISTRATION_SPAN_NAME;
 }
 function spanIdentity(e) {
-  if (
-    typeof e != `object` ||
-    !e ||
-    !(`spanContext` in e) ||
-    typeof e.spanContext != `function`
-  )
+  if (typeof e != `object` || !e || !(`spanContext` in e) || typeof e.spanContext != `function`)
     return;
   let t = e.spanContext();
   return typeof t.traceId == `string` && typeof t.spanId == `string`

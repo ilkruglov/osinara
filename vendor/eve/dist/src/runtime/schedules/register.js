@@ -41,8 +41,4 @@ function assertUniqueScheduleIds(e) {
 function createScheduleTaskName(t) {
   return `${EVE_SCHEDULE_TASK_NAME_PREFIX}${Buffer.from(t, `utf8`).toString(`base64url`)}`;
 }
-export {
-  EVE_SCHEDULE_TASK_NAME_PREFIX,
-  ScheduleRegistrationError,
-  createScheduleRegistrations,
-};
+export { EVE_SCHEDULE_TASK_NAME_PREFIX, ScheduleRegistrationError, createScheduleRegistrations };

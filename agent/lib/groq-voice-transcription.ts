@@ -62,10 +62,17 @@ async function readLimitedBody(response: Response, maxBytes: number): Promise<Ui
     );
   }
   // A plain copy: a small Buffer may sit in Node's shared allocation pool.
-  return new Uint8Array(await readBoundedBody(response, maxBytes, () => new AppError(
-    "AGENT_VOICE_FILE_TOO_LARGE",
-    "Голосовое сообщение превышает допустимый размер. Отправьте более короткую запись",
-  )));
+  return new Uint8Array(
+    await readBoundedBody(
+      response,
+      maxBytes,
+      () =>
+        new AppError(
+          "AGENT_VOICE_FILE_TOO_LARGE",
+          "Голосовое сообщение превышает допустимый размер. Отправьте более короткую запись",
+        ),
+    ),
+  );
 }
 
 export function createTelegramVoiceTranscriber(dependencies: TelegramVoiceTranscriberDependencies) {
@@ -105,7 +112,10 @@ export function createTelegramVoiceTranscriber(dependencies: TelegramVoiceTransc
   };
 }
 
-const telegramFetchWithTimeout = withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS);
+const telegramFetchWithTimeout = withRequestTimeout(
+  (request, init) => fetch(request, init),
+  TELEGRAM_API_REQUEST_TIMEOUT_MS,
+);
 
 export const transcribeTelegramVoice = createTelegramVoiceTranscriber({
   downloadFile: (filePath) => downloadTelegramFile({ fetch: telegramFetchWithTimeout, filePath }),

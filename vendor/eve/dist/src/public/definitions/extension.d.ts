@@ -9,7 +9,7 @@ declare const MOUNTED_EXTENSION: unique symbol;
  * into the extension's scope.
  */
 export interface MountedExtension {
-    readonly [MOUNTED_EXTENSION]: true;
+  readonly [MOUNTED_EXTENSION]: true;
 }
 /**
  * Typed handle returned by {@link defineExtension} for an extension that declares
@@ -18,21 +18,21 @@ export interface MountedExtension {
  * connections read the bound config through {@link ExtensionHandle.config}.
  */
 export interface ExtensionHandle<S extends StandardSchemaV1 = StandardSchemaV1> {
-    /** Consumer mount factory: validates `values` against the schema and binds them. */
-    (values: StandardSchemaV1.InferInput<S>): MountedExtension;
-    /** The bound configuration, typed from the schema (defaults applied). */
-    readonly config: StandardSchemaV1.InferOutput<S>;
-    /** The declared config schema; read by `eve extension build`. */
-    readonly schema: S;
+  /** Consumer mount factory: validates `values` against the schema and binds them. */
+  (values: StandardSchemaV1.InferInput<S>): MountedExtension;
+  /** The bound configuration, typed from the schema (defaults applied). */
+  readonly config: StandardSchemaV1.InferOutput<S>;
+  /** The declared config schema; read by `eve extension build`. */
+  readonly schema: S;
 }
 /**
  * Handle returned by {@link defineExtension} for an extension with no config.
  * Mounted with a bare re-export; {@link NoConfigExtensionHandle.config} is empty.
  */
 export interface NoConfigExtensionHandle {
-    (): MountedExtension;
-    readonly config: Record<string, never>;
-    readonly schema: undefined;
+  (): MountedExtension;
+  readonly config: Record<string, never>;
+  readonly schema: undefined;
 }
 /**
  * Declares an eve extension. Optionally takes a `config` schema — any Standard
@@ -59,10 +59,16 @@ export interface NoConfigExtensionHandle {
  * The `namespace` argument is supplied by the bundler shim and is not part of the
  * authoring surface.
  */
-export declare function defineExtension<const S extends StandardSchemaV1>(options: {
+export declare function defineExtension<const S extends StandardSchemaV1>(
+  options: {
     readonly config: S;
-}, namespace?: string): ExtensionHandle<S>;
-export declare function defineExtension(options?: {
+  },
+  namespace?: string,
+): ExtensionHandle<S>;
+export declare function defineExtension(
+  options?: {
     readonly config?: undefined;
-}, namespace?: string): NoConfigExtensionHandle;
+  },
+  namespace?: string,
+): NoConfigExtensionHandle;
 export {};

@@ -71,9 +71,7 @@ function requireFixtureKey(contentToKey: ReadonlyMap<string, string>, content: s
 
 describeEval("memory retrieval eval v1", () => {
   let auth: MemoryAuthorization;
-  const contentToKey = new Map(
-    EVAL_RECORDS.map((record) => [record.content, record.key]),
-  );
+  const contentToKey = new Map(EVAL_RECORDS.map((record) => [record.content, record.key]));
 
   beforeAll(async () => {
     // The fixture owns the disposable database for deterministic ranks and metrics.
@@ -108,11 +106,13 @@ describeEval("memory retrieval eval v1", () => {
       offset < EVAL_RECORDS.length;
       offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE
     ) {
-      embeddings.push(...await embedMemoryPassages(
-        EVAL_RECORDS
-          .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
-          .map((record) => record.content),
-      ));
+      embeddings.push(
+        ...(await embedMemoryPassages(
+          EVAL_RECORDS.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE).map(
+            (record) => record.content,
+          ),
+        )),
+      );
     }
 
     // Each synthetic row receives one source-aligned chunk, which isolates retrieval quality from chunking.
@@ -124,7 +124,14 @@ describeEval("memory retrieval eval v1", () => {
          VALUES ($1, $2, $2, $3, 'personal', 'fact', $4, 'eval:retrieval-v1',
                  'user_confirmed', 'normal', $5, 'indexed', $6)
          RETURNING id`,
-        [auth.familyId, auth.userId, auth.telegramUserId, record.content, record.key, record.updatedAt],
+        [
+          auth.familyId,
+          auth.userId,
+          auth.telegramUserId,
+          record.content,
+          record.key,
+          record.updatedAt,
+        ],
       );
       await database().query(
         `INSERT INTO memory_embedding_chunks
@@ -152,9 +159,13 @@ describeEval("memory retrieval eval v1", () => {
       chunkCounts[record.key] = chunks.length;
       const embeddings: number[][] = [];
       for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
-        embeddings.push(...await embedMemoryPassages(
-          chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE).map((chunk) => chunk.content),
-        ));
+        embeddings.push(
+          ...(await embedMemoryPassages(
+            chunks
+              .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
+              .map((chunk) => chunk.content),
+          )),
+        );
       }
       const inserted = await database().query<{ id: string }>(
         `INSERT INTO memory_items
@@ -163,15 +174,29 @@ describeEval("memory retrieval eval v1", () => {
          VALUES ($1, $2, $2, $3, 'personal', 'episode', 'итог обсуждения', $4, 'eval:retrieval-v3',
                  'user_confirmed', 'normal', $5, 'indexed', $6)
          RETURNING id`,
-        [auth.familyId, auth.userId, auth.telegramUserId, record.content, record.key, record.updatedAt],
+        [
+          auth.familyId,
+          auth.userId,
+          auth.telegramUserId,
+          record.content,
+          record.key,
+          record.updatedAt,
+        ],
       );
       for (const [index, chunk] of chunks.entries()) {
         await database().query(
           `INSERT INTO memory_embedding_chunks
              (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
            VALUES ($1, $2, $3, $4, $5, $6::vector, $7)`,
-          [inserted.rows[0]!.id, chunk.chunkIndex, chunk.content, chunk.startOffset, chunk.endOffset,
-            `[${embeddings[index]!.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+          [
+            inserted.rows[0]!.id,
+            chunk.chunkIndex,
+            chunk.content,
+            chunk.startOffset,
+            chunk.endOffset,
+            `[${embeddings[index]!.join(",")}]`,
+            MEMORY_EMBEDDING_MODEL_VERSION,
+          ],
         );
       }
     }
@@ -179,14 +204,20 @@ describeEval("memory retrieval eval v1", () => {
     const evaluated: EvaluatedQuery[] = [];
     for (const query of MEMORY_RETRIEVAL_EVAL_QUERIES_V3) {
       const { results } = await memoryRetrievalRepository.searchWithConflictClosure(
-        auth, query.text, await embedMemoryQuery(query.text), EVAL_RESULT_LIMIT,
+        auth,
+        query.text,
+        await embedMemoryQuery(query.text),
+        EVAL_RESULT_LIMIT,
       );
-      const resultKeys = results.map((result) => requireFixtureKey(contentToKey, result.memory.content));
+      const resultKeys = results.map((result) =>
+        requireFixtureKey(contentToKey, result.memory.content),
+      );
       evaluated.push({
         duplicateCount: 0,
-        hit: query.expectedKeys.length === 0
-          ? results.length === 0
-          : query.expectedKeys.some((key) => resultKeys.includes(key)),
+        hit:
+          query.expectedKeys.length === 0
+            ? results.length === 0
+            : query.expectedKeys.some((key) => resultKeys.includes(key)),
         query,
         resultAttributions: results.map((result, index) => ({
           branches: [
@@ -205,13 +236,21 @@ describeEval("memory retrieval eval v1", () => {
       buriedThesisRecallAt5: buried.filter((entry) => entry.hit).length / buried.length,
       chunkCounts,
       negativeEmptyRate: negatives.filter((entry) => entry.hit).length / negatives.length,
-      topHitRate: buried.filter((entry) => entry.resultKeys[0] === entry.query.expectedKeys[0]).length / buried.length,
+      topHitRate:
+        buried.filter((entry) => entry.resultKeys[0] === entry.query.expectedKeys[0]).length /
+        buried.length,
     };
     console.info("MEMORY_RETRIEVAL_EVAL_V3_LONG", JSON.stringify({ evaluated, metrics }));
 
-    expect(metrics.buriedThesisRecallAt5).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.buriedThesisRecallAt5Minimum);
-    expect(metrics.topHitRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.buriedThesisTopHitRateMinimum);
-    expect(metrics.negativeEmptyRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.negativeEmptyRateMinimum);
+    expect(metrics.buriedThesisRecallAt5).toBeGreaterThanOrEqual(
+      MEMORY_RETRIEVAL_V3_GATES.buriedThesisRecallAt5Minimum,
+    );
+    expect(metrics.topHitRate).toBeGreaterThanOrEqual(
+      MEMORY_RETRIEVAL_V3_GATES.buriedThesisTopHitRateMinimum,
+    );
+    expect(metrics.negativeEmptyRate).toBeGreaterThanOrEqual(
+      MEMORY_RETRIEVAL_V3_GATES.negativeEmptyRateMinimum,
+    );
   }, 180_000);
 
   it("preserves strict-search R1 recall gates and prints the measured result", async () => {
@@ -226,28 +265,33 @@ describeEval("memory retrieval eval v1", () => {
       // Every exposed attribution must carry branch-local evidence that already passed its gate.
       for (const result of results) {
         if (result.evidence.simpleLexicalRank !== null) {
-          expect(result.evidence.simpleLexicalRank)
-            .toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK);
+          expect(result.evidence.simpleLexicalRank).toBeGreaterThanOrEqual(
+            MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
+          );
         }
         if (result.evidence.russianMorphologyRank !== null) {
-          expect(result.evidence.russianMorphologyRank)
-            .toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK);
+          expect(result.evidence.russianMorphologyRank).toBeGreaterThanOrEqual(
+            MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
+          );
         }
         if (result.evidence.semanticSimilarity !== null) {
-          expect(result.evidence.semanticSimilarity)
-            .toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY);
+          expect(result.evidence.semanticSimilarity).toBeGreaterThanOrEqual(
+            MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+          );
         }
       }
       const resultKeys = results.map((result) =>
-        requireFixtureKey(contentToKey, result.memory.content)
+        requireFixtureKey(contentToKey, result.memory.content),
       );
       evaluated.push({
-        duplicateCount: query.key === "duplicate-pollution"
-          ? resultKeys.filter((key) => key.startsWith("duplicate-")).length
-          : 0,
-        hit: query.expectedKeys.length === 0
-          ? results.length === 0
-          : query.expectedKeys.some((key) => resultKeys.includes(key)),
+        duplicateCount:
+          query.key === "duplicate-pollution"
+            ? resultKeys.filter((key) => key.startsWith("duplicate-")).length
+            : 0,
+        hit:
+          query.expectedKeys.length === 0
+            ? results.length === 0
+            : query.expectedKeys.some((key) => resultKeys.includes(key)),
         query,
         resultAttributions: results.map((result, index) => ({
           branches: [
@@ -262,8 +306,8 @@ describeEval("memory retrieval eval v1", () => {
     }
 
     // Typo quality is measured separately: pg_trgm is justified only if BERTA plus FTS cannot recover it.
-    const positive = evaluated.filter((entry) =>
-      entry.query.category !== "negative" && entry.query.category !== "typo"
+    const positive = evaluated.filter(
+      (entry) => entry.query.category !== "negative" && entry.query.category !== "typo",
     );
     const negative = evaluated.filter((entry) => entry.query.category === "negative");
     const metrics = {
@@ -282,7 +326,9 @@ describeEval("memory retrieval eval v1", () => {
       MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1.requiredParaphraseSimilarityMinimum,
     );
     // The checked-in baseline makes an accidental return to R0's always-return behavior measurable.
-    expect(metrics.negativeEmptyRate).toBeGreaterThan(MEMORY_RETRIEVAL_R0_BASELINE_V1.negativeEmptyRate);
+    expect(metrics.negativeEmptyRate).toBeGreaterThan(
+      MEMORY_RETRIEVAL_R0_BASELINE_V1.negativeEmptyRate,
+    );
     expect(metrics.duplicateResultsAt5).toBeLessThan(
       MEMORY_RETRIEVAL_R0_BASELINE_V1.duplicateResultsAt5,
     );
@@ -295,18 +341,21 @@ describeEval("memory retrieval eval v1", () => {
     expect(metrics.duplicateResultsAt5).toBeLessThanOrEqual(
       MEMORY_RETRIEVAL_R1_GATES_V1.duplicateResultsAt5Maximum,
     );
-    expect(evaluated
-      .find((entry) => entry.query.key === "inflected-name")
-      ?.resultAttributions.find((result) => result.key === "architect-meeting")?.branches)
-      .toContain("russian");
-    expect(evaluated
-      .find((entry) => entry.query.key === "exact-number")
-      ?.resultAttributions.find((result) => result.key === "storage-code")?.branches)
-      .toContain("simple");
-    expect(evaluated
-      .find((entry) => entry.query.key === "cross-language-paraphrase")
-      ?.resultAttributions.find((result) => result.key === "backup-location")?.branches)
-      .toContain("semantic");
+    expect(
+      evaluated
+        .find((entry) => entry.query.key === "inflected-name")
+        ?.resultAttributions.find((result) => result.key === "architect-meeting")?.branches,
+    ).toContain("russian");
+    expect(
+      evaluated
+        .find((entry) => entry.query.key === "exact-number")
+        ?.resultAttributions.find((result) => result.key === "storage-code")?.branches,
+    ).toContain("simple");
+    expect(
+      evaluated
+        .find((entry) => entry.query.key === "cross-language-paraphrase")
+        ?.resultAttributions.find((result) => result.key === "backup-location")?.branches,
+    ).toContain("semantic");
     expect(metrics.typoRecovered).toBe(true);
   }, 120_000);
 
@@ -320,13 +369,14 @@ describeEval("memory retrieval eval v1", () => {
         EVAL_RESULT_LIMIT,
       );
       const resultKeys = results.map((result) =>
-        requireFixtureKey(contentToKey, result.memory.content)
+        requireFixtureKey(contentToKey, result.memory.content),
       );
       evaluated.push({
         duplicateCount: 0,
-        hit: query.expectedKeys.length === 0
-          ? results.length === 0
-          : query.expectedKeys.some((key) => resultKeys.includes(key)),
+        hit:
+          query.expectedKeys.length === 0
+            ? results.length === 0
+            : query.expectedKeys.some((key) => resultKeys.includes(key)),
         query,
         resultAttributions: results.map((result, index) => ({
           branches: [
@@ -344,23 +394,32 @@ describeEval("memory retrieval eval v1", () => {
     const controls = evaluated.filter((entry) => entry.query.category !== "negative");
     const hardNegatives = evaluated.filter((entry) => entry.query.category === "negative");
     const metrics = {
-      hardNegativeEmptyRate: hardNegatives.filter((entry) => entry.hit).length /
-        hardNegatives.length,
+      hardNegativeEmptyRate:
+        hardNegatives.filter((entry) => entry.hit).length / hardNegatives.length,
       hardNegativeQueries: hardNegatives.length,
       identityControlRecallAt5: controls.filter((entry) => entry.hit).length / controls.length,
     };
     console.info("MEMORY_RETRIEVAL_EVAL_V2_IDENTITY", JSON.stringify({ evaluated, metrics }));
 
-    expect(metrics.hardNegativeEmptyRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V2_GATES.hardNegativeEmptyRateMinimum);
-    expect(metrics.identityControlRecallAt5).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V2_GATES.identityControlRecallAt5Minimum);
+    expect(metrics.hardNegativeEmptyRate).toBeGreaterThanOrEqual(
+      MEMORY_RETRIEVAL_V2_GATES.hardNegativeEmptyRateMinimum,
+    );
+    expect(metrics.identityControlRecallAt5).toBeGreaterThanOrEqual(
+      MEMORY_RETRIEVAL_V2_GATES.identityControlRecallAt5Minimum,
+    );
   }, 120_000);
   it("recovers an indirect Russian question in strict mode without a weak label", async () => {
-    const results = await retrieveRelevantMemories(auth,
-      "Как попасть в мастерскую, если основной комплект потерялся?");
-    const spareKey = results.find((result) => "content" in result && result.content ===
-      MEMORY_RETRIEVAL_EVAL_RECORDS_V1.find((record) => record.key === "spare-key")!.content);
+    const results = await retrieveRelevantMemories(
+      auth,
+      "Как попасть в мастерскую, если основной комплект потерялся?",
+    );
+    const spareKey = results.find(
+      (result) =>
+        "content" in result &&
+        result.content ===
+          MEMORY_RETRIEVAL_EVAL_RECORDS_V1.find((record) => record.key === "spare-key")!.content,
+    );
     expect(spareKey).toBeDefined();
     expect(spareKey).not.toHaveProperty("matchQuality");
   });
-
 });

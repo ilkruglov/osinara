@@ -54,7 +54,8 @@ export function eventLogCacheKey(
   sortOrder: string,
 ): string | null {
   if (sortOrder !== "asc") return null;
-  if (params.pagination?.cursor !== undefined || params.pagination?.limit !== undefined) return null;
+  if (params.pagination?.cursor !== undefined || params.pagination?.limit !== undefined)
+    return null;
   if (typeof params.runId !== "string" || params.runId.length === 0) return null;
   return `${params.runId}\0${resolveData}`;
 }
@@ -67,13 +68,27 @@ function estimateBytes(data: readonly unknown[]): number {
   function count(value: unknown, depth: number): void {
     if (bytes > MAX_ENTRY_BYTES) return;
     // Pathological metadata is not worth caching; these guards bound traversal work and stack use.
-    if (++visited > 1_000_000 || depth > 64) { bytes = Infinity; return; }
-    if (typeof value === "string") { bytes += value.length * 2; return; }
-    if (value === null || value === undefined || typeof value === "number" || typeof value === "boolean") {
+    if (++visited > 1_000_000 || depth > 64) {
+      bytes = Infinity;
+      return;
+    }
+    if (typeof value === "string") {
+      bytes += value.length * 2;
+      return;
+    }
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
       bytes += 8;
       return;
     }
-    if (typeof value !== "object") { bytes = Infinity; return; }
+    if (typeof value !== "object") {
+      bytes = Infinity;
+      return;
+    }
     if (seen.has(value)) return;
     seen.add(value);
     bytes += 64;
@@ -90,7 +105,10 @@ function estimateBytes(data: readonly unknown[]): number {
         if (bytes > MAX_ENTRY_BYTES) break;
         count(item, depth + 1);
       }
-    } else if (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) {
+    } else if (
+      Object.getPrototypeOf(value) === Object.prototype ||
+      Object.getPrototypeOf(value) === null
+    ) {
       for (const [key, item] of Object.entries(value)) {
         bytes += 16 + key.length * 2;
         count(item, depth + 1);
@@ -101,7 +119,11 @@ function estimateBytes(data: readonly unknown[]): number {
       bytes = Infinity;
     }
   }
-  try { count(data, 0); } catch { return Infinity; }
+  try {
+    count(data, 0);
+  } catch {
+    return Infinity;
+  }
   return bytes;
 }
 
@@ -151,11 +173,13 @@ export function traceEventLogRead(
   milliseconds: number,
   log: (line: string) => void = (line) => console.info(line),
 ): void {
-  log(JSON.stringify({
-    code: "AGENT_WORKFLOW_EVENT_LOG",
-    fetched,
-    ms: Math.round(milliseconds),
-    reused,
-    runId,
-  }));
+  log(
+    JSON.stringify({
+      code: "AGENT_WORKFLOW_EVENT_LOG",
+      fetched,
+      ms: Math.round(milliseconds),
+      reused,
+      runId,
+    }),
+  );
 }

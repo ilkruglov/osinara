@@ -32,11 +32,7 @@ function createRegistrySession(t) {
       if (a.deploymentRequired !== !0) return result();
       let n = await t.detectDeployment(e.appRoot, { signal: e.signal }),
         r = n.state === `linked` || n.state === `deployed`;
-      for (
-        e.prompter.replaceContent?.({ headline: `Added ${o}`, facts: s });
-        ;
-
-      ) {
+      for (e.prompter.replaceContent?.({ headline: `Added ${o}`, facts: s }); ;) {
         let n = await e.prompter.select({
           message: `What would you like to do next?`,
           initialValue: `add-more`,
@@ -47,8 +43,7 @@ function createRegistrySession(t) {
             { value: `finish`, label: `Finish` },
           ],
         });
-        if (n === `add-more`)
-          return (e.prompter.replaceContent?.(), `add-more`);
+        if (n === `add-more`) return (e.prompter.replaceContent?.(), `add-more`);
         if (n === `finish`) return result();
         if (
           (await e.prompter.select({

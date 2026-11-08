@@ -64,9 +64,7 @@ export function resolveGoogleWorkspaceCliArtifact(
   return artifact;
 }
 
-export function resolveGoogleWorkspaceCliDownloadUrl(
-  artifact: GoogleWorkspaceCliArtifact,
-): string {
+export function resolveGoogleWorkspaceCliDownloadUrl(artifact: GoogleWorkspaceCliArtifact): string {
   return `${GWS_RELEASE_DOWNLOAD_BASE_URL}/v${GWS_VERSION}/${artifact.archiveName}`;
 }
 
@@ -112,10 +110,15 @@ async function downloadVerifiedArchive(artifact: GoogleWorkspaceCliArtifact): Pr
     } catch (error) {
       lastError = error;
       // A checksum mismatch is not a network condition; retrying would download the same bytes.
-      if (error instanceof Error && error.message.startsWith("AGENT_GWS_CHECKSUM_MISMATCH")) throw error;
-      console.warn(`gws download attempt ${attempt} of ${DOWNLOAD_ATTEMPTS} failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error && error.message.startsWith("AGENT_GWS_CHECKSUM_MISMATCH"))
+        throw error;
+      console.warn(
+        `gws download attempt ${attempt} of ${DOWNLOAD_ATTEMPTS} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       if (attempt < DOWNLOAD_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_RETRY_DELAY_MILLISECONDS * attempt));
+        await new Promise((resolve) =>
+          setTimeout(resolve, DOWNLOAD_RETRY_DELAY_MILLISECONDS * attempt),
+        );
       }
     }
   }

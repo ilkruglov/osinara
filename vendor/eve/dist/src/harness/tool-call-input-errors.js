@@ -58,8 +58,7 @@ function getInvalidToolCallInputError(t) {
       });
       return;
     } catch (e) {
-      if (e instanceof TypeError)
-        return createInvalidToolCallInputError({ error: e, toolCall: n });
+      if (e instanceof TypeError) return createInvalidToolCallInputError({ error: e, toolCall: n });
       throw e;
     }
 }

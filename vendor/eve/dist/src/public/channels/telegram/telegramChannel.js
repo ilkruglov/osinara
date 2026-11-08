@@ -29,10 +29,7 @@ import {
   collectTelegramFileParts,
   createTelegramFetchFile,
 } from "#public/channels/telegram/attachments.js";
-import {
-  defaultEvents,
-  defaultOnMessage,
-} from "#public/channels/telegram/defaults.js";
+import { defaultEvents, defaultOnMessage } from "#public/channels/telegram/defaults.js";
 import { verifyTelegramRequest } from "#public/channels/telegram/verify.js";
 const log = createLogger(`telegram.channel`);
 function telegramChannel(e = {}) {
@@ -57,54 +54,48 @@ function telegramChannel(e = {}) {
         return rebuildTelegramContext(t, n, e);
       },
       routes: [
-        POST(
-          e.route ?? `/eve/v1/telegram`,
-          async (r, { from: a, waitUntil: o }) => {
-            let s = await verifyInbound(r, e.credentials);
-            if (s === null)
-              return new Response(`unauthorized`, { status: 401 });
-            let c;
-            try {
-              c = parseJsonObject(JSON.parse(s));
-            } catch (e) {
-              return (
-                log.warn(`inbound Telegram body is not valid JSON`, {
-                  error: e,
-                }),
-                new Response(`ok`)
-              );
-            }
-            let u = parseTelegramUpdate(c);
-            // Osinara: a verified update of a kind Eve does not parse (message_reaction) goes to
-            // the application instead of being dropped.
-            if (u === null)
-              return e.onUnparsedUpdate === void 0
-                ? new Response(`ok`)
-                : e.onUnparsedUpdate(c);
-            let d = (l) =>
-              l.kind === `message`
-                ? dispatchMessage({
-                    config: e,
-                    message: l.message,
-                    onMessage: n,
-                    uploadPolicy: t,
-                    from: a,
-                  })
-                : dispatchCallbackQuery({
-                    config: e,
-                    query: l.callbackQuery,
-                    from: a,
-                  });
-            return e.onVerifiedUpdate !== void 0
-              ? e.onVerifiedUpdate({
-                  dispatch: d,
-                  raw: c,
-                  update: u,
-                  waitUntil: o,
+        POST(e.route ?? `/eve/v1/telegram`, async (r, { from: a, waitUntil: o }) => {
+          let s = await verifyInbound(r, e.credentials);
+          if (s === null) return new Response(`unauthorized`, { status: 401 });
+          let c;
+          try {
+            c = parseJsonObject(JSON.parse(s));
+          } catch (e) {
+            return (
+              log.warn(`inbound Telegram body is not valid JSON`, {
+                error: e,
+              }),
+              new Response(`ok`)
+            );
+          }
+          let u = parseTelegramUpdate(c);
+          // Osinara: a verified update of a kind Eve does not parse (message_reaction) goes to
+          // the application instead of being dropped.
+          if (u === null)
+            return e.onUnparsedUpdate === void 0 ? new Response(`ok`) : e.onUnparsedUpdate(c);
+          let d = (l) =>
+            l.kind === `message`
+              ? dispatchMessage({
+                  config: e,
+                  message: l.message,
+                  onMessage: n,
+                  uploadPolicy: t,
+                  from: a,
                 })
-              : (o(d(u)), new Response(`ok`));
-          },
-        ),
+              : dispatchCallbackQuery({
+                  config: e,
+                  query: l.callbackQuery,
+                  from: a,
+                });
+          return e.onVerifiedUpdate !== void 0
+            ? e.onVerifiedUpdate({
+                dispatch: d,
+                raw: c,
+                update: u,
+                waitUntil: o,
+              })
+            : (o(d(u)), new Response(`ok`));
+        }),
         ...(e.onDrain === void 0
           ? []
           : [
@@ -136,10 +127,8 @@ function telegramChannel(e = {}) {
       async receive(t, { from: n }) {
         let r = t.target,
           i = readChatId(r.chatId);
-        if (i === void 0)
-          throw Error(`telegramChannel().receive requires target.chatId.`);
-        let a =
-            typeof r.messageThreadId == `number` ? r.messageThreadId : void 0,
+        if (i === void 0) throw Error(`telegramChannel().receive requires target.chatId.`);
+        let a = typeof r.messageThreadId == `number` ? r.messageThreadId : void 0,
           o = readOptionalString(r.conversationId),
           s = r.initialMessage;
         if (s !== void 0 && o !== void 0)
@@ -153,8 +142,7 @@ function telegramChannel(e = {}) {
           messageThreadId: a ?? null,
         };
         return (
-          s !== void 0 &&
-            (await buildTelegramHandle({ config: e, state: c }).sendMessage(s)),
+          s !== void 0 && (await buildTelegramHandle({ config: e, state: c }).sendMessage(s)),
           n(continuationTokenFromState(c)).send(t.message, {
             auth: t.auth,
             state: c,
@@ -191,8 +179,7 @@ function buildTelegramHandle(e) {
   }
   async function sendOne(e) {
     let t = r.chatId ?? ``;
-    if (!t)
-      throw Error(`telegramChannel: missing chat id for outbound message.`);
+    if (!t) throw Error(`telegramChannel: missing chat id for outbound message.`);
     let a = await sendTelegramMessage({
       apiBaseUrl: n?.apiBaseUrl,
       body: {
@@ -224,8 +211,7 @@ function buildTelegramHandle(e) {
     },
     editMessageReplyMarkup(e) {
       let t = r.chatId ?? ``;
-      if (!t)
-        throw Error(`telegramChannel: missing chat id for reply-markup edit.`);
+      if (!t) throw Error(`telegramChannel: missing chat id for reply-markup edit.`);
       return editTelegramMessageReplyMarkup({
         apiBaseUrl: n?.apiBaseUrl,
         chatId: t,
@@ -290,17 +276,11 @@ async function verifyInbound(e, t) {
       webhookVerifier: t?.webhookVerifier,
     });
   } catch (e) {
-    return (
-      log.warn(`telegram inbound verification failed`, { error: e }),
-      null
-    );
+    return (log.warn(`telegram inbound verification failed`, { error: e }), null);
   }
 }
 async function dispatchMessage(e) {
-  /* bot senders are classified by the application */ let t = stateFromMessage(
-      e.message,
-      e.config,
-    ),
+  /* bot senders are classified by the application */ let t = stateFromMessage(e.message, e.config),
     n = { telegram: buildTelegramHandle({ config: e.config, state: t }) },
     r;
   try {
@@ -378,10 +358,9 @@ async function dispatchCallbackQuery(e) {
     try {
       return await e
         .from(i.continuationToken ?? r)
-        .respond(
-          i.inputResponses ?? [telegramCallbackInputResponse(e.query.data)],
-          { auth: i.auth },
-        );
+        .respond(i.inputResponses ?? [telegramCallbackInputResponse(e.query.data)], {
+          auth: i.auth,
+        });
     } catch (e) {
       log.error(`callback query delivery failed`, { error: e });
       throw e;
@@ -451,15 +430,12 @@ function stateFromCallbackQuery(e, t) {
   };
 }
 function conversationIdForMessage(e) {
-  return e.replyToMessage?.from?.isBot === !0
-    ? e.replyToMessage.messageId
-    : e.messageId;
+  return e.replyToMessage?.from?.isBot === !0 ? e.replyToMessage.messageId : e.messageId;
 }
 function continuationTokenFromState(e) {
   return telegramContinuationToken({
     chatId: e.chatId ?? ``,
-    conversationId:
-      e.chatType === `private` ? void 0 : (e.conversationId ?? void 0),
+    conversationId: e.chatType === `private` ? void 0 : (e.conversationId ?? void 0),
     messageThreadId: e.messageThreadId ?? void 0,
   });
 }

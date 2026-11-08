@@ -157,7 +157,10 @@ describe("Telegram interface localization", () => {
           name: "birthday-card",
           trialRequest: "Сделай открытку Жене",
           trialSummary: "Сделала открытку для Жени",
-          trials: [{ exampleId: "e1", summary: "Прошло" }, { exampleId: "e2", summary: "Прошло" }],
+          trials: [
+            { exampleId: "e1", summary: "Прошло" },
+            { exampleId: "e2", summary: "Прошло" },
+          ],
         },
         kind: "tool-call" as const,
         toolName: "manage_skill",
@@ -263,7 +266,9 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Название: Рабочая группа");
     expect(request.prompt).toContain("Telegram chat ID: -1001");
     expect(request.prompt).toContain("Разрешённые инструменты: remember");
-    expect(request.prompt).toContain("история, workspace, память и сессии будут безвозвратно удалены");
+    expect(request.prompt).toContain(
+      "история, workspace, память и сессии будут безвозвратно удалены",
+    );
   });
 
   it("escapes control characters in model-provided approval values", () => {
@@ -317,7 +322,9 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("изменить политику внешней Telegram-группы");
     expect(request.prompt).toContain("Telegram chat ID: -1001");
     expect(request.prompt).toContain("Режим сообщений: owner_only");
-    expect(request.prompt).toContain("Полный список разрешённых инструментов: remember, list_group_history");
+    expect(request.prompt).toContain(
+      "Полный список разрешённых инструментов: remember, list_group_history",
+    );
     expect(request.prompt).toContain("Группа и бот останутся подключены");
     expect(request.prompt).not.toContain("Тихая проверка памяти");
   });
@@ -486,7 +493,9 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Telegram chat ID: -1001234567890");
     expect(request.prompt).toContain("Окно истории, дней: 7");
     expect(request.prompt).toContain("Разрешённые возможности: send_workspace_file, web_fetch");
-    expect(request.prompt).toContain("Сценарий: Прочитай snapshot, создай HTML и отправь его в группу.");
+    expect(request.prompt).toContain(
+      "Сценарий: Прочитай snapshot, создай HTML и отправь его в группу.",
+    );
   });
 
   it("localizes removal of a workspace Google profile", () => {
@@ -545,7 +554,8 @@ describe("Telegram interface localization", () => {
   it("shows the actionable schedule input explanation without internal details", () => {
     const turnMessage = formatTelegramTurnFailure({
       code: "AGENT_SCHEDULE_INPUT_INVALID",
-      message: "AGENT_SCHEDULE_INPUT_INVALID: Для daily recurrence передайте recurrence: {\"kind\":\"daily\",\"interval\":1}",
+      message:
+        'AGENT_SCHEDULE_INPUT_INVALID: Для daily recurrence передайте recurrence: {"kind":"daily","interval":1}',
     });
 
     expect(turnMessage).toContain("Для daily recurrence передайте recurrence");
@@ -556,7 +566,8 @@ describe("Telegram interface localization", () => {
   it("shows actionable input explanations for every validated model payload", () => {
     const turnMessage = formatTelegramTurnFailure({
       code: "AGENT_REMINDER_INPUT_INVALID",
-      message: "AGENT_REMINDER_INPUT_INVALID: Для recurrence передайте null или объект {\"unit\":\"weekly\",\"interval\":1}",
+      message:
+        'AGENT_REMINDER_INPUT_INVALID: Для recurrence передайте null или объект {"unit":"weekly","interval":1}',
     });
 
     expect(turnMessage).toContain("Для recurrence передайте null");
@@ -573,7 +584,9 @@ describe("Telegram interface localization", () => {
     };
 
     expect(isUnrecoverableHistoryFailure(data)).toBe(true);
-    expect(isUnrecoverableHistoryFailure({ code: "MODEL_CALL_FAILED", details: { errorId: "x" } })).toBe(false);
+    expect(
+      isUnrecoverableHistoryFailure({ code: "MODEL_CALL_FAILED", details: { errorId: "x" } }),
+    ).toBe(false);
     expect(formatTelegramTurnFailure(data)).toContain("следующее сообщение начнёт новый контекст");
   });
 
@@ -596,5 +609,4 @@ describe("Telegram interface localization", () => {
     expect(turnMessage).not.toContain("<think>");
     expect(turnMessage).not.toContain("secret reasoning");
   });
-
 });

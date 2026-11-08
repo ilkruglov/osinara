@@ -38,9 +38,7 @@ async function terminateChildSessionsStep(e) {
         });
       }
   }
-  let l = (getAgentHandleStore(s.state)?.handles ?? []).filter(
-    isLocalChildHandle,
-  );
+  let l = (getAgentHandleStore(s.state)?.handles ?? []).filter(isLocalChildHandle);
   if (l.length !== 0)
     for (let e of l) {
       if (e.phase === `starting`) {
@@ -74,12 +72,9 @@ function readSessionTaskIndex(e, n) {
     return getSessionTaskIndex(e);
   } catch (e) {
     return (
-      logError(
-        log,
-        `failed to read the task index during parent finalization`,
-        e,
-        { parentSessionId: n },
-      ),
+      logError(log, `failed to read the task index during parent finalization`, e, {
+        parentSessionId: n,
+      }),
       []
     );
   }

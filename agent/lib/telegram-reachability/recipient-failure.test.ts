@@ -8,10 +8,17 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { classifyTelegramRecipientFailure, telegramProviderDescription } from "./recipient-failure.js";
+import {
+  classifyTelegramRecipientFailure,
+  telegramProviderDescription,
+} from "./recipient-failure.js";
 
-const answer = (error_code: number, description: string, parameters?: Record<string, unknown>) =>
-  ({ description, error_code, ok: false, ...(parameters ? { parameters } : {}) });
+const answer = (error_code: number, description: string, parameters?: Record<string, unknown>) => ({
+  description,
+  error_code,
+  ok: false,
+  ...(parameters ? { parameters } : {}),
+});
 
 describe("classifyTelegramRecipientFailure", () => {
   it.each([
@@ -29,7 +36,12 @@ describe("classifyTelegramRecipientFailure", () => {
   });
 
   it.each([
-    [400, answer(400, "Bad Request: group chat was upgraded to a supergroup chat", { migrate_to_chat_id: -1001 })],
+    [
+      400,
+      answer(400, "Bad Request: group chat was upgraded to a supergroup chat", {
+        migrate_to_chat_id: -1001,
+      }),
+    ],
     [400, answer(400, "Bad Request: message thread not found")],
     [400, answer(400, "Bad Request: not enough rights to send text messages to the chat")],
     [403, answer(403, "Forbidden: bot can't send messages to bots")],
@@ -43,8 +55,12 @@ describe("classifyTelegramRecipientFailure", () => {
   });
 
   it("uses the HTTP status when the answer carries no error_code", () => {
-    expect(classifyTelegramRecipientFailure(403, { description: "Forbidden: user is deactivated", ok: false }))
-      .toBe("deactivated");
+    expect(
+      classifyTelegramRecipientFailure(403, {
+        description: "Forbidden: user is deactivated",
+        ok: false,
+      }),
+    ).toBe("deactivated");
   });
 });
 

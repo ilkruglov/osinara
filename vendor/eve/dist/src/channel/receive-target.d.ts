@@ -6,11 +6,12 @@ declare const receiveTargetMarker: unique symbol;
  * from a plain channel import.
  */
 export interface TypedReceiveTarget<TTarget = Record<string, unknown>> {
-    readonly [receiveTargetMarker]?: TTarget;
+  readonly [receiveTargetMarker]?: TTarget;
 }
 /**
  * Extracts the receive-target type from a channel value, falling back to
  * `Record<string, unknown>` when the channel declares no marker.
  */
-export type InferReceiveTarget<TChannel> = TChannel extends TypedReceiveTarget<infer TTarget> ? TTarget : Record<string, unknown>;
+export type InferReceiveTarget<TChannel> =
+  TChannel extends TypedReceiveTarget<infer TTarget> ? TTarget : Record<string, unknown>;
 export {};

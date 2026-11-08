@@ -15,9 +15,8 @@ import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 import { memoryTurnSourceRepository } from "./memory-turn-source-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("turn-bound memory source repository", () => {
   beforeEach(async () => {
@@ -138,20 +137,25 @@ describeWithDatabase("turn-bound memory source repository", () => {
     };
 
     // The bot id must match the message author; a user identity cannot claim a bot message.
-    await expect(memoryTurnSourceRepository.bind({ ...binding, invokingActorId: "7000000002" }))
-      .rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
-    await expect(memoryTurnSourceRepository.bind({
-      ...binding,
-      invokingActorId: "agent-memory-author",
-      invokingActorKind: "telegram_user",
-    })).rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
+    await expect(
+      memoryTurnSourceRepository.bind({ ...binding, invokingActorId: "7000000002" }),
+    ).rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
+    await expect(
+      memoryTurnSourceRepository.bind({
+        ...binding,
+        invokingActorId: "agent-memory-author",
+        invokingActorKind: "telegram_user",
+      }),
+    ).rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
 
     await memoryTurnSourceRepository.bind(binding);
-    await expect(memoryTurnSourceRepository.resolve({
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      sourceSequence: null,
-    })).resolves.toMatchObject({
+    await expect(
+      memoryTurnSourceRepository.resolve({
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        sourceSequence: null,
+      }),
+    ).resolves.toMatchObject({
       conversationId: fixture.conversationId,
       invokingActorId: "7000000001",
       invokingActorKind: "telegram_bot",
@@ -206,26 +210,32 @@ describeWithDatabase("turn-bound memory source repository", () => {
     };
     await memoryTurnSourceRepository.bind(binding);
 
-    await expect(memoryTurnSourceRepository.verifyBoundResume({
-      applicationSessionId: binding.applicationSessionId,
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      invokingActorId: binding.invokingActorId,
-      invokingActorKind: binding.invokingActorKind,
-    })).resolves.toBe(true);
-    await expect(memoryTurnSourceRepository.verifyBoundResume({
-      applicationSessionId: binding.applicationSessionId,
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      invokingActorId: "another-telegram-actor",
-      invokingActorKind: binding.invokingActorKind,
-    })).resolves.toBe(false);
+    await expect(
+      memoryTurnSourceRepository.verifyBoundResume({
+        applicationSessionId: binding.applicationSessionId,
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        invokingActorId: binding.invokingActorId,
+        invokingActorKind: binding.invokingActorKind,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      memoryTurnSourceRepository.verifyBoundResume({
+        applicationSessionId: binding.applicationSessionId,
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        invokingActorId: "another-telegram-actor",
+        invokingActorKind: binding.invokingActorKind,
+      }),
+    ).resolves.toBe(false);
 
-    await expect(memoryTurnSourceRepository.resolve({
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      sourceSequence: "2",
-    })).resolves.toMatchObject({
+    await expect(
+      memoryTurnSourceRepository.resolve({
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        sourceSequence: "2",
+      }),
+    ).resolves.toMatchObject({
       conversationId: fixture.conversationId,
       invokingActorId: "agent-memory-author",
       invokingActorKind: "telegram_user",
@@ -248,45 +258,56 @@ describeWithDatabase("turn-bound memory source repository", () => {
       sensitivity: "normal",
       source: "eve:delta-source-memory",
     });
-    await expect(database().query(
-      `SELECT item.subject_user_id, evidence.author_user_id, evidence.timeline_entry_id,
+    await expect(
+      database().query(
+        `SELECT item.subject_user_id, evidence.author_user_id, evidence.timeline_entry_id,
               operation.actor_user_id
        FROM memory_items AS item
        JOIN claim_evidence AS evidence ON evidence.claim_id = item.id
        JOIN memory_mutation_operations AS operation ON operation.memory_item_id = item.id
        WHERE item.id = $1`,
-      [memory.id],
-    )).resolves.toMatchObject({ rows: [{
-      actor_user_id: fixture.userId,
-      author_user_id: secondUser.rows[0]!.id,
-      subject_user_id: secondUser.rows[0]!.id,
-      timeline_entry_id: delta.rows[0]!.id,
-    }] });
-    await expect(memoryTurnSourceRepository.resolve({
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      sourceSequence: null,
-    })).resolves.toMatchObject({
+        [memory.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          actor_user_id: fixture.userId,
+          author_user_id: secondUser.rows[0]!.id,
+          subject_user_id: secondUser.rows[0]!.id,
+          timeline_entry_id: delta.rows[0]!.id,
+        },
+      ],
+    });
+    await expect(
+      memoryTurnSourceRepository.resolve({
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        sourceSequence: null,
+      }),
+    ).resolves.toMatchObject({
       isCurrent: true,
       timelineEntryId: fixture.timelineEntryId,
     });
 
-    await expect(memoryTurnSourceRepository.bind({
-      ...binding,
-      visibleTimelineEntryIds: [fixture.timelineEntryId],
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH" });
+    await expect(
+      memoryTurnSourceRepository.bind({
+        ...binding,
+        visibleTimelineEntryIds: [fixture.timelineEntryId],
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH" });
 
     // Active turn bindings retain source rows across ordinary timeline pruning/deletion attempts.
-    await expect(database().query(
-      "DELETE FROM telegram_group_messages WHERE id = $1",
-      [delta.rows[0]!.id],
-    )).rejects.toThrow();
+    await expect(
+      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [delta.rows[0]!.id]),
+    ).rejects.toThrow();
 
     await memoryTurnSourceRepository.release(binding.eveSessionId, binding.eveTurnId);
-    await expect(memoryTurnSourceRepository.resolve({
-      eveSessionId: binding.eveSessionId,
-      eveTurnId: binding.eveTurnId,
-      sourceSequence: "2",
-    })).resolves.toBeNull();
+    await expect(
+      memoryTurnSourceRepository.resolve({
+        eveSessionId: binding.eveSessionId,
+        eveTurnId: binding.eveTurnId,
+        sourceSequence: "2",
+      }),
+    ).resolves.toBeNull();
   });
 });

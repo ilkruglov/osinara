@@ -11,7 +11,10 @@
  *   shared one timeout across all requests of an adapter, some dropped the caller's signal. Here
  *   the deadline starts per request and no signal a caller passed is lost.
  */
-export function deadlineSignal(timeoutMs: number, ...signals: readonly (AbortSignal | undefined)[]): AbortSignal {
+export function deadlineSignal(
+  timeoutMs: number,
+  ...signals: readonly (AbortSignal | undefined)[]
+): AbortSignal {
   const present = signals.filter((signal): signal is AbortSignal => signal !== undefined);
   const timeout = AbortSignal.timeout(timeoutMs);
   return present.length === 0 ? timeout : AbortSignal.any([...present, timeout]);
@@ -22,8 +25,9 @@ export function withRequestTimeout(
   timeoutMs: number,
   outerSignal?: AbortSignal,
 ): typeof fetch {
-  return (request, init) => fetchImplementation(request, {
-    ...init,
-    signal: deadlineSignal(timeoutMs, outerSignal, init?.signal ?? undefined),
-  });
+  return (request, init) =>
+    fetchImplementation(request, {
+      ...init,
+      signal: deadlineSignal(timeoutMs, outerSignal, init?.signal ?? undefined),
+    });
 }

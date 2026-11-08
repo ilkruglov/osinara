@@ -1,13 +1,26 @@
-import type { StandardJSONSchemaV1, StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from "#compiled/@standard-schema/spec/index.js";
 import type { PublicToolDefinition, ToolModelOutput } from "#shared/tool-definition.js";
 import type { SessionContext } from "#public/definitions/callback-context.js";
 import type { Approval } from "#public/definitions/approval.js";
 import type { JsonObject } from "#shared/json.js";
-import type { AuthorizationDefinition, ConnectionAuthorizationContext, NonInteractiveAuthorizationDefinition, TokenResult } from "#runtime/connections/types.js";
+import type {
+  AuthorizationDefinition,
+  ConnectionAuthorizationContext,
+  NonInteractiveAuthorizationDefinition,
+  TokenResult,
+} from "#runtime/connections/types.js";
 import { type DynamicEvents, type DynamicSentinel } from "#shared/dynamic-tool-definition.js";
 type ApprovalContextInput<TInput> = unknown extends TInput ? Record<string, unknown> : TInput;
-type DynamicEventMapHandler<TEvents extends DynamicEvents> = Extract<NonNullable<TEvents[keyof TEvents]>, (...args: never[]) => unknown>;
-type DynamicEventMapResult<TEvents extends DynamicEvents> = Awaited<ReturnType<DynamicEventMapHandler<TEvents>>>;
+type DynamicEventMapHandler<TEvents extends DynamicEvents> = Extract<
+  NonNullable<TEvents[keyof TEvents]>,
+  (...args: never[]) => unknown
+>;
+type DynamicEventMapResult<TEvents extends DynamicEvents> = Awaited<
+  ReturnType<DynamicEventMapHandler<TEvents>>
+>;
 export type { ToolModelOutput, ToolModelOutputPart } from "#shared/tool-definition.js";
 /**
  * Authorization provider passed to {@link ToolContext.getToken} or
@@ -18,33 +31,35 @@ export type { ToolModelOutput, ToolModelOutputPart } from "#shared/tool-definiti
  * - a full interactive OAuth definition (e.g. `connect("okta/myagent")` from
  *   `@vercel/connect/eve`, or {@link defineInteractiveAuthorization}).
  */
-export type ToolAuthDefinition = (Omit<NonInteractiveAuthorizationDefinition, "principalType"> & {
-    readonly principalType?: NonInteractiveAuthorizationDefinition["principalType"];
-}) | AuthorizationDefinition;
+export type ToolAuthDefinition =
+  | (Omit<NonInteractiveAuthorizationDefinition, "principalType"> & {
+      readonly principalType?: NonInteractiveAuthorizationDefinition["principalType"];
+    })
+  | AuthorizationDefinition;
 export type ToolAuthProvider = ToolAuthDefinition;
 /**
  * Controls Eve runtime behavior for an inline tool auth provider.
  */
 export interface ToolAuthOptions {
-    /**
-     * Connection metadata passed through to provider callbacks. Tool-only
-     * providers usually leave this unset; connection-backed helpers can use it
-     * to receive the upstream server URL.
-     */
-    readonly connection?: ConnectionAuthorizationContext;
-    /**
-     * Optional human-readable provider name shown in sign-in UI. Presentation
-     * only; it does not affect OAuth scopes, token cache keys, or callback URLs.
-     */
-    readonly displayName?: string;
-    /**
-     * Optional Eve auth-flow key for token caches, callback URLs, pending
-     * authorization state, and authorization completion. This is not an OAuth
-     * scope. For Vercel Connect OAuth targeting such as `scopes`, `resources`,
-     * or `authorizationDetails`, configure the provider with
-     * `connect({ connector, tokenParams })`.
-     */
-    readonly authKey?: string;
+  /**
+   * Connection metadata passed through to provider callbacks. Tool-only
+   * providers usually leave this unset; connection-backed helpers can use it
+   * to receive the upstream server URL.
+   */
+  readonly connection?: ConnectionAuthorizationContext;
+  /**
+   * Optional human-readable provider name shown in sign-in UI. Presentation
+   * only; it does not affect OAuth scopes, token cache keys, or callback URLs.
+   */
+  readonly displayName?: string;
+  /**
+   * Optional Eve auth-flow key for token caches, callback URLs, pending
+   * authorization state, and authorization completion. This is not an OAuth
+   * scope. For Vercel Connect OAuth targeting such as `scopes`, `resources`,
+   * or `authorizationDetails`, configure the provider with
+   * `connect({ connector, tokenParams })`.
+   */
+  readonly authKey?: string;
 }
 /**
  * Authored tool context. Passed as the last argument to
@@ -54,31 +69,31 @@ export interface ToolAuthOptions {
  * resolves that provider inline, which lets one tool use multiple credentials.
  */
 export type ToolContext = SessionContext & {
-    /** Aborts when the active turn is cancelled. */
-    readonly abortSignal: AbortSignal;
-    /**
-     * Id of the current tool call — the same `callId` carried by the call's
-     * stream events and its {@link ApprovalContext}.
-     */
-    readonly callId: string;
-    /**
-     * Final runtime name of the current tool, including any namespace
-     * qualification. This is the same `toolName` carried by stream events and
-     * the tool's {@link ApprovalContext}.
-     */
-    readonly toolName: string;
-    /**
-     * Resolves the bearer token for an inline provider. This accepts the same
-     * auth shapes as a connection's `auth` field, including `connect("...")`
-     * from `@vercel/connect/eve`.
-     */
-    getToken(provider: ToolAuthProvider, options?: ToolAuthOptions): Promise<TokenResult>;
-    /**
-     * Signals that the caller must complete authorization for an inline
-     * provider before proceeding. Use this after a downstream `401` rejects a
-     * token returned by {@link getToken}.
-     */
-    requireAuth(provider: ToolAuthProvider, options?: ToolAuthOptions): never;
+  /** Aborts when the active turn is cancelled. */
+  readonly abortSignal: AbortSignal;
+  /**
+   * Id of the current tool call — the same `callId` carried by the call's
+   * stream events and its {@link ApprovalContext}.
+   */
+  readonly callId: string;
+  /**
+   * Final runtime name of the current tool, including any namespace
+   * qualification. This is the same `toolName` carried by stream events and
+   * the tool's {@link ApprovalContext}.
+   */
+  readonly toolName: string;
+  /**
+   * Resolves the bearer token for an inline provider. This accepts the same
+   * auth shapes as a connection's `auth` field, including `connect("...")`
+   * from `@vercel/connect/eve`.
+   */
+  getToken(provider: ToolAuthProvider, options?: ToolAuthOptions): Promise<TokenResult>;
+  /**
+   * Signals that the caller must complete authorization for an inline
+   * provider before proceeding. Use this after a downstream `401` rejects a
+   * token returned by {@link getToken}.
+   */
+  requireAuth(provider: ToolAuthProvider, options?: ToolAuthOptions): never;
 };
 /**
  * Public tool definition authored in `agent/tools/*.ts`.
@@ -87,32 +102,40 @@ export type ToolContext = SessionContext & {
  * the extension (`agent/tools/get_weather.ts` registers as `get_weather`).
  * Authored definitions have no `name` field; identity is path-derived.
  */
-export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends PublicToolDefinition<TInput, TOutput> {
-    execute(input: TInput, ctx: ToolContext): Promise<TOutput> | TOutput | AsyncIterable<TOutput>;
-    /**
-     * Optional per-tool approval gate. The return value determines whether
-     * user approval is required before executing this tool.
-     *
-     * Use the helpers from `eve/tools/approval` for common cases:
-     * - {@link always}: always require approval
-     * - {@link never}: never require approval
-     * - {@link once}: require approval only the first time per session
-     */
-    approval?: Approval<ApprovalContextInput<TInput>>;
-    /**
-     * Optional projection controlling what the model sees as the tool result.
-     * Receives the full `TOutput` from {@link execute} and returns the
-     * model-facing {@link ToolModelOutput}.
-     *
-     * When omitted, the model sees the full `execute` return value
-     * (default AI SDK serialization). Channel event handlers
-     * (`action.result`) always receive the full output regardless.
-     */
-    toModelOutput?: (output: TOutput) => ToolModelOutput | Promise<ToolModelOutput>;
+export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends PublicToolDefinition<
+  TInput,
+  TOutput
+> {
+  execute(input: TInput, ctx: ToolContext): Promise<TOutput> | TOutput | AsyncIterable<TOutput>;
+  /**
+   * Optional per-tool approval gate. The return value determines whether
+   * user approval is required before executing this tool.
+   *
+   * Use the helpers from `eve/tools/approval` for common cases:
+   * - {@link always}: always require approval
+   * - {@link never}: never require approval
+   * - {@link once}: require approval only the first time per session
+   */
+  approval?: Approval<ApprovalContextInput<TInput>>;
+  /**
+   * Optional projection controlling what the model sees as the tool result.
+   * Receives the full `TOutput` from {@link execute} and returns the
+   * model-facing {@link ToolModelOutput}.
+   *
+   * When omitted, the model sees the full `execute` return value
+   * (default AI SDK serialization). Channel event handlers
+   * (`action.result`) always receive the full output regardless.
+   */
+  toModelOutput?: (output: TOutput) => ToolModelOutput | Promise<ToolModelOutput>;
 }
-type ToolOutputFromExecuteReturn<TReturn> = TReturn extends Promise<infer TOutput> ? TOutput : TReturn extends AsyncIterable<infer TOutput> ? TOutput : TReturn;
+type ToolOutputFromExecuteReturn<TReturn> =
+  TReturn extends Promise<infer TOutput>
+    ? TOutput
+    : TReturn extends AsyncIterable<infer TOutput>
+      ? TOutput
+      : TReturn;
 type ToolDefinitionWithExecuteReturn<TInput, TOutput, TReturn> = ToolDefinition<TInput, TOutput> & {
-    execute(input: TInput, ctx: ToolContext): TReturn;
+  execute(input: TInput, ctx: ToolContext): TReturn;
 };
 /**
  * Defines a tool configuration, used both for static tools (default export
@@ -122,39 +145,79 @@ type ToolDefinitionWithExecuteReturn<TInput, TOutput, TReturn> = ToolDefinition<
  * For static tools, the runtime tool name is the filename slug. `defineTool`
  * stamps a brand that lifecycle code validates; it rejects raw object literals.
  */
-export declare function defineTool<TInputSchema extends StandardSchemaV1<unknown, unknown> | StandardJSONSchemaV1<unknown, unknown>, TOutputSchema extends StandardJSONSchemaV1<unknown, unknown>, TReturn extends Promise<StandardJSONSchemaV1.InferOutput<TOutputSchema>> | StandardJSONSchemaV1.InferOutput<TOutputSchema> | AsyncIterable<StandardJSONSchemaV1.InferOutput<TOutputSchema>>>(definition: {
-    description: ToolDefinition<unknown, unknown>["description"];
-    inputSchema: TInputSchema;
-    outputSchema: TOutputSchema;
-    execute(input: StandardSchemaV1.InferOutput<TInputSchema>, ctx: ToolContext): TReturn;
-    approval?: ToolDefinition<StandardSchemaV1.InferOutput<TInputSchema>, unknown>["approval"];
-    toModelOutput?: ToolDefinition<unknown, StandardJSONSchemaV1.InferOutput<TOutputSchema>>["toModelOutput"];
-}): ToolDefinitionWithExecuteReturn<StandardSchemaV1.InferOutput<TInputSchema>, StandardJSONSchemaV1.InferOutput<TOutputSchema>, TReturn>;
-export declare function defineTool<TSchema extends StandardSchemaV1<unknown, unknown> | StandardJSONSchemaV1<unknown, unknown>, TReturn>(definition: {
-    description: ToolDefinition<unknown, unknown>["description"];
-    inputSchema: TSchema;
-    outputSchema?: JsonObject;
-    execute(input: StandardSchemaV1.InferOutput<TSchema>, ctx: ToolContext): TReturn;
-    approval?: ToolDefinition<StandardSchemaV1.InferOutput<TSchema>, unknown>["approval"];
-    toModelOutput?: ToolDefinition<unknown, ToolOutputFromExecuteReturn<TReturn>>["toModelOutput"];
-}): ToolDefinitionWithExecuteReturn<StandardSchemaV1.InferOutput<TSchema>, ToolOutputFromExecuteReturn<TReturn>, TReturn>;
-export declare function defineTool<TOutputSchema extends StandardJSONSchemaV1<unknown, unknown>, TReturn extends Promise<StandardJSONSchemaV1.InferOutput<TOutputSchema>> | StandardJSONSchemaV1.InferOutput<TOutputSchema> | AsyncIterable<StandardJSONSchemaV1.InferOutput<TOutputSchema>>>(definition: {
-    description: ToolDefinition<unknown, unknown>["description"];
-    inputSchema: JsonObject;
-    outputSchema: TOutputSchema;
-    execute(input: Record<string, unknown>, ctx: ToolContext): TReturn;
-    approval?: ToolDefinition<Record<string, unknown>, unknown>["approval"];
-    toModelOutput?: ToolDefinition<unknown, StandardJSONSchemaV1.InferOutput<TOutputSchema>>["toModelOutput"];
-}): ToolDefinitionWithExecuteReturn<Record<string, unknown>, StandardJSONSchemaV1.InferOutput<TOutputSchema>, TReturn>;
+export declare function defineTool<
+  TInputSchema extends StandardSchemaV1<unknown, unknown> | StandardJSONSchemaV1<unknown, unknown>,
+  TOutputSchema extends StandardJSONSchemaV1<unknown, unknown>,
+  TReturn extends
+    | Promise<StandardJSONSchemaV1.InferOutput<TOutputSchema>>
+    | StandardJSONSchemaV1.InferOutput<TOutputSchema>
+    | AsyncIterable<StandardJSONSchemaV1.InferOutput<TOutputSchema>>,
+>(definition: {
+  description: ToolDefinition<unknown, unknown>["description"];
+  inputSchema: TInputSchema;
+  outputSchema: TOutputSchema;
+  execute(input: StandardSchemaV1.InferOutput<TInputSchema>, ctx: ToolContext): TReturn;
+  approval?: ToolDefinition<StandardSchemaV1.InferOutput<TInputSchema>, unknown>["approval"];
+  toModelOutput?: ToolDefinition<
+    unknown,
+    StandardJSONSchemaV1.InferOutput<TOutputSchema>
+  >["toModelOutput"];
+}): ToolDefinitionWithExecuteReturn<
+  StandardSchemaV1.InferOutput<TInputSchema>,
+  StandardJSONSchemaV1.InferOutput<TOutputSchema>,
+  TReturn
+>;
+export declare function defineTool<
+  TSchema extends StandardSchemaV1<unknown, unknown> | StandardJSONSchemaV1<unknown, unknown>,
+  TReturn,
+>(definition: {
+  description: ToolDefinition<unknown, unknown>["description"];
+  inputSchema: TSchema;
+  outputSchema?: JsonObject;
+  execute(input: StandardSchemaV1.InferOutput<TSchema>, ctx: ToolContext): TReturn;
+  approval?: ToolDefinition<StandardSchemaV1.InferOutput<TSchema>, unknown>["approval"];
+  toModelOutput?: ToolDefinition<unknown, ToolOutputFromExecuteReturn<TReturn>>["toModelOutput"];
+}): ToolDefinitionWithExecuteReturn<
+  StandardSchemaV1.InferOutput<TSchema>,
+  ToolOutputFromExecuteReturn<TReturn>,
+  TReturn
+>;
+export declare function defineTool<
+  TOutputSchema extends StandardJSONSchemaV1<unknown, unknown>,
+  TReturn extends
+    | Promise<StandardJSONSchemaV1.InferOutput<TOutputSchema>>
+    | StandardJSONSchemaV1.InferOutput<TOutputSchema>
+    | AsyncIterable<StandardJSONSchemaV1.InferOutput<TOutputSchema>>,
+>(definition: {
+  description: ToolDefinition<unknown, unknown>["description"];
+  inputSchema: JsonObject;
+  outputSchema: TOutputSchema;
+  execute(input: Record<string, unknown>, ctx: ToolContext): TReturn;
+  approval?: ToolDefinition<Record<string, unknown>, unknown>["approval"];
+  toModelOutput?: ToolDefinition<
+    unknown,
+    StandardJSONSchemaV1.InferOutput<TOutputSchema>
+  >["toModelOutput"];
+}): ToolDefinitionWithExecuteReturn<
+  Record<string, unknown>,
+  StandardJSONSchemaV1.InferOutput<TOutputSchema>,
+  TReturn
+>;
 export declare function defineTool<TReturn>(definition: {
-    description: ToolDefinition<unknown, unknown>["description"];
-    inputSchema: JsonObject;
-    outputSchema?: JsonObject;
-    execute(input: Record<string, unknown>, ctx: ToolContext): TReturn;
-    approval?: ToolDefinition<Record<string, unknown>, unknown>["approval"];
-    toModelOutput?: ToolDefinition<unknown, ToolOutputFromExecuteReturn<TReturn>>["toModelOutput"];
-}): ToolDefinitionWithExecuteReturn<Record<string, unknown>, ToolOutputFromExecuteReturn<TReturn>, TReturn>;
-export declare function defineTool<TInput = unknown, TOutput = unknown>(definition: ToolDefinition<TInput, TOutput>): ToolDefinition<TInput, TOutput>;
+  description: ToolDefinition<unknown, unknown>["description"];
+  inputSchema: JsonObject;
+  outputSchema?: JsonObject;
+  execute(input: Record<string, unknown>, ctx: ToolContext): TReturn;
+  approval?: ToolDefinition<Record<string, unknown>, unknown>["approval"];
+  toModelOutput?: ToolDefinition<unknown, ToolOutputFromExecuteReturn<TReturn>>["toModelOutput"];
+}): ToolDefinitionWithExecuteReturn<
+  Record<string, unknown>,
+  ToolOutputFromExecuteReturn<TReturn>,
+  TReturn
+>;
+export declare function defineTool<TInput = unknown, TOutput = unknown>(
+  definition: ToolDefinition<TInput, TOutput>,
+): ToolDefinition<TInput, TOutput>;
 /**
  * Defines a dynamic resolver evaluated at runtime from stream-event
  * handlers. It is shared across tools, skills, and agent definitions;
@@ -204,7 +267,7 @@ export declare function defineTool<TInput = unknown, TOutput = unknown>(definiti
  * emitting the same name is an error.
  */
 export declare function defineDynamic<const TEvents extends DynamicEvents>(definition: {
-    readonly events: TEvents;
+  readonly events: TEvents;
 }): DynamicSentinel<DynamicEventMapResult<TEvents>>;
 /**
  * Marker discriminator written into every {@link DisabledToolSentinel}.
@@ -216,7 +279,7 @@ declare const DISABLED_TOOL_SENTINEL_KIND = "eve:disabled-tool";
  * name matches the file's slug.
  */
 export interface DisabledToolSentinel {
-    readonly kind: typeof DISABLED_TOOL_SENTINEL_KIND;
+  readonly kind: typeof DISABLED_TOOL_SENTINEL_KIND;
 }
 /**
  * Returns a sentinel that disables the framework tool whose name matches the
@@ -237,23 +300,23 @@ declare const EXPERIMENTAL_WORKFLOW_TOOL_KIND = "eve:enable-workflow-tool";
  * Configuration accepted by {@link experimental_workflow}.
  */
 export interface ExperimentalWorkflowToolInput {
-    /**
-     * Maximum number of subagent or remote-agent calls one `Workflow` program
-     * may dispatch, counted across sequential and parallel calls alike.
-     *
-     * Calls beyond the limit fail with a `WORKFLOW_SUBAGENT_LIMIT_REACHED`
-     * result instead of starting a child session.
-     *
-     * @default 100
-     */
-    readonly maxSubagents?: number;
+  /**
+   * Maximum number of subagent or remote-agent calls one `Workflow` program
+   * may dispatch, counted across sequential and parallel calls alike.
+   *
+   * Calls beyond the limit fail with a `WORKFLOW_SUBAGENT_LIMIT_REACHED`
+   * result instead of starting a child session.
+   *
+   * @default 100
+   */
+  readonly maxSubagents?: number;
 }
 /**
  * Framework `Workflow` tool definition returned by
  * {@link experimental_workflow}.
  */
 export interface ExperimentalWorkflowToolDefinition extends ExperimentalWorkflowToolInput {
-    readonly kind: typeof EXPERIMENTAL_WORKFLOW_TOOL_KIND;
+  readonly kind: typeof EXPERIMENTAL_WORKFLOW_TOOL_KIND;
 }
 /**
  * Enables and configures the experimental framework `Workflow` tool, an
@@ -270,8 +333,12 @@ export interface ExperimentalWorkflowToolDefinition extends ExperimentalWorkflow
  * Only the root session sees the tool. The resulting model-facing tool is
  * still called `Workflow`.
  */
-export declare function experimental_workflow(input?: ExperimentalWorkflowToolInput): ExperimentalWorkflowToolDefinition;
+export declare function experimental_workflow(
+  input?: ExperimentalWorkflowToolInput,
+): ExperimentalWorkflowToolDefinition;
 /**
  * Type guard for a definition returned by {@link experimental_workflow}.
  */
-export declare function isExperimentalWorkflowToolDefinition(value: unknown): value is ExperimentalWorkflowToolDefinition;
+export declare function isExperimentalWorkflowToolDefinition(
+  value: unknown,
+): value is ExperimentalWorkflowToolDefinition;

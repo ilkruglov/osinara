@@ -2,24 +2,15 @@ function normalizeChannelCors(e) {
   if (e === void 0 || e === !1) return;
   if (e === !0) return {};
   if (typeof e != `object` || !e || Array.isArray(e))
-    throw Error(
-      `Expected channel cors to be a boolean or a serializable CORS options object.`,
-    );
+    throw Error(`Expected channel cors to be a boolean or a serializable CORS options object.`);
   let t = {};
   if (
     (e.origin !== void 0 && (t.origin = normalizeOrigin(e.origin)),
-    e.methods !== void 0 &&
-      (t.methods = normalizeWildcardOrStringList(e.methods, `methods`)),
+    e.methods !== void 0 && (t.methods = normalizeWildcardOrStringList(e.methods, `methods`)),
     e.allowHeaders !== void 0 &&
-      (t.allowHeaders = normalizeWildcardOrStringList(
-        e.allowHeaders,
-        `allowHeaders`,
-      )),
+      (t.allowHeaders = normalizeWildcardOrStringList(e.allowHeaders, `allowHeaders`)),
     e.exposeHeaders !== void 0 &&
-      (t.exposeHeaders = normalizeWildcardOrStringList(
-        e.exposeHeaders,
-        `exposeHeaders`,
-      )),
+      (t.exposeHeaders = normalizeWildcardOrStringList(e.exposeHeaders, `exposeHeaders`)),
     e.credentials !== void 0)
   ) {
     if (typeof e.credentials != `boolean`)
@@ -35,14 +26,10 @@ function normalizeChannelCors(e) {
 function normalizeOrigin(e) {
   if (e === `*` || e === `null`) return e;
   if (!Array.isArray(e))
-    throw Error(
-      `Expected channel cors.origin to be "*", "null", or an array of origins.`,
-    );
+    throw Error(`Expected channel cors.origin to be "*", "null", or an array of origins.`);
   return e.map((e) => {
     if (typeof e != `string` || e.length === 0)
-      throw Error(
-        `Expected channel cors.origin entries to be non-empty strings.`,
-      );
+      throw Error(`Expected channel cors.origin entries to be non-empty strings.`);
     return e;
   });
 }
@@ -52,9 +39,7 @@ function normalizeWildcardOrStringList(e, t) {
     throw Error(`Expected channel cors.${t} to be "*" or an array of strings.`);
   return e.map((e) => {
     if (typeof e != `string` || e.length === 0)
-      throw Error(
-        `Expected channel cors.${t} entries to be non-empty strings.`,
-      );
+      throw Error(`Expected channel cors.${t} entries to be non-empty strings.`);
     return e;
   });
 }
@@ -62,15 +47,11 @@ function normalizeMaxAge(e) {
   if (e === !1) return !1;
   if (typeof e == `number`) {
     if (!Number.isFinite(e) || e < 0)
-      throw Error(
-        `Expected channel cors.maxAge to be a non-negative finite number.`,
-      );
+      throw Error(`Expected channel cors.maxAge to be a non-negative finite number.`);
     return String(e);
   }
   if (typeof e == `string` && e.length > 0) return e;
-  throw Error(
-    `Expected channel cors.maxAge to be false, a string, or a number.`,
-  );
+  throw Error(`Expected channel cors.maxAge to be false, a string, or a number.`);
 }
 function normalizePreflight(e) {
   if (typeof e != `object` || !e || Array.isArray(e))
@@ -78,9 +59,7 @@ function normalizePreflight(e) {
   let t = e.statusCode;
   if (t === void 0) return {};
   if (!Number.isInteger(t) || t < 100 || t > 599)
-    throw Error(
-      `Expected channel cors.preflight.statusCode to be an HTTP status code.`,
-    );
+    throw Error(`Expected channel cors.preflight.statusCode to be an HTTP status code.`);
   return { statusCode: t };
 }
 export { normalizeChannelCors };

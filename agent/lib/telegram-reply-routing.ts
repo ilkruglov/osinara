@@ -19,8 +19,8 @@ export function telegramBaseContinuationToken(
   const conversationId = repliesToBot
     ? message.replyToMessage.messageId
     : message.chat.type === "private"
-    ? undefined
-    : message.messageId;
+      ? undefined
+      : message.messageId;
   const messageThreadId = repliesToBot
     ? message.replyToMessage?.messageThreadId
     : message.messageThreadId;
@@ -43,8 +43,11 @@ export function telegramReplyContinuationTokens(message: TelegramMessage): strin
     ...(messageThreadId === undefined ? {} : { messageThreadId }),
   });
   if (messageThreadId === undefined) return [exact];
-  return [exact, telegramContinuationToken({
-    chatId: message.chat.id,
-    conversationId: reply.messageId,
-  })];
+  return [
+    exact,
+    telegramContinuationToken({
+      chatId: message.chat.id,
+      conversationId: reply.messageId,
+    }),
+  ];
 }

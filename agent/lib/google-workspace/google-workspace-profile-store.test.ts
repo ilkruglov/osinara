@@ -81,9 +81,11 @@ describe("Google Workspace profile store", () => {
 
     const directoryAfterReconnect = await stat(personalDirectory);
     expect(directoryAfterReconnect.ino).toBe(directoryBeforeRemove.ino);
-    expect(JSON.parse(await readFile(personalCredentials, "utf8"))).toEqual(expect.objectContaining({
-      refresh_token: "next-refresh-secret",
-    }));
+    expect(JSON.parse(await readFile(personalCredentials, "utf8"))).toEqual(
+      expect.objectContaining({
+        refresh_token: "next-refresh-secret",
+      }),
+    );
   });
 
   it("rejects an untrusted workspace path before filesystem access", async () => {
@@ -91,11 +93,13 @@ describe("Google Workspace profile store", () => {
     roots.push(root);
     const store = createGoogleWorkspaceProfileStore(root);
 
-    await expect(store.write("../family", {
-      client_id: "client-id",
-      client_secret: "client-secret",
-      refresh_token: "refresh-secret",
-      type: "authorized_user",
-    })).rejects.toThrow();
+    await expect(
+      store.write("../family", {
+        client_id: "client-id",
+        client_secret: "client-secret",
+        refresh_token: "refresh-secret",
+        type: "authorized_user",
+      }),
+    ).rejects.toThrow();
   });
 });

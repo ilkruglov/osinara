@@ -7,4 +7,9 @@
  * import { defineExtension } from "eve/extension";
  * ```
  */
-export { defineExtension, type ExtensionHandle, type MountedExtension, type NoConfigExtensionHandle, } from "#public/definitions/extension.js";
+export {
+  defineExtension,
+  type ExtensionHandle,
+  type MountedExtension,
+  type NoConfigExtensionHandle,
+} from "#public/definitions/extension.js";

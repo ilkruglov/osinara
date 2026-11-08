@@ -124,10 +124,9 @@ export async function deletePostgresEveSession(
         [hashes],
       );
     }
-    const deletedRun = await client.query(
-      "DELETE FROM workflow.workflow_runs WHERE id = $1",
-      [runId],
-    );
+    const deletedRun = await client.query("DELETE FROM workflow.workflow_runs WHERE id = $1", [
+      runId,
+    ]);
     if (deletedRun.rowCount !== 1) {
       throw new AppError(
         "AGENT_EVE_SESSION_STORAGE_DELETE_INCOMPLETE",

@@ -3,16 +3,7 @@ import { defaultDeliverResult } from "#channel/adapter.js";
 import { buildCallbackContext } from "#context/build-callback-context.js";
 import { normalizeChannelCors } from "#channel/cors.js";
 import { HTTP_ADAPTER_KIND } from "#channel/http.js";
-import {
-  DELETE,
-  GET,
-  HEAD,
-  OPTIONS,
-  PATCH,
-  POST,
-  PUT,
-  WS,
-} from "#channel/routes.js";
+import { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, WS } from "#channel/routes.js";
 const DISABLED_ROUTE_SENTINEL_KIND = `eve:disabled-channel`;
 function disableRoute() {
   return { kind: DISABLED_ROUTE_SENTINEL_KIND };
@@ -111,9 +102,7 @@ function buildAdapter(e) {
           };
         },
         deliver(n, r) {
-          return e.deliver === void 0
-            ? defaultDeliverResult(n)
-            : e.deliver(n, r);
+          return e.deliver === void 0 ? defaultDeliverResult(n) : e.deliver(n, r);
         },
         ...l,
       };

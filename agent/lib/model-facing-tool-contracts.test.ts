@@ -10,10 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildMemoryReviewToolSurface } from "./memory-review/memory-review-tool-surface.js";
 import { EXTERNAL_GROUP_TOOL_NAMES } from "./tool-policy/group-tool-catalog.js";
-import {
-  buildModeToolSurface,
-  buildSubagentToolSurface,
-} from "./tool-policy/mode-tool-surface.js";
+import { buildModeToolSurface, buildSubagentToolSurface } from "./tool-policy/mode-tool-surface.js";
 
 // Generic call discipline (when to call, input provenance, result and error handling) is stated
 // once in the permanent instructions. Repeating it per descriptor cost ~17k characters per step.
@@ -51,19 +48,28 @@ describe("model-facing tool contracts", () => {
   it("walks every emitted mode surface and requires a complete compact descriptor", () => {
     for (const [surfaceName, surface] of Object.entries(surfaces())) {
       expect(Object.keys(surface).length, `${surfaceName} must emit tools`).toBeGreaterThan(0);
-      const totalDescriptionCharacters = Object.values(surface)
-        .reduce((total, definition) => total + definition.description.length, 0);
-      expect(totalDescriptionCharacters, `${surfaceName} total prompt size`)
-        .toBeLessThanOrEqual(TOTAL_DESCRIPTION_MAX_CHARACTERS);
+      const totalDescriptionCharacters = Object.values(surface).reduce(
+        (total, definition) => total + definition.description.length,
+        0,
+      );
+      expect(totalDescriptionCharacters, `${surfaceName} total prompt size`).toBeLessThanOrEqual(
+        TOTAL_DESCRIPTION_MAX_CHARACTERS,
+      );
       for (const [toolName, definition] of Object.entries(surface)) {
         expect(definition.inputSchema, `${surfaceName}.${toolName} input schema`).toBeDefined();
         expect(typeof definition.execute, `${surfaceName}.${toolName} executor`).toBe("function");
         const denied = /недоступен/u.test(definition.description);
-        expect(definition.description.length, `${surfaceName}.${toolName} prompt size`)
-          .toBeLessThan(denied ? DENIED_DESCRIPTION_MAX_CHARACTERS : TOOL_DESCRIPTION_MAX_CHARACTERS);
+        expect(
+          definition.description.length,
+          `${surfaceName}.${toolName} prompt size`,
+        ).toBeLessThan(
+          denied ? DENIED_DESCRIPTION_MAX_CHARACTERS : TOOL_DESCRIPTION_MAX_CHARACTERS,
+        );
         for (const filler of GENERIC_DESCRIPTION_FILLER) {
-          expect(definition.description, `${surfaceName}.${toolName} repeats generic filler`)
-            .not.toContain(filler);
+          expect(
+            definition.description,
+            `${surfaceName}.${toolName} repeats generic filler`,
+          ).not.toContain(filler);
         }
       }
     }

@@ -49,12 +49,12 @@ async function requireManagedFile(path: string, mode: number): Promise<Buffer> {
   // Secret files still require exactly 0600 on both paths.
   const permittedModes = mode === 0o644 ? [0o600, 0o644] : [mode];
   if (
-    !metadata.isFile()
-    || metadata.isSymbolicLink()
-    || metadata.uid !== 0
-    || metadata.gid !== 0
-    || !permittedModes.includes(metadata.mode & 0o777)
-    || await realpath(path) !== path
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.uid !== 0 ||
+    metadata.gid !== 0 ||
+    !permittedModes.includes(metadata.mode & 0o777) ||
+    (await realpath(path)) !== path
   ) {
     throw new InstallerError(
       "OSINARA_OPERATION_FILE_INVALID",
@@ -87,7 +87,9 @@ export async function requireExactHealthyResponse(
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
     });
     if (!response.ok || response.url !== url) {
-      throw new Error(`health contract mismatch: ok=${response.ok} exactUrl=${response.url === url}`);
+      throw new Error(
+        `health contract mismatch: ok=${response.ok} exactUrl=${response.url === url}`,
+      );
     }
   } catch (error) {
     throw new InstallerError(
@@ -119,15 +121,22 @@ async function installationMetadata(): Promise<{
       { cause: error },
     );
   }
-  const version = typeof manifest === "object" && manifest !== null && "version" in manifest
-    ? manifest.version
-    : undefined;
+  const version =
+    typeof manifest === "object" && manifest !== null && "version" in manifest
+      ? manifest.version
+      : undefined;
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/u.test(version)) {
-    throw new InstallerError("OSINARA_OPERATION_MANIFEST_INVALID", "Deployment manifest не содержит версию");
+    throw new InstallerError(
+      "OSINARA_OPERATION_MANIFEST_INVALID",
+      "Deployment manifest не содержит версию",
+    );
   }
   const hostnameLine = tlsEnvBytes.toString("utf8").match(/^OSINARA_HOSTNAME=([^\r\n]+)$/mu);
   if (!hostnameLine?.[1]) {
-    throw new InstallerError("OSINARA_OPERATION_TLS_ENV_INVALID", "TLS config не содержит hostname");
+    throw new InstallerError(
+      "OSINARA_OPERATION_TLS_ENV_INVALID",
+      "TLS config не содержит hostname",
+    );
   }
   const config = parseModelProviderConfigBytes(configBytes);
   return {
@@ -147,10 +156,19 @@ async function createOwnerBootstrapLink(): Promise<unknown> {
       "В установленной конфигурации отсутствует имя Telegram-бота",
     );
   }
-  const stdout = await compose(COMPOSE_PATH, [ENV_PATH, RELEASE_ENV_PATH], [
-    "run", "--no-deps", "--rm", "--entrypoint", "node", "agent",
-    ".runtime/scripts/create-bootstrap-code.js",
-  ]);
+  const stdout = await compose(
+    COMPOSE_PATH,
+    [ENV_PATH, RELEASE_ENV_PATH],
+    [
+      "run",
+      "--no-deps",
+      "--rm",
+      "--entrypoint",
+      "node",
+      "agent",
+      ".runtime/scripts/create-bootstrap-code.js",
+    ],
+  );
   const bootstrap = parseBootstrapProcessOutput(stdout);
   return buildOwnerBootstrapOutput({
     botUsername: username,
@@ -185,12 +203,16 @@ export function createProductionOperationalCommands(): OperationalCommandOperati
     },
     logs: async (lines) => {
       const [application, tls] = await Promise.all([
-        compose(COMPOSE_PATH, [ENV_PATH, RELEASE_ENV_PATH], [
-          "logs", "--no-color", "--no-log-prefix", "--tail", String(lines),
-        ]),
-        compose(TLS_COMPOSE_PATH, [TLS_ENV_PATH], [
-          "logs", "--no-color", "--no-log-prefix", "--tail", String(lines),
-        ]),
+        compose(
+          COMPOSE_PATH,
+          [ENV_PATH, RELEASE_ENV_PATH],
+          ["logs", "--no-color", "--no-log-prefix", "--tail", String(lines)],
+        ),
+        compose(
+          TLS_COMPOSE_PATH,
+          [TLS_ENV_PATH],
+          ["logs", "--no-color", "--no-log-prefix", "--tail", String(lines)],
+        ),
       ]);
       return {
         application: application.toString("utf8"),
@@ -200,12 +222,16 @@ export function createProductionOperationalCommands(): OperationalCommandOperati
     },
     ownerBootstrap: createOwnerBootstrapLink,
     restart: async () => {
-      await compose(COMPOSE_PATH, [ENV_PATH, RELEASE_ENV_PATH], [
-        "up", "--detach", "--force-recreate", "--no-build", "--wait", "--wait-timeout", "600",
-      ]);
-      await compose(TLS_COMPOSE_PATH, [TLS_ENV_PATH], [
-        "up", "--detach", "--force-recreate", "--no-build", "--wait", "--wait-timeout", "120",
-      ]);
+      await compose(
+        COMPOSE_PATH,
+        [ENV_PATH, RELEASE_ENV_PATH],
+        ["up", "--detach", "--force-recreate", "--no-build", "--wait", "--wait-timeout", "600"],
+      );
+      await compose(
+        TLS_COMPOSE_PATH,
+        [TLS_ENV_PATH],
+        ["up", "--detach", "--force-recreate", "--no-build", "--wait", "--wait-timeout", "120"],
+      );
       const metadata = await installationMetadata();
       await requireExactHealthyResponse(LOCAL_HEALTH_URL, globalThis.fetch);
       await requireExactHealthyResponse(`${metadata.address}/eve/v1/health`, globalThis.fetch);

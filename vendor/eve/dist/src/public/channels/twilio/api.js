@@ -31,9 +31,7 @@ async function callTwilioApi(e) {
 }
 async function sendTwilioMessage(e) {
   if (!e.from && !e.messagingServiceSid)
-    throw Error(
-      `twilioChannel: sending a message requires from or messagingServiceSid.`,
-    );
+    throw Error(`twilioChannel: sending a message requires from or messagingServiceSid.`);
   let n = await resolveTwilioAccountSid(e.credentials?.accountSid),
     r = await resolveCredentials(e.credentials);
   return preserveTwilioApiResponse(

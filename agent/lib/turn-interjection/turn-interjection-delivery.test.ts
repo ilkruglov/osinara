@@ -8,7 +8,11 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { finishTurnInterjectionDelivery, isTurnInterjectionDeliveryUntracked, recordTurnInterjectionDelivery } from "./turn-interjection-delivery.js";
+import {
+  finishTurnInterjectionDelivery,
+  isTurnInterjectionDeliveryUntracked,
+  recordTurnInterjectionDelivery,
+} from "./turn-interjection-delivery.js";
 
 function context(attributes: Record<string, unknown>) {
   return {
@@ -52,8 +56,15 @@ describe("turn interjection delivery", () => {
 
   it("ignores a turn that cannot receive messages meanwhile", async () => {
     const repo = repository();
-    await recordTurnInterjectionDelivery(context({ telegramTurnInterjectionMarker: undefined }), 1, repo);
-    await finishTurnInterjectionDelivery(context({ telegramTurnInterjectionMarker: undefined }), repo);
+    await recordTurnInterjectionDelivery(
+      context({ telegramTurnInterjectionMarker: undefined }),
+      1,
+      repo,
+    );
+    await finishTurnInterjectionDelivery(
+      context({ telegramTurnInterjectionMarker: undefined }),
+      repo,
+    );
     expect(repo.stepStarted).not.toHaveBeenCalled();
     expect(repo.finishTurn).not.toHaveBeenCalled();
   });
@@ -67,7 +78,9 @@ describe("turn interjection delivery", () => {
     repo.finishTurn.mockRejectedValue(new Error("database unavailable"));
     await expect(finishTurnInterjectionDelivery(context({}), repo)).resolves.toBeUndefined();
     expect(repo.finishTurn).toHaveBeenCalledTimes(2);
-    expect(log.mock.calls.map((call) => JSON.parse(String(call[0])).code)).toEqual(Array(3).fill("AGENT_TURN_INTERJECTION_DELIVERY_RECORD_FAILED"));
+    expect(log.mock.calls.map((call) => JSON.parse(String(call[0])).code)).toEqual(
+      Array(3).fill("AGENT_TURN_INTERJECTION_DELIVERY_RECORD_FAILED"),
+    );
   });
 
   // Codex review of 1.7.3: a result returned while the step was unrecorded passed for delivered on a retry.
@@ -75,7 +88,9 @@ describe("turn interjection delivery", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const repo = repository();
     const ctx = context({});
-    repo.stepStarted.mockRejectedValueOnce(new Error("down")).mockRejectedValueOnce(new Error("down"));
+    repo.stepStarted
+      .mockRejectedValueOnce(new Error("down"))
+      .mockRejectedValueOnce(new Error("down"));
     await recordTurnInterjectionDelivery(ctx, 4, repo);
     expect(isTurnInterjectionDeliveryUntracked(ctx)).toBe(true);
     await recordTurnInterjectionDelivery(ctx, 5, repo);

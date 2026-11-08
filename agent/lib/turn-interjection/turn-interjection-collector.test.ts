@@ -15,7 +15,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createTurnInterjectionCollector, type TurnInterjectionCollectorDependencies } from "./turn-interjection-collector.js";
+import {
+  createTurnInterjectionCollector,
+  type TurnInterjectionCollectorDependencies,
+} from "./turn-interjection-collector.js";
 import type { TurnInterjectionCandidate } from "./turn-interjection-repository.js";
 
 const BOT = "osinara_bot";
@@ -60,7 +63,11 @@ const GROUP_ATTRIBUTES = {
   telegramChatType: "supergroup",
 };
 
-function candidate(updateId: string, message: Record<string, unknown>, extra: Partial<TurnInterjectionCandidate> = {}): TurnInterjectionCandidate {
+function candidate(
+  updateId: string,
+  message: Record<string, unknown>,
+  extra: Partial<TurnInterjectionCandidate> = {},
+): TurnInterjectionCandidate {
   return {
     albumMemberCount: 0,
     payload: {
@@ -81,14 +88,22 @@ function candidate(updateId: string, message: Record<string, unknown>, extra: Pa
 }
 
 function voiceCandidate(updateId: string, extra: Partial<TurnInterjectionCandidate> = {}) {
-  return candidate(updateId, { voice: { file_id: `voice-${updateId}` } }, { voice: { fileId: `voice-${updateId}` }, ...extra });
+  return candidate(
+    updateId,
+    { voice: { file_id: `voice-${updateId}` } },
+    { voice: { fileId: `voice-${updateId}` }, ...extra },
+  );
 }
 
 function groupCandidate(updateId: string, text: string): TurnInterjectionCandidate {
   return candidate(updateId, { chat: { id: -2001, type: "supergroup" }, text });
 }
 
-type Mocked<T> = { [K in keyof T]: T[K] extends (...args: infer A) => infer R ? ReturnType<typeof vi.fn<(...args: A) => R>> : T[K] };
+type Mocked<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => infer R
+    ? ReturnType<typeof vi.fn<(...args: A) => R>>
+    : T[K];
+};
 
 let dependencies: Omit<TurnInterjectionCollectorDependencies, "repository"> & {
   authorizeVoice: ReturnType<typeof vi.fn>;
@@ -96,7 +111,7 @@ let dependencies: Omit<TurnInterjectionCollectorDependencies, "repository"> & {
   transcribeVoice: ReturnType<typeof vi.fn>;
 };
 let candidates: TurnInterjectionCandidate[];
-let owned: ((updateId: string) => boolean);
+let owned: (updateId: string) => boolean;
 const events: string[] = [];
 
 beforeEach(() => {
@@ -111,10 +126,17 @@ beforeEach(() => {
         events.push(`begin:${updateId}`);
         return { status: "started" as const };
       }),
-      claim: vi.fn(async (_coordinate: unknown, messages: readonly { contentKind: string; updateId: string }[]) => {
-        events.push(`claim:${messages.map((message) => `${message.updateId}=${message.contentKind}`).join(",")}`);
-        return new Set<string>(messages.map((message) => message.updateId).filter(owned));
-      }),
+      claim: vi.fn(
+        async (
+          _coordinate: unknown,
+          messages: readonly { contentKind: string; updateId: string }[],
+        ) => {
+          events.push(
+            `claim:${messages.map((message) => `${message.updateId}=${message.contentKind}`).join(",")}`,
+          );
+          return new Set<string>(messages.map((message) => message.updateId).filter(owned));
+        },
+      ),
       isReplyToPendingConfirmation: vi.fn(async () => false),
       listCandidates: vi.fn(async () => candidates),
       markReturned: vi.fn(async (_coordinate: unknown, updateIds: readonly string[]) => {
@@ -143,7 +165,11 @@ describe("turn interjection eligibility", () => {
   it.each([
     ["a delegated child turn", {}, { callId: "parent-call" }],
     ["a turn without its ingress update", { osinaraTelegramUpdateId: undefined }, undefined],
-    ["a turn whose preparation announced no marker", { telegramTurnInterjectionMarker: undefined }, undefined],
+    [
+      "a turn whose preparation announced no marker",
+      { telegramTurnInterjectionMarker: undefined },
+      undefined,
+    ],
     ["a scheduled run", { scheduledRunId: "00000000-0000-4000-8000-000000000001" }, undefined],
     ["an external group", { ...GROUP_ATTRIBUTES, groupType: "external" }, undefined],
     ["a channel author", { telegramActorKind: "telegram_channel" }, undefined],
@@ -163,19 +189,23 @@ describe("createTurnInterjectionCollector", () => {
 
     const block = await collect(toolContext({}));
 
-    expect(dependencies.repository.listCandidates).toHaveBeenCalledWith(expect.objectContaining({
-      currentUpdateId: "500",
-      eveSessionId: "ses_1",
-      eveTurnId: "turn_2",
-      telegramUserId: "101",
-      toolCallId: "call-1",
-    }));
+    expect(dependencies.repository.listCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentUpdateId: "500",
+        eveSessionId: "ses_1",
+        eveTurnId: "turn_2",
+        telegramUserId: "101",
+        toolCallId: "call-1",
+      }),
+    );
     expect(dependencies.repository.routeSessionId).toHaveBeenCalledWith("101::");
     expect(dependencies.repository.claim).toHaveBeenCalledWith(
       expect.objectContaining({ applicationSessionId: SESSION, toolCallId: "call-1" }),
       [{ contentKind: "text", updateId: "501" }],
     );
-    expect(blockMessages(block)).toEqual([expect.objectContaining({ kind: "text", text: "Стоп, не Москва, а Питер" })]);
+    expect(blockMessages(block)).toEqual([
+      expect.objectContaining({ kind: "text", text: "Стоп, не Москва, а Питер" }),
+    ]);
     expect(events).toEqual(["release", "claim:501=text", "returned:501"]);
   });
 
@@ -192,7 +222,9 @@ describe("createTurnInterjectionCollector", () => {
 
   it("leaves a message for another conversation waiting", async () => {
     candidates = [candidate("501", { text: "стоп" })];
-    dependencies.repository.routeSessionId.mockResolvedValue("00000000-0000-4000-8000-0000000000b2");
+    dependencies.repository.routeSessionId.mockResolvedValue(
+      "00000000-0000-4000-8000-0000000000b2",
+    );
     const { collect } = createTurnInterjectionCollector(dependencies);
 
     expect(await collect(toolContext({}))).toBeNull();
@@ -200,15 +232,24 @@ describe("createTurnInterjectionCollector", () => {
   });
 
   it("shows a reply to this conversation's message but leaves a reply to a confirmation waiting", async () => {
-    const replyToBot = (updateId: string, messageId: number, text: string) => candidate(updateId, {
-      reply_to_message: { chat: { id: 101, type: "private" }, from: { id: 999, is_bot: true, username: BOT }, message_id: messageId },
-      text,
-    });
+    const replyToBot = (updateId: string, messageId: number, text: string) =>
+      candidate(updateId, {
+        reply_to_message: {
+          chat: { id: 101, type: "private" },
+          from: { id: 999, is_bot: true, username: BOT },
+          message_id: messageId,
+        },
+        text,
+      });
     candidates = [replyToBot("501", 7, "да"), replyToBot("502", 8, "стоп, не то")];
-    dependencies.repository.isReplyToPendingConfirmation.mockImplementation(async ({ replyMessageId }) => replyMessageId === "7");
+    dependencies.repository.isReplyToPendingConfirmation.mockImplementation(
+      async ({ replyMessageId }) => replyMessageId === "7",
+    );
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext({})))).toEqual([expect.objectContaining({ text: "стоп, не то" })]);
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({ text: "стоп, не то" }),
+    ]);
     expect(dependencies.repository.isReplyToPendingConfirmation).toHaveBeenCalledWith({
       replyMessageId: "8",
       replyRouteToken: "101::8",
@@ -219,13 +260,21 @@ describe("createTurnInterjectionCollector", () => {
   });
 
   it("does not check confirmations for a reply to a person", async () => {
-    candidates = [candidate("501", {
-      reply_to_message: { chat: { id: 101, type: "private" }, from: { id: 101, is_bot: false }, message_id: 8 },
-      text: "и это тоже",
-    })];
+    candidates = [
+      candidate("501", {
+        reply_to_message: {
+          chat: { id: 101, type: "private" },
+          from: { id: 101, is_bot: false },
+          message_id: 8,
+        },
+        text: "и это тоже",
+      }),
+    ];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext({})))).toEqual([expect.objectContaining({ text: "и это тоже" })]);
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({ text: "и это тоже" }),
+    ]);
     expect(dependencies.repository.isReplyToPendingConfirmation).not.toHaveBeenCalled();
   });
 
@@ -233,7 +282,11 @@ describe("createTurnInterjectionCollector", () => {
     const interjection = createTurnInterjectionCollector(dependencies);
 
     await interjection.release(toolContext({}));
-    expect(dependencies.repository.releaseCall).toHaveBeenCalledWith({ eveSessionId: "ses_1", eveTurnId: "turn_2", toolCallId: "call-1" });
+    expect(dependencies.repository.releaseCall).toHaveBeenCalledWith({
+      eveSessionId: "ses_1",
+      eveTurnId: "turn_2",
+      toolCallId: "call-1",
+    });
 
     dependencies.repository.releaseCall.mockClear();
     await interjection.release(toolContext({ telegramTurnInterjectionMarker: undefined }));
@@ -244,57 +297,89 @@ describe("createTurnInterjectionCollector", () => {
     candidates = [candidate("501", { text: "/start" }), candidate("502", { text: "дальше" })];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext({})))).toEqual([expect.objectContaining({ text: "дальше" })]);
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({ text: "дальше" }),
+    ]);
   });
 
   it("shows in a family group only the messages addressed to the bot and routes by the group", async () => {
-    candidates = [groupCandidate("501", "кто купит хлеб?"), groupCandidate("502", `@${BOT} и молоко тоже`)];
+    candidates = [
+      groupCandidate("501", "кто купит хлеб?"),
+      groupCandidate("502", `@${BOT} и молоко тоже`),
+    ];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
     const block = await collect(toolContext(GROUP_ATTRIBUTES));
 
-    expect(blockMessages(block)).toEqual([expect.objectContaining({ text: `@${BOT} и молоко тоже` })]);
-    expect(dependencies.repository.routeSessionId).toHaveBeenCalledWith("osinara:group:group-1:main");
+    expect(blockMessages(block)).toEqual([
+      expect.objectContaining({ text: `@${BOT} и молоко тоже` }),
+    ]);
+    expect(dependencies.repository.routeSessionId).toHaveBeenCalledWith(
+      "osinara:group:group-1:main",
+    );
     expect(events).toEqual(["release", "claim:502=text", "returned:502"]);
   });
 
   it("leaves a group message of another forum topic waiting", async () => {
-    const topicMessage = (updateId: string, topic: number) => candidate(updateId, {
-      chat: { id: -2001, is_forum: true, type: "supergroup" },
-      is_topic_message: true,
-      message_thread_id: topic,
-      text: `@${BOT} стоп`,
-    });
+    const topicMessage = (updateId: string, topic: number) =>
+      candidate(updateId, {
+        chat: { id: -2001, is_forum: true, type: "supergroup" },
+        is_topic_message: true,
+        message_thread_id: topic,
+        text: `@${BOT} стоп`,
+      });
     candidates = [topicMessage("501", 9), topicMessage("502", 7)];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    const block = await collect(toolContext({ ...GROUP_ATTRIBUTES, telegramForumTopicId: "7", telegramMessageThreadId: "7" }));
+    const block = await collect(
+      toolContext({ ...GROUP_ATTRIBUTES, telegramForumTopicId: "7", telegramMessageThreadId: "7" }),
+    );
 
     expect(blockMessages(block)).toHaveLength(1);
     expect(events).toEqual(["release", "claim:502=text", "returned:502"]);
-    expect(dependencies.repository.routeSessionId).toHaveBeenCalledWith("osinara:group:group-1:topic:7");
+    expect(dependencies.repository.routeSessionId).toHaveBeenCalledWith(
+      "osinara:group:group-1:topic:7",
+    );
   });
 
   it("does not let messages it will not show fill the window", async () => {
     candidates = [
-      ...Array.from({ length: 12 }, (_, index) => groupCandidate(String(501 + index), `болтовня ${index}`)),
+      ...Array.from({ length: 12 }, (_, index) =>
+        groupCandidate(String(501 + index), `болтовня ${index}`),
+      ),
       groupCandidate("600", `@${BOT} стоп`),
     ];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext(GROUP_ATTRIBUTES)))).toEqual([expect.objectContaining({ text: `@${BOT} стоп` })]);
-    expect(dependencies.repository.listCandidates).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+    expect(blockMessages(await collect(toolContext(GROUP_ATTRIBUTES)))).toEqual([
+      expect.objectContaining({ text: `@${BOT} стоп` }),
+    ]);
+    expect(dependencies.repository.listCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 50 }),
+    );
   });
 
   // Review 28 September 2026: fifty unaddressed messages on the first page hid a later «стоп».
   it("reads the next page when a full page held nothing to show", async () => {
-    const chatter = Array.from({ length: 50 }, (_, index) => groupCandidate(String(501 + index), `болтовня ${index}`));
-    dependencies.repository.listCandidates.mockImplementation(async (input: { afterUpdateId?: string }) =>
-      input.afterUpdateId === undefined ? chatter : input.afterUpdateId === "550" ? [groupCandidate("600", `@${BOT} стоп`)] : []);
+    const chatter = Array.from({ length: 50 }, (_, index) =>
+      groupCandidate(String(501 + index), `болтовня ${index}`),
+    );
+    dependencies.repository.listCandidates.mockImplementation(
+      async (input: { afterUpdateId?: string }) =>
+        input.afterUpdateId === undefined
+          ? chatter
+          : input.afterUpdateId === "550"
+            ? [groupCandidate("600", `@${BOT} стоп`)]
+            : [],
+    );
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext(GROUP_ATTRIBUTES)))).toEqual([expect.objectContaining({ text: `@${BOT} стоп` })]);
-    expect(dependencies.repository.listCandidates).toHaveBeenLastCalledWith(expect.objectContaining({ afterUpdateId: "550" }));
+    expect(blockMessages(await collect(toolContext(GROUP_ATTRIBUTES)))).toEqual([
+      expect.objectContaining({ text: `@${BOT} стоп` }),
+    ]);
+    expect(dependencies.repository.listCandidates).toHaveBeenLastCalledWith(
+      expect.objectContaining({ afterUpdateId: "550" }),
+    );
   });
 
   it("claims a voice message and marks it started before transcribing it", async () => {
@@ -303,14 +388,31 @@ describe("createTurnInterjectionCollector", () => {
 
     const block = await collect(toolContext({}));
 
-    expect(events).toEqual(["release", "claim:501=voice", "begin:501", "transcribe:voice-501", "returned:501"]);
-    expect(dependencies.transcribeVoice).toHaveBeenCalledWith(expect.objectContaining({ fileId: "voice-501", mimeType: "audio/ogg" }));
-    expect(dependencies.repository.saveEarlyVoiceTranscript).toHaveBeenCalledWith("501", "и ещё добавь цены");
-    expect(blockMessages(block)).toEqual([expect.objectContaining({ kind: "voice", transcript: "и ещё добавь цены" })]);
+    expect(events).toEqual([
+      "release",
+      "claim:501=voice",
+      "begin:501",
+      "transcribe:voice-501",
+      "returned:501",
+    ]);
+    expect(dependencies.transcribeVoice).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: "voice-501", mimeType: "audio/ogg" }),
+    );
+    expect(dependencies.repository.saveEarlyVoiceTranscript).toHaveBeenCalledWith(
+      "501",
+      "и ещё добавь цены",
+    );
+    expect(blockMessages(block)).toEqual([
+      expect.objectContaining({ kind: "voice", transcript: "и ещё добавь цены" }),
+    ]);
   });
 
   it("never pays twice: an existing or already started transcription is not repeated", async () => {
-    candidates = [voiceCandidate("501", { voiceTranscript: "готово" }), voiceCandidate("502"), voiceCandidate("503")];
+    candidates = [
+      voiceCandidate("501", { voiceTranscript: "готово" }),
+      voiceCandidate("502"),
+      voiceCandidate("503"),
+    ];
     dependencies.repository.beginEarlyVoiceTranscription
       .mockResolvedValueOnce({ status: "transcribed", transcript: "уже распознано" })
       .mockResolvedValueOnce({ status: "unavailable" });
@@ -341,8 +443,16 @@ describe("createTurnInterjectionCollector", () => {
 
     const block = await collect(toolContext({}));
 
-    expect(blockMessages(block)).toEqual([expect.objectContaining({ kind: "voice_unavailable", reason: "transcription_failed" })]);
-    expect(events).toEqual(["release", "claim:501=voice", "begin:501", "claim:501=notice", "returned:501"]);
+    expect(blockMessages(block)).toEqual([
+      expect.objectContaining({ kind: "voice_unavailable", reason: "transcription_failed" }),
+    ]);
+    expect(events).toEqual([
+      "release",
+      "claim:501=voice",
+      "begin:501",
+      "claim:501=notice",
+      "returned:501",
+    ]);
   });
 
   it("does not transcribe voice the sender may not use and shows a notice instead", async () => {
@@ -350,7 +460,9 @@ describe("createTurnInterjectionCollector", () => {
     dependencies.authorizeVoice.mockResolvedValueOnce(false);
     const { collect } = createTurnInterjectionCollector(dependencies);
 
-    expect(blockMessages(await collect(toolContext({})))).toEqual([expect.objectContaining({ kind: "voice_unavailable", reason: "not_transcribed" })]);
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({ kind: "voice_unavailable", reason: "not_transcribed" }),
+    ]);
     expect(dependencies.transcribeVoice).not.toHaveBeenCalled();
     expect(events).toEqual(["release", "claim:501=notice", "returned:501"]);
   });
@@ -365,14 +477,25 @@ describe("createTurnInterjectionCollector", () => {
   });
 
   it("announces a photo album with its caption instead of the files themselves", async () => {
-    candidates = [candidate("501", {
-      caption: "вот чек",
-      photo: [{ file_id: "photo-1", file_unique_id: "unique-1", height: 10, width: 10 }],
-    }, { albumMemberCount: 2 })];
+    candidates = [
+      candidate(
+        "501",
+        {
+          caption: "вот чек",
+          photo: [{ file_id: "photo-1", file_unique_id: "unique-1", height: 10, width: 10 }],
+        },
+        { albumMemberCount: 2 },
+      ),
+    ];
     const { collect } = createTurnInterjectionCollector(dependencies);
 
     expect(blockMessages(await collect(toolContext({})))).toEqual([
-      expect.objectContaining({ attachment: "photo", caption: "вот чек", count: 3, kind: "attachment" }),
+      expect.objectContaining({
+        attachment: "photo",
+        caption: "вот чек",
+        count: 3,
+        kind: "attachment",
+      }),
     ]);
     expect(events).toEqual(["release", "claim:501=notice", "returned:501"]);
   });

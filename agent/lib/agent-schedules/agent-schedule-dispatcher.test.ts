@@ -37,13 +37,24 @@ const job: ClaimedAgentSchedule = {
 
 describe("agent schedule dispatcher", () => {
   it("claims nothing while a deploy pauses new turns", async () => {
-    const repository = { claimDue: vi.fn().mockResolvedValue([job]), failClaim: vi.fn(), markDispatchStarted: vi.fn(), markRunning: vi.fn() };
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue([job]),
+      failClaim: vi.fn(),
+      markDispatchStarted: vi.fn(),
+      markRunning: vi.fn(),
+    };
     const to = vi.fn();
 
-    await expect(createAgentScheduleDispatcher({
-      discardSession: vi.fn(), prepareHistory: vi.fn(), prepareSession: vi.fn(), repository, to,
-      turnStartsPaused: vi.fn().mockResolvedValue(true),
-    })(new Date("2026-07-17T06:00:00.000Z"))).resolves.toBe(0);
+    await expect(
+      createAgentScheduleDispatcher({
+        discardSession: vi.fn(),
+        prepareHistory: vi.fn(),
+        prepareSession: vi.fn(),
+        repository,
+        to,
+        turnStartsPaused: vi.fn().mockResolvedValue(true),
+      })(new Date("2026-07-17T06:00:00.000Z")),
+    ).resolves.toBe(0);
 
     expect(repository.claimDue).not.toHaveBeenCalled();
     expect(to).not.toHaveBeenCalled();
@@ -61,7 +72,12 @@ describe("agent schedule dispatcher", () => {
     const unreachableRecipient = vi.fn().mockResolvedValue("blocked");
 
     await createAgentScheduleDispatcher({
-      discardSession: vi.fn(), prepareHistory: vi.fn(), prepareSession, repository, to, unreachableRecipient,
+      discardSession: vi.fn(),
+      prepareHistory: vi.fn(),
+      prepareSession,
+      repository,
+      to,
+      unreachableRecipient,
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(unreachableRecipient).toHaveBeenCalledWith(job);
@@ -101,7 +117,11 @@ describe("agent schedule dispatcher", () => {
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(dispatched).toBe(1);
-    expect(prepareSession).toHaveBeenCalledWith(job, "101::schedule:run-1", new Date("2026-07-17T06:00:00.000Z"));
+    expect(prepareSession).toHaveBeenCalledWith(
+      job,
+      "101::schedule:run-1",
+      new Date("2026-07-17T06:00:00.000Z"),
+    );
     expect(to).toHaveBeenCalledWith(expect.any(Object), {
       chatId: "101",
       conversationId: "schedule:run-1",
@@ -166,8 +186,12 @@ describe("agent schedule dispatcher", () => {
     } as never)(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(prepareHistory).toHaveBeenCalledWith(groupJob);
-    expect(prepareHistory.mock.invocationCallOrder[0]).toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
-    expect(prepareSession.mock.invocationCallOrder[0]).toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
+    expect(prepareHistory.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.markDispatchStarted.mock.invocationCallOrder[0]!,
+    );
+    expect(prepareSession.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.markDispatchStarted.mock.invocationCallOrder[0]!,
+    );
     expect(to).toHaveBeenCalledWith(expect.any(Object), {
       chatId: "-1001234567890",
       conversationId: "schedule:run-1",
@@ -254,7 +278,10 @@ describe("agent schedule dispatcher", () => {
     const repository = {
       claimDue: vi.fn().mockResolvedValue([job, secondJob]),
       failClaim: vi.fn(),
-      markDispatchStarted: vi.fn().mockRejectedValueOnce(new Error("marker unavailable")).mockResolvedValueOnce(true),
+      markDispatchStarted: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("marker unavailable"))
+        .mockResolvedValueOnce(true),
       markRunning: vi.fn(),
     };
     const send = vi.fn().mockResolvedValue({ id: "eve-session-2" });
@@ -280,7 +307,9 @@ describe("agent schedule dispatcher", () => {
       applicationSessionId: "app-run-2",
       eveSessionId: "eve-session-2",
     });
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"));
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"),
+    );
     consoleError.mockRestore();
   });
 
@@ -321,7 +350,9 @@ describe("agent schedule dispatcher", () => {
       applicationSessionId: "app-run-2",
       eveSessionId: "eve-session-2",
     });
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"));
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"),
+    );
     consoleError.mockRestore();
   });
 });

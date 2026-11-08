@@ -50,34 +50,22 @@ function renderAgentTemplate(e, n) {
     : `import { defineAgent } from "eve";\nimport { chatgpt } from "eve/models/openai";\n\nexport default defineAgent({\n  model: chatgpt(${JSON.stringify(r)}),\n${reasoningTemplateLine(n)}});\n`;
 }
 function reasoningTemplateLine(e) {
-  return e === void 0 || e === `provider-default`
-    ? ``
-    : `  reasoning: "${e}",\n`;
+  return e === void 0 || e === `provider-default` ? `` : `  reasoning: "${e}",\n`;
 }
 function renderTemplate(e, n) {
-  return e === BASE_AGENT_TEMPLATE &&
-    parseChatGptModelSelection(n.model) !== void 0
+  return e === BASE_AGENT_TEMPLATE && parseChatGptModelSelection(n.model) !== void 0
     ? renderAgentTemplate(n.model, n.reasoning)
     : e
         .replaceAll(`__EVE_INIT_APP_NAME__`, n.appName)
         .replaceAll(`__EVE_INIT_MODEL__`, n.model)
-        .replaceAll(
-          `__EVE_INIT_REASONING__`,
-          reasoningTemplateLine(n.reasoning),
-        )
+        .replaceAll(`__EVE_INIT_REASONING__`, reasoningTemplateLine(n.reasoning))
         .replaceAll(`__EVE_INIT_BYOK_PROVIDER__`, modelProviderSlug(n.model))
         .replaceAll(`__EVE_INIT_BYOK_ENV_VAR__`, byokProviderEnvVar(n.model))
-        .replaceAll(
-          `__EVE_INIT_PACKAGE_VERSION__`,
-          formatEveDependencySpecifier(n.eveVersion),
-        )
+        .replaceAll(`__EVE_INIT_PACKAGE_VERSION__`, formatEveDependencySpecifier(n.eveVersion))
         .replaceAll(`__EVE_INIT_AI_SDK_VERSION__`, n.aiPackageVersion)
         .replaceAll(`__EVE_INIT_CONNECT_VERSION__`, n.connectPackageVersion)
         .replaceAll(`__EVE_INIT_ZOD_VERSION__`, n.zodPackageVersion)
-        .replaceAll(
-          `__EVE_INIT_TYPESCRIPT_VERSION__`,
-          n.typescriptPackageVersion,
-        )
+        .replaceAll(`__EVE_INIT_TYPESCRIPT_VERSION__`, n.typescriptPackageVersion)
         .replaceAll(`__EVE_INIT_TYPES_NODE_VERSION__`, n.nodeTypesVersion)
         .replaceAll(`__EVE_INIT_NODE_ENGINE__`, n.nodeEngine);
 }
@@ -235,25 +223,18 @@ async function scaffoldBaseProject(t) {
     p = resolve(t.workspaceProbeDirectory ?? n),
     m = isPackageManagerWorkspaceMember(u, p);
   if (i) await assertCanCreateInPlace(n, c);
-  else if (await pathExists(n))
-    throw Error(`Cannot create project because "${n}" already exists.`);
+  else if (await pathExists(n)) throw Error(`Cannot create project because "${n}" already exists.`);
   let h = {
     appName: basename(n),
     model: t.model,
     reasoning: t.reasoning,
     eveVersion: d.version,
-    aiPackageVersion: resolveVersionToken(
-      `aiPackageVersion`,
-      t.aiPackageVersion ?? `^7.0.58`,
-    ),
+    aiPackageVersion: resolveVersionToken(`aiPackageVersion`, t.aiPackageVersion ?? `^7.0.58`),
     connectPackageVersion: resolveVersionToken(
       `connectPackageVersion`,
       t.connectPackageVersion ?? `0.4.3`,
     ),
-    zodPackageVersion: resolveVersionToken(
-      `zodPackageVersion`,
-      t.zodPackageVersion ?? `4.4.3`,
-    ),
+    zodPackageVersion: resolveVersionToken(`zodPackageVersion`, t.zodPackageVersion ?? `4.4.3`),
     typescriptPackageVersion: resolveVersionToken(
       `typescriptPackageVersion`,
       t.typescriptPackageVersion ?? `7.0.2`,

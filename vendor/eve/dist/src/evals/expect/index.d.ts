@@ -1,13 +1,21 @@
 import type { StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
 import type { Assertion } from "#evals/types.js";
-export type { Assertion, AssertionEvaluation, AssertionHandle, AssertionSeverity, } from "#evals/types.js";
+export type {
+  Assertion,
+  AssertionEvaluation,
+  AssertionHandle,
+  AssertionSeverity,
+} from "#evals/types.js";
 /**
  * Passes when the value (coerced to a string) contains a substring or matches
  * a RegExp. A hard gate by default.
  */
 export declare function includes(substring: string | RegExp): Assertion;
 /** Passes when `predicate` returns true for the supplied value. */
-export declare function satisfies<T = unknown>(predicate: (value: T) => boolean, label: string): Assertion;
+export declare function satisfies<T = unknown>(
+  predicate: (value: T) => boolean,
+  label: string,
+): Assertion;
 /**
  * Passes when the value deep-equals `expected` (exact structural equality).
  * A hard gate by default.

@@ -1,21 +1,21 @@
 import type { AgentInfoResult } from "#client/index.js";
 /** One boot-time setup problem the TUI can point at a fixing command. */
 export interface SetupIssue {
-    /** Diagnostics never authorize a command by themselves. */
-    kind: "attention";
-    /** Short category label, e.g. "AI Gateway credentials". */
-    label: string;
-    /** The slash command that fixes it, e.g. "/model". */
-    command: string;
+  /** Diagnostics never authorize a command by themselves. */
+  kind: "attention";
+  /** Short category label, e.g. "AI Gateway credentials". */
+  label: string;
+  /** The slash command that fixes it, e.g. "/model". */
+  command: string;
 }
 /** What a boot detection may inspect. */
 export interface BootDetectionContext {
-    /** The local project the in-process dev server is running. */
-    appRoot: string;
-    /** `eve dev` loads the project env files before the TUI boots. */
-    env: Record<string, string | undefined>;
-    /** Best-effort agent truth from the header fetch; undefined when unavailable. */
-    info?: AgentInfoResult;
+  /** The local project the in-process dev server is running. */
+  appRoot: string;
+  /** `eve dev` loads the project env files before the TUI boots. */
+  env: Record<string, string | undefined>;
+  /** Best-effort agent truth from the header fetch; undefined when unavailable. */
+  info?: AgentInfoResult;
 }
 /**
  * One installation-state check run at TUI boot, before the user hits the
@@ -23,8 +23,8 @@ export interface BootDetectionContext {
  * a single fs stat) — they run between the header and the first prompt.
  */
 export interface BootDetection {
-    id: string;
-    detect(context: BootDetectionContext): SetupIssue[] | Promise<SetupIssue[]>;
+  id: string;
+  detect(context: BootDetectionContext): SetupIssue[] | Promise<SetupIssue[]>;
 }
 /**
  * Resolves the local TUI's current model-provider state into the agent-info
@@ -32,7 +32,10 @@ export interface BootDetection {
  * loaded credential is usable even when an earlier `/info` response says
  * disconnected.
  */
-export declare function normalizeLocalModelEndpoint(info: AgentInfoResult | undefined, env: Record<string, string | undefined>): AgentInfoResult | undefined;
+export declare function normalizeLocalModelEndpoint(
+  info: AgentInfoResult | undefined,
+  env: Record<string, string | undefined>,
+): AgentInfoResult | undefined;
 /** The built-in boot detections, run in order. */
 export declare const BOOT_DETECTIONS: readonly BootDetection[];
 /**
@@ -55,9 +58,15 @@ export declare const CLI_MISSING_SETUP_ISSUE: SetupIssue;
  * individually guarded: one that throws contributes nothing and never blocks
  * the prompt.
  */
-export declare function detectSetupIssues(context: BootDetectionContext, detections?: readonly BootDetection[]): Promise<SetupIssue[]>;
+export declare function detectSetupIssues(
+  context: BootDetectionContext,
+  detections?: readonly BootDetection[],
+): Promise<SetupIssue[]>;
 /** Places the auth issue before boot-time setup issues. */
-export declare function orderedSetupIssues(bootIssues: readonly SetupIssue[], authIssue: SetupIssue | undefined): SetupIssue[];
+export declare function orderedSetupIssues(
+  bootIssues: readonly SetupIssue[],
+  authIssue: SetupIssue | undefined,
+): SetupIssue[];
 /**
  * The attention line's body, mirroring Claude Code's
  * `1 setup issue: MCP · /doctor` shape; the renderer prefixes the warning

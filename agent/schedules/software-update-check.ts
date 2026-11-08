@@ -13,10 +13,12 @@ async function runScheduledSoftwareUpdateCheck(): Promise<void> {
     await runSoftwareUpdateCheck();
   } catch (error) {
     // The schedule boundary adds structured context, while Eve retains the original failure.
-    console.error(JSON.stringify({
-      code: "AGENT_SOFTWARE_UPDATE_CHECK_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_SOFTWARE_UPDATE_CHECK_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     throw error;
   }
 }

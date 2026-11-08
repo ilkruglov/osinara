@@ -1,10 +1,7 @@
 import { ContinuationTokenKey } from "./keys.js";
 import { getAdapterKind } from "#channel/adapter.js";
 import { buildCallbackContext } from "#context/build-callback-context.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 async function dispatchStreamEventHooks(e) {
   let t = e.registry.streamEventsByType.get(e.event.type) ?? [],
     n = e.registry.streamEventsWildcard;

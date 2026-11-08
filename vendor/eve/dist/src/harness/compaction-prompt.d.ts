@@ -7,15 +7,16 @@ export declare const COMPACTION_RESUMPTION_MESSAGE = "Continue.";
  * so compaction can recognize the message as synthetic when picking a user
  * message to replay after compaction.
  */
-export declare const TODO_COMPACTION_PRESERVATION_LABEL = "[Your task list was preserved across context compaction]";
+export declare const TODO_COMPACTION_PRESERVATION_LABEL =
+  "[Your task list was preserved across context compaction]";
 export interface CompactionPrompt {
-    readonly prompt: string;
-    readonly system: string;
+  readonly prompt: string;
+  readonly system: string;
 }
 /** Static prompt text added around checkpoint and conversation content. */
 export declare const COMPACTION_PROMPT_ENVELOPE: {
-    prompt: string;
-    system: string;
+  prompt: string;
+  system: string;
 };
 /**
  * Builds the compaction model input from framework-owned checkpoint state and
@@ -27,9 +28,9 @@ export declare const COMPACTION_PROMPT_ENVELOPE: {
  * prompt fits; the previous checkpoint is never truncated.
  */
 export declare function createCompactionPrompt(input: {
-    readonly messages: readonly ModelMessage[];
-    readonly previousCheckpoint: string | undefined;
-    readonly transcriptBudgetTokens?: number;
+  readonly messages: readonly ModelMessage[];
+  readonly previousCheckpoint: string | undefined;
+  readonly transcriptBudgetTokens?: number;
 }): CompactionPrompt;
 export declare const TRANSCRIPT_PAYLOAD_LIMIT = 2000;
 /**

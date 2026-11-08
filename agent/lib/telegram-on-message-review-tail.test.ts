@@ -9,7 +9,11 @@ import { describe, expect, it } from "vitest";
 
 import { MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED } from "./memory-review/memory-review-config.js";
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
-import { groupMessage, repositories, telegramContext } from "./telegram-on-message.test-fixtures.js";
+import {
+  groupMessage,
+  repositories,
+  telegramContext,
+} from "./telegram-on-message.test-fixtures.js";
 
 describe("group review tail on an addressed turn", () => {
   it("leaves the unreviewed tail to the idle review while the interactive path is off", async () => {
@@ -25,7 +29,11 @@ describe("group review tail on an addressed turn", () => {
       toolAllowlist: [],
       type: "family_private",
     });
-    repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "member", userId: "user-1" });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
     repository.session.hasRoute.mockResolvedValue(false);
     repository.hitl.authorizeReply.mockResolvedValue("not_applicable");
     repository.session.prepareTurn.mockResolvedValue({

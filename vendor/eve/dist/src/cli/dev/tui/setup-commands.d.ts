@@ -15,64 +15,67 @@ export type TuiSetupCommand = PromptCommandExtensionName;
  * move past their opening question.
  */
 export declare const SETUP_FLOW_CONFIG: {
-    "vc:install": {
-        title: string;
-        indicator: "pulse";
-    };
-    "vc:login": {
-        title: string;
-        indicator: "pulse";
-    };
-    model: {
-        title: string;
-        indicator: "pulse";
-    };
-    add: {
-        title: string;
-        indicator: "pulse";
-    };
-    deploy: {
-        title: string;
-        indicator: "spinner";
-    };
+  "vc:install": {
+    title: string;
+    indicator: "pulse";
+  };
+  "vc:login": {
+    title: string;
+    indicator: "pulse";
+  };
+  model: {
+    title: string;
+    indicator: "pulse";
+  };
+  add: {
+    title: string;
+    indicator: "pulse";
+  };
+  deploy: {
+    title: string;
+    indicator: "spinner";
+  };
 };
 /** The prompter surface plus the working-state interrupt trap a command races against. */
-export type TuiSetupCommandRenderer = TuiPrompterRenderer & Pick<SetupFlowRenderer, "readProviderPicker" | "readModelEditor" | "waitForInterrupt">;
+export type TuiSetupCommandRenderer = TuiPrompterRenderer &
+  Pick<SetupFlowRenderer, "readProviderPicker" | "readModelEditor" | "waitForInterrupt">;
 export interface TuiSetupCommandInput {
-    command: TuiSetupCommand;
-    /** The local project the in-process dev server is running. */
-    appRoot: string;
-    /** The renderer surface the TUI-native prompter drives. */
-    renderer: TuiSetupCommandRenderer;
-    /** Initial model-flow step authorized by the runner's boot evidence. */
-    initialModelStep?: "provider";
-    /** Live ChatGPT identity shown only inside model configuration UI. */
-    chatGptAccountLabel?: string;
-    /** Suspends development runtime artifacts while registry installation and setup mutate them. */
-    withExclusiveTerminal?<T>(task: () => Promise<T>): Promise<T>;
-    /** Test seam; defaults to the real TUI-native prompter over `renderer`. */
-    createPrompter?: (renderer: TuiPrompterRenderer) => Prompter;
-    /** Test seam; defaults to the real setup flows. */
-    flows?: Partial<TuiSetupFlows>;
+  command: TuiSetupCommand;
+  /** The local project the in-process dev server is running. */
+  appRoot: string;
+  /** The renderer surface the TUI-native prompter drives. */
+  renderer: TuiSetupCommandRenderer;
+  /** Initial model-flow step authorized by the runner's boot evidence. */
+  initialModelStep?: "provider";
+  /** Live ChatGPT identity shown only inside model configuration UI. */
+  chatGptAccountLabel?: string;
+  /** Suspends development runtime artifacts while registry installation and setup mutate them. */
+  withExclusiveTerminal?<T>(task: () => Promise<T>): Promise<T>;
+  /** Test seam; defaults to the real TUI-native prompter over `renderer`. */
+  createPrompter?: (renderer: TuiPrompterRenderer) => Prompter;
+  /** Test seam; defaults to the real setup flows. */
+  flows?: Partial<TuiSetupFlows>;
 }
 /** The flow entry points the commands dispatch to, injectable for tests. */
 export interface TuiSetupFlows {
-    runInstallVercelCliFlow: typeof runInstallVercelCliFlow;
-    runLoginFlow: typeof runLoginFlow;
-    runModelFlow: typeof runModelFlow;
-    runRegistryFlow: typeof runRegistryFlow;
-    runDeployFlow: typeof runDeployFlow;
+  runInstallVercelCliFlow: typeof runInstallVercelCliFlow;
+  runLoginFlow: typeof runLoginFlow;
+  runModelFlow: typeof runModelFlow;
+  runRegistryFlow: typeof runRegistryFlow;
+  runDeployFlow: typeof runDeployFlow;
 }
 export interface TuiSetupCommandResult {
-    message: string;
-    /** Promotes an outcome to a top-level status. */
-    tone?: "success" | "error";
-    /** Keep warning/error lines after the bordered panel closes. */
-    preserveFlowDiagnostics: boolean;
-    /** Status refresh required after the command settles. */
-    effect?: VercelStatusEffect | {
+  message: string;
+  /** Promotes an outcome to a top-level status. */
+  tone?: "success" | "error";
+  /** Keep warning/error lines after the bordered panel closes. */
+  preserveFlowDiagnostics: boolean;
+  /** Status refresh required after the command settles. */
+  effect?:
+    | VercelStatusEffect
+    | {
         kind: "model-access-changed";
-    };
+      };
 }
 /**
  * Runs one TUI setup command (/model, /add, /deploy) over the
@@ -82,4 +85,6 @@ export interface TuiSetupCommandResult {
  * active flow, then keeps command ownership until its subprocesses and setup
  * stack have unwound.
  */
-export declare function runTuiSetupCommand(input: TuiSetupCommandInput): Promise<TuiSetupCommandResult>;
+export declare function runTuiSetupCommand(
+  input: TuiSetupCommandInput,
+): Promise<TuiSetupCommandResult>;

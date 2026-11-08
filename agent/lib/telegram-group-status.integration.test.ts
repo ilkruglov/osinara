@@ -52,10 +52,12 @@ describeWithDatabase("Telegram group status repository", () => {
       [current.familyId, other.familyId],
     );
 
-    await expect(telegramGroupAdministrationRepository.listStatuses({
-      familyId: current.familyId,
-      requestedBy: current.ownerId,
-    })).resolves.toEqual([
+    await expect(
+      telegramGroupAdministrationRepository.listStatuses({
+        familyId: current.familyId,
+        requestedBy: current.ownerId,
+      }),
+    ).resolves.toEqual([
       {
         memoryReview: true,
         messageMode: "owner_only",
@@ -77,14 +79,16 @@ describeWithDatabase("Telegram group status repository", () => {
 
   it("rejects a stale owner snapshot", async () => {
     const current = await familyFixture("revoked");
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [current.familyId, current.ownerId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      current.familyId,
+      current.ownerId,
+    ]);
 
-    await expect(telegramGroupAdministrationRepository.listStatuses({
-      familyId: current.familyId,
-      requestedBy: current.ownerId,
-    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+    await expect(
+      telegramGroupAdministrationRepository.listStatuses({
+        familyId: current.familyId,
+        requestedBy: current.ownerId,
+      }),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
   });
 });

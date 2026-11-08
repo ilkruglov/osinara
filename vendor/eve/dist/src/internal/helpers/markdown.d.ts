@@ -17,8 +17,8 @@ export declare function lowerInstructionsMarkdown(markdown: string): Instruction
  * never carries a `name`.
  */
 interface LowerSkillMarkdownInput {
-    readonly description?: string;
-    readonly slug?: string;
+  readonly description?: string;
+  readonly slug?: string;
 }
 /**
  * Lowers an authored schedule markdown file into the shared public
@@ -38,5 +38,8 @@ export declare function lowerScheduleMarkdown(source: string): ScheduleDefinitio
  * to other skills; description may be derived from the markdown body).
  * Identity is path-derived, and frontmatter that eve does not use is a no-op.
  */
-export declare function lowerSkillMarkdown(source: string, input?: LowerSkillMarkdownInput): SkillDefinition;
+export declare function lowerSkillMarkdown(
+  source: string,
+  input?: LowerSkillMarkdownInput,
+): SkillDefinition;
 export {};

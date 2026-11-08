@@ -14,8 +14,7 @@ const WORKFLOW_RULES = [
     name: `Local session store inaccessible`,
     tags: [`workflow`],
     when: nameIs(`DataDirAccessError`),
-    message:
-      "The local workflow store (`.eve/.workflow-data`) could not be created or accessed.",
+    message: "The local workflow store (`.eve/.workflow-data`) could not be created or accessed.",
     hint: `Check filesystem permissions and free disk space, then retry.`,
   },
   {

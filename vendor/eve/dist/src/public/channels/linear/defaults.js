@@ -6,8 +6,7 @@ import {
 } from "#public/channels/linear/hitl.js";
 function defaultLinearAuth(e) {
   let t = e.agentActivity?.user ?? e.agentSession.creator,
-    n =
-      e.agentActivity?.userId ?? e.agentSession.creatorId ?? t?.id ?? `unknown`,
+    n = e.agentActivity?.userId ?? e.agentSession.creatorId ?? t?.id ?? `unknown`,
     r = {
       action: e.action,
       agent_session_id: e.agentSession.id,
@@ -35,30 +34,18 @@ function defaultLinearAuth(e) {
   };
 }
 function defaultOnAgentSession(e, t) {
-  return t.action !== `created` && t.action !== `prompted`
-    ? null
-    : { auth: defaultLinearAuth(t) };
+  return t.action !== `created` && t.action !== `prompted` ? null : { auth: defaultLinearAuth(t) };
 }
 function createDefaultEvents(n = {}) {
   return {
     async "turn.started"(e, t, r) {
       ((t.state.pendingToolCallMessage = null),
-        await postActivity(
-          t,
-          n,
-          { body: `Working on this.`, type: `thought` },
-          { ephemeral: !0 },
-        ));
+        await postActivity(t, n, { body: `Working on this.`, type: `thought` }, { ephemeral: !0 }));
     },
     async "actions.requested"(e, t, r) {
       let i = t.state.pendingToolCallMessage;
       if (((t.state.pendingToolCallMessage = null), i)) {
-        await postActivity(
-          t,
-          n,
-          { body: i, type: `thought` },
-          { ephemeral: !0 },
-        );
+        await postActivity(t, n, { body: i, type: `thought` }, { ephemeral: !0 });
         return;
       }
       if (e.actions.length !== 0) {
@@ -104,8 +91,7 @@ function createDefaultEvents(n = {}) {
         s;
       if (a !== void 0) {
         let e = { providerName: i, url: a };
-        (o !== void 0 && (e.userId = o),
-          (s = { signal: `auth`, signalMetadata: e }));
+        (o !== void 0 && (e.userId = o), (s = { signal: `auth`, signalMetadata: e }));
       }
       await postActivity(
         t,
@@ -140,14 +126,11 @@ function createDefaultEvents(n = {}) {
     },
     async "message.completed"(e, t, r) {
       if (e.finishReason === `tool-calls`) {
-        t.state.pendingToolCallMessage = e.message
-          ? (firstNonEmptyLine(e.message) ?? null)
-          : null;
+        t.state.pendingToolCallMessage = e.message ? (firstNonEmptyLine(e.message) ?? null) : null;
         return;
       }
       ((t.state.pendingToolCallMessage = null),
-        e.message &&
-          (await postActivity(t, n, { body: e.message, type: `response` })));
+        e.message && (await postActivity(t, n, { body: e.message, type: `response` })));
     },
     async "session.failed"(r, i) {
       let a = formatErrorHint(r),
@@ -194,20 +177,14 @@ function postActivity(e, t, r, i = {}) {
 }
 function requireAgentSessionId(e) {
   if (e === null)
-    throw Error(
-      `linearChannel: cannot post Agent Activity without an Agent Session id.`,
-    );
+    throw Error(`linearChannel: cannot post Agent Activity without an Agent Session id.`);
   return e;
 }
 function linearUserLabel(e) {
   return e.displayName ?? e.name ?? e.email;
 }
 function authorizationDisplayName(e, t) {
-  return t === void 0
-    ? e.length === 0
-      ? e
-      : e.charAt(0).toUpperCase() + e.slice(1)
-    : t;
+  return t === void 0 ? (e.length === 0 ? e : e.charAt(0).toUpperCase() + e.slice(1)) : t;
 }
 function authorizationRequiredBody(e) {
   return [

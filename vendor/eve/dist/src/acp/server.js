@@ -1,8 +1,4 @@
-import {
-  agent,
-  methods,
-  ndJsonStream,
-} from "#compiled/@agentclientprotocol/sdk/index.js";
+import { agent, methods, ndJsonStream } from "#compiled/@agentclientprotocol/sdk/index.js";
 import { Readable, Writable } from "node:stream";
 import { EveAcpAdapter } from "#acp/adapter.js";
 import { limitAcpLineBytes } from "#acp/line-limit.js";
@@ -17,23 +13,16 @@ async function runAcpServerOnStreams(r, i) {
     o = agent({ name: `eve` })
       .onRequest(methods.agent.initialize, ({ params: e }) => a.initialize(e))
       .onRequest(methods.agent.session.new, ({ params: e }) => a.newSession(e))
-      .onRequest(
-        methods.agent.session.prompt,
-        ({ params: e, client: t, signal: n }) => a.prompt(e, t, n),
+      .onRequest(methods.agent.session.prompt, ({ params: e, client: t, signal: n }) =>
+        a.prompt(e, t, n),
       )
-      .onRequest(methods.agent.session.close, ({ params: e }) =>
-        a.closeSession(e.sessionId),
-      )
-      .onNotification(methods.agent.session.cancel, ({ params: e }) =>
-        a.cancel(e.sessionId),
-      ),
+      .onRequest(methods.agent.session.close, ({ params: e }) => a.closeSession(e.sessionId))
+      .onNotification(methods.agent.session.cancel, ({ params: e }) => a.cancel(e.sessionId)),
     s = Writable.toWeb(i.output),
     c = Readable.toWeb(i.input).pipeThrough(limitAcpLineBytes()),
     l = o.connect(ndJsonStream(s, c)),
     close = () => l.close();
-  r.signal?.aborted
-    ? close()
-    : r.signal?.addEventListener(`abort`, close, { once: !0 });
+  r.signal?.aborted ? close() : r.signal?.addEventListener(`abort`, close, { once: !0 });
   try {
     await l.closed;
   } finally {

@@ -59,13 +59,7 @@ function projectPolicyContext(e) {
 }
 async function readProject(e) {
   let t = await e.deps.captureVercel(
-    [
-      `api`,
-      `/v9/projects/${encodeURIComponent(e.projectId)}`,
-      `--scope`,
-      e.ownerId,
-      `--raw`,
-    ],
+    [`api`, `/v9/projects/${encodeURIComponent(e.projectId)}`, `--scope`, e.ownerId, `--raw`],
     { cwd: e.workspaceRoot, nonInteractive: !0, signal: e.signal },
   );
   if (!t.ok) return { kind: `failed`, message: t.failure.message };

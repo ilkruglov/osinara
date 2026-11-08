@@ -3,12 +3,9 @@ function createRuntimeIpAllowList(t) {
   let n = new BlockList();
   for (let e of t) {
     let t = e.trim();
-    if (t.length === 0)
-      throw Error(`Expected every network.ipAllowList entry to be non-empty.`);
+    if (t.length === 0) throw Error(`Expected every network.ipAllowList entry to be non-empty.`);
     if (t.includes(`*`))
-      throw Error(
-        `Expected "${t}" to use exact IP or CIDR syntax instead of "*".`,
-      );
+      throw Error(`Expected "${t}" to use exact IP or CIDR syntax instead of "*".`);
     let r = t.indexOf(`/`);
     if (r === -1) {
       let e = normalizeIpAddress(t),

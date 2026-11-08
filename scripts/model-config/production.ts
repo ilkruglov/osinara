@@ -16,10 +16,9 @@ export const PRODUCTION_MODEL_CONFIG_PATHS: ModelConfigPaths = Object.freeze({
   lockPath: "/opt/osinara/.model-config.lock",
 });
 
-export function createProductionModelConfigDependencies(operations: Pick<
-  ModelConfigDependencies,
-  "health" | "preflight" | "restart"
->): ModelConfigDependencies {
+export function createProductionModelConfigDependencies(
+  operations: Pick<ModelConfigDependencies, "health" | "preflight" | "restart">,
+): ModelConfigDependencies {
   return {
     assertRoot: () => {
       if (process.getuid?.() !== 0 || process.getgid?.() !== 0) {

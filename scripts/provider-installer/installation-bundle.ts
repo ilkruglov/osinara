@@ -21,10 +21,18 @@ const ALLOWED_ENTRIES = new Map<string, { mode: number; type: "directory" | "fil
   ["installation/", { mode: 0o755, type: "directory" }],
   ["installation/production-deploy/", { mode: 0o755, type: "directory" }],
   ["installation/production-deploy.sh", { mode: 0o750, type: "file" }],
-  ...["common", "database", "release", "backup"].map((name): [string, { mode: number; type: "file" }] =>
-    [`installation/production-deploy/${name}.sh`, { mode: 0o640, type: "file" }]),
-  ...["osinara-deploy.service", "osinara-deploy.timer", "LICENSE", "NOTICE"].map((name): [string, { mode: number; type: "file" }] =>
-    [`installation/${name}`, { mode: 0o644, type: "file" }]),
+  ...["common", "database", "release", "backup"].map(
+    (name): [string, { mode: number; type: "file" }] => [
+      `installation/production-deploy/${name}.sh`,
+      { mode: 0o640, type: "file" },
+    ],
+  ),
+  ...["osinara-deploy.service", "osinara-deploy.timer", "LICENSE", "NOTICE"].map(
+    (name): [string, { mode: number; type: "file" }] => [
+      `installation/${name}`,
+      { mode: 0o644, type: "file" },
+    ],
+  ),
   ["installation/Caddyfile", { mode: 0o644, type: "file" }],
   ["installation/compose.installation.json", { mode: 0o644, type: "file" }],
   ["installation/compose.tls.yaml", { mode: 0o644, type: "file" }],
@@ -49,16 +57,23 @@ export async function readInstallationBundle(
     const fail = (error: unknown): void => {
       if (settled) return;
       settled = true;
-      reject(error instanceof InstallerError
-        ? error
-        : bundleEntryError("Не удалось разобрать installation bundle", error));
+      reject(
+        error instanceof InstallerError
+          ? error
+          : bundleEntryError("Не удалось разобрать installation bundle", error),
+      );
       extract.destroy();
     };
 
     extract.on("entry", (header, stream, next) => {
       const expected = ALLOWED_ENTRIES.get(header.name);
       const mode = header.mode === undefined ? undefined : header.mode & 0o777;
-      if (!expected || seen.has(header.name) || header.type !== expected.type || mode !== expected.mode) {
+      if (
+        !expected ||
+        seen.has(header.name) ||
+        header.type !== expected.type ||
+        mode !== expected.mode
+      ) {
         stream.resume();
         fail(bundleEntryError(`Недопустимая запись installation bundle: ${header.name}`));
         return;
@@ -69,9 +84,11 @@ export async function readInstallationBundle(
         totalBytes += chunk.byteLength;
         if (expected.type === "file") chunks.push(Buffer.from(chunk));
         if (totalBytes > MAX_UNCOMPRESSED_BYTES) {
-          fail(bundleEntryError(
-            `Распакованный installation bundle превышает ${MAX_UNCOMPRESSED_BYTES} байт`,
-          ));
+          fail(
+            bundleEntryError(
+              `Распакованный installation bundle превышает ${MAX_UNCOMPRESSED_BYTES} байт`,
+            ),
+          );
         }
       });
       stream.on("error", fail);

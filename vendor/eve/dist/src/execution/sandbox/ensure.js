@@ -11,9 +11,7 @@ import { waitForSandboxTemplatePrewarmLock } from "#execution/sandbox/template-p
 async function ensureSandboxAccess(e) {
   let i = e.state?.initialized ?? !1,
     o = e.state?.session ?? null,
-    s =
-      getRuntimeCompiledArtifactsSandboxAppRoot(e.compiledArtifactsSource) ??
-      process.cwd(),
+    s = getRuntimeCompiledArtifactsSandboxAppRoot(e.compiledArtifactsSource) ?? process.cwd(),
     c = e.registry.sandbox,
     l;
   function getHandle() {
@@ -32,8 +30,7 @@ async function ensureSandboxAccess(e) {
       u = l.backend,
       d = createRuntimeSandboxTemplatePlan({
         definition: l,
-        workspaceResourceRoot:
-          a?.workspaceResourceRoot ?? c.workspaceResourceRoot,
+        workspaceResourceRoot: a?.workspaceResourceRoot ?? c.workspaceResourceRoot,
       }),
       f = await createRuntimeSandboxKeys({
         backendName: u.name,
@@ -61,10 +58,7 @@ async function ensureSandboxAccess(e) {
           ),
         templateKey: f.templateKey,
       }));
-    let p =
-      o !== null && o.backendName === u.name && o.sessionKey === f.sessionKey
-        ? o
-        : null;
+    let p = o !== null && o.backendName === u.name && o.sessionKey === f.sessionKey ? o : null;
     p === null && (i = !1);
     let m = {
         existingMetadata: p?.metadata,
@@ -123,9 +117,7 @@ async function ensureSandboxAccess(e) {
     async stop() {
       let e = await getHandle();
       if (e === null)
-        throw Error(
-          `The sandbox is not available in the current authored runtime context.`,
-        );
+        throw Error(`The sandbox is not available in the current authored runtime context.`);
       await e.stop();
     },
   };
@@ -152,9 +144,7 @@ async function createBackendHandleWithPrewarmRetry(e) {
         log: (e) => logDevelopmentSandbox(`eve: ${e}`),
         templateKey: e.createInput.templateKey,
       }),
-      logDevelopmentSandbox(
-        `eve: sandbox template is ready; retrying sandbox creation...`,
-      ),
+      logDevelopmentSandbox(`eve: sandbox template is ready; retrying sandbox creation...`),
       await e.backend.create(e.createInput)
     );
   }
@@ -166,9 +156,7 @@ async function withDevelopmentSandboxProgress(t, n, r) {
   if ((logDevelopmentSandbox(t), !isEveDevEnvironment())) return await r();
   let i = Date.now(),
     a = setInterval(() => {
-      logDevelopmentSandbox(
-        `${n} (${Math.round((Date.now() - i) / 1e3)}s elapsed)...`,
-      );
+      logDevelopmentSandbox(`${n} (${Math.round((Date.now() - i) / 1e3)}s elapsed)...`);
     }, 5e3);
   a.unref?.();
   try {

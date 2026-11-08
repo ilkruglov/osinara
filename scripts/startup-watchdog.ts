@@ -53,11 +53,13 @@ export async function watchStartup(
     await sleep(watch.pollMs);
   }
   if (!alive(watch.serverPid)) return "server-gone";
-  console.error(JSON.stringify({
-    code: "AGENT_STARTUP_HEALTH_TIMEOUT",
-    deadlineMs: watch.deadlineMs,
-    message: "The agent server never answered health; stopping it so the container restarts",
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_STARTUP_HEALTH_TIMEOUT",
+      deadlineMs: watch.deadlineMs,
+      message: "The agent server never answered health; stopping it so the container restarts",
+    }),
+  );
   process.kill(watch.serverPid, "SIGTERM");
   const killAt = Date.now() + watch.killAfterMs;
   while (Date.now() < killAt) {

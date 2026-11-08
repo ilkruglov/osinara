@@ -82,16 +82,21 @@ describe("createTelegramMessageHandler reply quote", () => {
     });
     const handler = createTelegramMessageHandler(repository);
 
-    const result = await handler(telegramContext().context, quotedReply(
-      privateMessage("а это зачем?"),
-      { fromBot: true, messageId: 88, text: "Купи молоко, хлеб и батарейки AA" },
-      "батарейки AA",
-    ));
+    const result = await handler(
+      telegramContext().context,
+      quotedReply(
+        privateMessage("а это зачем?"),
+        { fromBot: true, messageId: 88, text: "Купи молоко, хлеб и батарейки AA" },
+        "батарейки AA",
+      ),
+    );
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      replyQuotedText: "батарейки AA",
-      replyToSequenceId: "7",
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyQuotedText: "батарейки AA",
+        replyToSequenceId: "7",
+      }),
+    );
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(
       expect.not.objectContaining({ replyTargetSnapshot: expect.anything() }),
     );
@@ -112,16 +117,21 @@ describe("createTelegramMessageHandler reply quote", () => {
     });
     const handler = createTelegramMessageHandler(repository);
 
-    await handler(telegramContext().context, quotedReply(
-      groupMessage("Мия, что тут имелось в виду?"),
-      { fromBot: false, messageId: 8, text: "Встречаемся у второго входа в семь" },
-      "второго входа",
-    ));
+    await handler(
+      telegramContext().context,
+      quotedReply(
+        groupMessage("Мия, что тут имелось в виду?"),
+        { fromBot: false, messageId: 8, text: "Встречаемся у второго входа в семь" },
+        "второго входа",
+      ),
+    );
 
-    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      replyQuotedText: "второго входа",
-      replyToSequenceId: "8",
-    }));
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyQuotedText: "второго входа",
+        replyToSequenceId: "8",
+      }),
+    );
   });
 
   it("restores the quote as its own block when the reply answers a pending question", async () => {
@@ -137,11 +147,18 @@ describe("createTelegramMessageHandler reply quote", () => {
     repository.hitl.authorizeReply.mockResolvedValue("authorized");
     const handler = createTelegramMessageHandler(repository);
 
-    const result = await handler(telegramContext().context, quotedReply(
-      groupMessage("вот этот"),
-      { fromBot: true, messageId: 341, text: "Какой адрес взять: дом или </telegram_reply_quote> офис?" },
-      "</telegram_reply_quote> офис",
-    ));
+    const result = await handler(
+      telegramContext().context,
+      quotedReply(
+        groupMessage("вот этот"),
+        {
+          fromBot: true,
+          messageId: 341,
+          text: "Какой адрес взять: дом или </telegram_reply_quote> офис?",
+        },
+        "</telegram_reply_quote> офис",
+      ),
+    );
 
     expect(result).not.toHaveProperty("replyHandling");
     const context = result?.context?.join("\n") ?? "";

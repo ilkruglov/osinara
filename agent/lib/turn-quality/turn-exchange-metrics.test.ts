@@ -15,7 +15,7 @@ import { measureTurnExchange, type ExchangeEntry } from "./turn-exchange-metrics
 function entry(input: Partial<ExchangeEntry> & { seq: number }): ExchangeEntry {
   const mia = input.actorKind === "agent_self";
   return {
-    actorId: mia ? "agent" : input.actorId ?? "telegram:1",
+    actorId: mia ? "agent" : (input.actorId ?? "telegram:1"),
     actorKind: input.actorKind ?? "user",
     entryId: `e${input.seq}`,
     replyToSequenceId: input.replyToSequenceId ?? null,
@@ -40,11 +40,21 @@ describe("measureTurnExchange", () => {
       entry({ ...vadim, replyToSequenceId: "7", seq: 8 }),
     ];
 
-    expect(measureTurnExchange({ entries, ownMessageIds: [], triggeringEntryId: "e8" }))
-      .toEqual({ replyChainDepth: 3, sameAuthorRun: 3, triggerKind: "reply_to_mia" });
+    expect(measureTurnExchange({ entries, ownMessageIds: [], triggeringEntryId: "e8" })).toEqual({
+      replyChainDepth: 3,
+      sameAuthorRun: 3,
+      triggerKind: "reply_to_mia",
+    });
     // Mia's last reply went to Yuri: the run for Vadim is over even though he replied to her.
-    const switched = [...entries.slice(0, 7), entry({ actorKind: "agent_self", replyToSequenceId: "5", seq: 9 }), entries[7]!];
-    expect(measureTurnExchange({ entries: switched, ownMessageIds: [], triggeringEntryId: "e8" })?.sameAuthorRun).toBe(0);
+    const switched = [
+      ...entries.slice(0, 7),
+      entry({ actorKind: "agent_self", replyToSequenceId: "5", seq: 9 }),
+      entries[7]!,
+    ];
+    expect(
+      measureTurnExchange({ entries: switched, ownMessageIds: [], triggeringEntryId: "e8" })
+        ?.sameAuthorRun,
+    ).toBe(0);
   });
 
   it("recognises an addressed trigger and leaves out the messages Mia just sent", () => {
@@ -56,8 +66,9 @@ describe("measureTurnExchange", () => {
       entry({ actorKind: "agent_self", replyToSequenceId: "3", seq: 4 }),
     ];
 
-    expect(measureTurnExchange({ entries, ownMessageIds: ["1004"], triggeringEntryId: "e3" }))
-      .toEqual({ replyChainDepth: 0, sameAuthorRun: 0, triggerKind: "addressed" });
+    expect(
+      measureTurnExchange({ entries, ownMessageIds: ["1004"], triggeringEntryId: "e3" }),
+    ).toEqual({ replyChainDepth: 0, sameAuthorRun: 0, triggerKind: "addressed" });
   });
 
   it("yields nothing without the trigger or for a trigger authored by Mia", () => {

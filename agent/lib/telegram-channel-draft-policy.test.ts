@@ -32,9 +32,13 @@ describe("Telegram channel draft policy", () => {
 
   it("records scheduled delivery confirmation before the group timeline", async () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
-    const authorization = source.indexOf("await agentScheduleDispatchRepository.authorizeDelivery(");
+    const authorization = source.indexOf(
+      "await agentScheduleDispatchRepository.authorizeDelivery(",
+    );
     const delivery = source.indexOf("await deliverTelegramFinalOutput(");
-    const confirmation = source.indexOf("await agentScheduleDispatchRepository.completeDeliveredRun(");
+    const confirmation = source.indexOf(
+      "await agentScheduleDispatchRepository.completeDeliveredRun(",
+    );
     const timeline = source.indexOf("await telegramGroupJournalRepository.recordAgentResponse(");
 
     expect(authorization).toBeGreaterThan(-1);

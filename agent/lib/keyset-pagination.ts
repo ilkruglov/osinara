@@ -62,8 +62,12 @@ export function decodeDateBigintCursor(
   if (value === undefined) return null;
   const [rawTimestamp, id, cursorBinding, extra] = value.split("|");
   const timestamp = new Date(rawTimestamp ?? "");
-  if (extra !== undefined || !id || !POSITIVE_BIGINT_PATTERN.test(id) ||
-      Number.isNaN(timestamp.getTime())) {
+  if (
+    extra !== undefined ||
+    !id ||
+    !POSITIVE_BIGINT_PATTERN.test(id) ||
+    Number.isNaN(timestamp.getTime())
+  ) {
     invalidCursor(code, message);
   }
   requireBinding(cursorBinding, binding, code, message);
@@ -82,8 +86,13 @@ export function decodeBigintUuidCursor(
 ): { id: string; sequence: string } | null {
   if (value === undefined) return null;
   const [sequence, id, cursorBinding, extra] = value.split("|");
-  if (extra !== undefined || !sequence || !POSITIVE_BIGINT_PATTERN.test(sequence) ||
-      !id || !UUID_PATTERN.test(id)) {
+  if (
+    extra !== undefined ||
+    !sequence ||
+    !POSITIVE_BIGINT_PATTERN.test(sequence) ||
+    !id ||
+    !UUID_PATTERN.test(id)
+  ) {
     invalidCursor(code, message);
   }
   requireBinding(cursorBinding, binding, code, message);

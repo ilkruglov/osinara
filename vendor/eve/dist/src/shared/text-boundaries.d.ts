@@ -4,9 +4,9 @@
  * positions and which spans editing operations may remove.
  */
 interface GraphemeSpan {
-    readonly text: string;
-    readonly start: number;
-    readonly end: number;
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
 }
 /** Splits text into grapheme clusters while preserving `String.slice` offsets. */
 export declare function graphemes(text: string): GraphemeSpan[];

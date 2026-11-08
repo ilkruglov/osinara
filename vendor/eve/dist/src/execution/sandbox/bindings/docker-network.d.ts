@@ -5,4 +5,8 @@ import type { SandboxNetworkPolicy } from "#shared/sandbox-network-policy.js";
  * detaching the container's networks. Domain-level policies and
  * credential brokering require the firewall on the Vercel backend.
  */
-export declare function setDockerNetworkPolicy(cli: DockerCli, containerName: string, policy: SandboxNetworkPolicy): Promise<void>;
+export declare function setDockerNetworkPolicy(
+  cli: DockerCli,
+  containerName: string,
+  policy: SandboxNetworkPolicy,
+): Promise<void>;

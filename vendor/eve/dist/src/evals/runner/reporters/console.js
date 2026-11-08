@@ -15,9 +15,7 @@ var ConsoleReporter = class {
   }
   onRunStart(e, t) {
     (this.#e(``),
-      this.#e(
-        `${this.#t.bold(this.#t.cyan(`EVALS`))} ${this.#t.bold(String(e.length))}`,
-      ),
+      this.#e(`${this.#t.bold(this.#t.cyan(`EVALS`))} ${this.#t.bold(String(e.length))}`),
       this.#e(
         `${this.#t.dim(`target`)} ${t.kind === `local` ? this.#t.green(t.url) : this.#t.blue(t.url)}`,
       ),
@@ -28,16 +26,14 @@ var ConsoleReporter = class {
       s = r.filter((e) => e.severity === `gate`),
       c = r.filter((e) => e.severity === `soft`),
       l = this.#n(i),
-      u =
-        s.length > 0 ? this.#r(s.filter((e) => e.passed).length, s.length) : ``,
+      u = s.length > 0 ? this.#r(s.filter((e) => e.passed).length, s.length) : ``,
       d = c.map((e) => this.#i(e.name, e.score)).join(`  `),
       f = [l, this.#t.dim(e.id), u, d].filter(Boolean).join(`  `);
     this.#e(f);
     for (let e of r)
       if (!e.passed) {
         this.#e(`  ${this.#t.red(`✗ ${formatAssertionFailureHeadline(e)}`)}`);
-        for (let n of formatAssertionFailureDetailLines(e))
-          this.#e(`    ${this.#t.red(n)}`);
+        for (let n of formatAssertionFailureDetailLines(e)) this.#e(`    ${this.#t.red(n)}`);
       }
     (a && this.#e(`  ${this.#t.red(a)}`), o && this.#e(`  ${this.#t.dim(o)}`));
   }
@@ -51,9 +47,7 @@ var ConsoleReporter = class {
       r > 0 && s.push(this.#t.yellow(`${r} scored`)),
       i > 0 && s.push(this.#t.dim(`${i} skipped`)),
       s.length === 0 && s.push(this.#t.dim(`0 evals`)),
-      this.#e(
-        `${this.#t.bold(`Results:`)} ${s.join(`, `)} ${this.#t.dim(`(${o} total)`)}`,
-      ));
+      this.#e(`${this.#t.bold(`Results:`)} ${s.join(`, `)} ${this.#t.dim(`(${o} total)`)}`));
     let c = this.#a(a);
     if (c.total > 0) {
       let e = this.#t.green(`${c.passed} passed`),
@@ -69,9 +63,7 @@ var ConsoleReporter = class {
       }
     }
     let u = computeDurationMs(e.startedAt, e.completedAt);
-    (this.#e(``),
-      this.#e(this.#t.dim(`Completed in ${formatDuration(u)}`)),
-      this.#e(``));
+    (this.#e(``), this.#e(this.#t.dim(`Completed in ${formatDuration(u)}`)), this.#e(``));
   }
   #n(e) {
     switch (e) {
@@ -91,11 +83,7 @@ var ConsoleReporter = class {
   }
   #i(e, t) {
     let n = `${e}: ${Math.round(t * 100)}%`;
-    return t === 1
-      ? this.#t.green(n)
-      : t === 0
-        ? this.#t.red(n)
-        : this.#t.yellow(n);
+    return t === 1 ? this.#t.green(n) : t === 0 ? this.#t.red(n) : this.#t.yellow(n);
   }
   #a(e) {
     let t = 0,
@@ -109,9 +97,7 @@ var ConsoleReporter = class {
       for (let e of n.assertions) {
         if (e.severity !== `soft`) continue;
         let n = t.get(e.name);
-        n
-          ? ((n.sum += e.score), (n.count += 1))
-          : t.set(e.name, { sum: e.score, count: 1 });
+        n ? ((n.sum += e.score), (n.count += 1)) : t.set(e.name, { sum: e.score, count: 1 });
       }
     return [...t.entries()].map(([e, { sum: t, count: n }]) => ({
       name: e,

@@ -1,9 +1,4 @@
-import {
-  createLogger,
-  extractErrorId,
-  formatErrorHint,
-  logError,
-} from "#internal/logging.js";
+import { createLogger, extractErrorId, formatErrorHint, logError } from "#internal/logging.js";
 import { checkoutGitHubRepository } from "#public/channels/github/checkout.js";
 import { shouldDispatchGitHubComment } from "#public/channels/github/inbound.js";
 import { splitGitHubCommentBody } from "#public/channels/github/limits.js";
@@ -50,9 +45,7 @@ function createDefaultEvents(e = {}) {
       await checkoutRepositoryForTurn(n, i, e);
     },
     async "message.completed"(e, t, n) {
-      e.finishReason === `tool-calls` ||
-        !e.message ||
-        (await postCommentChunks(t, e.message));
+      e.finishReason === `tool-calls` || !e.message || (await postCommentChunks(t, e.message));
     },
     async "input.requested"(t, n, r) {
       if (t.requests.length === 0) return;
@@ -108,8 +101,7 @@ function renderInputRequest(e) {
           return `${t + 1}. ${e.label}${n}`;
         }),
       ),
-    e.allowFreeform === !0 &&
-      t.push(``, `You can also reply with a custom answer.`),
+    e.allowFreeform === !0 && t.push(``, `You can also reply with a custom answer.`),
     t.join(`
 `)
   );

@@ -6,10 +6,7 @@ import { HumanActionRequiredError } from "#setup/human-action.js";
 import { runInstallVercelCliFlow } from "#setup/flows/install-vercel-cli.js";
 import { runModelFlow } from "#setup/flows/model.js";
 import { runProviderFlow } from "#setup/flows/provider.js";
-import {
-  RegistryFlowFailedError,
-  runRegistryFlow,
-} from "#setup/flows/registry.js";
+import { RegistryFlowFailedError, runRegistryFlow } from "#setup/flows/registry.js";
 const SETUP_FLOW_CONFIG = {
   "vc:install": { title: `Install the Vercel CLI`, indicator: `pulse` },
   "vc:login": { title: `Log in to Vercel`, indicator: `pulse` },
@@ -41,18 +38,13 @@ function registryResultMessage(e) {
 function muteableRenderer(e, t, n) {
   return {
     readSelect: (n) => (t() ? Promise.resolve(void 0) : e.readSelect(n)),
-    readEditableSelect: (n) =>
-      t() ? Promise.resolve(void 0) : e.readEditableSelect(n),
-    readProviderPicker: (n) =>
-      t() ? Promise.resolve(void 0) : e.readProviderPicker(n),
-    readModelEditor: (n) =>
-      t() ? Promise.resolve(void 0) : e.readModelEditor(n),
+    readEditableSelect: (n) => (t() ? Promise.resolve(void 0) : e.readEditableSelect(n)),
+    readProviderPicker: (n) => (t() ? Promise.resolve(void 0) : e.readProviderPicker(n)),
+    readModelEditor: (n) => (t() ? Promise.resolve(void 0) : e.readModelEditor(n)),
     readText: (n) => (t() ? Promise.resolve(void 0) : e.readText(n)),
     readAcknowledge: (n) => (t() ? Promise.resolve() : e.readAcknowledge(n)),
     readChoice: (n) =>
-      t()
-        ? { choice: Promise.resolve(void 0), close: () => {} }
-        : e.readChoice(n),
+      t() ? { choice: Promise.resolve(void 0), close: () => {} } : e.readChoice(n),
     setStatus: (n) => {
       t() || e.setStatus(n);
     },
@@ -115,9 +107,7 @@ async function executeSetupCommand(e, i, u, d) {
           }),
         );
       case `vc:login`:
-        return loginResultMessage(
-          await m.runLoginFlow({ appRoot: p, prompter: i, signal: d }),
-        );
+        return loginResultMessage(await m.runLoginFlow({ appRoot: p, prompter: i, signal: d }));
       case `model`: {
         let pickProvider = (e) => u.readProviderPicker(e),
           t = {
@@ -127,8 +117,7 @@ async function executeSetupCommand(e, i, u, d) {
             chatGptAccountLabel: e.chatGptAccountLabel,
             deps: {
               pickModelSettings: (e) => u.readModelEditor(e),
-              runProviderFlow: (e) =>
-                runProviderFlow({ ...e, picker: pickProvider }),
+              runProviderFlow: (e) => runProviderFlow({ ...e, picker: pickProvider }),
             },
           };
         (e.initialModelStep !== void 0 && (t.initialStep = e.initialModelStep),
@@ -145,27 +134,20 @@ async function executeSetupCommand(e, i, u, d) {
           };
         let r = [];
         (n.modelMessage !== void 0 && r.push(n.modelMessage),
-          n.providerSelection !== void 0 &&
-            r.push(providerSelectionMessage(n.providerSelection)));
+          n.providerSelection !== void 0 && r.push(providerSelectionMessage(n.providerSelection)));
         let a = {
           message: r.join(`
 `),
           preserveFlowDiagnostics: !1,
         };
-        return (
-          n.accessChanged && (a.effect = { kind: `model-access-changed` }),
-          a
-        );
+        return (n.accessChanged && (a.effect = { kind: `model-access-changed` }), a);
       }
       case `add`: {
         let e = await m.runRegistryFlow({ appRoot: p, prompter: i, signal: d });
         if (e.kind === `cancelled`)
           return { message: `/add dismissed.`, preserveFlowDiagnostics: !0 };
         let t = {
-          message:
-            e.addedItems.length > 0
-              ? registryResultMessage(e)
-              : `No registry items added.`,
+          message: e.addedItems.length > 0 ? registryResultMessage(e) : `No registry items added.`,
           preserveFlowDiagnostics: !0,
         };
         return (
@@ -195,9 +177,7 @@ async function executeSetupCommand(e, i, u, d) {
                 }
               : {
                   message:
-                    e.productionUrl === void 0
-                      ? `Deployed.`
-                      : `Deployed: ${e.productionUrl}`,
+                    e.productionUrl === void 0 ? `Deployed.` : `Deployed: ${e.productionUrl}`,
                   preserveFlowDiagnostics: !0,
                   effect: { kind: `deployed` },
                 };
@@ -234,11 +214,7 @@ async function executeSetupCommand(e, i, u, d) {
   }
 }
 async function vercelCliUpgradeOutcome(e, t, n, r) {
-  if (
-    !(e instanceof HumanActionRequiredError) ||
-    e.action.kind !== `vercel-cli-upgrade`
-  )
-    return;
+  if (!(e instanceof HumanActionRequiredError) || e.action.kind !== `vercel-cli-upgrade`) return;
   let a;
   try {
     a = await r.prompter.select({
@@ -299,9 +275,7 @@ async function vercelCliUpgradeOutcome(e, t, n, r) {
   }
 }
 function errorMessage(e) {
-  let t = (e instanceof Error ? e.message : String(e))
-    .replace(/\s+/gu, ` `)
-    .trim();
+  let t = (e instanceof Error ? e.message : String(e)).replace(/\s+/gu, ` `).trim();
   return t.length <= 240 ? t : `${t.slice(0, 239)}…`;
 }
 function vercelCliUpgradeFailureMessage(e, t) {

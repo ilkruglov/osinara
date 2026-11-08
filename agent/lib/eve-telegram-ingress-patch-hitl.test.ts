@@ -23,9 +23,11 @@ function createChannelSource(session: Record<string, unknown> = { id: "session-c
 describe("Eve Telegram verified ingress patch HITL callbacks", () => {
   it("resolves a rotated continuation token for HITL callbacks before delivery", async () => {
     const source = createChannelSource();
-    const apiFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ok: true, result: true }), {
-      headers: { "content-type": "application/json" },
-    }));
+    const apiFetch = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: true }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
     const auth = {
       attributes: { applicationSessionId: "app-session-1", role: "owner" },
       authenticator: "telegram",
@@ -47,32 +49,35 @@ describe("Eve Telegram verified ingress patch HITL callbacks", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        callback_query: {
-          data: "eve:0",
-          from: { first_name: "Анна", id: 101, is_bot: false },
-          id: "callback-1",
-          message: {
-            chat: { id: -100, type: "supergroup" },
-            date: 1_700_000_000,
-            message_id: 77,
-            message_thread_id: 55,
-            text: "Подтвердите действие",
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          callback_query: {
+            data: "eve:0",
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            id: "callback-1",
+            message: {
+              chat: { id: -100, type: "supergroup" },
+              date: 1_700_000_000,
+              message_id: 77,
+              message_thread_id: 55,
+              text: "Подтвердите действие",
+            },
           },
-        },
-        update_id: 1003,
+          update_id: 1003,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
     expect(onHitlCallbackQuery).toHaveBeenCalledWith(
@@ -139,9 +144,11 @@ describe("Eve Telegram verified ingress patch HITL callbacks", () => {
     const onHitlCallbackQuery = vi.fn().mockResolvedValue(null);
     const channel = telegramChannel({
       api: {
-        fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, result: true }), {
-          headers: { "content-type": "application/json" },
-        })),
+        fetch: vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ ok: true, result: true }), {
+            headers: { "content-type": "application/json" },
+          }),
+        ),
       },
       credentials: { botToken: "test-token", webhookSecretToken: "webhook-secret" },
       onHitlCallbackQuery,
@@ -149,31 +156,34 @@ describe("Eve Telegram verified ingress patch HITL callbacks", () => {
     const route = channel.routes[0] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
 
-    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
-      body: JSON.stringify({
-        callback_query: {
-          data: "eve:0",
-          from: { first_name: "Анна", id: 202, is_bot: false },
-          id: "callback-foreign",
-          message: {
-            chat: { id: -100, type: "supergroup" },
-            date: 1_700_000_000,
-            message_id: 77,
-            text: "Подтвердите действие",
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          callback_query: {
+            data: "eve:0",
+            from: { first_name: "Анна", id: 202, is_bot: false },
+            id: "callback-foreign",
+            message: {
+              chat: { id: -100, type: "supergroup" },
+              date: 1_700_000_000,
+              message_id: 77,
+              text: "Подтвердите действие",
+            },
           },
-        },
-        update_id: 1004,
+          update_id: 1004,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
       }),
-      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
-      method: "POST",
-    }), {
-      params: {},
-      requestIp: null,
-      from: source.from,
-      waitUntil(task: Promise<unknown>) {
-        backgroundTask = task;
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
-    });
+    );
     await backgroundTask;
 
     expect(onHitlCallbackQuery).toHaveBeenCalledTimes(1);

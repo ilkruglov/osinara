@@ -150,19 +150,13 @@ async function resolveSelectionMetadata(t) {
   let a = { ...i, expiresAt: n + 864e5 };
   return (
     t.state.set(RuntimeModelMetadataCacheKey, (e) => ({
-      ...Object.fromEntries(
-        Object.entries(e ?? {}).filter(([, e]) => e.expiresAt > n),
-      ),
+      ...Object.fromEntries(Object.entries(e ?? {}).filter(([, e]) => e.expiresAt > n)),
       [t.cacheKey]: a,
     })),
     a
   );
 }
-const DYNAMIC_MODEL_SELECTION_KEYS = new Set([
-  `model`,
-  `modelContextWindowTokens`,
-  `modelOptions`,
-]);
+const DYNAMIC_MODEL_SELECTION_KEYS = new Set([`model`, `modelContextWindowTokens`, `modelOptions`]);
 function validateDynamicModelSelection(e) {
   let t = Object.keys(e).filter((e) => !DYNAMIC_MODEL_SELECTION_KEYS.has(e));
   if (t.length > 0)
@@ -181,9 +175,7 @@ function normalizeDynamicModelSelection(e) {
   return isModelSelectionDefinition(e) ? e : { model: e };
 }
 function isModelSelectionDefinition(e) {
-  return (
-    typeof e == `object` && !!e && `model` in e && !isRuntimeLanguageModel(e)
-  );
+  return typeof e == `object` && !!e && `model` in e && !isRuntimeLanguageModel(e);
 }
 function validateRuntimeLanguageModel(e) {
   if (!isRuntimeLanguageModel(e))

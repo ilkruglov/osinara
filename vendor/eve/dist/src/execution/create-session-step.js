@@ -5,16 +5,11 @@ import { createSession } from "#execution/session.js";
 import { resolveInheritedTokenLimit } from "#execution/run-session-limits.js";
 import { resolveEffectiveAgentRuntimeFromConfig } from "#execution/effective-agent-config.js";
 import { TASK_UPDATE_SESSION_INSTRUCTION } from "#execution/tasks/child/instructions.js";
-import {
-  TASK_UPDATE_TOOL_NAME,
-  isTaskToolAvailable,
-} from "#runtime/framework-tools/tasks.js";
+import { TASK_UPDATE_TOOL_NAME, isTaskToolAvailable } from "#runtime/framework-tools/tasks.js";
 async function createSessionStep(t) {
   "use step";
   let n = await getCompiledRuntimeAgentBundle({
-      compiledArtifactsSource: resolveDurableCompiledArtifactsSource(
-        t.compiledArtifactsSource,
-      ),
+      compiledArtifactsSource: resolveDurableCompiledArtifactsSource(t.compiledArtifactsSource),
       nodeId: t.nodeId,
     }),
     r = resolveEffectiveAgentRuntimeFromConfig(n, t.dynamicSubagentAgentConfig),
@@ -22,9 +17,7 @@ async function createSessionStep(t) {
       t.taskOwned === !0 &&
       isTaskToolAvailable({
         disabledFrameworkTools: n.resolvedAgent.disabledFrameworkTools ?? [],
-        hasAuthoredTool: r.turnAgent.tools.some(
-          (e) => e.name === TASK_UPDATE_TOOL_NAME,
-        ),
+        hasAuthoredTool: r.turnAgent.tools.some((e) => e.name === TASK_UPDATE_TOOL_NAME),
         tasksEnabled: n.resolvedAgent.config?.experimental?.tasks === !0,
         toolName: TASK_UPDATE_TOOL_NAME,
       });

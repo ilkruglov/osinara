@@ -43,11 +43,8 @@ import {
 async function emitTurnPreamble(e, t, n, r, i) {
   let o = `turn_${n.sequence}`;
   return (
-    n.sessionStarted ||
-      (await e(createSessionStartedEvent({ runtime: r, trace: i }))),
-    await e(
-      createTurnStartedEvent({ sequence: n.sequence, trace: i, turnId: o }),
-    ),
+    n.sessionStarted || (await e(createSessionStartedEvent({ runtime: r, trace: i }))),
+    await e(createTurnStartedEvent({ sequence: n.sequence, trace: i, turnId: o })),
     t.message !== void 0 &&
       (await e(
         createMessageReceivedEvent({
@@ -79,9 +76,7 @@ async function emitStepAndTurnFailed(e, t, n) {
       turnId: t.turnId,
     }),
   ),
-    await e(
-      createTurnFailedEvent({ ...n, sequence: t.sequence, turnId: t.turnId }),
-    ));
+    await e(createTurnFailedEvent({ ...n, sequence: t.sequence, turnId: t.turnId })));
 }
 async function emitFailedStep(e, t, n) {
   (await emitStepAndTurnFailed(e, t, n), await e(createSessionFailedEvent(n)));
@@ -103,9 +98,7 @@ function advanceStep(e) {
 }
 async function emitTurnEpilogue(e, t, n) {
   return (
-    await e(
-      createTurnCompletedEvent({ sequence: t.sequence, turnId: t.turnId }),
-    ),
+    await e(createTurnCompletedEvent({ sequence: t.sequence, turnId: t.turnId })),
     n === `conversation`
       ? await e(createSessionWaitingEvent())
       : await e(createSessionCompletedEvent()),
@@ -188,16 +181,12 @@ async function consumeStreamContent(a, s, c, l, u) {
         ));
     },
     collectProviderToolCall = async (e) => {
-      if (v.has(e.toolCallId) || (v.add(e.toolCallId), g.has(e.toolCallId)))
-        return;
-      (g.add(e.toolCallId),
-        f.trim().length > 0 && (await flushCurrentMessage()));
+      if (v.has(e.toolCallId) || (v.add(e.toolCallId), g.has(e.toolCallId))) return;
+      (g.add(e.toolCallId), f.trim().length > 0 && (await flushCurrentMessage()));
       let t = resolveProviderToolCallRequest(e);
       if (t.toolError !== void 0) {
         (b.add(e.toolCallId),
-          await emitActionResult(
-            createRuntimeToolResultFromToolError(t.toolError),
-          ),
+          await emitActionResult(createRuntimeToolResultFromToolError(t.toolError)),
           y.add(e.toolCallId),
           S.push(createToolResultMessagePartFromToolError(t.toolError)));
         return;
@@ -303,9 +292,7 @@ async function consumeStreamContent(a, s, c, l, u) {
           let t = e;
           if (t.preliminary === !0) {
             t.providerExecuted !== !0 &&
-              (await emitActionPartial(
-                createRuntimeToolResultFromStepResult(t),
-              ));
+              (await emitActionPartial(createRuntimeToolResultFromStepResult(t)));
             break;
           }
           if (t.providerExecuted === !0) {
@@ -325,16 +312,11 @@ async function consumeStreamContent(a, s, c, l, u) {
               y.add(e.toolCallId));
             break;
           }
-          if (
-            (await l.flush(),
-            await flushCurrentMessage(),
-            isInlineAuthorizationToolResult(t))
-          ) {
+          if ((await l.flush(), await flushCurrentMessage(), isInlineAuthorizationToolResult(t))) {
             (y.add(e.toolCallId), x.push(t));
             break;
           }
-          (await emitActionResult(createRuntimeToolResultFromStepResult(t)),
-            y.add(e.toolCallId));
+          (await emitActionResult(createRuntimeToolResultFromStepResult(t)), y.add(e.toolCallId));
           break;
         }
         case `tool-error`: {
@@ -350,17 +332,13 @@ async function consumeStreamContent(a, s, c, l, u) {
           break;
         }
         case `finish-step`:
-          ((p = normalizeAssistantStepFinishReason(e.finishReason)),
-            await l.flush());
+          ((p = normalizeAssistantStepFinishReason(e.finishReason)), await l.flush());
           break;
         case `error`:
           m = normalizeModelStreamError(e.error);
           break;
         case `abort`:
-          throw new DOMException(
-            e.reason ?? `The model stream was aborted.`,
-            `AbortError`,
-          );
+          throw new DOMException(e.reason ?? `The model stream was aborted.`, `AbortError`);
         default:
           break;
       }

@@ -3,10 +3,7 @@ import { delimiter, join, relative, sep } from "node:path";
 import { resolveInstalledPackageInfo } from "#internal/application/package.js";
 import { constants } from "node:fs";
 import { LOCAL_WORKFLOW_WORLD_DATA_DIRECTORY_RELATIVE_PATH } from "#internal/workflow/local-world-data-directory.js";
-import {
-  captureVercel,
-  resolveVercelInvocation,
-} from "#setup/primitives/run-vercel.js";
+import { captureVercel, resolveVercelInvocation } from "#setup/primitives/run-vercel.js";
 function createDevDiagnosticDump(e, t, n = {}) {
   let i = t.replace(/\.log$/, `.dump`),
     a = n.now ?? (() => new Date()),
@@ -59,10 +56,7 @@ function formatDump(e) {
   return `${JSON.stringify(t, null, 2)}\n`;
 }
 async function collectDevEnvironmentInfo(e) {
-  let [t, n] = await Promise.all([
-      detectVercelCli(e),
-      measureSessionsDirectory(e),
-    ]),
+  let [t, n] = await Promise.all([detectVercelCli(e), measureSessionsDirectory(e)]),
     r = {
       eveVersion: resolveInstalledPackageInfo().version,
       nodeVersion: process.version,
@@ -79,18 +73,12 @@ async function detectVercelCli(e) {
         nonInteractive: !0,
         timeoutMs: 5e3,
       }),
-      t.command === `vercel`
-        ? findOnPath(`vercel`)
-        : Promise.resolve(t.command),
+      t.command === `vercel` ? findOnPath(`vercel`) : Promise.resolve(t.command),
     ]),
     i = n.ok ? n.stdout : `${n.failure.stdout}\n${n.failure.stderr}`,
     a = /(\d+\.\d+\.\d+\S*)/.exec(i)?.[1],
     o = {};
-  return (
-    a !== void 0 && (o.vercelCliVersion = a),
-    r !== void 0 && (o.vercelCliPath = r),
-    o
-  );
+  return (a !== void 0 && (o.vercelCliVersion = a), r !== void 0 && (o.vercelCliPath = r), o);
 }
 async function findOnPath(t) {
   let n = (process.env.PATH ?? ``).split(delimiter).filter((e) => e.length > 0);
@@ -124,8 +112,4 @@ async function measureSessionsDirectory(e) {
     bytes: s,
   };
 }
-export {
-  collectDevEnvironmentInfo,
-  createDevDiagnosticDump,
-  measureSessionsDirectory,
-};
+export { collectDevEnvironmentInfo, createDevDiagnosticDump, measureSessionsDirectory };

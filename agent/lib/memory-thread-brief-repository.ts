@@ -26,7 +26,11 @@ import {
   loadMemoryThreadSources,
   type ThreadSourceRow,
 } from "./memory-thread-source-repository.js";
-import { assembleMemoryThreadContext, type ActivatedMemoryThread, type MemoryThreadContext } from "./memory-thread-context.js";
+import {
+  assembleMemoryThreadContext,
+  type ActivatedMemoryThread,
+  type MemoryThreadContext,
+} from "./memory-thread-context.js";
 import { loadMemoryThreadSourceEvidence } from "./memory-thread-source-evidence.js";
 import { memoryVectorLiteral } from "./memory-vector.js";
 
@@ -42,10 +46,14 @@ interface ActivatedThreadRow {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  return memoryVectorLiteral(vector, () => new AppError(
-    "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
-    "Не удалось выполнить смысловой поиск нитей памяти",
-  ));
+  return memoryVectorLiteral(
+    vector,
+    () =>
+      new AppError(
+        "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
+        "Не удалось выполнить смысловой поиск нитей памяти",
+      ),
+  );
 }
 
 function titleSimilarity(value: number | string | null): number | null {
@@ -95,8 +103,15 @@ async function loadEpisodes(
        AND entry.thread_id = $5 AND entry.role = 'episode'
        AND char_length(COALESCE(claim.content, outcome.summary)) <= $6
      ORDER BY entry.occurred_at DESC, entry.id DESC LIMIT $7`,
-    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId,
-      THREAD_EPISODE_MAX_CHARACTERS, THREAD_CONTEXT_EPISODES_PER_THREAD],
+    [
+      auth.familyId,
+      auth.scopes,
+      auth.userId,
+      auth.groupId,
+      threadId,
+      THREAD_EPISODE_MAX_CHARACTERS,
+      THREAD_CONTEXT_EPISODES_PER_THREAD,
+    ],
   );
   return result.rows.map((row) => ({
     content: row.content,
@@ -106,7 +121,11 @@ async function loadEpisodes(
 }
 
 async function loadCompletionEpisode(threadId: string, auth: MemoryAuthorization) {
-  const result = await database().query<{ entry_ref: string; outcome_ref: string; summary: string }>(
+  const result = await database().query<{
+    entry_ref: string;
+    outcome_ref: string;
+    summary: string;
+  }>(
     `SELECT entry.entry_ref, outcome.outcome_ref, outcome.summary
      FROM memory_threads AS thread
      JOIN confirmed_outcomes AS outcome ON outcome.id = thread.completion_outcome_id
@@ -121,11 +140,13 @@ async function loadCompletionEpisode(threadId: string, auth: MemoryAuthorization
     [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId],
   );
   const row = result.rows[0];
-  return row ? {
-    content: row.summary,
-    sourceEntryRefs: [row.entry_ref],
-    sourceRecordRefs: [row.outcome_ref],
-  } : undefined;
+  return row
+    ? {
+        content: row.summary,
+        sourceEntryRefs: [row.entry_ref],
+        sourceRecordRefs: [row.outcome_ref],
+      }
+    : undefined;
 }
 
 async function isThreadFinallyAuthorized(
@@ -148,16 +169,20 @@ async function isThreadFinallyAuthorized(
 export function createMemoryThreadBriefRepository() {
   return {
     async activate(input: {
-    auth: MemoryAuthorization;
-    queryEmbedding: readonly number[] | null;
-    retrievedClaimIds: readonly string[];
-    skillHints: readonly string[];
-  }): Promise<MemoryThreadContext> {
-    const hints = [...new Set(input.skillHints.map((hint) =>
-      hint.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("ru-RU")
-    ))];
-    const result = await database().query<ActivatedThreadRow>(
-      `WITH hits AS (
+      auth: MemoryAuthorization;
+      queryEmbedding: readonly number[] | null;
+      retrievedClaimIds: readonly string[];
+      skillHints: readonly string[];
+    }): Promise<MemoryThreadContext> {
+      const hints = [
+        ...new Set(
+          input.skillHints.map((hint) =>
+            hint.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("ru-RU"),
+          ),
+        ),
+      ];
+      const result = await database().query<ActivatedThreadRow>(
+        `WITH hits AS (
          SELECT entry.thread_id, count(*)::integer AS retrieval_hits
          FROM memory_thread_entries AS entry
          JOIN memory_items AS claim ON claim.id = entry.source_claim_id
@@ -172,9 +197,9 @@ export function createMemoryThreadBriefRepository() {
                 THEN 1 - (thread.title_embedding <=> $6::vector) ELSE NULL END AS title_similarity
        FROM memory_threads AS thread LEFT JOIN hits ON hits.thread_id = thread.id
        WHERE thread.family_id = $1 AND ${liveMemoryReadPredicate({
-          alias: "thread",
-          personalIdentityColumn: "scope_partition_key",
-        })} AND (thread.status = 'completed' OR EXISTS (
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })} AND (thread.status = 'completed' OR EXISTS (
           SELECT 1 FROM memory_thread_entries AS available_entry
           LEFT JOIN memory_items AS available_claim ON available_claim.id = available_entry.source_claim_id
             AND available_claim.claim_status = 'active'
@@ -193,27 +218,60 @@ export function createMemoryThreadBriefRepository() {
                   1 - (thread.title_embedding <=> $6::vector) >= $9) DESC,
                 retrieval_hits DESC, thread.updated_at DESC
         LIMIT $10`,
-      [input.auth.familyId, input.auth.scopes, input.auth.userId, input.auth.groupId,
-        input.retrievedClaimIds, input.queryEmbedding === null ? null : vectorLiteral(input.queryEmbedding), hints,
-         MEMORY_EMBEDDING_MODEL_VERSION, THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
-         THREAD_CONTEXT_MAX_THREADS],
-    );
-    const activated: ActivatedMemoryThread[] = [];
-    for (const thread of result.rows) {
-      const similarity = titleSimilarity(thread.title_similarity);
-      if (thread.status === "completed") {
-        const completionEpisode = await loadCompletionEpisode(thread.id, input.auth);
+        [
+          input.auth.familyId,
+          input.auth.scopes,
+          input.auth.userId,
+          input.auth.groupId,
+          input.retrievedClaimIds,
+          input.queryEmbedding === null ? null : vectorLiteral(input.queryEmbedding),
+          hints,
+          MEMORY_EMBEDDING_MODEL_VERSION,
+          THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
+          THREAD_CONTEXT_MAX_THREADS,
+        ],
+      );
+      const activated: ActivatedMemoryThread[] = [];
+      for (const thread of result.rows) {
+        const similarity = titleSimilarity(thread.title_similarity);
+        if (thread.status === "completed") {
+          const completionEpisode = await loadCompletionEpisode(thread.id, input.auth);
+          const sourceEvidence = await loadMemoryThreadSourceEvidence(
+            database(),
+            thread.id,
+            input.auth,
+          );
+          // No content-bearing DTO is emitted if access changed during the preceding reads.
+          if (!(await isThreadFinallyAuthorized(thread.id, input.auth))) continue;
+          activated.push({
+            blocks: [],
+            completionEpisode,
+            episodes: [],
+            purpose: thread.purpose,
+            relevance: {
+              retrievalHits: thread.retrieval_hits,
+              skillHint: thread.skill_hint,
+              titleMatch: similarity !== null && similarity >= THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
+            },
+            sourceEvidence,
+            status: thread.status,
+            threadRef: thread.thread_ref,
+            title: thread.title,
+          });
+          continue;
+        }
+        const blocks = await buildBrief(thread, input.auth);
+        const episodes = await loadEpisodes(thread.id, input.auth);
         const sourceEvidence = await loadMemoryThreadSourceEvidence(
           database(),
           thread.id,
           input.auth,
         );
-        // No content-bearing DTO is emitted if access changed during the preceding reads.
-        if (!await isThreadFinallyAuthorized(thread.id, input.auth)) continue;
+        // Source reads are provisional until this final live check succeeds.
+        if (!(await isThreadFinallyAuthorized(thread.id, input.auth))) continue;
         activated.push({
-          blocks: [],
-          completionEpisode,
-          episodes: [],
+          blocks,
+          episodes,
           purpose: thread.purpose,
           relevance: {
             retrievalHits: thread.retrieval_hits,
@@ -225,33 +283,8 @@ export function createMemoryThreadBriefRepository() {
           threadRef: thread.thread_ref,
           title: thread.title,
         });
-        continue;
       }
-      const blocks = await buildBrief(thread, input.auth);
-      const episodes = await loadEpisodes(thread.id, input.auth);
-      const sourceEvidence = await loadMemoryThreadSourceEvidence(
-        database(),
-        thread.id,
-        input.auth,
-      );
-      // Source reads are provisional until this final live check succeeds.
-      if (!await isThreadFinallyAuthorized(thread.id, input.auth)) continue;
-      activated.push({
-        blocks,
-        episodes,
-        purpose: thread.purpose,
-        relevance: {
-          retrievalHits: thread.retrieval_hits,
-          skillHint: thread.skill_hint,
-          titleMatch: similarity !== null && similarity >= THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
-        },
-        sourceEvidence,
-        status: thread.status,
-        threadRef: thread.thread_ref,
-        title: thread.title,
-      });
-    }
-    return assembleMemoryThreadContext(activated);
+      return assembleMemoryThreadContext(activated);
     },
   };
 }

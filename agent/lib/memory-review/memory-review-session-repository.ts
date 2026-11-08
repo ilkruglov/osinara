@@ -29,15 +29,23 @@ export const memoryReviewSessionRepository = {
             AND conversation_sessions.kind = 'proactive'
             AND conversation_sessions.eve_session_id IS NULL
         RETURNING id, thread_id`,
-      [batch.familyId, batch.groupId, batch.scope, batch.messageThreadId,
-        continuationToken, now, batch.batchId,
-        batch.scope === "personal" ? batch.ownerUserId : null],
+      [
+        batch.familyId,
+        batch.groupId,
+        batch.scope,
+        batch.messageThreadId,
+        continuationToken,
+        now,
+        batch.batchId,
+        batch.scope === "personal" ? batch.ownerUserId : null,
+      ],
     );
     const row = result.rows[0];
-    if (!row) throw new AppError(
-      "AGENT_MEMORY_REVIEW_SESSION_CREATE_FAILED",
-      "Не удалось создать контекст проверки памяти",
-    );
+    if (!row)
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_SESSION_CREATE_FAILED",
+        "Не удалось создать контекст проверки памяти",
+      );
     return {
       continuationToken,
       generation: 0,
@@ -48,10 +56,7 @@ export const memoryReviewSessionRepository = {
     };
   },
 
-  async retireUnstarted(
-    batch: MemoryReviewClaim,
-    applicationSessionId: string,
-  ): Promise<void> {
+  async retireUnstarted(batch: MemoryReviewClaim, applicationSessionId: string): Promise<void> {
     const result = await database().query(
       `UPDATE conversation_sessions
           SET pending_operation = false, task_state = 'failed', retired_at = now(),

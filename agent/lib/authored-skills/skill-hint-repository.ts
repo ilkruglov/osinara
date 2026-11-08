@@ -17,8 +17,16 @@ export const SKILL_HINT_MIN_STEPS = 4;
 const SKILL_HINT_TTL_MILLISECONDS = 24 * 60 * 60 * 1_000;
 /** Bookkeeping calls that every turn makes; they say nothing about the task being repeatable. */
 export const SKILL_HINT_IGNORED_TOOLS: ReadonlySet<string> = new Set([
-  "get_current_time", "list_memories", "load_skill", "manage_skill", "read_profile_view",
-  "remember", "search_memories", "search_memory_threads", "list_memory_threads", "read_memory_thread",
+  "get_current_time",
+  "list_memories",
+  "load_skill",
+  "manage_skill",
+  "read_profile_view",
+  "remember",
+  "search_memories",
+  "search_memory_threads",
+  "list_memory_threads",
+  "read_memory_thread",
 ]);
 
 export type SkillHint =
@@ -27,10 +35,11 @@ export type SkillHint =
   | { kind: "repeat"; stepCount: number; toolNames: readonly string[] };
 
 export function formatSkillHint(hint: SkillHint): string {
-  if (hint.kind === "improve") return [
-    `Подготовь черновик улучшения навыка ${hint.summary}: владелец подтвердил неудачу двух разных применений одной версии.`,
-    "Загрузи skill-authoring, прочитай навык, предложи одну конкретную правку и сохрани draft. Проверь выбор через test_selection. Не выполняй побочные действия для проверки без явной просьбы владельца. Покажи черновик и результаты; publish только после пробного выполнения и кнопки владельца.",
-  ].join(" ");
+  if (hint.kind === "improve")
+    return [
+      `Подготовь черновик улучшения навыка ${hint.summary}: владелец подтвердил неудачу двух разных применений одной версии.`,
+      "Загрузи skill-authoring, прочитай навык, предложи одну конкретную правку и сохрани draft. Проверь выбор через test_selection. Не выполняй побочные действия для проверки без явной просьбы владельца. Покажи черновик и результаты; publish только после пробного выполнения и кнопки владельца.",
+    ].join(" ");
   if (hint.kind === "backlog") {
     return [
       `В бэклоге улучшений второй раз повторяется: ${hint.summary}`,
@@ -52,18 +61,23 @@ interface HintRow {
 }
 
 function rowToHint(row: HintRow): SkillHint | null {
-  if (row.kind === "backlog" || row.kind === "improve") return row.summary === null ? null : { kind: row.kind, summary: row.summary };
-  return row.step_count === null ? null : { kind: "repeat", stepCount: row.step_count, toolNames: row.tool_names };
+  if (row.kind === "backlog" || row.kind === "improve")
+    return row.summary === null ? null : { kind: row.kind, summary: row.summary };
+  return row.step_count === null
+    ? null
+    : { kind: "repeat", stepCount: row.step_count, toolNames: row.tool_names };
 }
 
 export const skillHintRepository = {
   /** Upserts the conversation's pending hint; a later signal replaces an earlier one. */
-  async save(input: SkillHint & {
-    conversationId: string;
-    eveSessionId: string;
-    eveTurnId: string;
-    familyId: string;
-  }): Promise<void> {
+  async save(
+    input: SkillHint & {
+      conversationId: string;
+      eveSessionId: string;
+      eveTurnId: string;
+      familyId: string;
+    },
+  ): Promise<void> {
     const stepCount = input.kind === "repeat" ? input.stepCount : null;
     const toolNames = input.kind === "repeat" ? [...input.toolNames] : [];
     const summary = input.kind === "backlog" ? input.summary : null;
@@ -77,8 +91,16 @@ export const skillHintRepository = {
              eve_session_id = EXCLUDED.eve_session_id, eve_turn_id = EXCLUDED.eve_turn_id,
              created_at = now()
        WHERE conversation_skill_hints.kind <> 'improve' OR EXCLUDED.kind = 'improve'`,
-      [input.conversationId, input.familyId, input.kind, stepCount, toolNames, summary,
-        input.eveSessionId, input.eveTurnId],
+      [
+        input.conversationId,
+        input.familyId,
+        input.kind,
+        stepCount,
+        toolNames,
+        summary,
+        input.eveSessionId,
+        input.eveTurnId,
+      ],
     );
   },
 

@@ -1,20 +1,16 @@
-import {
-  parseSlackConnectorDetails,
-  parseSlackConnectors,
-} from "./slack-connect.js";
+import { parseSlackConnectorDetails, parseSlackConnectors } from "./slack-connect.js";
 import { SLACK_CHANNEL_DEFAULT_ROUTE } from "#setup/scaffold/index.js";
 import "#setup/primitives/run-vercel.js";
 import "#setup/cli/index.js";
-import {
-  CONNECT_MUTATION_TIMEOUT_MS,
-  replaceConnectTrigger,
-} from "#setup/connect-provisioning.js";
+import { CONNECT_MUTATION_TIMEOUT_MS, replaceConnectTrigger } from "#setup/connect-provisioning.js";
 const CONNECT_LOOKUP_TIMEOUT_MS = 6e4;
 async function listSlackConnectors(e, n, r, i) {
-  let o = await e.captureVercel(
-    [`connect`, `list`, `-F`, `json`, `--all-projects`],
-    { cwd: n, onOutput: r, timeoutMs: CONNECT_LOOKUP_TIMEOUT_MS, signal: i },
-  );
+  let o = await e.captureVercel([`connect`, `list`, `-F`, `json`, `--all-projects`], {
+    cwd: n,
+    onOutput: r,
+    timeoutMs: CONNECT_LOOKUP_TIMEOUT_MS,
+    signal: i,
+  });
   if (!o.ok) return { state: `failed`, message: o.failure.message };
   try {
     let e = JSON.parse(o.stdout);
@@ -64,10 +60,7 @@ async function attachSlackConnector(e, t, r, a, o) {
 }
 async function fetchSlackConnectorDetails(t) {
   let n = t.orgId === void 0 ? `` : `?teamId=${encodeURIComponent(t.orgId)}`,
-    r = [
-      `api`,
-      `/v1/connect/connectors/${encodeURIComponent(t.connectorId)}${n}`,
-    ];
+    r = [`api`, `/v1/connect/connectors/${encodeURIComponent(t.connectorId)}${n}`];
   t.orgId !== void 0 && r.push(`--scope`, t.orgId);
   let i = await t.deps.captureVercel(r, {
     cwd: t.projectRoot,
@@ -101,10 +94,11 @@ async function fetchSlackWorkspace(e) {
 }
 async function cleanupConnectorUid(e, t) {
   let { log: n, deps: i, projectRoot: a, onOutput: o } = e;
-  return (await i.runVercel(
-    [`connect`, `remove`, t, `--disconnect-all`, `--yes`],
-    { cwd: a, onOutput: o, timeoutMs: CONNECT_MUTATION_TIMEOUT_MS },
-  ))
+  return (await i.runVercel([`connect`, `remove`, t, `--disconnect-all`, `--yes`], {
+    cwd: a,
+    onOutput: o,
+    timeoutMs: CONNECT_MUTATION_TIMEOUT_MS,
+  }))
     ? !0
     : (n.warning(
         `Could not remove the abandoned Slack connector. Run \`vercel connect remove ${t} --disconnect-all --yes\` to clean it up.`,
@@ -114,9 +108,7 @@ async function cleanupConnectorUid(e, t) {
 async function cleanupConnectorUids(e, t) {
   let n = [];
   for (let r of new Set(t)) (await cleanupConnectorUid(e, r)) || n.push(r);
-  return n.length === 0
-    ? { state: `clean` }
-    : { state: `failed`, connectorUids: n };
+  return n.length === 0 ? { state: `clean` } : { state: `failed`, connectorUids: n };
 }
 async function cleanupCreatedAttempt(e, t) {
   if (t.createdRef) return cleanupConnectorUids(e, [t.createdRef.uid]);

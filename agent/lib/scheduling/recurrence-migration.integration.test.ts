@@ -16,7 +16,10 @@ const SCHEMA = "recurrence_periods_migration_test";
   afterAll(closeDatabase);
 
   it("commits new enum values without rewriting existing calendar records", async () => {
-    const migration = await readFile(resolve("migrations/103_schedule_recurrence_periods.sql"), "utf8");
+    const migration = await readFile(
+      resolve("migrations/103_schedule_recurrence_periods.sql"),
+      "utf8",
+    );
     const client = await database().connect();
     try {
       await client.query(`CREATE SCHEMA ${SCHEMA}`);
@@ -52,14 +55,32 @@ const SCHEMA = "recurrence_periods_migration_test";
       `);
       expect(after.rows).toEqual(before.rows);
 
-      for (const [table, unitColumn] of [["reminders", "recurrence_unit"], ["agent_schedules", "recurrence_kind"]] as const) {
-        const daily = await client.query<{ id: string }>(`SELECT id FROM ${table} WHERE ${unitColumn} = 'daily'`);
-        expect(await nextAnchoredOccurrence(client, table, daily.rows[0]!.id, new Date("2026-03-28T08:01:00Z")))
-          .toEqual({ next_index: 1, next_run_at: new Date("2026-03-29T07:00:00Z") });
+      for (const [table, unitColumn] of [
+        ["reminders", "recurrence_unit"],
+        ["agent_schedules", "recurrence_kind"],
+      ] as const) {
+        const daily = await client.query<{ id: string }>(
+          `SELECT id FROM ${table} WHERE ${unitColumn} = 'daily'`,
+        );
+        expect(
+          await nextAnchoredOccurrence(
+            client,
+            table,
+            daily.rows[0]!.id,
+            new Date("2026-03-28T08:01:00Z"),
+          ),
+        ).toEqual({ next_index: 1, next_run_at: new Date("2026-03-29T07:00:00Z") });
         for (const unit of ["minutely", "hourly"]) {
-          await expect(client.query(`INSERT INTO ${table} (${unitColumn}) VALUES ($1)`, [unit]))
-            .rejects.toMatchObject({ code: "23514", constraint: `${table}_fixed_recurrence_anchor_check` });
-          await client.query(`INSERT INTO ${table} (${unitColumn}, recurrence_anchor_at) VALUES ($1, '2026-03-28T08:00:00Z')`, [unit]);
+          await expect(
+            client.query(`INSERT INTO ${table} (${unitColumn}) VALUES ($1)`, [unit]),
+          ).rejects.toMatchObject({
+            code: "23514",
+            constraint: `${table}_fixed_recurrence_anchor_check`,
+          });
+          await client.query(
+            `INSERT INTO ${table} (${unitColumn}, recurrence_anchor_at) VALUES ($1, '2026-03-28T08:00:00Z')`,
+            [unit],
+          );
         }
         await client.query(`INSERT INTO ${table} (${unitColumn}) VALUES ('yearly'), ('monthly')`);
       }

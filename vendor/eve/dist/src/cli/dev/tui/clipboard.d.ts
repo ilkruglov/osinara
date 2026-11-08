@@ -6,12 +6,21 @@
  * a convenience, never a hard dependency.
  */
 /** The OSC 52 sequence for `text`, wrapped for tmux/screen when present. */
-export declare function clipboardSequence(text: string, env?: Readonly<Record<string, string | undefined>>): string;
+export declare function clipboardSequence(
+  text: string,
+  env?: Readonly<Record<string, string | undefined>>,
+): string;
 /** The native clipboard command for a platform, or `undefined` when unknown. */
-export declare function clipboardCommand(platform: NodeJS.Platform, env?: Readonly<Record<string, string | undefined>>): readonly string[] | undefined;
+export declare function clipboardCommand(
+  platform: NodeJS.Platform,
+  env?: Readonly<Record<string, string | undefined>>,
+): readonly string[] | undefined;
 /**
  * Copies `text` to the clipboard: emits OSC 52 through `writeTerminal`
  * (the same raw write the alt screen paints with) and pipes the text into
  * the platform clipboard command in the background.
  */
-export declare function copyTextToClipboard(text: string, writeTerminal: (chunk: string) => void): void;
+export declare function copyTextToClipboard(
+  text: string,
+  writeTerminal: (chunk: string) => void,
+): void;

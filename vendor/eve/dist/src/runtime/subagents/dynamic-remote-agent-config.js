@@ -14,16 +14,7 @@ async function normalizeDynamicRemoteAgentConfig(t) {
   if (
     (expectOnlyKnownKeys(
       a,
-      [
-        `auth`,
-        `description`,
-        `forwardPrincipal`,
-        `headers`,
-        `kind`,
-        `outputSchema`,
-        `path`,
-        `url`,
-      ],
+      [`auth`, `description`, `forwardPrincipal`, `headers`, `kind`, `outputSchema`, `path`, `url`],
       i,
     ),
     a.kind !== `remote`)
@@ -31,10 +22,7 @@ async function normalizeDynamicRemoteAgentConfig(t) {
     throw Error(i);
   let o = await resolveUrl(a.url, i),
     s = readCredentialsStepId(a);
-  if (
-    (validateCredentials(a, i),
-    (a.auth !== void 0 || a.headers !== void 0) && s === void 0)
-  )
+  if ((validateCredentials(a, i), (a.auth !== void 0 || a.headers !== void 0) && s === void 0))
     throw Error(
       `${i} Dynamic remote auth and headers must be compiled by eve so credentials stay out of durable workflow state.`,
     );
@@ -45,18 +33,14 @@ async function normalizeDynamicRemoteAgentConfig(t) {
   };
   return (
     s !== void 0 && (c.credentialsStepId = s),
-    a.forwardPrincipal !== void 0 &&
-      (c.forwardPrincipal = expectBoolean(a.forwardPrincipal, i)),
-    a.outputSchema !== void 0 &&
-      (c.outputSchema = serializeOutputSchema(a.outputSchema)),
+    a.forwardPrincipal !== void 0 && (c.forwardPrincipal = expectBoolean(a.forwardPrincipal, i)),
+    a.outputSchema !== void 0 && (c.outputSchema = serializeOutputSchema(a.outputSchema)),
     c
   );
 }
 async function resolveUrl(e, n) {
-  let r =
-    typeof e == `function` ? await expectFunction(e, n)() : expectString(e, n);
-  if (r.length === 0)
-    throw Error(`${n} The "url" field must resolve to a non-empty string.`);
+  let r = typeof e == `function` ? await expectFunction(e, n)() : expectString(e, n);
+  if (r.length === 0) throw Error(`${n} The "url" field must resolve to a non-empty string.`);
   return r;
 }
 function validateCredentials(e, n) {

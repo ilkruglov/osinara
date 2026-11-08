@@ -22,7 +22,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 // Migration tests destroy an isolated schema and must never run against a production database.
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -131,8 +133,13 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
                  'AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS', now(), now()),
                 ($5, $2, $3, 'interactive', 'completed', 7609, 7610, 7619, 10, $4,
                  NULL, now(), now())`,
-        [INCIDENT_BATCH_ID, lane.rows[0]!.id, conversation.rows[0]!.id,
-          APPLICATION_SESSION_ID, SUCCESSOR_BATCH_ID],
+        [
+          INCIDENT_BATCH_ID,
+          lane.rows[0]!.id,
+          conversation.rows[0]!.id,
+          APPLICATION_SESSION_ID,
+          SUCCESSOR_BATCH_ID,
+        ],
       );
       await client.query(
         `UPDATE memory_review_batches SET eve_session_id = $2, eve_turn_id = 'turn_0'
@@ -168,10 +175,12 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
       await expect(client.query(migration)).rejects.toThrow(
         "AGENT_MEMORY_REVIEW_LOCAL_QUEUE_RECOVERY_SOURCE_OWNED",
       );
-      await expect(client.query(
-        "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
-        [INCIDENT_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 1 }] });
+      await expect(
+        client.query(
+          "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
+          [INCIDENT_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 1 }] });
       await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [
         SUCCESSOR_BATCH_ID,
       ]);
@@ -217,45 +226,67 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
 
       await client.query(migration);
 
-      await expect(client.query(
-        `SELECT batch_kind::text, status::text, recovery_attempts,
+      await expect(
+        client.query(
+          `SELECT batch_kind::text, status::text, recovery_attempts,
                 last_recovery_diagnostic_code, application_session_id,
                 from_sequence::text, through_sequence::text, source_count
            FROM memory_review_batches WHERE id = $1`,
-        [INCIDENT_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{
-        application_session_id: null,
-        batch_kind: "background",
-        from_sequence: "7609",
-        last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_LOCAL_QUEUE_TRANSPORT_TIMEOUT",
-        recovery_attempts: 1,
-        source_count: 50,
-        status: "pending",
-        through_sequence: "7659",
-      }] });
-      await expect(client.query(
-        `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
+          [INCIDENT_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            application_session_id: null,
+            batch_kind: "background",
+            from_sequence: "7609",
+            last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_LOCAL_QUEUE_TRANSPORT_TIMEOUT",
+            recovery_attempts: 1,
+            source_count: 50,
+            status: "pending",
+            through_sequence: "7659",
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT count(*)::integer AS count, min(timeline_sequence)::text AS first,
                 max(timeline_sequence)::text AS last
            FROM memory_review_batch_sources WHERE batch_id = $1`,
-        [INCIDENT_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 50, first: "7609", last: "7659" }] });
-      await expect(client.query(
-        `SELECT eve_session_id, memory_review_batch_id, retired_at
+          [INCIDENT_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 50, first: "7609", last: "7659" }] });
+      await expect(
+        client.query(
+          `SELECT eve_session_id, memory_review_batch_id, retired_at
            FROM conversation_sessions WHERE id = $1`,
-        [APPLICATION_SESSION_ID],
-      )).resolves.toMatchObject({ rows: [{
-        eve_session_id: "wrun_current",
-        memory_review_batch_id: null,
-        retired_at: null,
-      }] });
-      await expect(client.query(
-        `SELECT metadata FROM audit_events
+          [APPLICATION_SESSION_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            eve_session_id: "wrun_current",
+            memory_review_batch_id: null,
+            retired_at: null,
+          },
+        ],
+      });
+      await expect(
+        client.query(
+          `SELECT metadata FROM audit_events
           WHERE event_type = 'memory_review.operator_recovered' AND subject_id = $1`,
-        [INCIDENT_BATCH_ID],
-      )).resolves.toMatchObject({ rows: [{ metadata: expect.objectContaining({
-        recoveryAttempt: 1,
-        throughSequence: 7659,
-      }) }] });
+          [INCIDENT_BATCH_ID],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            metadata: expect.objectContaining({
+              recoveryAttempt: 1,
+              throughSequence: 7659,
+            }),
+          },
+        ],
+      });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

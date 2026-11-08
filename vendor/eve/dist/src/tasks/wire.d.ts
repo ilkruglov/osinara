@@ -22,4 +22,6 @@ import type { TaskCommand, TaskRunInboundPayload } from "#tasks/types.js";
  *
  * Returns `undefined` for unrecognized payloads, which the run ignores.
  */
-export declare function translateTaskInboundPayload(payload: TaskRunInboundPayload): TaskCommand | undefined;
+export declare function translateTaskInboundPayload(
+  payload: TaskRunInboundPayload,
+): TaskCommand | undefined;

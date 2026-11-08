@@ -14,7 +14,11 @@ import { chmod, chown, lstat, mkdir, open, realpath, rename, rm } from "node:fs/
 import { createServer } from "node:net";
 
 import type { HostInstallationOperations, HostInstallationStageInput } from "./host-executor.js";
-import { composeArgs, parseBootstrapProcessOutput, releaseEnvironmentFromManifest } from "./host-contracts.js";
+import {
+  composeArgs,
+  parseBootstrapProcessOutput,
+  releaseEnvironmentFromManifest,
+} from "./host-contracts.js";
 import { readInstallationBundle, validateInstallationBundle } from "./installation-bundle.js";
 import { recoverPreMigrationInstallationAttempt } from "./installation-attempt.js";
 import { acquireInstallationLock } from "./installation-lock.js";
@@ -71,7 +75,10 @@ async function writeRootFile(path: string, bytes: Buffer, mode: number): Promise
     await handle.close();
   }
   await rename(temporaryPath, path);
-  const directory = await open(path.slice(0, path.lastIndexOf("/")), constants.O_RDONLY | constants.O_DIRECTORY);
+  const directory = await open(
+    path.slice(0, path.lastIndexOf("/")),
+    constants.O_RDONLY | constants.O_DIRECTORY,
+  );
   try {
     await directory.sync();
   } finally {
@@ -98,13 +105,17 @@ async function sleep(milliseconds: number): Promise<void> {
 async function assertPortAvailable(port: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const server = createServer();
-    server.once("error", (error) => reject(new InstallerError(
-      "OSINARA_INSTALL_PORT_UNAVAILABLE",
-      `Порт ${port} занят. Освободите порты 80 и 443 перед установкой`,
-      { cause: error },
-    )));
+    server.once("error", (error) =>
+      reject(
+        new InstallerError(
+          "OSINARA_INSTALL_PORT_UNAVAILABLE",
+          `Порт ${port} занят. Освободите порты 80 и 443 перед установкой`,
+          { cause: error },
+        ),
+      ),
+    );
     server.listen({ host: "0.0.0.0", port, exclusive: true }, () => {
-      server.close((error) => error ? reject(error) : resolve());
+      server.close((error) => (error ? reject(error) : resolve()));
     });
   });
 }
@@ -112,11 +123,11 @@ async function assertPortAvailable(port: number): Promise<void> {
 async function requirePhysicalRootDirectory(path: string): Promise<void> {
   const metadata = await lstat(path);
   if (
-    !metadata.isDirectory()
-    || metadata.isSymbolicLink()
-    || metadata.uid !== 0
-    || metadata.gid !== 0
-    || await realpath(path) !== path
+    !metadata.isDirectory() ||
+    metadata.isSymbolicLink() ||
+    metadata.uid !== 0 ||
+    metadata.gid !== 0 ||
+    (await realpath(path)) !== path
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_HOST_PATH_INVALID",
@@ -149,7 +160,13 @@ export function createProductionHostOperations(): HostInstallationOperations {
         migrationMarker: MIGRATION_MARKER_PATH,
       });
       const projects = await runHostCommand({
-        args: ["ps", "-a", "--filter", "label=com.docker.compose.project=osinara-production", "--quiet"],
+        args: [
+          "ps",
+          "-a",
+          "--filter",
+          "label=com.docker.compose.project=osinara-production",
+          "--quiet",
+        ],
         command: "docker",
         timeoutMs: 30_000,
       });
@@ -170,8 +187,10 @@ export function createProductionHostOperations(): HostInstallationOperations {
           command: "docker",
           timeoutMs: 30_000,
         });
-        if (volumes.toString("utf8").trim() === resource
-          || networks.toString("utf8").trim() === resource) {
+        if (
+          volumes.toString("utf8").trim() === resource ||
+          networks.toString("utf8").trim() === resource
+        ) {
           throw new InstallerError(
             "OSINARA_INSTALL_EXISTING_STATE",
             `На сервере уже существует Docker resource ${resource}; автоматическое подключение старых данных запрещено`,
@@ -199,10 +218,13 @@ export function createProductionHostOperations(): HostInstallationOperations {
       await runHostCommand({ args: ["compose", "version"], command: "docker", timeoutMs: 30_000 });
     },
     commit: async () => {
-      if (!updaterFiles) throw new InstallerError("OSINARA_INSTALL_BUNDLE_ENTRY_INVALID", "Updater не подготовлен");
+      if (!updaterFiles)
+        throw new InstallerError("OSINARA_INSTALL_BUNDLE_ENTRY_INVALID", "Updater не подготовлен");
       await activateInstalledUpdater(updaterFiles, {
         write: writeRootFile,
-        run: async (args) => { await runHostCommand({ command: "systemctl", args, timeoutMs: 30_000 }); },
+        run: async (args) => {
+          await runHostCommand({ command: "systemctl", args, timeoutMs: 30_000 });
+        },
       });
       await rm(ATTEMPT_DIR, { force: true, recursive: true });
     },
@@ -210,20 +232,28 @@ export function createProductionHostOperations(): HostInstallationOperations {
       await configureTelegramWebhook({ ...input, fetch: globalThis.fetch, timeoutMs: 30_000 });
     },
     createOwnerBootstrap: async () => {
-      const stdout = await dockerCompose(COMPOSE_PATH, [ENV_PATH, RELEASE_ENV_PATH], [
-        "run",
-        "--no-deps",
-        "--rm",
-        "--entrypoint",
-        "node",
-        "agent",
-        ".runtime/scripts/create-bootstrap-code.js",
-      ]);
+      const stdout = await dockerCompose(
+        COMPOSE_PATH,
+        [ENV_PATH, RELEASE_ENV_PATH],
+        [
+          "run",
+          "--no-deps",
+          "--rm",
+          "--entrypoint",
+          "node",
+          "agent",
+          ".runtime/scripts/create-bootstrap-code.js",
+        ],
+      );
       return parseBootstrapProcessOutput(stdout);
     },
     markMigrationStarted: async () => {
       // Atomic write plus file and parent-directory fsync makes the no-cleanup boundary durable.
-      await writeRootFile(MIGRATION_MARKER_PATH, Buffer.from("migration-started\n", "ascii"), 0o600);
+      await writeRootFile(
+        MIGRATION_MARKER_PATH,
+        Buffer.from("migration-started\n", "ascii"),
+        0o600,
+      );
     },
     preflight: async () => {
       await assertPortAvailable(80);
@@ -249,10 +279,11 @@ export function createProductionHostOperations(): HostInstallationOperations {
       const files = await readInstallationBundle(input.archive);
       const requireFile = (path: string): Buffer => {
         const bytes = files.get(path);
-        if (!bytes) throw new InstallerError(
-          "OSINARA_INSTALL_BUNDLE_ENTRY_INVALID",
-          `Installation bundle не содержит ${path}`,
-        );
+        if (!bytes)
+          throw new InstallerError(
+            "OSINARA_INSTALL_BUNDLE_ENTRY_INVALID",
+            `Installation bundle не содержит ${path}`,
+          );
         return bytes;
       };
       const releaseEnvironment = releaseEnvironmentFromManifest(
@@ -278,14 +309,28 @@ export function createProductionHostOperations(): HostInstallationOperations {
         await writeRootFile(ENV_PATH, input.environmentBytes, 0o600);
         await writeRootFile(MODEL_CONFIG_PATH, input.modelConfigBytes, 0o644);
         await writeRootFile(RELEASE_ENV_PATH, releaseEnvironment, 0o600);
-        await writeRootFile(COMPOSE_PATH, requireFile("installation/compose.installation.json"), 0o644);
-        await writeRootFile(MANIFEST_PATH, requireFile("installation/osinara-deployment.json"), 0o644);
+        await writeRootFile(
+          COMPOSE_PATH,
+          requireFile("installation/compose.installation.json"),
+          0o644,
+        );
+        await writeRootFile(
+          MANIFEST_PATH,
+          requireFile("installation/osinara-deployment.json"),
+          0o644,
+        );
         await writeRootFile(CADDYFILE_PATH, requireFile("installation/Caddyfile"), 0o644);
         await writeRootFile(TLS_COMPOSE_PATH, requireFile("installation/compose.tls.yaml"), 0o644);
-        await writeRootFile(TLS_ENV_PATH, Buffer.from(`OSINARA_HOSTNAME=${input.hostname}\n`), 0o600);
+        await writeRootFile(
+          TLS_ENV_PATH,
+          Buffer.from(`OSINARA_HOSTNAME=${input.hostname}\n`),
+          0o600,
+        );
         await stageInstalledUpdater(files, {
           mkdir: async (path, mode) => {
-            await mkdir(path, { mode }); await chown(path, 0, 0); await chmod(path, mode);
+            await mkdir(path, { mode });
+            await chown(path, 0, 0);
+            await chmod(path, mode);
           },
           write: writeRootFile,
         });
@@ -296,14 +341,18 @@ export function createProductionHostOperations(): HostInstallationOperations {
       }
     },
     startApplication: async () => {
-      await dockerCompose(COMPOSE_PATH, [ENV_PATH, RELEASE_ENV_PATH], [
-        "up", "--detach", "--remove-orphans", "--no-build", "--wait", "--wait-timeout", "600",
-      ]);
+      await dockerCompose(
+        COMPOSE_PATH,
+        [ENV_PATH, RELEASE_ENV_PATH],
+        ["up", "--detach", "--remove-orphans", "--no-build", "--wait", "--wait-timeout", "600"],
+      );
     },
     startTls: async () => {
-      await dockerCompose(TLS_COMPOSE_PATH, [TLS_ENV_PATH], [
-        "up", "--detach", "--remove-orphans", "--no-build", "--wait", "--wait-timeout", "120",
-      ]);
+      await dockerCompose(
+        TLS_COMPOSE_PATH,
+        [TLS_ENV_PATH],
+        ["up", "--detach", "--remove-orphans", "--no-build", "--wait", "--wait-timeout", "120"],
+      );
     },
     validateBundle: validateInstallationBundle,
     waitForPublicHttps: async (hostname) => {

@@ -58,11 +58,7 @@ function renderCommandSuggestions(e, a, o) {
     .map((t, n) => {
       let i = u + n === e.selectedIndex,
         o = `/${t.name}`,
-        c = renderCursorRow(
-          i ? `${a.glyph.selectedPointer} ${o}` : `  ${o}`,
-          i,
-          s,
-        ),
+        c = renderCursorRow(i ? `${a.glyph.selectedPointer} ${o}` : `  ${o}`, i, s),
         l = invocation(t).slice(`/${t.name}`.length),
         d = ` `.repeat(p - invocation(t).length);
       return (

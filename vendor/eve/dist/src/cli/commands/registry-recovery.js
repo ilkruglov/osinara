@@ -19,12 +19,7 @@ async function resolveRegistryItemForAdd(e, t, n) {
     return { found: !0, item: await t() };
   } catch (t) {
     if (!isRegistryNotFoundError(t)) throw t;
-    return (
-      e.error(errorMessage(t)),
-      await n(),
-      (process.exitCode = 1),
-      { found: !1 }
-    );
+    return (e.error(errorMessage(t)), await n(), (process.exitCode = 1), { found: !1 });
   }
 }
 function setupResumeCommand(e) {

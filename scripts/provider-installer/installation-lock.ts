@@ -47,12 +47,12 @@ async function openTrustedLock(path: string, security: InstallationLockSecurity)
   // A persistent file is safe to reuse only when its exact host metadata remains trusted.
   const metadata = await lstat(path);
   if (
-    !metadata.isFile()
-    || metadata.isSymbolicLink()
-    || metadata.uid !== security.uid
-    || metadata.gid !== security.gid
-    || (metadata.mode & 0o777) !== LOCK_MODE
-    || await realpath(path) !== path
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.uid !== security.uid ||
+    metadata.gid !== security.gid ||
+    (metadata.mode & 0o777) !== LOCK_MODE ||
+    (await realpath(path)) !== path
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_LOCK_UNTRUSTED",
@@ -70,7 +70,15 @@ export async function acquireInstallationLock(
   const handle = await openTrustedLock(path, security);
   const child = spawn(
     FLOCK_PATH,
-    ["--exclusive", "--nonblock", "--no-fork", LOCK_FILE_DESCRIPTOR_PATH, SHELL_PATH, "-c", LOCK_HOLDER_SOURCE],
+    [
+      "--exclusive",
+      "--nonblock",
+      "--no-fork",
+      LOCK_FILE_DESCRIPTOR_PATH,
+      SHELL_PATH,
+      "-c",
+      LOCK_HOLDER_SOURCE,
+    ],
     { stdio: ["pipe", "pipe", "ignore", handle.fd] },
   );
 
@@ -80,10 +88,12 @@ export async function acquireInstallationLock(
       child.once("error", () => {
         if (settled) return;
         settled = true;
-        reject(new InstallerError(
-          "OSINARA_INSTALL_LOCK_FAILED",
-          `Не удалось запустить ${FLOCK_PATH}; установите util-linux и повторите операцию`,
-        ));
+        reject(
+          new InstallerError(
+            "OSINARA_INSTALL_LOCK_FAILED",
+            `Не удалось запустить ${FLOCK_PATH}; установите util-linux и повторите операцию`,
+          ),
+        );
       });
       child.stdout?.once("data", (bytes: Buffer) => {
         if (settled || bytes.toString("ascii") !== LOCK_READY) return;
@@ -93,12 +103,14 @@ export async function acquireInstallationLock(
       child.once("exit", (code) => {
         if (settled) return;
         settled = true;
-        reject(new InstallerError(
-          code === 1 ? "OSINARA_INSTALL_LOCKED" : "OSINARA_INSTALL_LOCK_FAILED",
-          code === 1
-            ? "Другая установка уже выполняется"
-            : `Процесс ${FLOCK_PATH} завершился с кодом ${String(code)} до получения lock`,
-        ));
+        reject(
+          new InstallerError(
+            code === 1 ? "OSINARA_INSTALL_LOCKED" : "OSINARA_INSTALL_LOCK_FAILED",
+            code === 1
+              ? "Другая установка уже выполняется"
+              : `Процесс ${FLOCK_PATH} завершился с кодом ${String(code)} до получения lock`,
+          ),
+        );
       });
     });
     // The holder inherited the same open-file description; parent must drop its duplicate so
@@ -113,9 +125,11 @@ export async function acquireInstallationLock(
     try {
       await new Promise<void>((resolve, reject) => {
         child.once("error", reject);
-        child.once("exit", (code) => code === 0
-          ? resolve()
-          : reject(new Error(`lock holder exited with code ${String(code)}`)));
+        child.once("exit", (code) =>
+          code === 0
+            ? resolve()
+            : reject(new Error(`lock holder exited with code ${String(code)}`)),
+        );
         child.stdin?.end();
       });
     } catch (error) {

@@ -62,10 +62,7 @@ const nonEmptyString = z.string().min(1),
     z.strictObject({
       address: addressSchema,
       identity: identitySchema,
-      operation: z.discriminatedUnion(`kind`, [
-        startOperationSchema,
-        continueOperationSchema,
-      ]),
+      operation: z.discriminatedUnion(`kind`, [startOperationSchema, continueOperationSchema]),
       phase: z.literal(`running`),
     }),
     z.strictObject({
@@ -82,11 +79,9 @@ const nonEmptyString = z.string().min(1),
   ]),
   agentHandleStoreSchema = z
     .strictObject({ handles: z.array(agentHandleSchema) })
-    .refine(
-      (e) =>
-        new Set(e.handles.map((e) => e.identity.id)).size === e.handles.length,
-      { message: `Agent handle ids must be unique.` },
-    );
+    .refine((e) => new Set(e.handles.map((e) => e.identity.id)).size === e.handles.length, {
+      message: `Agent handle ids must be unique.`,
+    });
 function deriveAgentId(e, t) {
   return `ag_${e}:${t.slice(0, 12)}`;
 }
@@ -99,9 +94,7 @@ function formatAgentStatus(e) {
 function assertPersistableAgentHandleStore(e) {
   let t = agentHandleStoreSchema.safeParse(e);
   if (!t.success)
-    throw Error(
-      `Refusing to persist a corrupt agent handle store: ${t.error.message}`,
-    );
+    throw Error(`Refusing to persist a corrupt agent handle store: ${t.error.message}`);
   return t.data;
 }
 function getAgentHandleStore(t) {

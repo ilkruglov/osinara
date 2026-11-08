@@ -28,9 +28,16 @@ export const ownerTelegramId = (index: number) => 1_000_000 + index;
 export const groupChatId = (index: number) => -(900_200_000 + index);
 
 export async function databaseSizes() {
-  const app = await db.query<{ size: string }>("SELECT pg_database_size(current_database())::text AS size");
-  const workflow = await workflowDb.query<{ size: string }>("SELECT pg_database_size(current_database())::text AS size");
-  return { appMb: Number(app.rows[0]!.size) / 1048576, workflowMb: Number(workflow.rows[0]!.size) / 1048576 };
+  const app = await db.query<{ size: string }>(
+    "SELECT pg_database_size(current_database())::text AS size",
+  );
+  const workflow = await workflowDb.query<{ size: string }>(
+    "SELECT pg_database_size(current_database())::text AS size",
+  );
+  return {
+    appMb: Number(app.rows[0]!.size) / 1048576,
+    workflowMb: Number(workflow.rows[0]!.size) / 1048576,
+  };
 }
 
 export async function prepareFamilies(families: number) {
@@ -64,8 +71,13 @@ export async function prewarmSandboxes() {
   const prewarm = resolve(root, "../../node_modules/eve/dist/src/execution/sandbox/prewarm.js");
   const code = `const { prewarmBuiltAppSandboxes } = await import(${JSON.stringify(`file://${prewarm}`)});
     await prewarmBuiltAppSandboxes({ appRoot: process.cwd(), log: (line) => console.log(line) });`;
-  const child = spawn(process.execPath, ["--input-type=module", "-e", code], { cwd: root, stdio: "inherit" });
-  const [exitCode] = await new Promise<[number | null]>((done) => child.on("exit", (value) => done([value])));
+  const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+    cwd: root,
+    stdio: "inherit",
+  });
+  const [exitCode] = await new Promise<[number | null]>((done) =>
+    child.on("exit", (value) => done([value])),
+  );
   if (exitCode !== 0) throw new Error(`LOAD_PREWARM_FAILED: ${exitCode}`);
 }
 
@@ -80,30 +92,42 @@ export interface ServerProcess {
  * node flags to the server alone, for those NODE_OPTIONS refuses (`--prof`).
  */
 export function startServer(port: number, cpus?: string): ServerProcess {
-  const args = [...(process.env.LOAD_NODE_ARGS?.split(" ").filter(Boolean) ?? []), ".output/server/index.mjs"];
-  const server = spawn(cpus ? "taskset" : process.execPath, cpus ? ["-c", cpus, process.execPath, ...args] : args, {
-    cwd: root,
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      EVE_MOCK_AUTHORED_MODELS: "0",
-      HOST: "127.0.0.1", NITRO_HOST: "127.0.0.1", PORT: String(port), NITRO_PORT: String(port),
-      TELEGRAM_BOT_TOKEN: "load-test-token",
-      TELEGRAM_BOT_USERNAME: "osinara_load_bot",
-      TELEGRAM_WEBHOOK_SECRET_TOKEN: SECRET,
-      AGENT_INTERNAL_TOKEN: "load-test-internal-token-0123456789abcdef",
-      MODEL_API_KEY: "unused-load-key",
-      INVITATION_SIGNING_SECRET: "load-test-signing-secret-of-32-chars!!",
-      // A real embedder (TEI with BERTA) when LOAD_EMBEDDING_URL is set; otherwise an address that
-      // fails fast and leaves retrieval lexical.
-      MEMORY_EMBEDDING_BASE_URL: process.env.LOAD_EMBEDDING_URL ?? "http://memory-test",
-      // Production values; LOAD_WORKFLOW_CONCURRENCY raises both for a scaling run.
-      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: process.env.LOAD_WORKFLOW_CONCURRENCY ?? "10",
-      WORKFLOW_POSTGRES_MAX_POOL_SIZE: String(Number(process.env.LOAD_WORKFLOW_CONCURRENCY ?? 10) + 2),
-      WORKFLOW_POSTGRES_JOB_PREFIX: "osinara",
+  const args = [
+    ...(process.env.LOAD_NODE_ARGS?.split(" ").filter(Boolean) ?? []),
+    ".output/server/index.mjs",
+  ];
+  const server = spawn(
+    cpus ? "taskset" : process.execPath,
+    cpus ? ["-c", cpus, process.execPath, ...args] : args,
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        EVE_MOCK_AUTHORED_MODELS: "0",
+        HOST: "127.0.0.1",
+        NITRO_HOST: "127.0.0.1",
+        PORT: String(port),
+        NITRO_PORT: String(port),
+        TELEGRAM_BOT_TOKEN: "load-test-token",
+        TELEGRAM_BOT_USERNAME: "osinara_load_bot",
+        TELEGRAM_WEBHOOK_SECRET_TOKEN: SECRET,
+        AGENT_INTERNAL_TOKEN: "load-test-internal-token-0123456789abcdef",
+        MODEL_API_KEY: "unused-load-key",
+        INVITATION_SIGNING_SECRET: "load-test-signing-secret-of-32-chars!!",
+        // A real embedder (TEI with BERTA) when LOAD_EMBEDDING_URL is set; otherwise an address that
+        // fails fast and leaves retrieval lexical.
+        MEMORY_EMBEDDING_BASE_URL: process.env.LOAD_EMBEDDING_URL ?? "http://memory-test",
+        // Production values; LOAD_WORKFLOW_CONCURRENCY raises both for a scaling run.
+        WORKFLOW_POSTGRES_WORKER_CONCURRENCY: process.env.LOAD_WORKFLOW_CONCURRENCY ?? "10",
+        WORKFLOW_POSTGRES_MAX_POOL_SIZE: String(
+          Number(process.env.LOAD_WORKFLOW_CONCURRENCY ?? 10) + 2,
+        ),
+        WORKFLOW_POSTGRES_JOB_PREFIX: "osinara",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
   const log: string[] = [];
   const keep = (chunk: Buffer) => {
     for (const line of chunk.toString("utf8").split("\n")) if (line) log.push(line);
@@ -118,13 +142,19 @@ export async function waitHealthy(port: number, timeoutMs: number) {
   while (Date.now() < deadline) {
     try {
       if ((await fetch(`http://127.0.0.1:${port}/eve/v1/health`)).ok) return;
-    } catch { /* not listening yet */ }
+    } catch {
+      /* not listening yet */
+    }
     await sleep(500);
   }
   throw new Error(`LOAD_SERVER_NEVER_HEALTHY: ${port}`);
 }
 
-export interface Sample { cpuSeconds: number; rssMb: number; t: number }
+export interface Sample {
+  cpuSeconds: number;
+  rssMb: number;
+  t: number;
+}
 
 export async function sample(pid: number): Promise<Sample | null> {
   try {
@@ -132,7 +162,11 @@ export async function sample(pid: number): Promise<Sample | null> {
     const stat = (await readFile(`/proc/${pid}/stat`, "utf8")).split(") ")[1]!.split(" ");
     const rssKb = Number(/VmRSS:\s+(\d+)/u.exec(status)?.[1]);
     // utime and stime are fields 14 and 15 of /proc/pid/stat, in clock ticks of 100 Hz.
-    return { cpuSeconds: (Number(stat[11]) + Number(stat[12])) / 100, rssMb: rssKb / 1024, t: Date.now() };
+    return {
+      cpuSeconds: (Number(stat[11]) + Number(stat[12])) / 100,
+      rssMb: rssKb / 1024,
+      t: Date.now(),
+    };
   } catch {
     return null;
   }

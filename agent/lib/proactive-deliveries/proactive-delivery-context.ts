@@ -47,11 +47,13 @@ function truncateSingleDelivery(delivery: ModelDelivery, maxCharacters: number):
   let result = render([{ ...delivery, content: "", truncated: true }]);
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
-    const candidate = render([{
-      ...delivery,
-      content: delivery.content.slice(0, middle),
-      truncated: true,
-    }]);
+    const candidate = render([
+      {
+        ...delivery,
+        content: delivery.content.slice(0, middle),
+        truncated: true,
+      },
+    ]);
     if (candidate.length <= maxCharacters) {
       result = candidate;
       low = middle + 1;

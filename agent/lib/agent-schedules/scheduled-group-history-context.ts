@@ -36,5 +36,7 @@ export function scheduledGroupHistoryAccess(auth: SessionAuth): ScheduledGroupHi
   const initiator = access(auth.initiator);
   // A current caller must independently prove the same scheduled run as its durable initiator.
   if (!current || !initiator) return null;
-  return current.groupId === initiator.groupId && current.runId === initiator.runId ? current : null;
+  return current.groupId === initiator.groupId && current.runId === initiator.runId
+    ? current
+    : null;
 }

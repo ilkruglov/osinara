@@ -23,7 +23,13 @@ const REFLECTIONS_PER_FAMILY_PER_HOUR = 6;
 const REFLECTION_TIMEOUT_MILLISECONDS = 60_000;
 const MAX_ITEMS_PER_REFLECTION = 3;
 const SUMMARY_MAX_CHARACTERS = 400;
-const CATEGORIES = new Set<ImprovementCategory>(["memory", "other", "prompt", "tool_error", "workflow"]);
+const CATEGORIES = new Set<ImprovementCategory>([
+  "memory",
+  "other",
+  "prompt",
+  "tool_error",
+  "workflow",
+]);
 const PRIORITIES = new Set<ImprovementPriority>(["high", "low", "medium"]);
 
 export interface ReflectionItem {
@@ -87,23 +93,33 @@ export function parseReflection(text: string, evidence: TurnEvidence): Reflectio
     const category = candidate.category;
     const priority = candidate.priority;
     const summary = typeof candidate.summary === "string" ? candidate.summary.trim() : "";
-    if (!CATEGORIES.has(category as ImprovementCategory) || !PRIORITIES.has(priority as ImprovementPriority)) continue;
+    if (
+      !CATEGORIES.has(category as ImprovementCategory) ||
+      !PRIORITIES.has(priority as ImprovementPriority)
+    )
+      continue;
     if (summary.length === 0) continue;
     // A tool or code the evidence never named is the model's guess, not a fact: drop it.
-    const toolName = typeof candidate.toolName === "string" && knownTools.has(candidate.toolName)
-      ? candidate.toolName
-      : null;
-    const errorCode = typeof candidate.errorCode === "string" && knownCodes.has(candidate.errorCode)
-      ? candidate.errorCode
-      : null;
-    const clipped = summary.length > SUMMARY_MAX_CHARACTERS
-      ? `${summary.slice(0, SUMMARY_MAX_CHARACTERS - 1)}…`
-      : summary;
+    const toolName =
+      typeof candidate.toolName === "string" && knownTools.has(candidate.toolName)
+        ? candidate.toolName
+        : null;
+    const errorCode =
+      typeof candidate.errorCode === "string" && knownCodes.has(candidate.errorCode)
+        ? candidate.errorCode
+        : null;
+    const clipped =
+      summary.length > SUMMARY_MAX_CHARACTERS
+        ? `${summary.slice(0, SUMMARY_MAX_CHARACTERS - 1)}…`
+        : summary;
     items.push({
       category: category as ImprovementCategory,
       errorCode,
       fingerprint: improvementFingerprint({
-        category: category as ImprovementCategory, errorCode, summary: clipped, toolName,
+        category: category as ImprovementCategory,
+        errorCode,
+        summary: clipped,
+        toolName,
       }),
       priority: priority as ImprovementPriority,
       summary: clipped,
@@ -130,7 +146,9 @@ export async function reflectOnTurn(
   const text = await generate(buildReflectionPrompt(input));
   const items = parseReflection(text, input.evidence);
   if (items.length === 0 && text.trim().length > 0 && extractJson(text) === null) {
-    console.warn(JSON.stringify({ code: "AGENT_IMPROVEMENT_REFLECTION_UNPARSED", characters: text.length }));
+    console.warn(
+      JSON.stringify({ code: "AGENT_IMPROVEMENT_REFLECTION_UNPARSED", characters: text.length }),
+    );
   }
   return items;
 }

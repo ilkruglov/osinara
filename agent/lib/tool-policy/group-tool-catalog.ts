@@ -34,16 +34,19 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
     name: "generate_image",
     requiresImageGeneration: true,
-    usage: "создавать изображения и редактировать доступные исходники через Cloudflare, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
+    usage:
+      "создавать изображения и редактировать доступные исходники через Cloudflare, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
   },
   {
     name: "fetch_telegram_avatars",
     requiresImageGeneration: true,
-    usage: "скачивать аватарки участников текущей группы в её workspace как референсы для картинок про них: только иллюстрация или дружеская карикатура",
+    usage:
+      "скачивать аватарки участников текущей группы в её workspace как референсы для картинок про них: только иллюстрация или дружеская карикатура",
   },
   {
     name: "import_telegram_attachment",
-    usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML и YAML из сообщений текущей группы",
+    usage:
+      "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML и YAML из сообщений текущей группы",
   },
   {
     name: "inspect_workspace_image",
@@ -65,7 +68,8 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   },
   {
     name: "manage_memory.undo",
-    usage: "немедленно отменить только что выполненное сохранение памяти по возвращённому memoryRef",
+    usage:
+      "немедленно отменить только что выполненное сохранение памяти по возвращённому memoryRef",
   },
   {
     name: "manage_memory_conflict",
@@ -110,13 +114,12 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   },
   {
     name: "web_search",
-    usage: "искать в интернете провайдерским поиском модели; выполняется на стороне провайдера, отзыв права действует со следующего шага модели",
+    usage:
+      "искать в интернете провайдерским поиском модели; выполняется на стороне провайдера, отзыв права действует со следующего шага модели",
   },
 ] as const satisfies readonly ExternalGroupCapability[];
 
-export const EXTERNAL_GROUP_TOOL_NAMES = capabilityNames(
-  EXTERNAL_GROUP_CAPABILITY_CATALOG,
-);
+export const EXTERNAL_GROUP_TOOL_NAMES = capabilityNames(EXTERNAL_GROUP_CAPABILITY_CATALOG);
 export type ExternalGroupToolName = (typeof EXTERNAL_GROUP_TOOL_NAMES)[number];
 
 // Persisted validation stays provider-agnostic on purpose: a grant made while another provider was
@@ -182,7 +185,8 @@ export function parseExternalGroupToolAllowlist(
   // known subset. Registration rejects both shapes, so seeing either means persisted corruption.
   const allowed = new Set<ExternalGroupToolName>();
   for (const name of value) {
-    if (typeof name !== "string" || !isExternalGroupToolName(name) || allowed.has(name)) return null;
+    if (typeof name !== "string" || !isExternalGroupToolName(name) || allowed.has(name))
+      return null;
     allowed.add(name);
   }
   return allowed;

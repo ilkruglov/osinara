@@ -21,7 +21,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 // Timeline integration tests mutate shared tables and therefore require an isolated test database.
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -88,20 +90,26 @@ describeWithDatabase("Telegram channel journal", () => {
 
     const recorded = await telegramGroupJournalRepository.record(group.groupId, message, actor);
 
-    await expect(database().query(
-      `SELECT actor_kind, actor_id, telegram_user_id, telegram_sender_chat_id,
+    await expect(
+      database().query(
+        `SELECT actor_kind, actor_id, telegram_user_id, telegram_sender_chat_id,
               sender_username, sender_display_name, sender_is_bot
          FROM telegram_group_messages WHERE id = $1`,
-      [recorded.entryId],
-    )).resolves.toMatchObject({ rows: [{
-      actor_id: "telegram-channel:-1001783384254",
-      actor_kind: "telegram_channel",
-      sender_display_name: "Pavel Zloi",
-      sender_is_bot: false,
-      sender_username: "evilfreelancer",
-      telegram_sender_chat_id: "-1001783384254",
-      telegram_user_id: null,
-    }] });
+        [recorded.entryId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          actor_id: "telegram-channel:-1001783384254",
+          actor_kind: "telegram_channel",
+          sender_display_name: "Pavel Zloi",
+          sender_is_bot: false,
+          sender_username: "evilfreelancer",
+          telegram_sender_chat_id: "-1001783384254",
+          telegram_user_id: null,
+        },
+      ],
+    });
     const entries = await telegramGroupJournalRepository.listRecent({
       anchorEntryId: null,
       beforeSequence: null,
@@ -115,9 +123,11 @@ describeWithDatabase("Telegram channel journal", () => {
     await expect(
       conversationRepository.syncTimelineParticipants(conversation.id, [recorded.entryId]),
     ).resolves.toEqual([]);
-    await expect(database().query(
-      "SELECT count(*)::integer AS count FROM conversation_participants WHERE conversation_id = $1",
-      [conversation.id],
-    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    await expect(
+      database().query(
+        "SELECT count(*)::integer AS count FROM conversation_participants WHERE conversation_id = $1",
+        [conversation.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 });

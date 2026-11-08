@@ -8,10 +8,7 @@
  */
 import type { PoolClient } from "pg";
 
-import {
-  insertClaimReinforcement,
-  type PreparedClaimEvidence,
-} from "./claim-evidence-writer.js";
+import { insertClaimReinforcement, type PreparedClaimEvidence } from "./claim-evidence-writer.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import type { ReferencedMemoryRow } from "./memory-record.js";
 
@@ -71,9 +68,19 @@ export async function reinforceExactClaim(
         AND item.attribute IS NOT DISTINCT FROM $10::text
         AND item.occurred_at IS NOT DISTINCT FROM $11::timestamptz
      ORDER BY item.created_at, item.id LIMIT 1 FOR UPDATE OF item`,
-    [auth.familyId, identity.scope, identity.scopePartitionKey, identity.contentNormalized,
-      identity.subjectParticipantId, identity.subjectUserId, identity.subjectLabel,
-      identity.memoryProjectId, identity.kind, identity.attribute, identity.occurredAt],
+    [
+      auth.familyId,
+      identity.scope,
+      identity.scopePartitionKey,
+      identity.contentNormalized,
+      identity.subjectParticipantId,
+      identity.subjectUserId,
+      identity.subjectLabel,
+      identity.memoryProjectId,
+      identity.kind,
+      identity.attribute,
+      identity.occurredAt,
+    ],
   );
   const existing = duplicate.rows[0];
   if (!existing) return null;
@@ -87,8 +94,12 @@ export async function reinforceExactClaim(
   await client.query(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
      VALUES ($1, $2, 'memory.reinforced', $3, jsonb_build_object('scope', $4::text))`,
-    [auth.familyId, identity.systemActor ? null : prepared?.auditActorUserId ?? auth.userId,
-      existing.id, identity.scope],
+    [
+      auth.familyId,
+      identity.systemActor ? null : (prepared?.auditActorUserId ?? auth.userId),
+      existing.id,
+      identity.scope,
+    ],
   );
   return existing;
 }

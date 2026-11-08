@@ -18,10 +18,7 @@ const WORKFLOW_VIRTUAL_ENTRY_ID = `\0eve-workflow-entry`,
     `next/dist/compiled/server-only`,
     `next/dist/compiled/client-only`,
   ]),
-  NODE_BUILTIN_MODULES = new Set([
-    ...builtinModules,
-    ...builtinModules.map((e) => `node:${e}`),
-  ]),
+  NODE_BUILTIN_MODULES = new Set([...builtinModules, ...builtinModules.map((e) => `node:${e}`)]),
   WORKFLOW_INPUT_EXTENSIONS = new Set([
     `.ts`,
     `.tsx`,
@@ -64,9 +61,7 @@ async function collectWorkflowInputFiles(e) {
       }
       if (!r.isFile()) continue;
       let n = r.name.match(/\.[^.]+$/)?.[0];
-      n !== void 0 &&
-        WORKFLOW_INPUT_EXTENSIONS.has(n) &&
-        t.push(join(e, r.name));
+      n !== void 0 && WORKFLOW_INPUT_EXTENSIONS.has(n) && t.push(join(e, r.name));
     }
   }
   return (await visit(e), t);
@@ -84,8 +79,7 @@ function createWorkflowVirtualEntryPlugin(e) {
       if (e === `\0eve-workflow-entry`) return { id: e };
     },
     load(t) {
-      if (t === `\0eve-workflow-entry`)
-        return { code: e, moduleSideEffects: !0, moduleType: `js` };
+      if (t === `\0eve-workflow-entry`) return { code: e, moduleSideEffects: !0, moduleType: `js` };
     },
   };
 }
@@ -93,12 +87,10 @@ function createWorkflowPseudoPackagePlugin() {
   return {
     name: `eve-workflow-pseudo-packages`,
     resolveId(e) {
-      if (PSEUDO_PACKAGES.has(e))
-        return { id: `\0eve-workflow-pseudo-package:${e}` };
+      if (PSEUDO_PACKAGES.has(e)) return { id: `\0eve-workflow-pseudo-package:${e}` };
     },
     load(e) {
-      if (e.startsWith(`\0eve-workflow-pseudo-package:`))
-        return { code: ``, moduleType: `js` };
+      if (e.startsWith(`\0eve-workflow-pseudo-package:`)) return { code: ``, moduleType: `js` };
     },
   };
 }
@@ -106,8 +98,7 @@ function createWorkflowRuntimeAliasPlugin() {
   return {
     name: `eve-workflow-runtime-aliases`,
     resolveId(e) {
-      if (!(e !== `workflow` && !e.startsWith(`workflow/`)))
-        return resolveWorkflowModulePath(e);
+      if (!(e !== `workflow` && !e.startsWith(`workflow/`))) return resolveWorkflowModulePath(e);
     },
   };
 }
@@ -119,21 +110,8 @@ function createEvePackageImportsPlugin(e, t = {}) {
       if (r !== void 0)
         return t.workflowCondition === !0 && r === `@workflow/core/index.js`
           ? resolveFirstExistingPath([
-              join(
-                e,
-                `src`,
-                `internal`,
-                `workflow-bundle`,
-                `workflow-core-shim.ts`,
-              ),
-              join(
-                e,
-                `dist`,
-                `src`,
-                `internal`,
-                `workflow-bundle`,
-                `workflow-core-shim.js`,
-              ),
+              join(e, `src`, `internal`, `workflow-bundle`, `workflow-core-shim.ts`),
+              join(e, `dist`, `src`, `internal`, `workflow-bundle`, `workflow-core-shim.js`),
             ])
           : resolveFirstExistingPath([
               join(e, `.generated`, `compiled`, r),
@@ -142,16 +120,7 @@ function createEvePackageImportsPlugin(e, t = {}) {
       let i = n.match(/^#(.+)\.js$/)?.[1];
       if (i !== void 0)
         return resolveFirstExistingPath(
-          [
-            `.ts`,
-            `.tsx`,
-            `.mts`,
-            `.cts`,
-            `.js`,
-            `.jsx`,
-            `.mjs`,
-            `.cjs`,
-          ].flatMap((t) => [
+          [`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`].flatMap((t) => [
             join(e, `src`, `${i}${t}`),
             join(e, `dist`, `src`, `${i}${t}`),
           ]),
@@ -189,9 +158,7 @@ function createWorkflowTransformPlugin(e) {
 async function bundleWorkflowStepRegistrations(e) {
   let t = [...e.discoveredEntries.discoveredSteps].sort(),
     n = new Set(t),
-    r = [...e.discoveredEntries.discoveredSerdeFiles]
-      .sort()
-      .filter((e) => !n.has(e)),
+    r = [...e.discoveredEntries.discoveredSerdeFiles].sort().filter((e) => !n.has(e)),
     i = {},
     a = [
       createWorkflowImport(e.builtinsPath, e.workingDir),
@@ -200,50 +167,36 @@ async function bundleWorkflowStepRegistrations(e) {
       `export const __steps_registered = true;`,
     ].join(`
 `),
-    o = await buildSingleRolldownChunk(
-      `step registrations bundle for "${e.outfile}"`,
-      {
-        cwd: e.workingDir,
-        input: WORKFLOW_VIRTUAL_ENTRY_ID,
-        external: isWorkflowStepExternalPackage,
-        platform: `node`,
-        plugins: [
-          createWorkflowVirtualEntryPlugin(a),
-          createWorkflowPseudoPackagePlugin(),
-          createWorkflowRuntimeAliasPlugin(),
-          createEvePackageImportsPlugin(e.workingDir),
-          createWorkflowTransformPlugin({
-            manifest: i,
-            mode: `step`,
-            projectRoot: e.projectRoot,
-            sideEffectFiles: [...t, ...r],
-            workingDir: e.workingDir,
-          }),
-        ],
-        resolve: {
-          conditionNames: [`eve-source`],
-          extensions: [
-            `.ts`,
-            `.tsx`,
-            `.mts`,
-            `.cts`,
-            `.js`,
-            `.jsx`,
-            `.mjs`,
-            `.cjs`,
-          ],
-          mainFields: [`module`, `main`],
-        },
-        tsconfig: e.tsconfigPath ?? !1,
-        output: { comments: !1, format: `esm`, sourcemap: `inline` },
+    o = await buildSingleRolldownChunk(`step registrations bundle for "${e.outfile}"`, {
+      cwd: e.workingDir,
+      input: WORKFLOW_VIRTUAL_ENTRY_ID,
+      external: isWorkflowStepExternalPackage,
+      platform: `node`,
+      plugins: [
+        createWorkflowVirtualEntryPlugin(a),
+        createWorkflowPseudoPackagePlugin(),
+        createWorkflowRuntimeAliasPlugin(),
+        createEvePackageImportsPlugin(e.workingDir),
+        createWorkflowTransformPlugin({
+          manifest: i,
+          mode: `step`,
+          projectRoot: e.projectRoot,
+          sideEffectFiles: [...t, ...r],
+          workingDir: e.workingDir,
+        }),
+      ],
+      resolve: {
+        conditionNames: [`eve-source`],
+        extensions: [`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`],
+        mainFields: [`module`, `main`],
       },
-    );
+      tsconfig: e.tsconfigPath ?? !1,
+      output: { comments: !1, format: `esm`, sourcemap: `inline` },
+    });
   await writeWorkflowBundleAtomically(e.outfile, o.code);
 }
 function isWorkflowStepExternalPackage(e) {
-  return WORKFLOW_STEP_EXTERNAL_PACKAGES.some(
-    (t) => e === t || e.startsWith(`${t}/`),
-  );
+  return WORKFLOW_STEP_EXTERNAL_PACKAGES.some((t) => e === t || e.startsWith(`${t}/`));
 }
 function createWorkflowNodeBuiltinGuardPlugin() {
   return {
@@ -265,17 +218,12 @@ async function bundleFinalWorkflowOutput(e) {
     stepRegistrationsImport:
       e.stepRegistrationsPath === void 0
         ? void 0
-        : toRelativeImportSpecifier(
-            dirname(e.outfile),
-            e.stepRegistrationsPath,
-          ),
+        : toRelativeImportSpecifier(dirname(e.outfile), e.stepRegistrationsPath),
   });
   await writeWorkflowBundleAtomically(e.outfile, t);
 }
 function createWorkflowEntrypointSource(e) {
-  let t = normalizeEsmImportSpecifier(
-      resolveWorkflowModulePath(`workflow/runtime`),
-    ),
+  let t = normalizeEsmImportSpecifier(resolveWorkflowModulePath(`workflow/runtime`)),
     n = Buffer.from(
       e.code.endsWith(`
 `)

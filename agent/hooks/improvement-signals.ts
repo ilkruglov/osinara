@@ -29,21 +29,29 @@ const handlers = createImprovementSignalHandlers({
     }
     return identity.userId === null
       ? Promise.resolve(null)
-      : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, groupId: identity.groupId, userId: identity.userId });
+      : authoredSkillRepository.conversationId({
+          chatKind: identity.chatKind,
+          familyId: identity.familyId,
+          groupId: identity.groupId,
+          userId: identity.userId,
+        });
   },
   isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),
   recordSkillTelemetry: (input) => authoredSkillRepository.recordTelemetry(input),
-  recordTurnEvaluation: (identity, input) => turnEvaluationRepository.recordOutcome(identity, input),
+  recordTurnEvaluation: (identity, input) =>
+    turnEvaluationRepository.recordOutcome(identity, input),
   saveHint: (input) => skillHintRepository.save(input),
 });
 
 function report(stage: string, error: unknown): void {
-  console.error(JSON.stringify({
-    code: "AGENT_IMPROVEMENT_SIGNAL_FAILED",
-    error: error instanceof Error ? error.message : String(error),
-    stage,
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_IMPROVEMENT_SIGNAL_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+      stage,
+    }),
+  );
 }
 
 export default defineHook({

@@ -21,7 +21,9 @@ const access = {
   userId: "user-1",
 };
 
-function input(overrides: Partial<Parameters<ReturnType<typeof createTelegramMemoryContextBuilder>>[0]> = {}) {
+function input(
+  overrides: Partial<Parameters<ReturnType<typeof createTelegramMemoryContextBuilder>>[0]> = {},
+) {
   return {
     access,
     actor: { id: "101", kind: "telegram_user" as const },
@@ -37,13 +39,20 @@ function input(overrides: Partial<Parameters<ReturnType<typeof createTelegramMem
   };
 }
 
-const emptyRetrieval = { memories: [], retrievedClaimIds: [], threads: { threads: [], totalCharacters: 0 } };
+const emptyRetrieval = {
+  memories: [],
+  retrievedClaimIds: [],
+  threads: { threads: [], totalCharacters: 0 },
+};
 
 describe("createTelegramMemoryContextBuilder", () => {
   it("does not discard claims when optional exposure bookkeeping is unavailable", async () => {
     const build = createTelegramMemoryContextBuilder({
       createProfile: vi.fn().mockResolvedValue(null),
-      retrieve: vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [{ content: "Любит гречку", memoryRef: "mem_1" }] }),
+      retrieve: vi.fn().mockResolvedValue({
+        ...emptyRetrieval,
+        memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
+      }),
       exposures: {
         sessionTurn: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
         recentlyShownMemoryRefs: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
@@ -55,11 +64,14 @@ describe("createTelegramMemoryContextBuilder", () => {
   });
   it("keeps the profile when retrieval fails", async () => {
     const createProfile = vi.fn().mockResolvedValue({
-      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "view_test",
-      subjects: [], totalCharacters: 0,
+      generatedAt: "2026-08-08T10:00:00.000Z",
+      profileViewRef: "view_test",
+      subjects: [],
+      totalCharacters: 0,
     });
     const build = createTelegramMemoryContextBuilder({
-      createProfile, retrieve: vi.fn().mockRejectedValue(new Error("retrieval unavailable")),
+      createProfile,
+      retrieve: vi.fn().mockRejectedValue(new Error("retrieval unavailable")),
     });
     const blocks = await build(input());
     expect(createProfile).toHaveBeenCalled();
@@ -70,7 +82,10 @@ describe("createTelegramMemoryContextBuilder", () => {
   it("keeps retrieved claims when profile or skill hints fail", async () => {
     const build = createTelegramMemoryContextBuilder({
       createProfile: vi.fn().mockRejectedValue(new Error("profile unavailable")),
-      retrieve: vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [{ content: "Любит гречку", memoryRef: "mem_1" }] }),
+      retrieve: vi.fn().mockResolvedValue({
+        ...emptyRetrieval,
+        memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
+      }),
       takeSkillHint: vi.fn().mockRejectedValue(new Error("hints unavailable")),
     });
     expect((await build(input())).join("\n")).toContain("Любит гречку");
@@ -81,7 +96,10 @@ describe("createTelegramMemoryContextBuilder", () => {
       ...emptyRetrieval,
       memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
     });
-    const build = createTelegramMemoryContextBuilder({ createProfile: vi.fn().mockResolvedValue(null), retrieve });
+    const build = createTelegramMemoryContextBuilder({
+      createProfile: vi.fn().mockResolvedValue(null),
+      retrieve,
+    });
 
     const blocks = await build(input());
 
@@ -107,7 +125,11 @@ describe("createTelegramMemoryContextBuilder", () => {
   });
 
   it("appends the pending repeat-task hint once and after the memory block", async () => {
-    const takeSkillHint = vi.fn().mockResolvedValue({ kind: "repeat", stepCount: 5, toolNames: ["web_search", "generate_image"] });
+    const takeSkillHint = vi.fn().mockResolvedValue({
+      kind: "repeat",
+      stepCount: 5,
+      toolNames: ["web_search", "generate_image"],
+    });
     const build = createTelegramMemoryContextBuilder({
       createProfile: vi.fn().mockResolvedValue(null),
       retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
@@ -136,19 +158,33 @@ describe("createTelegramMemoryContextBuilder", () => {
       memories: [{ content: "Любит гречку", memoryRef: "mem_fresh" }],
     });
     const createProfile = vi.fn().mockResolvedValue({
-      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_1", totalCharacters: 10,
-      subjects: [{ claims: [{ memoryRef: "mem_reply" }], label: "Женя", priority: "reply_subject", subjectRef: "s1", totalCharacters: 10 }],
+      generatedAt: "2026-08-08T10:00:00.000Z",
+      profileViewRef: "pv_1",
+      totalCharacters: 10,
+      subjects: [
+        {
+          claims: [{ memoryRef: "mem_reply" }],
+          label: "Женя",
+          priority: "reply_subject",
+          subjectRef: "s1",
+          totalCharacters: 10,
+        },
+      ],
     });
     const build = createTelegramMemoryContextBuilder({ createProfile, exposures, retrieve });
 
     await build(input({ replyTelegramUserId: "202" }));
 
-    expect(retrieve).toHaveBeenCalledWith(expect.anything(), "что купить?", [], { excludeMemoryRefs: new Set(["mem_seen"]) });
+    expect(retrieve).toHaveBeenCalledWith(expect.anything(), "что купить?", [], {
+      excludeMemoryRefs: new Set(["mem_seen"]),
+    });
     expect(exposures.authorCardShownRecently).toHaveBeenCalledWith("app-session-1", "101", 12);
     expect(createProfile.mock.calls[0]![1]).toMatchObject({ suppressCurrentAuthor: true });
     expect(exposures.record).toHaveBeenCalledWith({
-      applicationSessionId: "app-session-1", authorTelegramUserId: null,
-      memoryRefs: ["mem_fresh", "mem_reply"], sessionTurn: 12,
+      applicationSessionId: "app-session-1",
+      authorTelegramUserId: null,
+      memoryRefs: ["mem_fresh", "mem_reply"],
+      sessionTurn: 12,
     });
   });
 
@@ -160,26 +196,54 @@ describe("createTelegramMemoryContextBuilder", () => {
       record: vi.fn().mockResolvedValue(undefined),
       sessionTurn: vi.fn().mockResolvedValue(12),
     };
-    const trace = [{ kind: "preference", lexical: true, morphology: false, outcome: "shown", ref: "mem_fresh", retention: 1, score: 0.03, semantic: 0.41 }];
+    const trace = [
+      {
+        kind: "preference",
+        lexical: true,
+        morphology: false,
+        outcome: "shown",
+        ref: "mem_fresh",
+        retention: 1,
+        score: 0.03,
+        semantic: 0.41,
+      },
+    ];
     const retrieve = vi.fn().mockResolvedValue({
       ...emptyRetrieval,
       memories: [{ content: "Любит гречку", memoryRef: "mem_fresh" }],
       trace,
     });
     const createProfile = vi.fn().mockResolvedValue({
-      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_1", totalCharacters: 10,
-      subjects: [{ claims: [{ content: "Работает логистом", memoryRef: "mem_card" }], label: "Женя", priority: "current_author", subjectRef: "s1", totalCharacters: 10 }],
+      generatedAt: "2026-08-08T10:00:00.000Z",
+      profileViewRef: "pv_1",
+      totalCharacters: 10,
+      subjects: [
+        {
+          claims: [{ content: "Работает логистом", memoryRef: "mem_card" }],
+          label: "Женя",
+          priority: "current_author",
+          subjectRef: "s1",
+          totalCharacters: 10,
+        },
+      ],
     });
     const build = createTelegramMemoryContextBuilder({ createProfile, exposures, retrieve });
 
     const blocks = await build(input());
 
-    const lines = info.mock.calls.map(([line]) => String(line)).filter((line) => line.includes("AGENT_MEMORY_RETRIEVAL_TRACE"));
+    const lines = info.mock.calls
+      .map(([line]) => String(line))
+      .filter((line) => line.includes("AGENT_MEMORY_RETRIEVAL_TRACE"));
     expect(lines).toHaveLength(1);
     const logged = JSON.parse(lines[0]!);
     expect(logged).toMatchObject({
-      applicationSessionId: "app-session-1", candidates: trace, conflictRefs: [], profileRefs: ["mem_card"], sessionTurn: 12,
-      threads: 0, timelineEntryId: "entry-1",
+      applicationSessionId: "app-session-1",
+      candidates: trace,
+      conflictRefs: [],
+      profileRefs: ["mem_card"],
+      sessionTurn: 12,
+      threads: 0,
+      timelineEntryId: "entry-1",
     });
     expect(logged.memoryChars + logged.profileChars).toBe(blocks.join("").length);
     expect(lines[0]).not.toContain("гречку");
@@ -198,19 +262,43 @@ describe("createTelegramMemoryContextBuilder", () => {
       sessionTurn: vi.fn().mockResolvedValue(3),
     };
     const conflict = {
-      conflictRef: "conf_1", instruction: "Не выбирать версию самостоятельно", type: "unresolved_conflict",
+      conflictRef: "conf_1",
+      instruction: "Не выбирать версию самостоятельно",
+      type: "unresolved_conflict",
       versions: [
-        { content: "Встреча в четверг", evidenceKind: "explicit", memoryRef: "mem_thu", observedAt: "2026-10-01", sourceLabel: "Женя" },
-        { content: "Встреча в пятницу", evidenceKind: "explicit", memoryRef: "mem_fri", observedAt: "2026-10-02", sourceLabel: "Илья" },
+        {
+          content: "Встреча в четверг",
+          evidenceKind: "explicit",
+          memoryRef: "mem_thu",
+          observedAt: "2026-10-01",
+          sourceLabel: "Женя",
+        },
+        {
+          content: "Встреча в пятницу",
+          evidenceKind: "explicit",
+          memoryRef: "mem_fri",
+          observedAt: "2026-10-02",
+          sourceLabel: "Илья",
+        },
       ],
     };
-    const retrieve = vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [conflict], trace: [] });
-    const build = createTelegramMemoryContextBuilder({ createProfile: vi.fn().mockResolvedValue(null), exposures, retrieve });
+    const retrieve = vi
+      .fn()
+      .mockResolvedValue({ ...emptyRetrieval, memories: [conflict], trace: [] });
+    const build = createTelegramMemoryContextBuilder({
+      createProfile: vi.fn().mockResolvedValue(null),
+      exposures,
+      retrieve,
+    });
 
     await build(input());
 
-    expect(exposures.record).toHaveBeenCalledWith(expect.objectContaining({ memoryRefs: ["mem_thu", "mem_fri"] }));
-    const line = info.mock.calls.map(([value]) => String(value)).find((value) => value.includes("AGENT_MEMORY_RETRIEVAL_TRACE"))!;
+    expect(exposures.record).toHaveBeenCalledWith(
+      expect.objectContaining({ memoryRefs: ["mem_thu", "mem_fri"] }),
+    );
+    const line = info.mock.calls
+      .map(([value]) => String(value))
+      .find((value) => value.includes("AGENT_MEMORY_RETRIEVAL_TRACE"))!;
     expect(JSON.parse(line).conflictRefs).toEqual(["mem_thu", "mem_fri"]);
     expect(line).not.toContain("четверг");
     info.mockRestore();
@@ -224,18 +312,32 @@ describe("createTelegramMemoryContextBuilder", () => {
       sessionTurn: vi.fn().mockResolvedValue(3),
     };
     const createProfile = vi.fn().mockResolvedValue({
-      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_2", totalCharacters: 10,
-      subjects: [{ claims: [{ memoryRef: "mem_me" }], label: "Илья", priority: "current_author", subjectRef: "s2", totalCharacters: 10 }],
+      generatedAt: "2026-08-08T10:00:00.000Z",
+      profileViewRef: "pv_2",
+      totalCharacters: 10,
+      subjects: [
+        {
+          claims: [{ memoryRef: "mem_me" }],
+          label: "Илья",
+          priority: "current_author",
+          subjectRef: "s2",
+          totalCharacters: 10,
+        },
+      ],
     });
     const build = createTelegramMemoryContextBuilder({
-      createProfile, exposures, retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
+      createProfile,
+      exposures,
+      retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
     });
 
     await build(input({ explicitMentionTelegramUserIds: ["101"] }));
 
     expect(exposures.authorCardShownRecently).not.toHaveBeenCalled();
     expect(createProfile.mock.calls[0]![1]).toMatchObject({ suppressCurrentAuthor: false });
-    expect(exposures.record).toHaveBeenCalledWith(expect.objectContaining({ authorTelegramUserId: "101", memoryRefs: ["mem_me"] }));
+    expect(exposures.record).toHaveBeenCalledWith(
+      expect.objectContaining({ authorTelegramUserId: "101", memoryRefs: ["mem_me"] }),
+    );
   });
 
   it("adds nothing when the message carries no text", async () => {
@@ -247,7 +349,9 @@ describe("createTelegramMemoryContextBuilder", () => {
   });
 
   it("binds the same-turn profile view to the application session and timeline entry", async () => {
-    const retrieve = vi.fn().mockResolvedValue({ ...emptyRetrieval, retrievedClaimIds: ["claim-related"] });
+    const retrieve = vi
+      .fn()
+      .mockResolvedValue({ ...emptyRetrieval, retrievedClaimIds: ["claim-related"] });
     const createProfile = vi.fn().mockResolvedValue({
       generatedAt: "2026-08-08T10:00:00.000Z",
       profileViewRef: "view_11111111111111111111111111111111",
@@ -256,11 +360,13 @@ describe("createTelegramMemoryContextBuilder", () => {
     });
     const build = createTelegramMemoryContextBuilder({ createProfile, retrieve });
 
-    const blocks = await build(input({
-      explicitMentionTelegramUserIds: ["202"],
-      replyTelegramUserId: "203",
-      replyTimelineSequence: "44",
-    }));
+    const blocks = await build(
+      input({
+        explicitMentionTelegramUserIds: ["202"],
+        replyTelegramUserId: "203",
+        replyTimelineSequence: "44",
+      }),
+    );
 
     expect(createProfile).toHaveBeenCalledWith(expect.objectContaining({ familyId: "family-1" }), {
       conversationId: "conversation-1",
@@ -285,10 +391,18 @@ describe("createTelegramMemoryContextBuilder", () => {
       retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
     });
 
-    const blocks = await build(input({
-      access: { ...access, groupId: "group-1", memoryScopes: ["group"], role: "external", userId: null },
-      actor: { id: "-1001783384254", kind: "telegram_channel" },
-    }));
+    const blocks = await build(
+      input({
+        access: {
+          ...access,
+          groupId: "group-1",
+          memoryScopes: ["group"],
+          role: "external",
+          userId: null,
+        },
+        actor: { id: "-1001783384254", kind: "telegram_channel" },
+      }),
+    );
 
     expect(createProfile).not.toHaveBeenCalled();
     expect(blocks).toHaveLength(1);

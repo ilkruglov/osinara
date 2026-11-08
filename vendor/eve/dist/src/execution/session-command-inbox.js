@@ -55,9 +55,7 @@ function createSessionCommandInbox() {
     states = () => [a, o, s, ...c].filter((e) => e !== void 0),
     nextRead = () => {
       if (a === void 0)
-        throw Error(
-          `Cannot wait for session commands before claiming the stable inbox.`,
-        );
+        throw Error(`Cannot wait for session commands before claiming the stable inbox.`);
       if (d !== null) return d;
       let e = states();
       for (let t of e) arm(t);
@@ -66,7 +64,7 @@ function createSessionCommandInbox() {
           (d = Promise.resolve(f.result)),
           d)
         : ((d = (async () => {
-            for (; l.length === 0; )
+            for (; l.length === 0;)
               await new Promise((e) => {
                 p = e;
               });
@@ -79,9 +77,7 @@ function createSessionCommandInbox() {
     async claimAuthorization(e) {
       if (s !== void 0) {
         if (s.hook.token === e) return;
-        throw Error(
-          `A session command inbox cannot change its authorization token.`,
-        );
+        throw Error(`A session command inbox cannot change its authorization token.`);
       }
       let n = createState(e);
       (await claimHookOwnership(n.hook), (s = n));
@@ -95,8 +91,7 @@ function createSessionCommandInbox() {
       (await claimHookOwnership(n.hook), enable(n), (a = n));
     },
     consumeNext() {
-      if (f === void 0)
-        throw Error(`Cannot consume a session command before it resolves.`);
+      if (f === void 0) throw Error(`Cannot consume a session command before it resolves.`);
       ((f.state.pending = !1),
         (f.state.resolved = void 0),
         f.result.done && (f.state.closed = !0),
@@ -126,10 +121,7 @@ function createSessionCommandInbox() {
     },
     setAuthorizationWindow(e) {
       if (s === void 0) {
-        if (e)
-          throw Error(
-            `Cannot open the authorization window before claiming its hook.`,
-          );
+        if (e) throw Error(`Cannot open the authorization window before claiming its hook.`);
         return;
       }
       if (e) {
@@ -150,10 +142,7 @@ function createSessionCommandInbox() {
       if (!e || o?.hook.token === e) return;
       let r = createState(e);
       if (o === void 0) {
-        (await claimHookOwnership(r.hook),
-          enable(r),
-          (o = r),
-          d !== null && arm(r));
+        (await claimHookOwnership(r.hook), enable(r), (o = r), d !== null && arm(r));
         return;
       }
       (arm(r), await claimHookOwnership(r.hook), enable(r));

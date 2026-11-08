@@ -62,15 +62,19 @@ async function connectedAccount(
     state,
     new Date("2099-07-12T12:05:00.000Z"),
   );
-  return await googleIntegrationRepository.completeAuthorization(claim, {
-    accessToken: "access-secret",
-    accessTokenExpiresAt: new Date("2099-07-12T13:05:00.000Z"),
-    displayName: "owner@example.com",
-    encryptionKey,
-    externalAccountId: input.externalAccountId ?? "google-subject-123",
-    refreshToken: "refresh-secret",
-    scopes: ["scope-a", "scope-b"],
-  }, async () => undefined);
+  return await googleIntegrationRepository.completeAuthorization(
+    claim,
+    {
+      accessToken: "access-secret",
+      accessTokenExpiresAt: new Date("2099-07-12T13:05:00.000Z"),
+      displayName: "owner@example.com",
+      encryptionKey,
+      externalAccountId: input.externalAccountId ?? "google-subject-123",
+      refreshToken: "refresh-secret",
+      scopes: ["scope-a", "scope-b"],
+    },
+    async () => undefined,
+  );
 }
 
 describeWithDatabase("google integration repository", () => {
@@ -88,18 +92,22 @@ describeWithDatabase("google integration repository", () => {
       rawState: "state-secret-with-at-least-32-bytes",
     });
 
-    await expect(googleIntegrationRepository.claimAuthorization(
-      "state-secret-with-at-least-32-bytes",
-      new Date("2099-07-12T12:05:00.000Z"),
-    )).resolves.toMatchObject({
+    await expect(
+      googleIntegrationRepository.claimAuthorization(
+        "state-secret-with-at-least-32-bytes",
+        new Date("2099-07-12T12:05:00.000Z"),
+      ),
+    ).resolves.toMatchObject({
       actorUserId: auth.userId,
       familyId: auth.familyId,
       workspaceId: auth.workspaceId,
     });
-    await expect(googleIntegrationRepository.claimAuthorization(
-      "state-secret-with-at-least-32-bytes",
-      new Date("2099-07-12T12:05:01.000Z"),
-    )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
+    await expect(
+      googleIntegrationRepository.claimAuthorization(
+        "state-secret-with-at-least-32-bytes",
+        new Date("2099-07-12T12:05:01.000Z"),
+      ),
+    ).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
   });
 
   it("rejects an expired state before token exchange", async () => {
@@ -109,10 +117,12 @@ describeWithDatabase("google integration repository", () => {
       rawState: "expired-state-with-at-least-32-bytes",
     });
 
-    await expect(googleIntegrationRepository.claimAuthorization(
-      "expired-state-with-at-least-32-bytes",
-      new Date("2099-07-12T12:10:01.000Z"),
-    )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
+    await expect(
+      googleIntegrationRepository.claimAuthorization(
+        "expired-state-with-at-least-32-bytes",
+        new Date("2099-07-12T12:10:01.000Z"),
+      ),
+    ).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
   });
 
   it("creates only one valid pending state across concurrent authorization starts", async () => {
@@ -127,22 +137,28 @@ describeWithDatabase("google integration repository", () => {
         rawState: "second-state-with-at-least-32-random-bytes",
       },
     ];
-    const results = await Promise.all(attempts.map(async (attempt) =>
-      await googleIntegrationRepository.createAuthorization(auth, attempt)
-    ));
+    const results = await Promise.all(
+      attempts.map(
+        async (attempt) => await googleIntegrationRepository.createAuthorization(auth, attempt),
+      ),
+    );
     const createdIndex = results.findIndex((result) => result.created);
     const reusedIndex = results.findIndex((result) => !result.created);
 
     expect(results.filter((result) => result.created)).toHaveLength(1);
     expect(results[reusedIndex]!.expiresAt).toBe(results[createdIndex]!.expiresAt);
-    await expect(googleIntegrationRepository.claimAuthorization(
-      attempts[reusedIndex]!.rawState,
-      new Date("2099-07-12T12:05:00.000Z"),
-    )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
-    await expect(googleIntegrationRepository.claimAuthorization(
-      attempts[createdIndex]!.rawState,
-      new Date("2099-07-12T12:05:00.000Z"),
-    )).resolves.toMatchObject({ workspaceId: auth.workspaceId });
+    await expect(
+      googleIntegrationRepository.claimAuthorization(
+        attempts[reusedIndex]!.rawState,
+        new Date("2099-07-12T12:05:00.000Z"),
+      ),
+    ).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
+    await expect(
+      googleIntegrationRepository.claimAuthorization(
+        attempts[createdIndex]!.rawState,
+        new Date("2099-07-12T12:05:00.000Z"),
+      ),
+    ).resolves.toMatchObject({ workspaceId: auth.workspaceId });
   });
 
   it("stores encrypted tokens and resolves only the current user's default account", async () => {
@@ -155,8 +171,13 @@ describeWithDatabase("google integration repository", () => {
       isDefault: true,
       status: "active",
     });
-    await expect(googleAccountRepository.getDefaultAccount(auth, encryptionKey)).resolves
-      .toMatchObject({ accessToken: "access-secret", id: account.id, refreshToken: "refresh-secret" });
+    await expect(
+      googleAccountRepository.getDefaultAccount(auth, encryptionKey),
+    ).resolves.toMatchObject({
+      accessToken: "access-secret",
+      id: account.id,
+      refreshToken: "refresh-secret",
+    });
     const raw = await database().query<{
       access_token_ciphertext: string;
       refresh_token_ciphertext: string;
@@ -173,8 +194,9 @@ describeWithDatabase("google integration repository", () => {
       state: "replacement-state-with-at-least-32-bytes",
     });
 
-    await expect(googleAccountRepository.getDefaultAccount(auth, encryptionKey)).resolves
-      .toMatchObject({ externalAccountId: "google-subject-456", id: replacement.id });
+    await expect(
+      googleAccountRepository.getDefaultAccount(auth, encryptionKey),
+    ).resolves.toMatchObject({ externalAccountId: "google-subject-456", id: replacement.id });
     const accounts = await database().query<{ external_account_id: string }>(
       "SELECT external_account_id FROM integration_accounts WHERE workspace_id = $1",
       [auth.workspaceId],
@@ -210,20 +232,23 @@ describeWithDatabase("google integration repository", () => {
       userId: member.rows[0]!.id,
     };
 
-    await expect(googleAccountRepository.getDefaultAccount(memberAuth, encryptionKey)).resolves
-      .toMatchObject({ id: account.id, refreshToken: "refresh-secret" });
-    await expect(googleIntegrationRepository.createAuthorization(memberAuth, {
-      expiresAt: new Date("2099-07-12T12:10:00.000Z"),
-      rawState: "member-state-with-at-least-32-bytes",
-    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
-    await expect(googleAccountRepository.withProfileAccount(
-      memberAuth,
-      encryptionKey,
-      true,
-      async () => undefined,
-    )).rejects.toThrowError(
-      /AGENT_OWNER_REQUIRED/,
-    );
+    await expect(
+      googleAccountRepository.getDefaultAccount(memberAuth, encryptionKey),
+    ).resolves.toMatchObject({ id: account.id, refreshToken: "refresh-secret" });
+    await expect(
+      googleIntegrationRepository.createAuthorization(memberAuth, {
+        expiresAt: new Date("2099-07-12T12:10:00.000Z"),
+        rawState: "member-state-with-at-least-32-bytes",
+      }),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+    await expect(
+      googleAccountRepository.withProfileAccount(
+        memberAuth,
+        encryptionKey,
+        true,
+        async () => undefined,
+      ),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
   });
 
   it("applies the native gws workspace-binding schema", async () => {
@@ -236,8 +261,10 @@ describeWithDatabase("google integration repository", () => {
     expect(names).toContain("workspace_id");
     expect(names).toContain("connected_by_user_id");
     expect(names).not.toContain("user_id");
-    await expect(database().query<{ relation: string | null }>(
-      "SELECT to_regclass('public.integration_operations')::text AS relation",
-    )).resolves.toMatchObject({ rows: [{ relation: null }] });
+    await expect(
+      database().query<{ relation: string | null }>(
+        "SELECT to_regclass('public.integration_operations')::text AS relation",
+      ),
+    ).resolves.toMatchObject({ rows: [{ relation: null }] });
   });
 });

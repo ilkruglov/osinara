@@ -79,10 +79,9 @@ async function dispatchDynamicInstructionEvent(e) {
           return { resolver: e, instruction: lowerInstruction(n) };
         } catch (t) {
           return (
-            log.error(
-              `Dynamic instructions resolver "${e.slug}" returned an invalid value.`,
-              { error: toErrorMessage(t) },
-            ),
+            log.error(`Dynamic instructions resolver "${e.slug}" returned an invalid value.`, {
+              error: toErrorMessage(t),
+            }),
             null
           );
         }

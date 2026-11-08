@@ -1,12 +1,6 @@
 import { EveAgentStore, detachEveAgentStore } from "#client/eve-agent-store.js";
 import { defaultMessageReducer } from "#client/message-reducer.js";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { resolveEveAgentHost } from "#client/agent-host.js";
 function useEveAgent(n = {}) {
   let r = useRef(void 0);
@@ -41,9 +35,6 @@ function useEveAgent(n = {}) {
     s = useCallback(() => i.reset(), [i]),
     c = useCallback((e, t) => i.send({ ...t, message: e }), [i]),
     l = useCallback((e, t) => i.send({ ...t, inputResponses: e }), [i]);
-  return useMemo(
-    () => ({ ...a, cancel: o, reset: s, respond: l, send: c }),
-    [o, s, l, c, a],
-  );
+  return useMemo(() => ({ ...a, cancel: o, reset: s, respond: l, send: c }), [o, s, l, c, a]);
 }
 export { useEveAgent };

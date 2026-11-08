@@ -22,7 +22,8 @@ describe("integerSetting", () => {
   });
 
   it.each(["0", "101", "-1", "2.5", "ten", "", " 5"])("rejects %j", (value) => {
-    expect(() => integerSetting("X", bounds, { X: value }))
-      .toThrow(expect.objectContaining({ code: "AGENT_RUNTIME_TUNING_INVALID" }));
+    expect(() => integerSetting("X", bounds, { X: value })).toThrow(
+      expect.objectContaining({ code: "AGENT_RUNTIME_TUNING_INVALID" }),
+    );
   });
 });

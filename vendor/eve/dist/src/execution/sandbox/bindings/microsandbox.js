@@ -12,10 +12,7 @@ import {
 const MICROSANDBOX_BACKEND_NAME = `microsandbox`;
 function createMicrosandboxSandboxBackend(t = {}) {
   let n = resolveMicrosandboxOptions(t.createOptions),
-    r = createStableHash(JSON.stringify(microsandboxOptionsForHash(n))).slice(
-      0,
-      20,
-    );
+    r = createStableHash(JSON.stringify(microsandboxOptionsForHash(n))).slice(0, 20);
   return {
     name: MICROSANDBOX_BACKEND_NAME,
     async prewarm(e) {
@@ -43,8 +40,4 @@ function createMicrosandboxSandboxBackend(t = {}) {
     },
   };
 }
-export {
-  MICROSANDBOX_BACKEND_NAME,
-  createMicrosandboxSandboxBackend,
-  pruneMicrosandboxTemplates,
-};
+export { MICROSANDBOX_BACKEND_NAME, createMicrosandboxSandboxBackend, pruneMicrosandboxTemplates };

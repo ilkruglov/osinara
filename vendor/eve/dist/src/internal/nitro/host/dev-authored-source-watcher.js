@@ -47,8 +47,7 @@ async function startAuthoredSourceWatcher(e) {
       awaitWriteFinish: { pollInterval: 50, stabilityThreshold: 160 },
       followSymlinks: !1,
       ignoreInitial: !0,
-      ignored: (e) =>
-        shouldIgnoreWatcherPath(e, t.appRoot, t.workspaceExtensions),
+      ignored: (e) => shouldIgnoreWatcherPath(e, t.appRoot, t.workspaceExtensions),
     }),
     f = waitForWatcherReady(d),
     rebuild = async (i, a = !1) => {
@@ -62,9 +61,7 @@ async function startAuthoredSourceWatcher(e) {
             let o = [...c];
             (s.clear(), c.clear());
             let l = t;
-            !a &&
-              r.length > 0 &&
-              console.log(formatChangeDetectedLogLine(l.appRoot, r));
+            !a && r.length > 0 && console.log(formatChangeDetectedLogLine(l.appRoot, r));
             try {
               let n = await e.coordinator.rebuild({ changedPaths: o });
               ((t = n.host),
@@ -82,9 +79,7 @@ async function startAuthoredSourceWatcher(e) {
             }
           })
           .catch((e) => {
-            console.error(
-              `[eve:dev] rebuild queue error: ${toErrorMessage(e)}`,
-            );
+            console.error(`[eve:dev] rebuild queue error: ${toErrorMessage(e)}`);
           })),
         await r);
     },
@@ -111,10 +106,7 @@ async function startAuthoredSourceWatcher(e) {
     (a = !0),
     {
       async close() {
-        ((n = !0),
-          i !== void 0 && (clearTimeout(i), (i = void 0)),
-          await d.close(),
-          await r);
+        ((n = !0), i !== void 0 && (clearTimeout(i), (i = void 0)), await d.close(), await r);
       },
       flush,
       rebuild: forceRebuild,
@@ -170,11 +162,7 @@ function syncWatcherPaths(e) {
     r = [];
   for (let [r, i] of t) e.previousWatchPathsByKey.has(r) || n.push(i);
   for (let [n, i] of e.previousWatchPathsByKey) t.has(n) || r.push(i);
-  return (
-    n.length > 0 && e.watcher.add(n),
-    r.length > 0 && e.watcher.unwatch(r),
-    t
-  );
+  return (n.length > 0 && e.watcher.add(n), r.length > 0 && e.watcher.unwatch(r), t);
 }
 function toWatchPathKey(e) {
   return normalize(resolve(e));

@@ -13,8 +13,7 @@ var import_picocolors = __toESM(require_picocolors(), 1);
 function validatePulseSequence(e) {
   if (e.length !== 8 && e.length !== 16)
     throw RangeError(`Pulse sequence must contain 8 or 16 steps.`);
-  if (/[^01]/u.test(e))
-    throw RangeError(`Pulse sequence steps must be "0" or "1".`);
+  if (/[^01]/u.test(e)) throw RangeError(`Pulse sequence steps must be "0" or "1".`);
 }
 function pulseStepDurationMs(e, t) {
   let n = Math.round((e * PROGRESS_PULSE_DURATION_MS) / t);
@@ -24,13 +23,7 @@ function sanitizeProgressText(e) {
   return sanitizeForTerminal(e).replaceAll(/\s+/gu, ` `).trim();
 }
 function fitProgressText(e, t) {
-  return t <= 0
-    ? ``
-    : visibleLength(e) <= t
-      ? e
-      : t === 1
-        ? `…`
-        : `${sliceVisible(e, t - 1)}…`;
+  return t <= 0 ? `` : visibleLength(e) <= t ? e : t === 1 ? `…` : `${sliceVisible(e, t - 1)}…`;
 }
 function renderProgressRow(e, t, n, r) {
   let i = n !== ``,
@@ -39,9 +32,7 @@ function renderProgressRow(e, t, n, r) {
     c = visibleLength(o);
   if (c >= s) {
     let t = fitProgressText(o, s);
-    return t.startsWith(e)
-      ? `${import_picocolors.default.green(e)}${t.slice(e.length)}`
-      : t;
+    return t.startsWith(e) ? `${import_picocolors.default.green(e)}${t.slice(e.length)}` : t;
   }
   let l = i ? fitProgressText(` ${n}`, s - c) : ``,
     d = l === `` ? `` : import_picocolors.default.dim(l);
@@ -62,12 +53,7 @@ function startCliLiveRow(e, t = {}) {
     g,
     paint = () => {
       if (f === void 0 || s === void 0) return;
-      let e = renderProgressRow(
-        d ? PROGRESS_PULSE_GLYPH : ` `,
-        f.message,
-        f.detail,
-        r.columns,
-      );
+      let e = renderProgressRow(d ? PROGRESS_PULSE_GLYPH : ` `, f.message, f.detail, r.columns);
       (s.update([e]), (p = !0));
     },
     schedulePulseStep = () => {
@@ -99,10 +85,7 @@ function startCliLiveRow(e, t = {}) {
       }
     },
     stop() {
-      h ||
-        ((h = !0),
-        g !== void 0 && clearTimeout(g),
-        s !== void 0 && p && s.clear());
+      h || ((h = !0), g !== void 0 && clearTimeout(g), s !== void 0 && p && s.clear());
     },
   };
 }

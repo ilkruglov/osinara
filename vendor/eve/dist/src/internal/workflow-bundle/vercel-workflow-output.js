@@ -91,11 +91,7 @@ async function repointEveFunctionSymlinksInDirectory(e, t, n = e) {
 }
 async function repointFunctionSymlink(e, t) {
   (await rm(e, { force: !0, recursive: !0 }),
-    await symlink(
-      normalizeVercelOutputPath(relative(dirname(e), t)),
-      e,
-      `dir`,
-    ));
+    await symlink(normalizeVercelOutputPath(relative(dirname(e), t)), e, `dir`));
 }
 async function pruneNonEveFunctionEntries(e, t) {
   let n;
@@ -110,8 +106,7 @@ async function pruneNonEveFunctionEntries(e, t) {
       let r = join(t, n.name),
         i = normalizeVercelOutputPath(relative(e, r));
       if (n.name.endsWith(`.func`)) {
-        isEveVercelFunctionPath(i) ||
-          (await rm(r, { force: !0, recursive: !0 }));
+        isEveVercelFunctionPath(i) || (await rm(r, { force: !0, recursive: !0 }));
         return;
       }
       n.isDirectory() && (await pruneNonEveFunctionEntries(e, r));

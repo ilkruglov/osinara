@@ -11,14 +11,18 @@ import type { AgentTUIInputOption } from "./runner.js";
 import { type LineState } from "./line-editor.js";
 import type { Theme } from "./theme.js";
 export interface QuestionPanelState {
-    readonly prompt: string;
-    readonly options: readonly AgentTUIInputOption[];
-    /** Row index under the cursor; `options.length` is the freeform row. */
-    readonly cursor: number;
-    /** Whether the trailing freeform row exists. */
-    readonly allowFreeform: boolean;
-    /** The freeform row's inline editor; focused while the cursor rests on it. */
-    readonly editor: LineState;
-    readonly caretVisible: boolean;
+  readonly prompt: string;
+  readonly options: readonly AgentTUIInputOption[];
+  /** Row index under the cursor; `options.length` is the freeform row. */
+  readonly cursor: number;
+  /** Whether the trailing freeform row exists. */
+  readonly allowFreeform: boolean;
+  /** The freeform row's inline editor; focused while the cursor rests on it. */
+  readonly editor: LineState;
+  readonly caretVisible: boolean;
 }
-export declare function renderQuestionPanel(state: QuestionPanelState, theme: Theme, width: number): string[];
+export declare function renderQuestionPanel(
+  state: QuestionPanelState,
+  theme: Theme,
+  width: number,
+): string[];

@@ -41,8 +41,9 @@ describe("turn timing", () => {
   it("logs and rethrows when the stage fails", async () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
     try {
-      await expect(timed("instructions_mode", () => Promise.reject(new Error("boom"))))
-        .rejects.toThrowError("boom");
+      await expect(
+        timed("instructions_mode", () => Promise.reject(new Error("boom"))),
+      ).rejects.toThrowError("boom");
       expect(log).toHaveBeenCalledTimes(1);
     } finally {
       log.mockRestore();

@@ -153,7 +153,10 @@ async function selectReasoning(
     return { reasoning: null, selection: "unavailable" };
   }
   if (model.reasoningOptions.length === 1) {
-    return { reasoning: model.reasoningOptions[0] as ReasoningSelection, selection: "automatic-single" };
+    return {
+      reasoning: model.reasoningOptions[0] as ReasoningSelection,
+      selection: "automatic-single",
+    };
   }
 
   const selectedId = await dependencies.prompts.select(
@@ -165,9 +168,11 @@ async function selectReasoning(
   );
   const selected = decodeReasoningSelection(selectedId);
   const selectedCanonicalId = encodeReasoningSelection(selected);
-  if (!model.reasoningOptions.some(
-    (option) => encodeReasoningSelection(option) === selectedCanonicalId,
-  )) {
+  if (
+    !model.reasoningOptions.some(
+      (option) => encodeReasoningSelection(option) === selectedCanonicalId,
+    )
+  ) {
     throw new InstallerError(
       "OSINARA_INSTALL_REASONING_SELECTION_INVALID",
       "Выбранный reasoning недоступен для этой модели",

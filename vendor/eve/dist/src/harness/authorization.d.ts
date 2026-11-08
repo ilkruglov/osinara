@@ -37,38 +37,38 @@ import type { JsonValue } from "#public/types/json.js";
 declare const AUTHORIZATION_BRAND: "__eveAuthorization";
 declare const AUTHORIZATION_PENDING_BRAND: "__eveAuthorizationPending";
 export interface AuthorizationChallenge {
-    /** Opaque identity of this exact authorization attempt. */
-    readonly attemptId?: string;
-    readonly candidateId?: string;
-    readonly name: string;
-    readonly challenge: ConnectionAuthorizationChallenge;
-    readonly hookUrl: string;
-    /** Principal passed to `startAuthorization`; omitted from model-facing copies. */
-    readonly principal?: ConnectionPrincipal;
-    /**
-     * Opaque resume value from the strategy's `startAuthorization`,
-     * journaled across the park. Absent for provider-owned flows.
-     */
-    readonly resume?: JsonValue;
+  /** Opaque identity of this exact authorization attempt. */
+  readonly attemptId?: string;
+  readonly candidateId?: string;
+  readonly name: string;
+  readonly challenge: ConnectionAuthorizationChallenge;
+  readonly hookUrl: string;
+  /** Principal passed to `startAuthorization`; omitted from model-facing copies. */
+  readonly principal?: ConnectionPrincipal;
+  /**
+   * Opaque resume value from the strategy's `startAuthorization`,
+   * journaled across the park. Absent for provider-owned flows.
+   */
+  readonly resume?: JsonValue;
 }
 export interface AuthorizationSignal {
-    readonly [AUTHORIZATION_BRAND]: true;
-    readonly challenges: readonly AuthorizationChallenge[];
+  readonly [AUTHORIZATION_BRAND]: true;
+  readonly challenges: readonly AuthorizationChallenge[];
 }
 /**
  * Opaque tool output the model sees while authorization is pending.
  * Contains connection names only — no OAuth URLs, user codes, or hook URLs.
  */
 export interface AuthorizationPendingModelOutput {
-    readonly [AUTHORIZATION_PENDING_BRAND]: true;
-    readonly connections: readonly string[];
+  readonly [AUTHORIZATION_PENDING_BRAND]: true;
+  readonly connections: readonly string[];
 }
 export interface AuthorizationResult {
-    readonly attemptId?: string;
-    readonly resume?: JsonValue;
-    readonly callback: AuthorizationCallback;
-    readonly hookUrl: string;
-    readonly principal?: ConnectionPrincipal;
+  readonly attemptId?: string;
+  readonly resume?: JsonValue;
+  readonly callback: AuthorizationCallback;
+  readonly hookUrl: string;
+  readonly principal?: ConnectionPrincipal;
 }
 /**
  * Creates an authorization signal. Return this from a tool's execute
@@ -77,7 +77,9 @@ export interface AuthorizationResult {
  * The harness emits `authorization.required` events for each challenge
  * and parks the session. Channels render sign-in buttons.
  */
-export declare function requestAuthorization(challenges: readonly AuthorizationChallenge[]): AuthorizationSignal;
+export declare function requestAuthorization(
+  challenges: readonly AuthorizationChallenge[],
+): AuthorizationSignal;
 /**
  * Returns a copy of `signal` with each challenge's `resume` value stripped.
  *
@@ -115,25 +117,31 @@ export declare function consumeAuthorizationResult(name: string): AuthorizationR
  */
 export declare function getHookUrl(name: string, attemptId: string): string | undefined;
 /** Mints the identity and callback URL for one interactive authorization attempt. */
-export declare function createAuthorizationAttempt(name: string): {
-    readonly attemptId: string;
-    readonly hookUrl: string;
-} | undefined;
+export declare function createAuthorizationAttempt(name: string):
+  | {
+      readonly attemptId: string;
+      readonly hookUrl: string;
+    }
+  | undefined;
 export declare function isAuthorizationSignal(value: unknown): value is AuthorizationSignal;
-export declare function isAuthorizationPendingModelOutput(value: unknown): value is AuthorizationPendingModelOutput;
+export declare function isAuthorizationPendingModelOutput(
+  value: unknown,
+): value is AuthorizationPendingModelOutput;
 /**
  * JSON-safe pending authorization output for model-facing tool results and
  * wire surfaces (`action.result`, telemetry). Omits OAuth URLs and user
  * codes — connection names only.
  */
 export declare function authorizationPendingAsJsonObject(input: {
-    readonly connections: readonly string[];
+  readonly connections: readonly string[];
 }): AuthorizationPendingModelOutput;
 /**
  * Projects a full {@link AuthorizationSignal} to the opaque shape recorded
  * in model-facing tool results and session history.
  */
-export declare function modelFacingAuthorizationOutput(signal: AuthorizationSignal): AuthorizationPendingModelOutput;
+export declare function modelFacingAuthorizationOutput(
+  signal: AuthorizationSignal,
+): AuthorizationPendingModelOutput;
 /** Human-readable tool output for {@link modelFacingAuthorizationOutput}. */
 export declare function authorizationPendingModelText(connections: readonly string[]): string;
 export declare function isPendingAuthorizationToolOutput(value: unknown): boolean;
@@ -144,7 +152,7 @@ export declare function isPendingAuthorizationToolOutput(value: unknown): boolea
  */
 export declare function authHookToken(sessionId: string): string;
 interface NamedAuthorizationResult extends AuthorizationResult {
-    readonly name: string;
+  readonly name: string;
 }
 export declare const PendingAuthorizationResultKey: ContextKey<readonly NamedAuthorizationResult[]>;
 /**
@@ -154,12 +162,25 @@ export declare const PendingAuthorizationResultKey: ContextKey<readonly NamedAut
  */
 export declare const CallbackBaseUrlKey: ContextKey<string>;
 export interface PendingAuthorizationState {
-    readonly challenges: readonly AuthorizationChallenge[];
+  readonly challenges: readonly AuthorizationChallenge[];
 }
-export declare function setPendingAuthorization(sessionState: Record<string, unknown> | undefined, value: PendingAuthorizationState): Record<string, unknown>;
+export declare function setPendingAuthorization(
+  sessionState: Record<string, unknown> | undefined,
+  value: PendingAuthorizationState,
+): Record<string, unknown>;
 /** Existing same-scope attempts replaced by newer attempts for the same principal. */
-export declare function getSupersededAuthorizationChallenges(sessionState: Record<string, unknown> | undefined, replacements: readonly AuthorizationChallenge[]): readonly AuthorizationChallenge[];
-export declare function clearPendingAuthorization(sessionState: Record<string, unknown> | undefined, attemptIds?: readonly string[]): Record<string, unknown> | undefined;
-export declare function getPendingAuthorization(sessionState: Record<string, unknown> | undefined): PendingAuthorizationState | undefined;
-export declare function hasPendingAuthorization(sessionState: Record<string, unknown> | undefined): boolean;
+export declare function getSupersededAuthorizationChallenges(
+  sessionState: Record<string, unknown> | undefined,
+  replacements: readonly AuthorizationChallenge[],
+): readonly AuthorizationChallenge[];
+export declare function clearPendingAuthorization(
+  sessionState: Record<string, unknown> | undefined,
+  attemptIds?: readonly string[],
+): Record<string, unknown> | undefined;
+export declare function getPendingAuthorization(
+  sessionState: Record<string, unknown> | undefined,
+): PendingAuthorizationState | undefined;
+export declare function hasPendingAuthorization(
+  sessionState: Record<string, unknown> | undefined,
+): boolean;
 export {};

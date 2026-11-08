@@ -15,10 +15,10 @@ import type { ModelMessage } from "ai";
 import { type HarnessEmissionState } from "#harness/emission.js";
 import type { HarnessSession, StepResult, ToolLoopHarnessConfig } from "#harness/types.js";
 interface SessionLimitPolicyInput {
-    readonly config: ToolLoopHarnessConfig;
-    readonly emit?: ToolLoopHarnessConfig["handleEvent"];
-    readonly emissionState: HarnessEmissionState;
-    readonly session: HarnessSession;
+  readonly config: ToolLoopHarnessConfig;
+  readonly emit?: ToolLoopHarnessConfig["handleEvent"];
+  readonly emissionState: HarnessEmissionState;
+  readonly session: HarnessSession;
 }
 /**
  * Acts on a resolved session-limit continuation answer.
@@ -37,13 +37,17 @@ interface SessionLimitPolicyInput {
  *
  * Returns `result: null` when the step should continue with `session`.
  */
-export declare function applySessionLimitContinuation(input: SessionLimitPolicyInput & {
-    readonly limitContinuation: {
-        readonly granted: boolean;
-    } | undefined;
-}): Promise<{
-    readonly result: StepResult | null;
-    readonly session: HarnessSession;
+export declare function applySessionLimitContinuation(
+  input: SessionLimitPolicyInput & {
+    readonly limitContinuation:
+      | {
+          readonly granted: boolean;
+        }
+      | undefined;
+  },
+): Promise<{
+  readonly result: StepResult | null;
+  readonly session: HarnessSession;
 }>;
 /**
  * Pre-model-call gate for the session token budget.
@@ -53,7 +57,9 @@ export declare function applySessionLimitContinuation(input: SessionLimitPolicyI
  * task-mode sessions without HITL fail fast with
  * `SESSION_TOKEN_LIMIT_REACHED`.
  */
-export declare function enforceSessionTokenLimit(input: SessionLimitPolicyInput & {
+export declare function enforceSessionTokenLimit(
+  input: SessionLimitPolicyInput & {
     readonly messages: readonly ModelMessage[];
-}): Promise<StepResult | null>;
+  },
+): Promise<StepResult | null>;
 export {};

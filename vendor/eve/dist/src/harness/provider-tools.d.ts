@@ -29,7 +29,10 @@ export declare function resolveWebSearchOutputSchema(backend: WebSearchBackend):
  * - Direct/BYO Google models: native Google search grounding
  * - Other BYO models: not available (returns `null`)
  */
-export declare function resolveWebSearchBackend(modelRef: RuntimeModelReference, gatewayProvider?: WebSearchProvider): WebSearchBackend | null;
+export declare function resolveWebSearchBackend(
+  modelRef: RuntimeModelReference,
+  gatewayProvider?: WebSearchProvider,
+): WebSearchBackend | null;
 /**
  * Constructs the AI SDK provider tool for web search based on the resolved
  * backend. Called once per harness step when web search is enabled.
@@ -37,4 +40,6 @@ export declare function resolveWebSearchBackend(modelRef: RuntimeModelReference,
  * Dynamic imports keep unused provider SDKs out of the bundle — only the
  * provider matching the current model is loaded.
  */
-export declare function resolveWebSearchProviderTool(backend: WebSearchBackend): Promise<ToolSet[string]>;
+export declare function resolveWebSearchProviderTool(
+  backend: WebSearchBackend,
+): Promise<ToolSet[string]>;

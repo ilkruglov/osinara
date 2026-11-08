@@ -15,7 +15,9 @@ import type { TelegramMessageRepositories } from "./telegram-on-message-reposito
 
 const OWNER_BOOTSTRAP_COMMAND_PATTERN = /^\/start ([A-Za-z0-9_-]{43})$/u;
 
-type TelegramIdentity = Awaited<ReturnType<TelegramMessageRepositories["telegram"]["findIdentity"]>>;
+type TelegramIdentity = Awaited<
+  ReturnType<TelegramMessageRepositories["telegram"]["findIdentity"]>
+>;
 
 export async function handleTelegramEnrollmentBoundary(input: {
   ctx: TelegramContext;

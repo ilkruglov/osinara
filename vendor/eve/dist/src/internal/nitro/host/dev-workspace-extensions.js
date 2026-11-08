@@ -33,16 +33,12 @@ async function prepareDevelopmentWorkspaceExtensions(e) {
     });
     n !== void 0 && c.set(n.packageRoot, n);
   }
-  let l = [...c.values()].sort((e, t) =>
-      e.packageRoot.localeCompare(t.packageRoot),
-    ),
+  let l = [...c.values()].sort((e, t) => e.packageRoot.localeCompare(t.packageRoot)),
     u = new Map(e.previousExtensions?.map((e) => [e.packageRoot, e])),
     d =
       e.changedPaths === void 0
         ? void 0
-        : await Promise.all(
-            e.changedPaths.map(async (e) => await toCanonicalPath(e)),
-          ),
+        : await Promise.all(e.changedPaths.map(async (e) => await toCanonicalPath(e))),
     f = e.previousExtensions === void 0 || d?.length === 0;
   return (
     await Promise.all(
@@ -91,11 +87,7 @@ async function resolveWorkspaceExtension(n) {
   let o = await realpath(r.location.packageRoot).catch(() => void 0);
   if (o === void 0 || !isAuthoredSourcePath(o, n.workspaceSourceRoot)) return;
   let s = await tryReadExtensionBuildConfig(o);
-  if (
-    s === null ||
-    (await stat(s.sourceRoot).catch(() => void 0))?.isDirectory() !== !0
-  )
-    return;
+  if (s === null || (await stat(s.sourceRoot).catch(() => void 0))?.isDirectory() !== !0) return;
   let c = [
     join(o, `package.json`),
     join(o, `tsconfig.json`),
@@ -104,16 +96,11 @@ async function resolveWorkspaceExtension(n) {
   return {
     config: s,
     packageRoot: o,
-    buildConfigPaths: [...new Set(c.map((e) => resolve(e)))].sort((e, t) =>
-      e.localeCompare(t),
-    ),
+    buildConfigPaths: [...new Set(c.map((e) => resolve(e)))].sort((e, t) => e.localeCompare(t)),
   };
 }
 function affectsExtensionBuild(e, t) {
-  return (
-    isPathInsideOrEqual(e, t.config.sourceRoot) ||
-    t.buildConfigPaths.includes(e)
-  );
+  return isPathInsideOrEqual(e, t.config.sourceRoot) || t.buildConfigPaths.includes(e);
 }
 function sameBuildConfig(e, t) {
   return (

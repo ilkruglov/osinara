@@ -23,9 +23,7 @@ const GREP_INPUT_SCHEMA = z.strictObject({
       .int()
       .min(1)
       .max(1e3)
-      .describe(
-        `Maximum number of matches to return per file. Defaults to 100.`,
-      )
+      .describe(`Maximum number of matches to return per file. Defaults to 100.`)
       .optional(),
     literal: z
       .boolean()

@@ -12,35 +12,38 @@ export declare const ROOT_RUNTIME_AGENT_NODE_ID = "__root__";
  * One resolved runtime-owned agent node in the recursive compiled graph.
  */
 export interface ResolvedRuntimeAgentNode {
-    readonly agent: ResolvedAgent;
-    /**
-     * The merged set of channels (framework defaults + authored overrides
-     * minus authored disables) that the Nitro mounting loop should mount.
-     * Computed by `resolve-agent-graph.ts` so the host plumbing never has to
-     * combine framework defaults with the resolved-agent's authored channels.
-     */
-    readonly channels: readonly ResolvedChannelDefinition[];
-    /**
-     * Per-node hook registry. Stream-event subscribers fan out alongside
-     * channel adapter event handlers.
-     */
-    readonly hookRegistry: RuntimeHookRegistry;
-    readonly nodeId: string;
-    readonly sandboxRegistry: RuntimeSandboxRegistry;
-    readonly sourceId?: string;
-    readonly subagentRegistry: RuntimeSubagentRegistry;
-    readonly toolRegistry: RuntimeToolRegistry;
-    readonly turnAgent: RuntimeTurnAgent;
+  readonly agent: ResolvedAgent;
+  /**
+   * The merged set of channels (framework defaults + authored overrides
+   * minus authored disables) that the Nitro mounting loop should mount.
+   * Computed by `resolve-agent-graph.ts` so the host plumbing never has to
+   * combine framework defaults with the resolved-agent's authored channels.
+   */
+  readonly channels: readonly ResolvedChannelDefinition[];
+  /**
+   * Per-node hook registry. Stream-event subscribers fan out alongside
+   * channel adapter event handlers.
+   */
+  readonly hookRegistry: RuntimeHookRegistry;
+  readonly nodeId: string;
+  readonly sandboxRegistry: RuntimeSandboxRegistry;
+  readonly sourceId?: string;
+  readonly subagentRegistry: RuntimeSubagentRegistry;
+  readonly toolRegistry: RuntimeToolRegistry;
+  readonly turnAgent: RuntimeTurnAgent;
 }
 /**
  * Recursive runtime-owned compiled graph bundle shared across root and child
  * subagent execution.
  */
 export interface ResolvedAgentGraphBundle {
-    readonly nodesByNodeId: ReadonlyMap<string, ResolvedRuntimeAgentNode>;
-    readonly root: ResolvedRuntimeAgentNode;
+  readonly nodesByNodeId: ReadonlyMap<string, ResolvedRuntimeAgentNode>;
+  readonly root: ResolvedRuntimeAgentNode;
 }
 /**
  * Resolves one runtime-owned agent node from the compiled recursive graph.
  */
-export declare function getResolvedRuntimeAgentNode(bundle: ResolvedAgentGraphBundle, nodeId: string | undefined): ResolvedRuntimeAgentNode;
+export declare function getResolvedRuntimeAgentNode(
+  bundle: ResolvedAgentGraphBundle,
+  nodeId: string | undefined,
+): ResolvedRuntimeAgentNode;

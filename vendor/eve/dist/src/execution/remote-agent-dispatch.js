@@ -1,8 +1,5 @@
 import { z } from "#compiled/zod/index.js";
-import {
-  expectFunction,
-  expectObjectRecord,
-} from "#internal/authored-module.js";
+import { expectFunction, expectObjectRecord } from "#internal/authored-module.js";
 import {
   createEveCallbackRoutePath,
   createEveSessionCancelRoutePath,
@@ -26,19 +23,13 @@ const CreateSessionResponseSchema = z.object({
 var RemoteAgentCancelRequestError = class extends Error {
   retryable;
   constructor(e, t) {
-    (super(e),
-      (this.name = `RemoteAgentCancelRequestError`),
-      (this.retryable = t.retryable));
+    (super(e), (this.name = `RemoteAgentCancelRequestError`), (this.retryable = t.retryable));
   }
 };
 async function startRemoteAgentSession(e) {
   let t = e.callbackToken ?? e.session.continuationToken;
-  if (!t)
-    throw Error(
-      `Cannot dispatch remote agent without a parent continuation token.`,
-    );
-  if (!e.callbackBaseUrl)
-    throw Error(`Cannot dispatch remote agent without a callback base URL.`);
+  if (!t) throw Error(`Cannot dispatch remote agent without a parent continuation token.`);
+  if (!e.callbackBaseUrl) throw Error(`Cannot dispatch remote agent without a callback base URL.`);
   let n = buildForwardedPrincipalField(e),
     i = {
       capabilities: {},
@@ -47,10 +38,7 @@ async function startRemoteAgentSession(e) {
         subagentName: e.action.remoteAgentName,
         taskId: readTaskIdFromInboxToken(t),
         token: t,
-        url: createWorkflowCallbackUrl(
-          e.callbackBaseUrl,
-          createEveCallbackRoutePath(t),
-        ),
+        url: createWorkflowCallbackUrl(e.callbackBaseUrl, createEveCallbackRoutePath(t)),
       },
       message: formatRemoteAgentCallInputMessage({
         action: e.action,
@@ -59,16 +47,14 @@ async function startRemoteAgentSession(e) {
       }),
       mode: e.persistentSessions === !0 ? `conversation` : `task`,
       outputSchema:
-        normalizeRequestedOutputSchema(e.action.input.outputSchema) ??
-        e.remote.outputSchema,
+        normalizeRequestedOutputSchema(e.action.input.outputSchema) ?? e.remote.outputSchema,
     };
   (n !== void 0 && (i.forwardedPrincipal = n),
     e.operationId !== void 0 && (i.operationId = e.operationId));
   let a = await resolveRemoteAgentRequestHeaders(e.remote),
     o = formatTraceparent(e.parentTraceContext);
   if (o !== void 0) {
-    for (let e of Object.keys(a))
-      e.toLowerCase() === `traceparent` && delete a[e];
+    for (let e of Object.keys(a)) e.toLowerCase() === `traceparent` && delete a[e];
     a.traceparent = o;
   }
   let s = await fetch(createRemoteAgentSessionUrl(e.remote), {
@@ -90,9 +76,7 @@ async function startRemoteAgentSession(e) {
   }
   let l = CreateSessionResponseSchema.safeParse(c);
   if (!l.success)
-    throw Error(
-      `Remote agent "${e.action.remoteAgentName}" create-session response was invalid.`,
-    );
+    throw Error(`Remote agent "${e.action.remoteAgentName}" create-session response was invalid.`);
   return { sessionId: l.data.sessionId };
 }
 async function continueRemoteAgentSession(e) {
@@ -151,13 +135,10 @@ async function readRemoteAgentErrorCode(e) {
   return typeof n == `string` ? n : void 0;
 }
 function buildForwardedPrincipalField(e) {
-  if (e.remote.forwardPrincipal !== !0 || e.auth === null || e.auth === void 0)
-    return;
+  if (e.remote.forwardPrincipal !== !0 || e.auth === null || e.auth === void 0) return;
   let t = { current: e.auth };
   return (
-    e.initiatorAuth !== null &&
-      e.initiatorAuth !== void 0 &&
-      (t.initiator = e.initiatorAuth),
+    e.initiatorAuth !== null && e.initiatorAuth !== void 0 && (t.initiator = e.initiatorAuth),
     t
   );
 }
@@ -186,10 +167,7 @@ async function cancelRemoteAgentTurn(e) {
     );
   }
   let i = CancelTurnResponseSchema.safeParse(r);
-  if (
-    !i.success ||
-    (i.data.status === `accepted` && i.data.sessionId !== e.sessionId)
-  )
+  if (!i.success || (i.data.status === `accepted` && i.data.sessionId !== e.sessionId))
     throw new RemoteAgentCancelRequestError(
       `Remote agent "${e.remote.name}" cancel-turn response was invalid.`,
       { retryable: !1 },
@@ -205,9 +183,7 @@ function resolveRemoteAgentForAction(e) {
   let t = e.registry.get(e.nodeId)?.definition;
   if (e.dynamicRemoteAgent !== void 0) {
     if (t === void 0)
-      throw Error(
-        `Missing remote agent "${e.remoteAgentName}" in runtime registry.`,
-      );
+      throw Error(`Missing remote agent "${e.remoteAgentName}" in runtime registry.`);
     let n = resolveDynamicRemoteAgentCredentials(e.dynamicRemoteAgent),
       r = e.dynamicRemoteAgent,
       i = {
@@ -223,32 +199,24 @@ function resolveRemoteAgentForAction(e) {
         url: r.url,
       };
     return (
-      r.forwardPrincipal !== void 0 &&
-        (i.forwardPrincipal = r.forwardPrincipal),
+      r.forwardPrincipal !== void 0 && (i.forwardPrincipal = r.forwardPrincipal),
       n.auth !== void 0 && (i.auth = n.auth),
       n.headers !== void 0 && (i.headers = n.headers),
       i
     );
   }
   if (t?.kind !== `remote`)
-    throw Error(
-      `Missing remote agent "${e.remoteAgentName}" in runtime registry.`,
-    );
+    throw Error(`Missing remote agent "${e.remoteAgentName}" in runtime registry.`);
   return t;
 }
 async function resolveRemoteAgentStreamHeaders(e) {
   if (e.resolverId === void 0) return {};
-  let t = new Set([
-    e.bundle.graph.root,
-    ...e.bundle.graph.nodesByNodeId.values(),
-  ]);
+  let t = new Set([e.bundle.graph.root, ...e.bundle.graph.nodesByNodeId.values()]);
   for (let n of t) {
     let t = n.subagentRegistry.subagentsByNodeId.get(e.resolverId)?.definition;
     if (t !== void 0) {
       if (t.kind !== `remote` || t.name !== e.name || t.url !== e.url)
-        throw Error(
-          `Remote child stream resolver does not match the authored remote agent.`,
-        );
+        throw Error(`Remote child stream resolver does not match the authored remote agent.`);
       return await resolveRemoteAgentRequestHeaders(t);
     }
   }
@@ -268,19 +236,12 @@ function resolveDynamicRemoteAgentCredentials(e) {
     throw Error(
       `Dynamic remote subagent credentials function "${e.credentialsStepId}" is not registered.`,
     );
-  let i = expectObjectRecord(
-      r(),
-      `Dynamic remote subagent credentials are invalid.`,
-    ),
+  let i = expectObjectRecord(r(), `Dynamic remote subagent credentials are invalid.`),
     a = {};
   return (
     i.auth !== void 0 &&
-      (a.auth = expectFunction(
-        i.auth,
-        `Dynamic remote subagent auth is invalid.`,
-      )),
-    i.headers !== void 0 &&
-      (a.headers = resolveDynamicRemoteAgentHeaders(i.headers)),
+      (a.auth = expectFunction(i.auth, `Dynamic remote subagent auth is invalid.`)),
+    i.headers !== void 0 && (a.headers = resolveDynamicRemoteAgentHeaders(i.headers)),
     a
   );
 }
@@ -288,8 +249,7 @@ function resolveDynamicRemoteAgentHeaders(e) {
   if (typeof e == `function`) return e;
   let t = expectObjectRecord(e, `Dynamic remote subagent headers are invalid.`);
   for (let e of Object.values(t))
-    if (typeof e != `string`)
-      throw Error(`Dynamic remote subagent headers are invalid.`);
+    if (typeof e != `string`) throw Error(`Dynamic remote subagent headers are invalid.`);
   return t;
 }
 function getStepRegistry() {
@@ -314,17 +274,13 @@ async function resolveRemoteAgentRequestHeaders(e) {
   let t = {};
   return (
     e.headers !== void 0 &&
-      Object.assign(
-        t,
-        typeof e.headers == `function` ? await e.headers() : e.headers,
-      ),
+      Object.assign(t, typeof e.headers == `function` ? await e.headers() : e.headers),
     e.auth !== void 0 && Object.assign(t, (await e.auth()).headers),
     t
   );
 }
 function formatRemoteAgentCallInputMessage(e) {
-  let t =
-    typeof e.action.input.message == `string` ? e.action.input.message : ``;
+  let t = typeof e.action.input.message == `string` ? e.action.input.message : ``;
   return formatSubagentInput({
     description: e.remote.description,
     message: t,

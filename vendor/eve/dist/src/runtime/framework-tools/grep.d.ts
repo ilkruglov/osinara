@@ -8,7 +8,8 @@ import type { ResolvedToolDefinition } from "#runtime/types.js";
  * `GREP_TOOL_DEFINITION` use the exact same schema object — keeping model
  * input contracts in sync without duplication.
  */
-export declare const GREP_INPUT_SCHEMA: z.ZodObject<{
+export declare const GREP_INPUT_SCHEMA: z.ZodObject<
+  {
     context: z.ZodOptional<z.ZodNumber>;
     glob: z.ZodOptional<z.ZodString>;
     ignoreCase: z.ZodOptional<z.ZodBoolean>;
@@ -16,15 +17,20 @@ export declare const GREP_INPUT_SCHEMA: z.ZodObject<{
     literal: z.ZodOptional<z.ZodBoolean>;
     path: z.ZodOptional<z.ZodString>;
     pattern: z.ZodString;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 /**
  * Shared output schema used by the framework `grep` tool and any author tool
  * constructed via {@link defineGrepTool}.
  */
-export declare const GREP_OUTPUT_SCHEMA: z.ZodObject<{
+export declare const GREP_OUTPUT_SCHEMA: z.ZodObject<
+  {
     content: z.ZodString;
     matchCount: z.ZodNumber;
     path: z.ZodString;
     truncated: z.ZodBoolean;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 export declare const GREP_TOOL_DEFINITION: ResolvedToolDefinition;

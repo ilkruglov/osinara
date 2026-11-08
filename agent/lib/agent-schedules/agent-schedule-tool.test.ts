@@ -59,8 +59,7 @@ const validDailyCreatePayload = {
 
 function approvalFor(input: Record<string, unknown>) {
   const approval = manageAgentSchedule.approval as unknown as
-    | ((context: { toolInput: Record<string, unknown> }) => unknown)
-    | undefined;
+    ((context: { toolInput: Record<string, unknown> }) => unknown) | undefined;
   expect(approval).toBeTypeOf("function");
   return approval!({ toolInput: input });
 }
@@ -85,19 +84,42 @@ describe("manage_agent_schedule", () => {
     expect(jsonSchema).toMatchObject({ additionalProperties: false, type: "object" });
     expect(jsonSchema).not.toHaveProperty("anyOf");
     expect(jsonSchema).not.toHaveProperty("oneOf");
-    expect(properties.action.enum).toEqual(["create", "update", "pause", "resume", "run_now", "delete"]);
-    expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: { kind: "once" } }).success).toBe(true);
-    expect(schema.safeParse({
-      ...validDailyCreatePayload,
-      recurrence: { daysOfWeek: [1, 5], interval: 2, kind: "weekly" },
-    }).success).toBe(true);
-    expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: { kind: "daily" } }).success).toBe(false);
-    expect(schema.safeParse({
-      ...validDailyCreatePayload,
-      recurrence: { daysOfWeek: [1], interval: 1, kind: "daily" },
-    }).success).toBe(false);
-    expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: { interval: 1, kind: "once" } }).success).toBe(false);
-    expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: { interval: 1, kind: "secondly" } }).success).toBe(false);
+    expect(properties.action.enum).toEqual([
+      "create",
+      "update",
+      "pause",
+      "resume",
+      "run_now",
+      "delete",
+    ]);
+    expect(
+      schema.safeParse({ ...validDailyCreatePayload, recurrence: { kind: "once" } }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        ...validDailyCreatePayload,
+        recurrence: { daysOfWeek: [1, 5], interval: 2, kind: "weekly" },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({ ...validDailyCreatePayload, recurrence: { kind: "daily" } }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        ...validDailyCreatePayload,
+        recurrence: { daysOfWeek: [1], interval: 1, kind: "daily" },
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ ...validDailyCreatePayload, recurrence: { interval: 1, kind: "once" } })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        ...validDailyCreatePayload,
+        recurrence: { interval: 1, kind: "secondly" },
+      }).success,
+    ).toBe(false);
   });
 
   it.each(["minutely", "hourly", "monthly", "yearly"] as const)(
@@ -106,14 +128,37 @@ describe("manage_agent_schedule", () => {
       const recurrence = { interval: 1, kind };
       const schema = manageAgentSchedule.inputSchema as z.ZodType;
       expect(schema.safeParse({ ...validDailyCreatePayload, recurrence }).success).toBe(true);
-      await manageAgentSchedule.execute({ ...validDailyCreatePayload, recurrence } as never, context);
-      expect(createSchedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ recurrence }));
-      await manageAgentSchedule.execute({ action: "update", id: scheduleId, recurrence } as never, context);
-      expect(updateSchedule).toHaveBeenCalledWith(expect.anything(), scheduleId, expect.objectContaining({ recurrence }));
-      for (const invalid of [{ interval: 0, kind }, { interval: 0.5, kind }, { interval: 1, kind, daysOfWeek: [1] }]) {
-        expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: invalid }).success).toBe(false);
-        await expect(manageAgentSchedule.execute({ ...validDailyCreatePayload, recurrence: invalid } as never, context))
-          .rejects.toMatchObject({ code: "AGENT_SCHEDULE_INPUT_INVALID" });
+      await manageAgentSchedule.execute(
+        { ...validDailyCreatePayload, recurrence } as never,
+        context,
+      );
+      expect(createSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recurrence }),
+      );
+      await manageAgentSchedule.execute(
+        { action: "update", id: scheduleId, recurrence } as never,
+        context,
+      );
+      expect(updateSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        scheduleId,
+        expect.objectContaining({ recurrence }),
+      );
+      for (const invalid of [
+        { interval: 0, kind },
+        { interval: 0.5, kind },
+        { interval: 1, kind, daysOfWeek: [1] },
+      ]) {
+        expect(schema.safeParse({ ...validDailyCreatePayload, recurrence: invalid }).success).toBe(
+          false,
+        );
+        await expect(
+          manageAgentSchedule.execute(
+            { ...validDailyCreatePayload, recurrence: invalid } as never,
+            context,
+          ),
+        ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_INPUT_INVALID" });
       }
     },
   );
@@ -143,20 +188,27 @@ describe("manage_agent_schedule", () => {
   });
 
   it("explains the exact recurrence shape when daily interval is missing", async () => {
-    await expect(manageAgentSchedule.execute({
-      ...validDailyCreatePayload,
-      recurrence: { kind: "daily" },
-    } as never, context)).rejects.toThrowError(
+    await expect(
+      manageAgentSchedule.execute(
+        {
+          ...validDailyCreatePayload,
+          recurrence: { kind: "daily" },
+        } as never,
+        context,
+      ),
+    ).rejects.toThrowError(
       /AGENT_SCHEDULE_INPUT_INVALID: Для daily recurrence передайте recurrence: \{"kind":"daily","interval":1\}/,
     );
     expect(createSchedule).not.toHaveBeenCalled();
   });
 
   it("rejects malformed recurrence before requesting HITL approval", () => {
-    expect(() => approvalFor({
-      ...validDailyCreatePayload,
-      recurrence: { kind: "daily" },
-    })).toThrowError(
+    expect(() =>
+      approvalFor({
+        ...validDailyCreatePayload,
+        recurrence: { kind: "daily" },
+      }),
+    ).toThrowError(
       /AGENT_SCHEDULE_INPUT_INVALID: Для daily recurrence передайте recurrence: \{"kind":"daily","interval":1\}/,
     );
     expect(createSchedule).not.toHaveBeenCalled();
@@ -170,41 +222,46 @@ describe("manage_agent_schedule", () => {
     expect(() => approvalFor({ ...validDailyCreatePayload, firstRun: "tomorrow" })).toThrowError(
       /AGENT_SCHEDULE_INPUT_INVALID.*firstRun/u,
     );
-    expect(() => approvalFor({
-      ...validDailyCreatePayload,
-      recurrence: { interval: 1, kind: "daily", unit: "days" },
-    })).toThrowError(/AGENT_SCHEDULE_INPUT_INVALID.*unit/u);
+    expect(() =>
+      approvalFor({
+        ...validDailyCreatePayload,
+        recurrence: { interval: 1, kind: "daily", unit: "days" },
+      }),
+    ).toThrowError(/AGENT_SCHEDULE_INPUT_INVALID.*unit/u);
   });
 
   it("ignores only known create-only siblings materialized by MiniMax on update", async () => {
-    await expect(manageAgentSchedule.execute({
-      action: "update",
-      firstRunAt: "2026-08-02T10:00:00+03:00",
-      id: scheduleId,
-      nextRunAt: "2026-08-03T10:00:00+03:00",
-      scope: "family",
-      timezone: "Europe/Moscow",
-    }, context)).resolves.toEqual({ id: scheduleId });
+    await expect(
+      manageAgentSchedule.execute(
+        {
+          action: "update",
+          firstRunAt: "2026-08-02T10:00:00+03:00",
+          id: scheduleId,
+          nextRunAt: "2026-08-03T10:00:00+03:00",
+          scope: "family",
+          timezone: "Europe/Moscow",
+        },
+        context,
+      ),
+    ).resolves.toEqual({ id: scheduleId });
 
-    expect(updateSchedule).toHaveBeenCalledWith(
-      expect.anything(),
-      scheduleId,
-      {
-        nextRunAt: new Date("2026-08-03T07:00:00.000Z"),
-        operationKey: "call-1",
-        recurrence: undefined,
-        scenarioPrompt: undefined,
-        title: undefined,
-        userRequest: undefined,
-      },
-    );
+    expect(updateSchedule).toHaveBeenCalledWith(expect.anything(), scheduleId, {
+      nextRunAt: new Date("2026-08-03T07:00:00.000Z"),
+      operationKey: "call-1",
+      recurrence: undefined,
+      scenarioPrompt: undefined,
+      title: undefined,
+      userRequest: undefined,
+    });
   });
 
   it.each(["delete", "pause", "resume", "run_now"] as const)(
     "keeps action=%s id-only even for known shared sibling fields",
     (action) => {
       expect(() => approvalFor({ action, id: scheduleId, timezone: "Europe/Moscow" })).toThrowError(
-        new RegExp(`AGENT_SCHEDULE_INPUT_INVALID: action=${action} содержит неизвестные поля: timezone`),
+        new RegExp(
+          `AGENT_SCHEDULE_INPUT_INVALID: action=${action} содержит неизвестные поля: timezone`,
+        ),
       );
     },
   );

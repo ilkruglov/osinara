@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_external_group_type_consolidation";
 
 describeWithDatabase("041 external Telegram group type consolidation migration", () => {
@@ -147,13 +146,15 @@ describeWithDatabase("041 external Telegram group type consolidation migration",
         ORDER BY enumsortorder
       `);
       expect(enumValues.rows.map((row) => row.enumlabel)).toEqual(["family_private", "external"]);
-      await expect(client.query(`
+      await expect(
+        client.query(`
         INSERT INTO telegram_groups
           (id, family_id, telegram_chat_id, title, type, message_mode, tool_allowlist, config)
         VALUES
           (gen_random_uuid(), gen_random_uuid(), '-1004', 'Invalid family mode',
            'family_private', 'owner_only', '{}', '{}')
-      `)).rejects.toThrow();
+      `),
+      ).rejects.toThrow();
     } finally {
       // Pool connections must never retain a test schema after that schema is removed.
       try {

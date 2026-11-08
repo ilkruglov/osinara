@@ -1,8 +1,4 @@
-import {
-  PROMPT_COMMANDS,
-  isPromptControlCommand,
-  parsePromptCommand,
-} from "./prompt-commands.js";
+import { PROMPT_COMMANDS, isPromptControlCommand, parsePromptCommand } from "./prompt-commands.js";
 import { buildAgentHeader } from "./agent-header.js";
 import { renderAttentionRows, renderBlockLines } from "./blocks.js";
 import { copyTextToClipboard } from "./clipboard.js";
@@ -16,14 +12,8 @@ import {
   typeaheadCompletion,
   typeaheadFor,
 } from "./command-typeahead.js";
-import {
-  formatDevRebuildStatus,
-  summarizeChangedFiles,
-} from "./dev-rebuild-status.js";
-import {
-  formatStoredDiagnostic,
-  presentDiagnostic,
-} from "./diagnostic-presentation.js";
+import { formatDevRebuildStatus, summarizeChangedFiles } from "./dev-rebuild-status.js";
+import { formatStoredDiagnostic, presentDiagnostic } from "./diagnostic-presentation.js";
 import { interruptedError } from "./errors.js";
 import { FileContentCache } from "./file-content-cache.js";
 import {
@@ -38,15 +28,9 @@ import {
 } from "./line-editor.js";
 import { nextLogDisplayMode } from "./log-display-mode.js";
 import { MessageQueue, renderMessageQueueRows } from "./message-queue.js";
-import {
-  initialModelEditorState,
-  transitionModelEditor,
-} from "./model-editor.js";
+import { initialModelEditorState, transitionModelEditor } from "./model-editor.js";
 import { promptPlaceholder } from "./prompt-placeholder.js";
-import {
-  initialProviderPickerState,
-  transitionProviderPicker,
-} from "./provider-picker.js";
+import { initialProviderPickerState, transitionProviderPicker } from "./provider-picker.js";
 import { renderQuestionPanel } from "./question-panel.js";
 import {
   enterBadge,
@@ -87,14 +71,8 @@ import {
   renderFinishedTodoRows,
   renderTodoPanelRows,
 } from "./todo-panel.js";
-import {
-  reduceSetupSelectInput,
-  setupSelectionIntent,
-} from "./setup-selection-input.js";
-import {
-  BACKGROUND_COLOR_QUERY,
-  parseBackgroundColorReply,
-} from "./terminal-background.js";
+import { reduceSetupSelectInput, setupSelectionIntent } from "./setup-selection-input.js";
+import { BACKGROUND_COLOR_QUERY, parseBackgroundColorReply } from "./terminal-background.js";
 import { inspectError } from "#internal/logging.js";
 import { eveVersionTag } from "#cli/banner.js";
 import {
@@ -296,8 +274,7 @@ var TerminalRenderer = class {
     let t = this.#pn().join(`
 `);
     if (this.#D) {
-      (t !== this.#O &&
-        ((this.#O = t), this.#Bt({ kind: `agent-header`, body: t, live: !1 })),
+      (t !== this.#O && ((this.#O = t), this.#Bt({ kind: `agent-header`, body: t, live: !1 })),
         this.#cn());
       return;
     }
@@ -344,8 +321,7 @@ var TerminalRenderer = class {
           interrupt = () => {
             ((this.#R = void 0), this.#Ft(), this.#Tt(), r(interruptedError()));
           },
-          suggestions = () =>
-            this.#R !== void 0 && isTypeaheadOpen(this.#R) ? this.#R : void 0,
+          suggestions = () => (this.#R !== void 0 && isTypeaheadOpen(this.#R) ? this.#R : void 0),
           highlighted = () => {
             let e = suggestions();
             return e === void 0 ? void 0 : selectedTypeaheadCommand(e);
@@ -416,9 +392,7 @@ var TerminalRenderer = class {
               break;
             }
             case `ctrl-d`:
-              a.text.length === 0
-                ? (this.#yt(), interrupt())
-                : apply(deleteForward(a));
+              a.text.length === 0 ? (this.#yt(), interrupt()) : apply(deleteForward(a));
               break;
             case `ctrl-l`:
               this.#dn();
@@ -453,8 +427,7 @@ var TerminalRenderer = class {
     (this.#Ct(t),
       this.#g.clear(),
       (this.#L = !1),
-      this.#G.kind !== `waiting` &&
-        (this.#G = { kind: `waiting`, startedAtMs: Date.now() }),
+      this.#G.kind !== `waiting` && (this.#G = { kind: `waiting`, startedAtMs: Date.now() }),
       (this.#q = this.#j > 0 ? STATUS.connectionAuth : STATUS.processing),
       this.#Ut(t?.submittedPrompt),
       t?.submittedPrompt !== void 0 && this.#d?.recordPrompt(),
@@ -545,11 +518,7 @@ var TerminalRenderer = class {
             hint: t.hint,
           });
     } finally {
-      (this.#rn(r),
-        r.cancelled && this.#nn(r),
-        this.#Yt(),
-        this.#d?.reportStats(),
-        this.#cn());
+      (this.#rn(r), r.cancelled && this.#nn(r), this.#Yt(), this.#d?.reportStats(), this.#cn());
     }
   }
   async readToolApproval(e, t) {
@@ -709,17 +678,10 @@ var TerminalRenderer = class {
         (this.#ue = (t) => {
           if (t.type === `ctrl-c`) {
             if ((s === `text` || isOnFreeformRow()) && l.text.length > 0) {
-              ((l = EMPTY_LINE),
-                this.#It(),
-                s === `text` && this.#qe(l),
-                this.#cn());
+              ((l = EMPTY_LINE), this.#It(), s === `text` && this.#qe(l), this.#cn());
               return;
             }
-            ((this.#$ = !0),
-              (this.#je = void 0),
-              this.#Ft(),
-              this.#Tt(),
-              r(interruptedError()));
+            ((this.#$ = !0), (this.#je = void 0), this.#Ft(), this.#Tt(), r(interruptedError()));
             return;
           }
           if (t.type === `ctrl-r`) {
@@ -761,9 +723,7 @@ var TerminalRenderer = class {
                   let e = Number(t.value) - 1;
                   e < n.length
                     ? selectOptionAt(e)
-                    : e === n.length &&
-                      i &&
-                      ((c = e), syncFreeformCaret(), this.#cn());
+                    : e === n.length && i && ((c = e), syncFreeformCaret(), this.#cn());
                 }
                 break;
             }
@@ -802,8 +762,7 @@ var TerminalRenderer = class {
     });
   }
   upsertSubagentStep(e) {
-    if ((this.#d?.recordSubagentDispatch(e.callId), this.#s === `hidden`))
-      return;
+    if ((this.#d?.recordSubagentDispatch(e.callId), this.#s === `hidden`)) return;
     let t = stripTerminalControls(e.reasoning ?? ``).trim(),
       n = stripTerminalControls(e.message ?? ``).trim();
     if (!(t.length === 0 && n.length === 0)) {
@@ -869,14 +828,11 @@ var TerminalRenderer = class {
         toolGroup: n.group,
         toolInput: e.input,
       };
-    (n.doneTitle !== void 0 &&
-      (r.doneTitle = stripTerminalControls(n.doneTitle)),
+    (n.doneTitle !== void 0 && (r.doneTitle = stripTerminalControls(n.doneTitle)),
       n.detail !== void 0 &&
-        ((r.detailLines = n.detail),
-        (r.keepDetailWhenDone = n.keepDetailWhenDone === !0)),
+        ((r.detailLines = n.detail), (r.keepDetailWhenDone = n.keepDetailWhenDone === !0)),
       e.output === void 0
-        ? e.errorText !== void 0 &&
-          (r.result = stripTerminalControls(e.errorText))
+        ? e.errorText !== void 0 && (r.result = stripTerminalControls(e.errorText))
         : ((r.result = n.summarizeResult(e.output)), (r.toolOutput = e.output)),
       this.#qt(r),
       this.#Je(e.callId),
@@ -994,9 +950,7 @@ var TerminalRenderer = class {
     (this.#Ht(), this.#Xe());
     let e = this.#i.colors,
       t = this.#i.glyph,
-      n = e.dim(
-        `${t.cornerOpen}${t.dash.repeat(2)} Session restarted, clear context.`,
-      );
+      n = e.dim(`${t.cornerOpen}${t.dash.repeat(2)} Session restarted, clear context.`);
     (this.#Bt({ kind: `session-boundary`, body: n, live: !1 }), this.#cn());
   }
   #Xe() {
@@ -1062,10 +1016,7 @@ var TerminalRenderer = class {
   }
   #Qe(e, t = `spinner`) {
     (this.#Ct(), (this.#L = !1), (this.#G = { kind: `idle` }), (this.#q = ``));
-    let n =
-      t === `pulse`
-        ? { kind: `pulse`, startedAtMs: Date.now() }
-        : { kind: `spinner` };
+    let n = t === `pulse` ? { kind: `pulse`, startedAtMs: Date.now() } : { kind: `spinner` };
     ((this.#Me = {
       title: stripTerminalControls(e),
       indicator: n,
@@ -1108,12 +1059,8 @@ var TerminalRenderer = class {
       r = e.kind === `search` ? e.searchAction : void 0,
       i = e.options,
       a = { options: i, searchAction: r, submitRow: n };
-    (`initialValue` in e &&
-      e.initialValue !== void 0 &&
-      (a.defaultValue = e.initialValue),
-      `initialValues` in e &&
-        e.initialValues !== void 0 &&
-        (a.initialValues = e.initialValues));
+    (`initialValue` in e && e.initialValue !== void 0 && (a.defaultValue = e.initialValue),
+      `initialValues` in e && e.initialValues !== void 0 && (a.initialValues = e.initialValues));
     let o = initialSelectState(a),
       s,
       c = !1,
@@ -1122,11 +1069,7 @@ var TerminalRenderer = class {
       clearSearch = () => {
         ((l += 1),
           (c = !1),
-          (o = reduceSelect(
-            o,
-            { type: `clear` },
-            { options: i, searchAction: r, submitRow: n },
-          )),
+          (o = reduceSelect(o, { type: `clear` }, { options: i, searchAction: r, submitRow: n })),
           this.#cn());
       },
       loadSearch = async (e, t) => {
@@ -1153,19 +1096,11 @@ var TerminalRenderer = class {
         }
       },
       u = e.notices;
-    if (
-      e.kind === `task-list` ||
-      (e.kind === `search` && e.layout === `task-list`)
-    ) {
+    if (e.kind === `task-list` || (e.kind === `search` && e.layout === `task-list`)) {
       let n = t.taskListLineStart ?? t.lines.length,
         r = t.lines
           .slice(n)
-          .filter(
-            (e) =>
-              e.tone === `success` ||
-              e.tone === `warning` ||
-              e.tone === `error`,
-          )
+          .filter((e) => e.tone === `success` || e.tone === `warning` || e.tone === `error`)
           .map((e) => ({ tone: e.tone, text: e.text }));
       ((u = e.notices ?? r),
         (t.taskListLineStart = t.lines.length),
@@ -1197,9 +1132,7 @@ var TerminalRenderer = class {
         }
         let u = { key: t, options: i, searchAction: r, select: o },
           d = reduceSetupSelectInput(
-            n
-              ? { ...u, kind: e.kind, required: e.required }
-              : { ...u, kind: e.kind },
+            n ? { ...u, kind: e.kind, required: e.required } : { ...u, kind: e.kind },
           );
         switch (d.kind) {
           case `cancel`:
@@ -1254,8 +1187,7 @@ var TerminalRenderer = class {
             r(void 0);
             return;
           case `move`:
-            ((n = moveActionCursor(n, i.direction, e.actions.length)),
-              this.#cn());
+            ((n = moveActionCursor(n, i.direction, e.actions.length)), this.#cn());
             return;
           case `repaint`:
             this.#cn();
@@ -1298,13 +1230,9 @@ var TerminalRenderer = class {
           },
         },
       };
-      return (
-        a !== void 0 && (n.error = a),
-        renderSelectQuestion(n, this.#i, t)
-      );
+      return (a !== void 0 && (n.error = a), renderSelectQuestion(n, this.#i, t));
     };
-    let onEditableRow = () =>
-        selectValueAtCursor([...e.options], r.cursor) === e.editable.value,
+    let onEditableRow = () => selectValueAtCursor([...e.options], r.cursor) === e.editable.value,
       syncEditableRow = () => {
         onEditableRow() ? this.#Pt() : ((i = lineOf(``)), this.#Ft());
       };
@@ -1374,8 +1302,7 @@ var TerminalRenderer = class {
         if (n.phase.kind !== `inactive`) return;
         let t = selectValueAtCursor([...e.options], n.select.cursor),
           r = e.options.find((e) => e.value === t);
-        if (r !== void 0)
-          return enterBadge(this.#i, r.checked === !0 ? `change` : void 0);
+        if (r !== void 0) return enterBadge(this.#i, r.checked === !0 ? `change` : void 0);
       };
     t.question = (t) => {
       let r = cursorBadge(),
@@ -1391,15 +1318,10 @@ var TerminalRenderer = class {
             editor: { kind: `key`, phase: n.phase },
           },
         };
-      return (
-        r !== void 0 && (i.cursorBadge = r),
-        renderSelectQuestion(i, this.#i, t)
-      );
+      return (r !== void 0 && (i.cursorBadge = r), renderSelectQuestion(i, this.#i, t));
     };
     let syncCaret = () => {
-      n.phase.kind === `editing` || n.phase.kind === `invalid`
-        ? this.#Pt()
-        : this.#Ft();
+      n.phase.kind === `editing` || n.phase.kind === `invalid` ? this.#Pt() : this.#Ft();
     };
     return (
       syncCaret(),
@@ -1412,11 +1334,7 @@ var TerminalRenderer = class {
                 case `ignore`:
                   return;
                 case `clear`:
-                  (r?.abort(),
-                    (r = void 0),
-                    (n = o.state),
-                    syncCaret(),
-                    this.#cn());
+                  (r?.abort(), (r = void 0), (n = o.state), syncCaret(), this.#cn());
                   return;
                 case `cancel`:
                   i(void 0);
@@ -1439,8 +1357,7 @@ var TerminalRenderer = class {
                     (e) => {
                       r !== t ||
                         t.signal.aborted ||
-                        ((r = void 0),
-                        dispatch({ type: `validated`, validation: e }));
+                        ((r = void 0), dispatch({ type: `validated`, validation: e }));
                     },
                     (e) => {
                       r !== t || t.signal.aborted || ((r = void 0), a(e));
@@ -1484,8 +1401,7 @@ var TerminalRenderer = class {
     let t = this.#st(),
       n = initialModelEditorState(e);
     return (
-      (t.question = (t) =>
-        renderModelEditorQuestion({ request: e, state: n }, this.#i, t)),
+      (t.question = (t) => renderModelEditorQuestion({ request: e, state: n }, this.#i, t)),
       this.#cn(),
       await this.#ut((t, r) => {
         let dispatch = (t) => {
@@ -1601,11 +1517,7 @@ var TerminalRenderer = class {
     let t = this.#st();
     return (
       (t.question = (t) =>
-        renderAcknowledgeQuestion(
-          { message: e.message, lines: e.lines },
-          this.#i,
-          t,
-        )),
+        renderAcknowledgeQuestion({ message: e.message, lines: e.lines }, this.#i, t)),
       this.#cn(),
       await this.#ut((e, t) => {
         switch (e.type) {
@@ -1624,13 +1536,7 @@ var TerminalRenderer = class {
     );
   }
   #st() {
-    return (
-      this.#Ct(),
-      (this.#L = !1),
-      (this.#G = { kind: `idle` }),
-      (this.#q = ``),
-      this.#ct()
-    );
+    return (this.#Ct(), (this.#L = !1), (this.#G = { kind: `idle` }), (this.#q = ``), this.#ct());
   }
   #ct() {
     return (
@@ -1707,8 +1613,7 @@ var TerminalRenderer = class {
     ((this.#We = consumer), this.#Mt(), (this.#ue = consumer), this.#Et());
   }
   #pt() {
-    this.#We !== void 0 &&
-      (this.#ue === this.#We && this.#Dt(), (this.#We = void 0));
+    this.#We !== void 0 && (this.#ue === this.#We && this.#Dt(), (this.#We = void 0));
   }
   #mt(e) {
     let t =
@@ -1727,17 +1632,12 @@ var TerminalRenderer = class {
               startedAtMs: Date.now(),
             };
     if (this.#Me !== void 0) {
-      ((this.#Me.status = t),
-        t === void 0 && (this.#Me.preview = void 0),
-        this.#cn());
+      ((this.#Me.status = t), t === void 0 && (this.#Me.preview = void 0), this.#cn());
       return;
     }
     if (!(this.#L || this.#W)) {
       if (t === void 0) {
-        ((this.#G = { kind: `idle` }),
-          (this.#J = void 0),
-          this.#zt(),
-          this.#cn());
+        ((this.#G = { kind: `idle` }), (this.#J = void 0), this.#zt(), this.#cn());
         return;
       }
       (this.#Ct(), this.#Rt(), (this.#J = t.text), this.#cn());
@@ -1749,14 +1649,11 @@ var TerminalRenderer = class {
     let r = this.#Me;
     if (r !== void 0) {
       if (((r.preview = void 0), t === `warning` || t === `error`))
-        for (let e of r.outputBuffer)
-          r.lines.push({ text: e, tone: `info`, evidence: !0 });
+        for (let e of r.outputBuffer) r.lines.push({ text: e, tone: `info`, evidence: !0 });
       ((r.outputBuffer = []), r.lines.push({ text: n, tone: t }), this.#cn());
       return;
     }
-    (this.#Ct(),
-      this.#Bt({ kind: `flow`, title: t, body: n, live: !1 }),
-      this.#cn());
+    (this.#Ct(), this.#Bt({ kind: `flow`, title: t, body: n, live: !1 }), this.#cn());
   }
   #gt(e) {
     let t = this.#Me;
@@ -1822,8 +1719,7 @@ var TerminalRenderer = class {
   shutdown() {
     if ((this.#Tt(), this.#Z && !this.#Q)) {
       this.#Q = !0;
-      let e =
-        this.#ze === void 0 ? `` : ` ${this.#i.glyph.dot} session ${this.#ze}`;
+      let e = this.#ze === void 0 ? `` : ` ${this.#i.glyph.dot} session ${this.#ze}`;
       this.#t.write(`${this.#i.colors.dim(`${eveVersionTag()}${e}`)}\n`);
     }
   }
@@ -1889,9 +1785,7 @@ var TerminalRenderer = class {
         this.#n.hideCursor(),
         this.#kn(),
         this.#e.isTTY &&
-          (this.#e.setRawMode?.(!0),
-          this.#e.resume(),
-          this.#n.emitBracketedPaste(!0)),
+          (this.#e.setRawMode?.(!0), this.#e.resume(), this.#n.emitBracketedPaste(!0)),
         (this.#me = () => this.#cn()),
         this.#t.on(`resize`, this.#me),
         process.on(`exit`, this.#wt)));
@@ -1899,8 +1793,7 @@ var TerminalRenderer = class {
   #wt = () => {
     this.#X &&
       (this.#r.exit(),
-      this.#e.isTTY &&
-        (this.#n.emitBracketedPaste(!1), this.#e.setRawMode?.(!1)),
+      this.#e.isTTY && (this.#n.emitBracketedPaste(!1), this.#e.setRawMode?.(!1)),
       this.#n.showCursor());
   };
   #Tt() {
@@ -1917,17 +1810,14 @@ var TerminalRenderer = class {
       this.#X)
     ) {
       this.#Rn();
-      for (let e of this.#m)
-        e.kind === `log` && e.id === void 0 && (e.live = !1);
+      for (let e of this.#m) e.kind === `log` && e.id === void 0 && (e.live = !1);
       (this.#cn(),
         this.#n.clear(),
         this.#n.showCursor(),
         this.#An(),
         this.#n.newline(),
         this.#e.isTTY &&
-          (this.#n.emitBracketedPaste(!1),
-          this.#e.setRawMode?.(!1),
-          this.#e.pause()),
+          (this.#n.emitBracketedPaste(!1), this.#e.setRawMode?.(!1), this.#e.pause()),
         (this.#me &&= (this.#t.off(`resize`, this.#me), void 0)),
         process.off(`exit`, this.#wt),
         (this.#X = !1));
@@ -1938,9 +1828,7 @@ var TerminalRenderer = class {
       this.#e.on(`data`, this.#Ot),
       this.#de.length > 0 &&
         queueMicrotask(() => {
-          this.#ue !== void 0 &&
-            this.#de.length > 0 &&
-            (this.#At(), this.#kt());
+          this.#ue !== void 0 && this.#de.length > 0 && (this.#At(), this.#kt());
         }));
   }
   #Dt() {
@@ -1952,8 +1840,7 @@ var TerminalRenderer = class {
   #kt() {
     if (this.#de === `\x1B`) {
       ((this.#pe = setTimeout(() => {
-        this.#de === `\x1B` &&
-          ((this.#de = ``), this.#ue?.({ type: `escape` }));
+        this.#de === `\x1B` && ((this.#de = ``), this.#ue?.({ type: `escape` }));
       }, 30)),
         this.#pe.unref?.());
       return;
@@ -1964,8 +1851,7 @@ var TerminalRenderer = class {
         if (this.#de !== e) return;
         let t = sanitizePastedText(stripPasteStart(e));
         ((this.#de = ``),
-          t.length > 0 &&
-            this.#ue?.({ type: `text`, value: t, framing: `bracketed-paste` }));
+          t.length > 0 && this.#ue?.({ type: `text`, value: t, framing: `bracketed-paste` }));
       }, incompletePasteFlushMs)),
         this.#pe.unref?.());
       return;
@@ -1979,12 +1865,11 @@ var TerminalRenderer = class {
     }
   }
   #At() {
-    for (; this.#de.length > 0; ) {
+    for (; this.#de.length > 0;) {
       let e = nextKey(this.#de);
       if (e.incomplete) return;
       if (
-        ((this.#de = this.#de.slice(e.consumed)),
-        !(e.key === void 0 || e.key.type === `ignore`))
+        ((this.#de = this.#de.slice(e.consumed)), !(e.key === void 0 || e.key.type === `ignore`))
       ) {
         if (e.key.type === `osc`) {
           this.#jt(e.key.value);
@@ -2058,9 +1943,7 @@ var TerminalRenderer = class {
   }
   #Rt() {
     let e = Date.now();
-    ((this.#ae = e),
-      (this.#G = { kind: `waiting`, startedAtMs: e }),
-      this.#Lt());
+    ((this.#ae = e), (this.#G = { kind: `waiting`, startedAtMs: e }), this.#Lt());
   }
   #zt() {
     this.#se &&= (clearInterval(this.#se), void 0);
@@ -2070,11 +1953,8 @@ var TerminalRenderer = class {
     let t =
       e.subagentCallId !== void 0 && this.#S.has(e.subagentCallId)
         ? -1
-        : this.#m.findIndex(
-            (e) => e.subagentCallId !== void 0 && this.#S.has(e.subagentCallId),
-          );
-    (t < 0 ? this.#m.push(e) : this.#m.splice(t, 0, e),
-      e.id && this.#h.set(e.id, e));
+        : this.#m.findIndex((e) => e.subagentCallId !== void 0 && this.#S.has(e.subagentCallId));
+    (t < 0 ? this.#m.push(e) : this.#m.splice(t, 0, e), e.id && this.#h.set(e.id, e));
   }
   #Vt(e) {
     ((this.#V = !0),
@@ -2111,8 +1991,7 @@ var TerminalRenderer = class {
     this.#d?.append(o === void 0 ? s : { ...s, hint: o });
     let c = { kind: `error`, title: r, body: i, live: !1 };
     (o !== void 0 && (c.hint = o),
-      a !== void 0 &&
-        (c.detail = this.#d === void 0 ? a : `details: ${this.#d.displayPath}`),
+      a !== void 0 && (c.detail = this.#d === void 0 ? a : `details: ${this.#d.displayPath}`),
       this.#Bt(c),
       this.#cn());
   }
@@ -2157,10 +2036,8 @@ var TerminalRenderer = class {
     }
     (e.id !== this.#Oe?.id && this.#Rn(), (e.updateSeq = ++this.#b));
     let r = -1;
-    for (let e = 0; e < this.#m.length; e += 1)
-      this.#m[e]?.subagentCallId === n && (r = e);
-    (this.#m.splice(r < 0 ? this.#m.length : r + 1, 0, e),
-      e.id !== void 0 && this.#h.set(e.id, e));
+    for (let e = 0; e < this.#m.length; e += 1) this.#m[e]?.subagentCallId === n && (r = e);
+    (this.#m.splice(r < 0 ? this.#m.length : r + 1, 0, e), e.id !== void 0 && this.#h.set(e.id, e));
   }
   #Jt(e) {
     ((this.#m = this.#m.filter((t) => t.id !== e)), this.#h.delete(e));
@@ -2189,10 +2066,7 @@ var TerminalRenderer = class {
       }
       case `assistant-complete`: {
         let t = n.text.get(e.id) ?? ``,
-          r =
-            e.text !== void 0 && t.length === 0
-              ? stripTerminalControls(e.text ?? ``)
-              : t;
+          r = e.text !== void 0 && t.length === 0 ? stripTerminalControls(e.text ?? ``) : t;
         (n.text.set(e.id, r), this.#Zt(e.id, r, !1));
         break;
       }
@@ -2297,8 +2171,7 @@ var TerminalRenderer = class {
   }
   #Zt(e, t, n) {
     let r = stripTerminalControls(t).trim();
-    r.length !== 0 &&
-      (this.#Kt({ id: e, kind: `assistant`, body: r, live: n }), this.#cn());
+    r.length !== 0 && (this.#Kt({ id: e, kind: `assistant`, body: r, live: n }), this.#cn());
   }
   #Qt(e, t, n, r) {
     let i = stripTerminalControls(t).trim();
@@ -2315,17 +2188,13 @@ var TerminalRenderer = class {
   #$t(e, t, n) {
     if (
       (n.tools.set(e.toolCallId, e),
-      this.#v.has(e.toolCallId) ||
-        this.#in(e) ||
-        toolBaseName(e.toolName) === `ask_question`)
+      this.#v.has(e.toolCallId) || this.#in(e) || toolBaseName(e.toolName) === `ask_question`)
     )
       return;
     let r = toolSectionId(e.toolCallId);
     this.#y.set(e.toolCallId, r);
     let i = this.#en(e);
-    (this.#Kt(renderNativeToolBlock(e, r, t.tools === `full`, i)),
-      this.#an(n),
-      this.#cn());
+    (this.#Kt(renderNativeToolBlock(e, r, t.tools === `full`, i)), this.#an(n), this.#cn());
   }
   #en(e) {
     e.output !== void 0 && this.#w.observeRead(e.output);
@@ -2389,8 +2258,7 @@ var TerminalRenderer = class {
       if (this.#v.has(n.toolCallId)) continue;
       let e = this.#y.get(n.toolCallId) ?? toolSectionId(n.toolCallId),
         r = this.#h.get(e);
-      r?.kind === `tool` &&
-        t.push({ block: r, active: isActiveToolStatus(n.status) });
+      r?.kind === `tool` && t.push({ block: r, active: isActiveToolStatus(n.status) });
     }
     applyCohortLiveness(t);
   }
@@ -2401,10 +2269,7 @@ var TerminalRenderer = class {
       i = this.#h.get(r);
     if (!(i === void 0 || i.kind !== `tool`))
       return {
-        errorText:
-          i.status === `error` && typeof i.result == `string`
-            ? i.result
-            : void 0,
+        errorText: i.status === `error` && typeof i.result == `string` ? i.result : void 0,
         input: i.toolInput,
         output: i.toolOutput,
         status: i.status ?? `running`,
@@ -2453,21 +2318,16 @@ var TerminalRenderer = class {
       i = this.#A,
       a = groupToolBlocksForDisplay(this.#m),
       o = 0;
-    for (; o < a.length && a[o].display.live === !1; ) o += 1;
+    for (; o < a.length && a[o].display.live === !1;) o += 1;
     if (o > 0) {
       let e = new Set(a.slice(0, o).flatMap((e) => e.members));
-      for (let t = this.#m.length - 1; t >= 0; --t)
-        e.has(this.#m[t]) && this.#m.splice(t, 1);
+      for (let t = this.#m.length - 1; t >= 0; --t) e.has(this.#m[t]) && this.#m.splice(t, 1);
     }
     for (let t of a.slice(0, o)) {
-      for (let e of t.members)
-        (this.#_.push(e), e.id && (this.#g.add(e.id), this.#h.delete(e.id)));
+      for (let e of t.members) (this.#_.push(e), e.id && (this.#g.add(e.id), this.#h.delete(e.id)));
       if (this.#Bn(t.display)) continue;
       let n = this.#mn(t.display, e, i);
-      ((i = previousBlockOf(t.display)),
-        (this.#A = i),
-        r.push(...n),
-        this.#k.push(...n));
+      ((i = previousBlockOf(t.display)), (this.#A = i), r.push(...n), this.#k.push(...n));
     }
     let s = [];
     for (let { display: t } of a.slice(o)) {
@@ -2582,8 +2442,7 @@ var TerminalRenderer = class {
   #vn(e) {
     let n = this.#i.colors,
       r = [``];
-    if (this.#je !== void 0)
-      return (r.push(...this.#je(e), ``), this.#wn(r, e), r);
+    if (this.#je !== void 0) return (r.push(...this.#je(e), ``), this.#wn(r, e), r);
     let a = this.#Me;
     if (a !== void 0) {
       let t = this.#_n(a, a.status),
@@ -2606,8 +2465,7 @@ var TerminalRenderer = class {
                 ? { kind: `idle`, indicator: t }
                 : { kind: `preview`, text: a.preview, indicator: t })
           : ((i = { kind: `status`, status: n }),
-            a.preview !== void 0 &&
-              (i = { kind: `status`, status: n, preview: a.preview }));
+            a.preview !== void 0 && (i = { kind: `status`, status: n, preview: a.preview }));
       let o = {
         title: a.title,
         lines:
@@ -2626,8 +2484,7 @@ var TerminalRenderer = class {
       };
       return (r.push(...renderFlowPanel(o, this.#i, e)), this.#Tn(r, e), r);
     }
-    (this.#Ne !== void 0 &&
-      r.push(...renderAttentionRows(this.#Ne, e, this.#i), ``),
+    (this.#Ne !== void 0 && r.push(...renderAttentionRows(this.#Ne, e, this.#i), ``),
       this.#Pe !== void 0 &&
         r.push(
           ...renderTodoPanelRows({
@@ -2637,9 +2494,7 @@ var TerminalRenderer = class {
             working: this.#W || this.#G.kind === `waiting`,
             pulse: this.#gn(
               this.#ae,
-              this.#i.unicode
-                ? PROGRESS_PULSE_GLYPH
-                : PROGRESS_PULSE_ASCII_GLYPH,
+              this.#i.unicode ? PROGRESS_PULSE_GLYPH : PROGRESS_PULSE_ASCII_GLYPH,
             ),
           }),
           ``,
@@ -2675,9 +2530,7 @@ var TerminalRenderer = class {
       return (
         this.#z &&
           this.#P.length === 0 &&
-          (f.placeholder = this.#V
-            ? ``
-            : promptPlaceholder(Date.now() - this.#B)),
+          (f.placeholder = this.#V ? `` : promptPlaceholder(Date.now() - this.#B)),
         r.push(...promptInputRows(f)),
         r.push(...s),
         r
@@ -2687,15 +2540,9 @@ var TerminalRenderer = class {
     if (this.#W || s) {
       (r.push(this.#yn(e)), this.#Sn(r, e));
       let t = [];
-      return (
-        this.#wn(t, e),
-        !this.#W && t.length > 0 && r.push(``),
-        r.push(...t),
-        r
-      );
+      return (this.#wn(t, e), !this.#W && t.length > 0 && r.push(``), r.push(...t), r);
     }
-    if (this.#U.text.length > 0)
-      return (this.#Cn(r, e, { inert: !1 }), this.#wn(r, e), r);
+    if (this.#U.text.length > 0) return (this.#Cn(r, e, { inert: !1 }), this.#wn(r, e), r);
     let u = this.#J ?? (this.#q.length > 0 ? this.#q : `Ready`),
       f = this.#En(),
       p = n.dim(this.#i.glyph.dot),
@@ -2704,15 +2551,9 @@ var TerminalRenderer = class {
   }
   #yn(e) {
     let t = this.#i.colors,
-      n = this.#gn(
-        this.#ae,
-        this.#i.unicode ? PROGRESS_PULSE_GLYPH : PROGRESS_PULSE_ASCII_GLYPH,
-      ),
+      n = this.#gn(this.#ae, this.#i.unicode ? PROGRESS_PULSE_GLYPH : PROGRESS_PULSE_ASCII_GLYPH),
       r = this.#G,
-      i =
-        this.#H.startedAtMs ??
-        this.#Ce ??
-        (r.kind === `waiting` ? r.startedAtMs : Date.now()),
+      i = this.#H.startedAtMs ?? this.#Ce ?? (r.kind === `waiting` ? r.startedAtMs : Date.now()),
       a = Date.now() - i,
       o = `${typewriterText(`Working for`, a, 80)} ${this.#bn(a)}`;
     return clip(`${t.yellow(n)} ${t.dim(o)}`, e);
@@ -2742,8 +2583,7 @@ var TerminalRenderer = class {
       maxRows: 4,
       inert: n.inert,
     };
-    (n.inert && this.#U.text.length === 0 && (r.placeholder = ``),
-      e.push(...promptInputRows(r)));
+    (n.inert && this.#U.text.length === 0 && (r.placeholder = ``), e.push(...promptInputRows(r)));
   }
   #wn(e, t) {
     let n = this.#N === void 0 ? `` : `  `,
@@ -2757,11 +2597,8 @@ var TerminalRenderer = class {
     }
     let o = this.#E?.info?.agent.model;
     (o?.id !== void 0 && (i.model = o.id),
-      o?.reasoning !== void 0 &&
-        o.reasoning !== `provider-default` &&
-        (i.reasoning = o.reasoning),
-      readGatewayServiceTier(o?.providerOptions).kind === `priority` &&
-        (i.fastMode = !0));
+      o?.reasoning !== void 0 && o.reasoning !== `provider-default` && (i.reasoning = o.reasoning),
+      readGatewayServiceTier(o?.providerOptions).kind === `priority` && (i.fastMode = !0));
     let s = o?.endpoint;
     (s !== void 0 && (i.endpoint = s),
       this.#M !== void 0 && (i.vercel = this.#M),
@@ -2786,10 +2623,7 @@ var TerminalRenderer = class {
         },
         this.#l,
       );
-    return (
-      n && t.push(n),
-      t.length > 0 ? e.dim(t.join(`  ${this.#i.glyph.dot}  `)) : ``
-    );
+    return (n && t.push(n), t.length > 0 ? e.dim(t.join(`  ${this.#i.glyph.dot}  `)) : ``);
   }
   #Dn() {
     return Math.max(20, this.#t.columns || 80);
@@ -2864,8 +2698,7 @@ var TerminalRenderer = class {
         let e = t.join(`
 `);
         ((t = []),
-          e.trim().length !== 0 &&
-            this.#Bt({ kind: `log`, title: `stdout`, body: e, live: !0 }));
+          e.trim().length !== 0 && this.#Bt({ kind: `log`, title: `stdout`, body: e, live: !0 }));
       };
     for (let n of e.split(`
 `)) {
@@ -2886,9 +2719,7 @@ var TerminalRenderer = class {
   #Pn(e) {
     let t = e.split(`
 `),
-      n = t.findIndex(
-        (e) => parseDevRebuildLogLine(e.trimEnd())?.kind === `failed`,
-      );
+      n = t.findIndex((e) => parseDevRebuildLogLine(e.trimEnd())?.kind === `failed`);
     if (n === -1) {
       if (this.#d === void 0) {
         this.#Bt({ kind: `log`, title: `stderr`, body: e, live: !0 });
@@ -2917,8 +2748,7 @@ var TerminalRenderer = class {
     }
     let r = t.slice(0, n).join(`
 `);
-    r.trim().length > 0 &&
-      this.#Bt({ kind: `log`, title: `stderr`, body: r, live: !0 });
+    r.trim().length > 0 && this.#Bt({ kind: `log`, title: `stderr`, body: r, live: !0 });
     let i = t.slice(n).join(`
 `);
     this.#Fn(i);
@@ -2940,8 +2770,7 @@ var TerminalRenderer = class {
     if (e.kind === `rebuilding`) {
       let t = summarizeChangedFiles(e.events, e.more);
       if (n !== void 0) {
-        ((n.state.summary = t),
-          (n.block.body = formatDevRebuildStatus(t, `rebuilding`)));
+        ((n.state.summary = t), (n.block.body = formatDevRebuildStatus(t, `rebuilding`)));
         return;
       }
       let r = `dev-rebuild:${this.#ke}`;
@@ -3038,11 +2867,7 @@ function promptInputRows({
   let u = r.colors;
   if (e.length === 0 && c !== void 0) {
     let e = renderInputWithBlockCursor({
-      ...visibleLine(
-        { text: c, cursor: 0 },
-        Math.max(1, n - 3),
-        r.glyph.ellipsis,
-      ),
+      ...visibleLine({ text: c, cursor: 0 }, Math.max(1, n - 3), r.glyph.ellipsis),
       visible: i,
       inverse: u.inverse,
       render: (e) => u.dim(renderInputText(e)),
@@ -3063,19 +2888,14 @@ function promptInputRows({
   for (let e = p; e < p + f; e += 1) {
     let t = d.rows[e],
       a = e === 0 ? m : ` `;
-    ((e === p && p > 0) || (e === p + f - 1 && p + f < d.rows.length)) &&
-      (a = h);
+    ((e === p && p > 0) || (e === p + f - 1 && p + f < d.rows.length)) && (a = h);
     let s;
     if (e === d.caretRow) {
       let {
         before: e,
         under: n,
         after: a,
-      } = visibleLine(
-        { text: t.text, cursor: d.caretOffset },
-        g,
-        r.glyph.ellipsis,
-      );
+      } = visibleLine({ text: t.text, cursor: d.caretOffset }, g, r.glyph.ellipsis);
       ((s = renderInputWithBlockCursor({
         before: e,
         under: n,
@@ -3108,8 +2928,7 @@ function leadsWithGap(e, t) {
   )
     return !0;
   if (e.kind === `sandbox` && t?.kind === `sandbox`) return !1;
-  if ((t?.kind === `sandbox` && e.kind !== `sandbox`) || t?.kind === `log`)
-    return !0;
+  if ((t?.kind === `sandbox` && e.kind !== `sandbox`) || t?.kind === `log`) return !0;
   switch (e.kind) {
     case `user`:
     case `assistant`:
@@ -3190,14 +3009,11 @@ function renderNativeToolBlock(e, t, n, r) {
       toolGroup: i.group,
     };
   return (
-    i.doneTitle !== void 0 &&
-      (a.doneTitle = stripTerminalControls(i.doneTitle)),
+    i.doneTitle !== void 0 && (a.doneTitle = stripTerminalControls(i.doneTitle)),
     i.detail !== void 0 &&
-      ((a.detailLines = i.detail),
-      (a.keepDetailWhenDone = i.keepDetailWhenDone === !0)),
+      ((a.detailLines = i.detail), (a.keepDetailWhenDone = i.keepDetailWhenDone === !0)),
     e.output === void 0
-      ? e.errorText !== void 0 &&
-        (a.result = stripTerminalControls(e.errorText))
+      ? e.errorText !== void 0 && (a.result = stripTerminalControls(e.errorText))
       : ((a.result = i.summarizeResult(e.output)), (a.toolOutput = e.output)),
     a
   );
@@ -3285,15 +3101,10 @@ function formatQuestionContent(e, t, n) {
   if (a.length > 0) {
     for (let [e, o] of a.entries()) {
       let a = stripTerminalControls(o.label),
-        s =
-          o.description === void 0 ? `` : stripTerminalControls(o.description),
+        s = o.description === void 0 ? `` : stripTerminalControls(o.description),
         c = t === e,
         l = s.length > 0 ? `${c ? ` ` : `  `}${r.dim(`— ${s}`)}` : ``,
-        u = renderCursorRow(
-          c ? `${n.glyph.selectedPointer} ${a}` : `  ${a}`,
-          c,
-          r,
-        );
+        u = renderCursorRow(c ? `${n.glyph.selectedPointer} ${a}` : `  ${a}`, c, r);
       i.push(`${u}${l}`);
     }
     if (e.allowFreeform === !0) {

@@ -15,9 +15,7 @@ function succeeded() {
       let t = runFailure(e);
       return t === void 0
         ? e.derived.parked
-          ? fail(
-              `run parked on ${e.derived.inputRequests.length} unanswered input request(s)`,
-            )
+          ? fail(`run parked on ${e.derived.inputRequests.length} unanswered input request(s)`)
           : PASS
         : t;
     },
@@ -45,9 +43,7 @@ function messageIncludes(e) {
       let n = joinCompletedMessages(t.events);
       return (typeof e == `string` ? n.includes(e) : testRegExp(e, n))
         ? PASS
-        : fail(
-            `assistant messages did not include ${String(e)}; got: ${truncate(n)}`,
-          );
+        : fail(`assistant messages did not include ${String(e)}; got: ${truncate(n)}`);
     },
   };
 }
@@ -113,9 +109,7 @@ function usedNoTools() {
     name: `usedNoTools`,
     evaluate(e) {
       let t = e.derived.toolCallCount;
-      return t === 0
-        ? PASS
-        : fail(`expected no tool calls, got ${t}`, { toolCallCount: t });
+      return t === 0 ? PASS : fail(`expected no tool calls, got ${t}`, { toolCallCount: t });
     },
   };
 }
@@ -171,15 +165,13 @@ function calledSubagent(e, t = {}) {
           return { score: 1, metadata: { matchingCalls: a.length } };
         if (i.length === 0) {
           let t = r.derived.subagentCalls.map((e) => e.name);
-          return fail(
-            `subagent "${e}" was never called; observed: [${t.join(`, `)}]`,
-            { observedSubagentCalls: r.derived.subagentCalls },
-          );
+          return fail(`subagent "${e}" was never called; observed: [${t.join(`, `)}]`, {
+            observedSubagentCalls: r.derived.subagentCalls,
+          });
         }
-        return fail(
-          `subagent "${e}" was called but ${a.length} call(s) matched the constraints`,
-          { observedSubagentCalls: i },
-        );
+        return fail(`subagent "${e}" was called but ${a.length} call(s) matched the constraints`, {
+          observedSubagentCalls: i,
+        });
       },
     }
   );
@@ -230,15 +222,11 @@ function eventOrder(e) {
         let e = n.events.flatMap((e, n) => (eventMatches(e, i) ? [n] : []));
         if (!matchesCount(i.count, e.length)) {
           let t = describeCount(i.count);
-          return fail(
-            `expected ${t} matching ${i.type} event(s), found ${e.length}`,
-          );
+          return fail(`expected ${t} matching ${i.type} event(s), found ${e.length}`);
         }
         let a = e[0];
         if (a === void 0 || a <= r)
-          return fail(
-            `event group ${i.type} did not occur after the previous group`,
-          );
+          return fail(`event group ${i.type} did not occur after the previous group`);
         r = e[e.length - 1] ?? r;
       }
       return PASS;
@@ -271,9 +259,7 @@ function outputMatches(e) {
 function joinCompletedMessages(e) {
   let t = [];
   for (let n of e)
-    n.type === `message.completed` &&
-      n.data.message !== null &&
-      t.push(n.data.message);
+    n.type === `message.completed` && n.data.message !== null && t.push(n.data.message);
   return t.join(`
 `);
 }
@@ -300,20 +286,13 @@ function actionResultLabel(e) {
     case `subagent-result`:
       return `subagent-result:${e.subagentName}`;
     case `load-skill-result`:
-      return e.name === void 0
-        ? `load-skill-result`
-        : `load-skill-result:${e.name}`;
+      return e.name === void 0 ? `load-skill-result` : `load-skill-result:${e.name}`;
   }
 }
 function runFailure(e) {
-  if (e.status === `failed`)
-    return fail(failureDetail(`run failed`, e.derived.failureCode));
-  let t = e.events.find(
-    (e) => e.type === `turn.failed` || e.type === `step.failed`,
-  );
-  return t === void 0
-    ? void 0
-    : fail(`${t.type} (${t.data.code}): ${t.data.message}`);
+  if (e.status === `failed`) return fail(failureDetail(`run failed`, e.derived.failureCode));
+  let t = e.events.find((e) => e.type === `turn.failed` || e.type === `step.failed`);
+  return t === void 0 ? void 0 : fail(`${t.type} (${t.data.code}): ${t.data.message}`);
 }
 function truncate(e, t = 200) {
   return e === void 0 ? `undefined` : e.length <= t ? e : `${e.slice(0, t)}…`;
@@ -361,8 +340,7 @@ function requestedTools(e) {
     };
   for (let t of e)
     if (t.type === `actions.requested`)
-      for (let e of t.data.actions)
-        e.kind === `tool-call` && append(e.callId, e.toolName);
+      for (let e of t.data.actions) e.kind === `tool-call` && append(e.callId, e.toolName);
     else if (t.type === `input.requested`)
       for (let e of t.data.requests) {
         let { action: t } = e;

@@ -24,12 +24,14 @@ const PNG_BYTES = Buffer.from(
 
 describe("validateAttachmentContent", () => {
   it("accepts actual image bytes through Telegram's native photo transport", async () => {
-    await expect(validateAttachmentContent({
-      bytes: PNG_BYTES,
-      declaredMediaType: "image/png",
-      fileName: "Снимок.png",
-      kind: "photo",
-    })).resolves.toEqual({ fileName: "Снимок.png", mediaType: "image/png" });
+    await expect(
+      validateAttachmentContent({
+        bytes: PNG_BYTES,
+        declaredMediaType: "image/png",
+        fileName: "Снимок.png",
+        kind: "photo",
+      }),
+    ).resolves.toEqual({ fileName: "Снимок.png", mediaType: "image/png" });
   });
 
   it.each([
@@ -51,52 +53,67 @@ describe("validateAttachmentContent", () => {
     ["a long Cyrillic name", `${"Протокол заседания ".repeat(12)}.pdf`, ".pdf"],
     ["a name whose extension is most of it", `x.${"a".repeat(250)}`, null],
     ["a name of four-byte characters", `${"😀".repeat(100)}.txt`, ".txt"],
-  ])("cuts %s to 200 UTF-8 bytes without breaking a character", async (_label, fileName, extension) => {
-    const result = await validateAttachmentContent({ bytes: Buffer.from("x"), fileName, kind: "document" });
+  ])(
+    "cuts %s to 200 UTF-8 bytes without breaking a character",
+    async (_label, fileName, extension) => {
+      const result = await validateAttachmentContent({
+        bytes: Buffer.from("x"),
+        fileName,
+        kind: "document",
+      });
 
-    expect(Buffer.byteLength(result.fileName, "utf8")).toBeLessThanOrEqual(200);
-    expect(result.fileName).not.toContain("\uFFFD");
-    expect(Buffer.from(result.fileName, "utf8").toString("utf8")).toBe(result.fileName);
-    if (extension !== null) expect(result.fileName.endsWith(extension)).toBe(true);
-    expect(fileName.startsWith(result.fileName.slice(0, 10))).toBe(true);
-  });
+      expect(Buffer.byteLength(result.fileName, "utf8")).toBeLessThanOrEqual(200);
+      expect(result.fileName).not.toContain("\uFFFD");
+      expect(Buffer.from(result.fileName, "utf8").toString("utf8")).toBe(result.fileName);
+      if (extension !== null) expect(result.fileName.endsWith(extension)).toBe(true);
+      expect(fileName.startsWith(result.fileName.slice(0, 10))).toBe(true);
+    },
+  );
 
   it("accepts a renamed document while retaining its detected content type", async () => {
-    await expect(validateAttachmentContent({
-      bytes: PNG_BYTES,
-      declaredMediaType: "application/pdf",
-      fileName: "договор.pdf",
-      kind: "document",
-    })).resolves.toEqual({ fileName: "договор.pdf", mediaType: "image/png" });
+    await expect(
+      validateAttachmentContent({
+        bytes: PNG_BYTES,
+        declaredMediaType: "application/pdf",
+        fileName: "договор.pdf",
+        kind: "document",
+      }),
+    ).resolves.toEqual({ fileName: "договор.pdf", mediaType: "image/png" });
   });
 
   it("accepts supported UTF-8 text documents when binary detection is absent", async () => {
-    await expect(validateAttachmentContent({
-      bytes: Buffer.from("name,value\nчай,2\n", "utf8"),
-      declaredMediaType: "text/csv",
-      fileName: "покупки.csv",
-      kind: "document",
-    })).resolves.toEqual({ fileName: "покупки.csv", mediaType: "text/csv" });
+    await expect(
+      validateAttachmentContent({
+        bytes: Buffer.from("name,value\nчай,2\n", "utf8"),
+        declaredMediaType: "text/csv",
+        fileName: "покупки.csv",
+        kind: "document",
+      }),
+    ).resolves.toEqual({ fileName: "покупки.csv", mediaType: "text/csv" });
   });
 
   it("accepts an APK-like archive regardless of the generic Telegram MIME", async () => {
     const emptyZip = Buffer.from("504b0506000000000000000000000000000000000000", "hex");
 
-    await expect(validateAttachmentContent({
-      bytes: emptyZip,
-      declaredMediaType: "application/octet-stream",
-      fileName: "application.apk",
-      kind: "document",
-    })).resolves.toEqual({ fileName: "application.apk", mediaType: "application/zip" });
+    await expect(
+      validateAttachmentContent({
+        bytes: emptyZip,
+        declaredMediaType: "application/octet-stream",
+        fileName: "application.apk",
+        kind: "document",
+      }),
+    ).resolves.toEqual({ fileName: "application.apk", mediaType: "application/zip" });
   });
 
   it("stores an opaque unknown document with a conservative binary media type", async () => {
-    await expect(validateAttachmentContent({
-      bytes: Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe]),
-      declaredMediaType: "application/x-user-defined",
-      fileName: "payload.custom",
-      kind: "document",
-    })).resolves.toEqual({
+    await expect(
+      validateAttachmentContent({
+        bytes: Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe]),
+        declaredMediaType: "application/x-user-defined",
+        fileName: "payload.custom",
+        kind: "document",
+      }),
+    ).resolves.toEqual({
       fileName: "payload.custom",
       mediaType: "application/octet-stream",
     });
@@ -105,11 +122,13 @@ describe("validateAttachmentContent", () => {
   it("rejects non-image bytes sent through Telegram's native photo transport", async () => {
     const emptyZip = Buffer.from("504b0506000000000000000000000000000000000000", "hex");
 
-    await expect(validateAttachmentContent({
-      bytes: emptyZip,
-      fileName: "photo.jpg",
-      kind: "photo",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TYPE_MISMATCH/);
+    await expect(
+      validateAttachmentContent({
+        bytes: emptyZip,
+        fileName: "photo.jpg",
+        kind: "photo",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TYPE_MISMATCH/);
   });
 });
 
@@ -125,54 +144,66 @@ describe("validateReadableTextAttachmentContent", () => {
     ["settings.YAML", "application/yaml", "ключ: значение\n"],
     ["config.yml", "application/yaml", "enabled: true\n"],
   ])("accepts strict UTF-8 %s as %s", async (fileName, mediaType, text) => {
-    await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from(text, "utf8"),
-      declaredMediaType: "application/octet-stream",
-      fileName,
-      kind: "document",
-    })).resolves.toEqual({ fileName, mediaType });
+    await expect(
+      validateReadableTextAttachmentContent({
+        bytes: Buffer.from(text, "utf8"),
+        declaredMediaType: "application/octet-stream",
+        fileName,
+        kind: "document",
+      }),
+    ).resolves.toEqual({ fileName, mediaType });
   });
 
   it.each(["document.pdf", "document.docx", "archive.zip"])(
     "rejects unsupported external document %s",
     async (fileName) => {
-      await expect(validateReadableTextAttachmentContent({
-        bytes: Buffer.from("readable text", "utf8"),
-        fileName,
-        kind: "document",
-      })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+      await expect(
+        validateReadableTextAttachmentContent({
+          bytes: Buffer.from("readable text", "utf8"),
+          fileName,
+          kind: "document",
+        }),
+      ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
     },
   );
 
   it("rejects valid UTF-8 containing NUL", async () => {
-    await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from("before\0after", "utf8"),
-      fileName: "notes.txt",
-      kind: "document",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    await expect(
+      validateReadableTextAttachmentContent({
+        bytes: Buffer.from("before\0after", "utf8"),
+        fileName: "notes.txt",
+        kind: "document",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
   });
 
   it("rejects invalid UTF-8 without relying on NUL detection", async () => {
-    await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from([0xc3, 0x28]),
-      fileName: "notes.txt",
-      kind: "document",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    await expect(
+      validateReadableTextAttachmentContent({
+        bytes: Buffer.from([0xc3, 0x28]),
+        fileName: "notes.txt",
+        kind: "document",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
   });
 
   it("rejects detected binary magic under a readable extension", async () => {
-    await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from("504b0506000000000000000000000000000000000000", "hex"),
-      fileName: "notes.txt",
-      kind: "document",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    await expect(
+      validateReadableTextAttachmentContent({
+        bytes: Buffer.from("504b0506000000000000000000000000000000000000", "hex"),
+        fileName: "notes.txt",
+        kind: "document",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
   });
 
   it("rejects a detected text format hidden under another allowlisted extension", async () => {
-    await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from('<?xml version="1.0"?><root>text</root>', "utf8"),
-      fileName: "notes.txt",
-      kind: "document",
-    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    await expect(
+      validateReadableTextAttachmentContent({
+        bytes: Buffer.from('<?xml version="1.0"?><root>text</root>', "utf8"),
+        fileName: "notes.txt",
+        kind: "document",
+      }),
+    ).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
   });
 });

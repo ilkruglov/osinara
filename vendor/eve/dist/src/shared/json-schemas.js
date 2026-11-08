@@ -7,10 +7,7 @@ const jsonValueSchema = z.unknown().transform((t, r) => {
       return (
         r.addIssue({
           code: `custom`,
-          message: formatJsonParseError(
-            t,
-            `Expected a JSON-serializable value.`,
-          ),
+          message: formatJsonParseError(t, `Expected a JSON-serializable value.`),
         }),
         z.NEVER
       );
@@ -23,10 +20,7 @@ const jsonValueSchema = z.unknown().transform((t, r) => {
       return (
         r.addIssue({
           code: `custom`,
-          message: formatJsonParseError(
-            t,
-            `Expected a JSON-serializable object.`,
-          ),
+          message: formatJsonParseError(t, `Expected a JSON-serializable object.`),
         }),
         z.NEVER
       );

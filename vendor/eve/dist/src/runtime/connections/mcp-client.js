@@ -1,10 +1,7 @@
 import { isObject } from "#shared/guards.js";
 import { buildCallbackContext } from "#context/build-callback-context.js";
 import { ConnectionAuthorizationRequiredError } from "#public/connections/errors.js";
-import {
-  evictScopedToken,
-  resolveScopedToken,
-} from "#runtime/connections/scoped-authorization.js";
+import { evictScopedToken, resolveScopedToken } from "#runtime/connections/scoped-authorization.js";
 import { createMCPClient } from "#compiled/@ai-sdk/mcp/index.js";
 import { resolveConnectionAuthorization } from "#runtime/connections/resolve-authorization.js";
 import {
@@ -55,9 +52,7 @@ var McpConnectionClient = class {
       let { tools: r } = await this.#o(),
         i = r[e];
       if (i?.execute === void 0)
-        throw Error(
-          `Tool "${e}" not found in connection "${this.#i.connectionName}".`,
-        );
+        throw Error(`Tool "${e}" not found in connection "${this.#i.connectionName}".`);
       let a = await resolveProvidedArguments({
         args: t,
         connection: this.#i,
@@ -89,10 +84,7 @@ var McpConnectionClient = class {
     let e = await this.connect(),
       t = await e.listTools(),
       n = this.#i.tools,
-      r =
-        n === void 0
-          ? t.tools
-          : t.tools.filter((e) => passesToolFilter(e.name, n)),
+      r = n === void 0 ? t.tools : t.tools.filter((e) => passesToolFilter(e.name, n)),
       i = Object.keys(this.#i.toolCall?.providedArguments ?? {}),
       a = r.map((e) => ({
         ...e,
@@ -105,10 +97,7 @@ var McpConnectionClient = class {
         description: e.description ?? ``,
         inputSchema: e.inputSchema ?? {},
         name: e.name,
-        outputSchema:
-          `outputSchema` in e && e.outputSchema !== void 0
-            ? e.outputSchema
-            : void 0,
+        outputSchema: `outputSchema` in e && e.outputSchema !== void 0 ? e.outputSchema : void 0,
       })),
       tools: o,
     };
@@ -168,17 +157,13 @@ function readStatusField(e) {
 function* walkErrorChain(t) {
   let n = t,
     r = new Set();
-  for (; n != null && !r.has(n); ) {
+  for (; n != null && !r.has(n);) {
     if ((r.add(n), yield n, !isObject(n) || !(`cause` in n))) return;
     n = n.cause;
   }
 }
 function passesToolFilter(e, t) {
-  return t === void 0
-    ? !0
-    : `allow` in t
-      ? t.allow.includes(e)
-      : !t.block.includes(e);
+  return t === void 0 ? !0 : `allow` in t ? t.allow.includes(e) : !t.block.includes(e);
 }
 async function resolveHeaders(e) {
   let n = {},
@@ -189,8 +174,7 @@ async function resolveHeaders(e) {
       typeof e.authorization == `function` ? getCallbackContext() : void 0,
     );
   if (
-    (i !== void 0 &&
-      (n.Authorization = `Bearer ${(await resolveToken(e, i)).token}`),
+    (i !== void 0 && (n.Authorization = `Bearer ${(await resolveToken(e, i)).token}`),
     e.headers !== void 0)
   ) {
     let t = await resolveHeadersDefinition(e.headers, getCallbackContext);
@@ -221,9 +205,4 @@ async function resolveHeadersDefinition(e, t) {
 async function resolveHeaderValue(e, t) {
   return typeof e == `function` ? await e(t()) : await e;
 }
-export {
-  McpConnectionClient,
-  isMcpAuthRequiredError,
-  passesToolFilter,
-  resolveHeaders,
-};
+export { McpConnectionClient, isMcpAuthRequiredError, passesToolFilter, resolveHeaders };

@@ -95,7 +95,9 @@ describe("private burst tuning", () => {
     vi.stubEnv("TELEGRAM_PRIVATE_BURST_QUIET_MS", "30000");
     vi.stubEnv("TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS", "20000");
 
-    await expect(import("./config.js")).rejects.toThrow(expect.objectContaining({ code: "AGENT_RUNTIME_TUNING_INVALID" }));
+    await expect(import("./config.js")).rejects.toThrow(
+      expect.objectContaining({ code: "AGENT_RUNTIME_TUNING_INVALID" }),
+    );
   });
 
   it("takes a consistent pair from the environment", async () => {

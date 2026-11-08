@@ -19,9 +19,9 @@ export declare const TELEGRAM_REPLY_RESPONSE_PREFIX = "telegram_reply:";
  * requestId.
  */
 export interface TelegramHitlState {
-    hitlCallbacks?: Record<string, InputResponse>;
-    nextHitlCallbackId?: number;
-    pendingFreeformReplies?: Record<string, string>;
+  hitlCallbacks?: Record<string, InputResponse>;
+  nextHitlCallbackId?: number;
+  pendingFreeformReplies?: Record<string, string>;
 }
 /**
  * Rendered Telegram message body for one pending input request.
@@ -30,17 +30,23 @@ export interface TelegramHitlState {
  * Option requests instead carry an inline-keyboard `replyMarkup`.
  */
 export interface TelegramInputRequestMessage {
-    readonly freeformRequestId?: string;
-    readonly replyMarkup?: Readonly<Record<string, unknown>>;
-    readonly text: string;
+  readonly freeformRequestId?: string;
+  readonly replyMarkup?: Readonly<Record<string, unknown>>;
+  readonly text: string;
 }
 /** Renders one `InputRequest` as Telegram inline keyboard or ForceReply markup. */
-export declare function renderTelegramInputRequest(request: InputRequest, state: TelegramHitlState): TelegramInputRequestMessage;
+export declare function renderTelegramInputRequest(
+  request: InputRequest,
+  state: TelegramHitlState,
+): TelegramInputRequestMessage;
 /** Records the Telegram message id that a freeform answer should reply to. */
-export declare function registerTelegramFreeformPrompt(state: TelegramHitlState, input: {
+export declare function registerTelegramFreeformPrompt(
+  state: TelegramHitlState,
+  input: {
     readonly messageId: string;
     readonly requestId: string;
-}): void;
+  },
+): void;
 /**
  * Wraps Telegram callback data as a synthetic `InputResponse` (requestId prefixed
  * with `telegram_callback:`, optionId hardcoded to `"selected"`). It is a
@@ -50,10 +56,13 @@ export declare function registerTelegramFreeformPrompt(state: TelegramHitlState,
 export declare function telegramCallbackInputResponse(callbackData: string): InputResponse;
 /** Wraps a reply-to-message id in an `InputResponse` shape for delivery. */
 export declare function telegramReplyInputResponse(input: {
-    readonly messageId: string;
-    readonly text: string;
+  readonly messageId: string;
+  readonly text: string;
 }): InputResponse;
 /** True when an input response needs Telegram-specific durable-state remapping. */
 export declare function isTelegramSyntheticResponse(response: InputResponse): boolean;
 /** Remaps compact Telegram callback/reply ids into real eve input responses. */
-export declare function resolveTelegramInputResponses(state: TelegramHitlState, responses: readonly InputResponse[]): InputResponse[];
+export declare function resolveTelegramInputResponses(
+  state: TelegramHitlState,
+  responses: readonly InputResponse[],
+): InputResponse[];

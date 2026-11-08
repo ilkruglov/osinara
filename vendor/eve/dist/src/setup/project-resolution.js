@@ -3,18 +3,14 @@ import "../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js";
 import { captureVercel } from "./primitives/run-vercel.js";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  VercelProjectLinkSchema,
-  readVercelProjectLink,
-} from "#internal/vercel/project-link.js";
+import { VercelProjectLinkSchema, readVercelProjectLink } from "#internal/vercel/project-link.js";
 const VercelProjectEnvironmentSchema = object({
   VERCEL_ORG_ID: VercelProjectLinkSchema.shape.orgId,
   VERCEL_PROJECT_ID: VercelProjectLinkSchema.shape.projectId,
 });
 function projectReferenceFromEnvironment(e) {
   let t = VercelProjectEnvironmentSchema.safeParse(e);
-  if (t.success)
-    return { orgId: t.data.VERCEL_ORG_ID, projectId: t.data.VERCEL_PROJECT_ID };
+  if (t.success) return { orgId: t.data.VERCEL_ORG_ID, projectId: t.data.VERCEL_PROJECT_ID };
 }
 async function assertNoLegacyProjectLinkDirectory(e) {
   try {
@@ -28,30 +24,23 @@ async function assertNoLegacyProjectLinkDirectory(e) {
   );
 }
 async function readProjectLink(e) {
-  return (
-    await assertNoLegacyProjectLinkDirectory(e),
-    await readVercelProjectLink(e)
-  );
+  return (await assertNoLegacyProjectLinkDirectory(e), await readVercelProjectLink(e));
 }
 function pickShortestAlias(e) {
   if (!Array.isArray(e)) return;
   let t;
   for (let n of e)
-    typeof n != `string` ||
-      n.length === 0 ||
-      ((t === void 0 || n.length < t.length) && (t = n));
+    typeof n != `string` || n.length === 0 || ((t === void 0 || n.length < t.length) && (t = n));
   return t;
 }
 async function fetchProductionAlias(e, n, r, i) {
-  let a = await captureVercel(
-    [`api`, `/v9/projects/${e}?teamId=${n}`, `--scope`, n],
-    { cwd: r, signal: i.signal },
-  );
+  let a = await captureVercel([`api`, `/v9/projects/${e}?teamId=${n}`, `--scope`, n], {
+    cwd: r,
+    signal: i.signal,
+  });
   if (a.ok)
     try {
-      let e = pickShortestAlias(
-        JSON.parse(a.stdout).targets?.production?.alias,
-      );
+      let e = pickShortestAlias(JSON.parse(a.stdout).targets?.production?.alias);
       return e ? `https://${e}` : void 0;
     } catch {
       return;
@@ -94,12 +83,9 @@ async function detectProjectIdentity(e, t = {}) {
   let n = await readProjectLink(e);
   if (n === void 0) return;
   let [r, i] = await Promise.all([
-    fetchVercelName(
-      `/v9/projects/${n.projectId}?teamId=${n.orgId}`,
-      n.orgId,
-      e,
-      t,
-    ).then((e) => e ?? n.projectId),
+    fetchVercelName(`/v9/projects/${n.projectId}?teamId=${n.orgId}`, n.orgId, e, t).then(
+      (e) => e ?? n.projectId,
+    ),
     n.orgId.startsWith(`team_`)
       ? fetchVercelName(`/v2/teams/${n.orgId}`, n.orgId, e, t)
       : Promise.resolve(void 0),
@@ -121,10 +107,7 @@ async function detectProjectResolution(e, t = {}) {
   return projectResolutionFromDeployment(await detectDeployment(e, t));
 }
 function mergeProjectResolution(e, t) {
-  return t.kind === `unresolved` ||
-    (e.kind === `deployed` && e.projectId === t.projectId)
-    ? e
-    : t;
+  return t.kind === `unresolved` || (e.kind === `deployed` && e.projectId === t.projectId) ? e : t;
 }
 function projectResolutionFromDeployResult(e, t) {
   return e.kind === `unresolved` || !t.deployed || t.productionUrl === void 0

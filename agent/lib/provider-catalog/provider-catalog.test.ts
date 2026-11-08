@@ -25,7 +25,9 @@ import {
 const MODELS_DEV_URL = "https://models.dev/api.json";
 
 /** Routes injected requests by URL so live and metadata responses remain independently testable. */
-function createCatalogFetch(responses: Record<string, Response>): ProviderCatalogFetch & ReturnType<typeof vi.fn> {
+function createCatalogFetch(
+  responses: Record<string, Response>,
+): ProviderCatalogFetch & ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : input.toString();
     const response = responses[url];

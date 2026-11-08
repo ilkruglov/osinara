@@ -8,33 +8,33 @@ import type { SetupBox } from "../step.js";
 import { syncHostFrameworkPreset } from "../vercel-project-framework.js";
 /** Injected for tests; defaults to the real subprocess primitives. */
 export interface DeployProjectDeps {
-    runVercel: typeof runVercel;
-    detectPackageManager: typeof detectPackageManager;
-    runPackageManagerInstall: typeof runPackageManagerInstall;
-    detectDeployment: typeof detectDeployment;
-    syncHostFrameworkPreset: typeof syncHostFrameworkPreset;
+  runVercel: typeof runVercel;
+  detectPackageManager: typeof detectPackageManager;
+  runPackageManagerInstall: typeof runPackageManagerInstall;
+  detectDeployment: typeof detectDeployment;
+  syncHostFrameworkPreset: typeof syncHostFrameworkPreset;
 }
 export interface DeployProjectOptions {
-    /** Deploy progress and command output stream through this log (rail styling preserved). */
-    prompter: {
-        log: ChannelSetupLog;
-    };
-    /** Skip the post-channel Vercel deployment entirely (`--no-deploy`). */
-    skip?: boolean;
-    /**
-     * Run even without a planned or detected project, linking interactively from
-     * inside `perform` (the `eve add channel/slack` composition; onboarding always has
-     * a plan or skips deploy with the channels).
-     */
-    ensureLinkedProject?: "interactive-vercel-link";
-    /**
-     * Headless mode: gates interactive `vercel` commands inside `perform`. The box
-     * asks no questions, so the dispatch decision the gather faces used to encode
-     * comes from the composition site (the same place that picks the asker base),
-     * not from a prompt.
-     */
-    headless?: boolean;
-    deps?: DeployProjectDeps;
+  /** Deploy progress and command output stream through this log (rail styling preserved). */
+  prompter: {
+    log: ChannelSetupLog;
+  };
+  /** Skip the post-channel Vercel deployment entirely (`--no-deploy`). */
+  skip?: boolean;
+  /**
+   * Run even without a planned or detected project, linking interactively from
+   * inside `perform` (the `eve add channel/slack` composition; onboarding always has
+   * a plan or skips deploy with the channels).
+   */
+  ensureLinkedProject?: "interactive-vercel-link";
+  /**
+   * Headless mode: gates interactive `vercel` commands inside `perform`. The box
+   * asks no questions, so the dispatch decision the gather faces used to encode
+   * comes from the composition site (the same place that picks the asker base),
+   * not from a prompt.
+   */
+  headless?: boolean;
+  deps?: DeployProjectDeps;
 }
 /**
  * What `perform` consumes. The headless flag gates interactive `vercel`
@@ -42,13 +42,13 @@ export interface DeployProjectOptions {
  * for nothing) and passed straight through {@link DeployProjectOptions.headless}.
  */
 export interface DeployProjectInput {
-    headless: boolean;
+  headless: boolean;
 }
 /** The deploy facts `apply` records: the (re)deployed project and the cleared flags. */
 export interface DeployProjectPayload {
-    project: ProjectResolution;
-    deploymentPending: boolean;
-    deploymentDependenciesInstalled: boolean;
+  project: ProjectResolution;
+  deploymentPending: boolean;
+  deploymentDependenciesInstalled: boolean;
 }
 /**
  * THE DEPLOY BOX. Owns the post-channel `vercel deploy --prod` once channel
@@ -69,4 +69,6 @@ export interface DeployProjectPayload {
  * every deploy surface — `eve add channel/slack`, the dev TUI `/deploy`, onboarding —
  * gets the reconcile without composing a separate box.
  */
-export declare function deployProject(options: DeployProjectOptions): SetupBox<SetupState, DeployProjectInput, DeployProjectPayload>;
+export declare function deployProject(
+  options: DeployProjectOptions,
+): SetupBox<SetupState, DeployProjectInput, DeployProjectPayload>;

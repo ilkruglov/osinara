@@ -1,4 +1,8 @@
-import type { ConnectionAuthDefinition, HeadersDefinition, ToolFilterDefinition } from "#runtime/connections/types.js";
+import type {
+  ConnectionAuthDefinition,
+  HeadersDefinition,
+  ToolFilterDefinition,
+} from "#runtime/connections/types.js";
 import type { Approval } from "#public/definitions/approval.js";
 import type { ConnectionToolCallDefinition } from "#public/definitions/connections/tool-call.js";
 /**
@@ -26,80 +30,80 @@ export type OpenAPISpecSource = string | Record<string, unknown>;
  * that require no authentication.
  */
 export interface OpenAPIConnectionDefinition {
-    /**
-     * The OpenAPI 3.x or Swagger 2.0 document. Pass an HTTPS URL to fetch
-     * and parse at runtime, or an inline parsed object.
-     */
-    readonly spec: OpenAPISpecSource;
-    /**
-     * Base URL the runtime resolves operation paths against (e.g.
-     * `https://api.example.com`).
-     *
-     * Optional: when omitted, the runtime uses the document's first usable
-     * `servers` entry (OpenAPI 3.x) or `schemes`/`host`/`basePath`
-     * (Swagger 2.0). It fills server-variable `{var}` placeholders from
-     * each variable's `default`, and resolves a relative server URL
-     * against the spec's URL. Provide `baseUrl` when the document has no
-     * derivable base URL, or to override it.
-     */
-    readonly baseUrl?: string;
-    /**
-     * Human-readable summary of the connection and its operations.
-     *
-     * The system prompt layer uses it to describe the connection to the
-     * model, and `connection_search` results use it so the model can
-     * choose which connection to query.
-     */
-    readonly description: string;
-    /**
-     * Auth strategy for the API. The runtime sends the resolved token as
-     * `Authorization: Bearer <token>`.
-     *
-     * - `getToken`-only: covers static API keys, pre-provisioned tokens,
-     *   and out-of-band OAuth. Defaults to `principalType: "app"` when
-     *   omitted.
-     * - Three-method form: provide `startAuthorization` and
-     *   `completeAuthorization` together to opt into interactive OAuth.
-     * - Resolver form: pass `(ctx) => provider` to select either shape
-     *   from the active caller's session context.
-     *
-     * Optional when `headers` is provided for non-Bearer auth schemes.
-     */
-    auth?: ConnectionAuthDefinition;
-    /**
-     * Optional per-connection approval gate for connection tool calls.
-     *
-     * Use the helpers from `eve/tools/approval`:
-     * - `never()`: allow all tool calls without approval
-     * - `once()`: require approval only the first time per session
-     * - `always()`: require approval for every tool call
-     */
-    approval?: Approval;
-    /**
-     * Arbitrary HTTP headers sent with every request to the API.
-     *
-     * Use for non-Bearer auth (e.g. API key headers) or configuration
-     * headers. Can be combined with `auth`. The whole map or individual
-     * values may be callbacks that receive the active session context.
-     */
-    headers?: HeadersDefinition;
-    /**
-     * Per-call behavior for operations exposed by this OpenAPI connection.
-     *
-     * Use `providedArguments` for application-owned operation parameters. eve
-     * removes configured keys from the model-facing input schema and adds their
-     * resolved values immediately before building the HTTP request.
-     */
-    toolCall?: ConnectionToolCallDefinition;
-    /**
-     * Operation filter keyed on `operationId`. When set, the model sees
-     * only operations whose id passes the filter; `connection_search`
-     * drops all others.
-     *
-     * Specify exactly one of `allow` or `block`. Mirrors `tools` on MCP
-     * connections, but names operations rather than tools.
-     */
-    operations?: ToolFilterDefinition;
+  /**
+   * The OpenAPI 3.x or Swagger 2.0 document. Pass an HTTPS URL to fetch
+   * and parse at runtime, or an inline parsed object.
+   */
+  readonly spec: OpenAPISpecSource;
+  /**
+   * Base URL the runtime resolves operation paths against (e.g.
+   * `https://api.example.com`).
+   *
+   * Optional: when omitted, the runtime uses the document's first usable
+   * `servers` entry (OpenAPI 3.x) or `schemes`/`host`/`basePath`
+   * (Swagger 2.0). It fills server-variable `{var}` placeholders from
+   * each variable's `default`, and resolves a relative server URL
+   * against the spec's URL. Provide `baseUrl` when the document has no
+   * derivable base URL, or to override it.
+   */
+  readonly baseUrl?: string;
+  /**
+   * Human-readable summary of the connection and its operations.
+   *
+   * The system prompt layer uses it to describe the connection to the
+   * model, and `connection_search` results use it so the model can
+   * choose which connection to query.
+   */
+  readonly description: string;
+  /**
+   * Auth strategy for the API. The runtime sends the resolved token as
+   * `Authorization: Bearer <token>`.
+   *
+   * - `getToken`-only: covers static API keys, pre-provisioned tokens,
+   *   and out-of-band OAuth. Defaults to `principalType: "app"` when
+   *   omitted.
+   * - Three-method form: provide `startAuthorization` and
+   *   `completeAuthorization` together to opt into interactive OAuth.
+   * - Resolver form: pass `(ctx) => provider` to select either shape
+   *   from the active caller's session context.
+   *
+   * Optional when `headers` is provided for non-Bearer auth schemes.
+   */
+  auth?: ConnectionAuthDefinition;
+  /**
+   * Optional per-connection approval gate for connection tool calls.
+   *
+   * Use the helpers from `eve/tools/approval`:
+   * - `never()`: allow all tool calls without approval
+   * - `once()`: require approval only the first time per session
+   * - `always()`: require approval for every tool call
+   */
+  approval?: Approval;
+  /**
+   * Arbitrary HTTP headers sent with every request to the API.
+   *
+   * Use for non-Bearer auth (e.g. API key headers) or configuration
+   * headers. Can be combined with `auth`. The whole map or individual
+   * values may be callbacks that receive the active session context.
+   */
+  headers?: HeadersDefinition;
+  /**
+   * Per-call behavior for operations exposed by this OpenAPI connection.
+   *
+   * Use `providedArguments` for application-owned operation parameters. eve
+   * removes configured keys from the model-facing input schema and adds their
+   * resolved values immediately before building the HTTP request.
+   */
+  toolCall?: ConnectionToolCallDefinition;
+  /**
+   * Operation filter keyed on `operationId`. When set, the model sees
+   * only operations whose id passes the filter; `connection_search`
+   * drops all others.
+   *
+   * Specify exactly one of `allow` or `block`. Mirrors `tools` on MCP
+   * connections, but names operations rather than tools.
+   */
+  operations?: ToolFilterDefinition;
 }
 /**
  * Defines an OpenAPI connection.
@@ -109,4 +113,6 @@ export interface OpenAPIConnectionDefinition {
  * `completeAuthorization`. Context-aware auth resolvers are validated when
  * eve invokes them inside an active turn.
  */
-export declare function defineOpenAPIConnection(definition: OpenAPIConnectionDefinition): OpenAPIConnectionDefinition;
+export declare function defineOpenAPIConnection(
+  definition: OpenAPIConnectionDefinition,
+): OpenAPIConnectionDefinition;

@@ -3,14 +3,9 @@ import {
   normalizePublicRoutePrefix,
 } from "#shared/public-route-prefix.js";
 const VERCEL_PROTECTION_BYPASS_QUERY = `x-vercel-protection-bypass`,
-  VERCEL_CALLBACK_HOST_ENVS = [
-    `VERCEL_URL`,
-    `VERCEL_BRANCH_URL`,
-    `VERCEL_PROJECT_PRODUCTION_URL`,
-  ];
+  VERCEL_CALLBACK_HOST_ENVS = [`VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_PROJECT_PRODUCTION_URL`];
 function resolveVercelProductionCallbackBaseUrl() {
-  return process.env.VERCEL_ENV === `production` &&
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
+  return process.env.VERCEL_ENV === `production` && process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : null;
 }
@@ -23,10 +18,7 @@ function resolveWorkflowCallbackBaseUrl(n) {
 function createWorkflowCallbackUrl(e, t) {
   let r = new URL(`${e.replace(/\/$/, ``)}${t}`),
     i = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-  return (
-    i && r.searchParams.set(VERCEL_PROTECTION_BYPASS_QUERY, i),
-    r.toString()
-  );
+  return (i && r.searchParams.set(VERCEL_PROTECTION_BYPASS_QUERY, i), r.toString());
 }
 function createRemoteTaskInputCallbackUrl(e, t) {
   let i = new URL(`${e.replace(/\/$/, ``)}${t}`),
@@ -35,10 +27,7 @@ function createRemoteTaskInputCallbackUrl(e, t) {
       (e) => process.env[e]?.trim().toLowerCase() === i.hostname.toLowerCase(),
     );
   return (
-    a &&
-      i.protocol === `https:` &&
-      o &&
-      i.searchParams.set(VERCEL_PROTECTION_BYPASS_QUERY, a),
+    a && i.protocol === `https:` && o && i.searchParams.set(VERCEL_PROTECTION_BYPASS_QUERY, a),
     i.toString()
   );
 }

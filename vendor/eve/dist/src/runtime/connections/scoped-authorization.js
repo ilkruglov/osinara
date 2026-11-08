@@ -33,8 +33,7 @@ async function evictScopedToken(t) {
   if (a === void 0) return;
   let s;
   try {
-    ((s = resolveScopedPrincipal(t, a)),
-      evictCachedToken(a, n, principalKey(s)));
+    ((s = resolveScopedPrincipal(t, a)), evictCachedToken(a, n, principalKey(s)));
   } catch {
     return;
   }
@@ -89,12 +88,7 @@ async function startScopedAuthorization(e) {
 function resolveScopedPrincipal(e, t) {
   return e.boundResponder === void 0
     ? resolveConnectionPrincipal(e.scope, e.authorization, t)
-    : resolveConnectionPrincipalFromAuth(
-        e.scope,
-        e.authorization,
-        e.boundResponder,
-        t,
-      );
+    : resolveConnectionPrincipalFromAuth(e.scope, e.authorization, e.boundResponder, t);
 }
 function resolveAuthorizationCallbackUrl(e) {
   if (e.authorization.vercelConnect === void 0) return e.callbackUrl;
@@ -104,8 +98,7 @@ function resolveAuthorizationCallbackUrl(e) {
   } catch {
     return e.callbackUrl;
   }
-  return t.protocol !== `http:` ||
-    !LOCAL_HTTP_VERCEL_CONNECT_HOSTNAMES.has(t.hostname)
+  return t.protocol !== `http:` || !LOCAL_HTTP_VERCEL_CONNECT_HOSTNAMES.has(t.hostname)
     ? e.callbackUrl
     : ((t.hostname = `localhost`), t.toString());
 }

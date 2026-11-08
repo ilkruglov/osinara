@@ -3,10 +3,7 @@ import {
   SCHEDULE_APP_AUTH,
   SCHEDULE_APP_AUTH as SCHEDULE_APP_AUTH$1,
 } from "#channel/schedule-auth.js";
-import {
-  createCrossChannelToFn,
-  toCrossChannelTargets,
-} from "#channel/cross-channel-receive.js";
+import { createCrossChannelToFn, toCrossChannelTargets } from "#channel/cross-channel-receive.js";
 import { expectFunction } from "#internal/authored-module.js";
 const SCHEDULE_ADAPTER_KIND = `schedule`,
   SCHEDULE_ADAPTER = { kind: SCHEDULE_ADAPTER_KIND };
@@ -19,10 +16,7 @@ var ScheduleDispatcher = class {
   async trigger(e) {
     let t = [],
       a = [],
-      o = createCrossChannelToFn(
-        this.runtime,
-        toCrossChannelTargets(this.channels),
-      ),
+      o = createCrossChannelToFn(this.runtime, toCrossChannelTargets(this.channels)),
       s = {
         appAuth: SCHEDULE_APP_AUTH$1,
         to(e, n) {
@@ -65,9 +59,7 @@ var ScheduleDispatcher = class {
 function expectScheduleRun(e, t, n) {
   let r = e;
   if (typeof r != `object` || !r)
-    throw Error(
-      `Schedule export "${n ?? `default`}" from "${t}" must be an object.`,
-    );
+    throw Error(`Schedule export "${n ?? `default`}" from "${t}" must be an object.`);
   return expectFunction(
     r.run,
     `Expected the schedule export "${n ?? `default`}" from "${t}" to export a \`run\` handler function.`,

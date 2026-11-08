@@ -24,9 +24,7 @@ import {
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import type { SandboxEngine } from "./sandbox-engine.js";
 import { createSandboxWriteMemo, isSkillPackagePath } from "./sandbox-write-memo.js";
-import {
-  collectLimitedStream,
-} from "./docker-sandbox-files.js";
+import { collectLimitedStream } from "./docker-sandbox-files.js";
 import {
   assertShellSafePath,
   initializeToolEnvironmentCommand,
@@ -39,7 +37,11 @@ import {
   startContainer,
 } from "./docker-sandbox-container.js";
 import { createStartBarrier } from "./docker-sandbox-hardening.js";
-import { executeSandboxProcess, processTimedOut, SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
+import {
+  executeSandboxProcess,
+  processTimedOut,
+  SANDBOX_SYSTEM_PATH,
+} from "./docker-sandbox-process.js";
 import {
   createSandboxRepeatGuard,
   SANDBOX_REPEAT_REFUSED_EXIT_CODE,
@@ -56,15 +58,26 @@ import {
   sandboxRequestHash,
 } from "./docker-sandbox-lifecycle.js";
 
-import { makeRoomForContainer, reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
-import { readContainerFile, writeContainerFile, writeSeedFiles } from "./docker-sandbox-transfer.js";
+import {
+  makeRoomForContainer,
+  reconcileSandboxContainers,
+} from "./docker-sandbox-reconciliation.js";
+import {
+  readContainerFile,
+  writeContainerFile,
+  writeSeedFiles,
+} from "./docker-sandbox-transfer.js";
 import {
   browserStateSubpath,
   buildSandboxContainerOptions,
   resolveTrustedToolMount,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
-import { migrateBrowserState, removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
+import {
+  migrateBrowserState,
+  removeBrowserContainer,
+  requireBrowserContainer,
+} from "./docker-sandbox-browser.js";
 import {
   isCleanupCommand,
   SANDBOX_QUOTA_REFUSED_EXIT_CODE,
@@ -110,12 +123,13 @@ export function resolveSandboxRuntimeImage(): string {
   return image;
 }
 
-
 function resolvePath(path: string): string {
   assertShellSafePath(path);
-  const normalized = path.startsWith("/") ? posix.normalize(path) : posix.resolve("/workspace", path);
-  const allowed = ["/tmp", "/tools", "/workspace"].some((root) =>
-    normalized === root || normalized.startsWith(`${root}/`)
+  const normalized = path.startsWith("/")
+    ? posix.normalize(path)
+    : posix.resolve("/workspace", path);
+  const allowed = ["/tmp", "/tools", "/workspace"].some(
+    (root) => normalized === root || normalized.startsWith(`${root}/`),
   );
   if (!allowed) {
     throw new Error("AGENT_SANDBOX_RUNNER_PATH_INVALID: Path is outside sandbox writable roots");
@@ -153,14 +167,24 @@ async function ensureToolDirectories(
  * its tool environment and its browser state. The set does not depend on which session asks, so
  * a family workspace measured from a private chat is the same number as from the family group.
  */
-function sessionWorkspaces(inspection: Docker.ContainerInspectInfo, roots: RuntimeRoots): WorkspaceDirectories[] {
+function sessionWorkspaces(
+  inspection: Docker.ContainerInspectInfo,
+  roots: RuntimeRoots,
+): WorkspaceDirectories[] {
   const ids = new Set<string>();
-  for (const mount of (inspection.HostConfig.Mounts ?? []) as Array<Docker.MountSettings & { VolumeOptions?: { Subpath?: string } }>) {
+  for (const mount of (inspection.HostConfig.Mounts ?? []) as Array<
+    Docker.MountSettings & { VolumeOptions?: { Subpath?: string } }
+  >) {
     const id = mount.VolumeOptions?.Subpath;
-    if (id && (mount.Target.startsWith("/workspace/") || mount.Target.startsWith("/tools/"))) ids.add(id);
+    if (id && (mount.Target.startsWith("/workspace/") || mount.Target.startsWith("/tools/")))
+      ids.add(id);
   }
   return [...ids].map((id) => ({
-    directories: [`${roots.workspaceRoot}/${id}`, `${roots.toolsRoot}/${id}`, `${roots.toolsRoot}/${browserStateSubpath(id)}`],
+    directories: [
+      `${roots.workspaceRoot}/${id}`,
+      `${roots.toolsRoot}/${id}`,
+      `${roots.toolsRoot}/${browserStateSubpath(id)}`,
+    ],
     key: id,
   }));
 }
@@ -184,7 +208,10 @@ export function createDockerSandboxEngine(input: {
 }): SandboxEngine {
   const activity = createSandboxActivityRegistry(Date.now);
   const hardening = input.hardening;
-  const afterStart: (container: Docker.Container, inspection?: Docker.ContainerInspectInfo) => Promise<void> = hardening
+  const afterStart: (
+    container: Docker.Container,
+    inspection?: Docker.ContainerInspectInfo,
+  ) => Promise<void> = hardening
     ? createStartBarrier((container) => hardening.afterStart(container))
     : async () => undefined;
   const repeatGuard = createSandboxRepeatGuard(Date.now);
@@ -198,7 +225,11 @@ export function createDockerSandboxEngine(input: {
     capacityGate = turn.catch(() => undefined);
     return await turn;
   };
-  const withCapacity = async (sessionId: string, start: () => Promise<void>, resuming?: Docker.Container): Promise<void> => {
+  const withCapacity = async (
+    sessionId: string,
+    start: () => Promise<void>,
+    resuming?: Docker.Container,
+  ): Promise<void> => {
     return await inCapacityGate(async () => {
       // Another operation of the session may have resumed it while this one queued: a running
       // container takes no new room (Codex review, 5 October 2026).
@@ -222,14 +253,17 @@ export function createDockerSandboxEngine(input: {
   };
   // A restart of a crowded container keeps its slot, but while it is down no other start may
   // count the room (Codex review, 6 November 2026).
-  const gateFor = (sessionId: string): ContainerStartGate => (work, container, kind = "start") =>
-    kind === "restart" ? inCapacityGate(work) : withCapacity(sessionId, work, container);
+  const gateFor =
+    (sessionId: string): ContainerStartGate =>
+    (work, container, kind = "start") =>
+      kind === "restart" ? inCapacityGate(work) : withCapacity(sessionId, work, container);
 
   // Skill package writes skip the disk budget only within these bounds: the path alone does not
   // prove the framework wrote it, and a model writing there may not grow without limit.
   const skillExemptBytes = new Map<string, number>();
   const skillWriteExempt = (generation: string | null, path: string, bytes: number): boolean => {
-    if (generation === null || !isSkillPackagePath(path) || !HOME_SKILLS_PATH.test(path)) return false;
+    if (generation === null || !isSkillPackagePath(path) || !HOME_SKILLS_PATH.test(path))
+      return false;
     if (bytes > SKILL_PACKAGE_FILE_EXEMPT_BYTES) return false;
     const spent = (skillExemptBytes.get(generation) ?? 0) + bytes;
     if (spent > SKILL_PACKAGE_RUN_EXEMPT_BYTES) return false;
@@ -245,83 +279,102 @@ export function createDockerSandboxEngine(input: {
     },
     async createSession(request): Promise<SandboxRunnerSessionResponse> {
       const sessionId = request.sandboxSessionId;
-      return await activity.runExclusive(sessionId, () => activity.runActive(sessionId, async () => {
-        for (const mount of request.mounts) {
-          await mkdir(`${input.roots.workspaceRoot}/${mount.workspaceId}`, { recursive: true });
-          await requireDirectory(
-            `${input.roots.workspaceRoot}/${mount.workspaceId}`,
-            "AGENT_SANDBOX_RUNNER_WORKSPACE_MISSING",
-          );
-        }
-        if (request.access === "trusted") {
-          // Exactly one verified scope owns HOME and the read-only Google profile mount.
-          const toolMount = resolveTrustedToolMount(request.mounts);
-          const toolsPath = `${input.roots.toolsRoot}/${toolMount.workspaceId}`;
-          await mkdir(toolsPath, { recursive: true });
-          await requireDirectory(toolsPath, "AGENT_SANDBOX_RUNNER_TOOLS_MISSING");
-        }
+      return await activity.runExclusive(sessionId, () =>
+        activity.runActive(sessionId, async () => {
+          for (const mount of request.mounts) {
+            await mkdir(`${input.roots.workspaceRoot}/${mount.workspaceId}`, { recursive: true });
+            await requireDirectory(
+              `${input.roots.workspaceRoot}/${mount.workspaceId}`,
+              "AGENT_SANDBOX_RUNNER_WORKSPACE_MISSING",
+            );
+          }
+          if (request.access === "trusted") {
+            // Exactly one verified scope owns HOME and the read-only Google profile mount.
+            const toolMount = resolveTrustedToolMount(request.mounts);
+            const toolsPath = `${input.roots.toolsRoot}/${toolMount.workspaceId}`;
+            await mkdir(toolsPath, { recursive: true });
+            await requireDirectory(toolsPath, "AGENT_SANDBOX_RUNNER_TOOLS_MISSING");
+          }
 
-        let existing = await inspectContainer(input.docker, sessionId);
-        const labels = existing?.inspection.Config.Labels;
-        const expectedBrowserlessKey = request.access === "trusted" && input.runtime.browserlessApiKey
-          ? "BROWSERLESS_AVAILABLE=true"
-          : undefined;
-        const existingBrowserlessKey = existing?.inspection.Config.Env?.find((entry) =>
-          entry.startsWith("BROWSERLESS_AVAILABLE=") || entry.startsWith("BROWSERLESS_API_KEY=")
-        );
-        if (existing && (existingBrowserlessKey !== expectedBrowserlessKey || sandboxContainerNeedsReplacement({
-          requestHash: labels?.[SANDBOX_REQUEST_HASH_LABEL],
-          sandboxSessionId: labels?.[SANDBOX_SESSION_LABEL],
-        }, request))) {
+          let existing = await inspectContainer(input.docker, sessionId);
+          const labels = existing?.inspection.Config.Labels;
+          const expectedBrowserlessKey =
+            request.access === "trusted" && input.runtime.browserlessApiKey
+              ? "BROWSERLESS_AVAILABLE=true"
+              : undefined;
+          const existingBrowserlessKey = existing?.inspection.Config.Env?.find(
+            (entry) =>
+              entry.startsWith("BROWSERLESS_AVAILABLE=") ||
+              entry.startsWith("BROWSERLESS_API_KEY="),
+          );
+          if (
+            existing &&
+            (existingBrowserlessKey !== expectedBrowserlessKey ||
+              sandboxContainerNeedsReplacement(
+                {
+                  requestHash: labels?.[SANDBOX_REQUEST_HASH_LABEL],
+                  sandboxSessionId: labels?.[SANDBOX_SESSION_LABEL],
+                },
+                request,
+              ))
+          ) {
+            if (request.seedFiles === undefined) {
+              return { created: false, seedRequired: true, sessionId };
+            }
+            // Workspace and tools are named-volume subpaths, so stale compute is disposable. The
+            // browser companion copied this container's mounts, so it goes too.
+            await existing.container.remove({ force: true, v: true });
+            await removeBrowserContainer(input.docker, sessionId);
+            existing = null;
+          }
+          if (existing) {
+            const stopped = existing;
+            if (!stopped.inspection.State.Running) {
+              await withCapacity(
+                sessionId,
+                () => startContainer(stopped.container),
+                stopped.container,
+              );
+            }
+            await afterStart(stopped.container);
+            return { created: false, seedRequired: false, sessionId };
+          }
           if (request.seedFiles === undefined) {
             return { created: false, seedRequired: true, sessionId };
           }
-          // Workspace and tools are named-volume subpaths, so stale compute is disposable. The
-          // browser companion copied this container's mounts, so it goes too.
-          await existing.container.remove({ force: true, v: true });
-          await removeBrowserContainer(input.docker, sessionId);
-          existing = null;
-        }
-        if (existing) {
-          const stopped = existing;
-          if (!stopped.inspection.State.Running) {
-            await withCapacity(sessionId, () => startContainer(stopped.container), stopped.container);
-          }
-          await afterStart(stopped.container);
-          return { created: false, seedRequired: false, sessionId };
-        }
-        if (request.seedFiles === undefined) {
-          return { created: false, seedRequired: true, sessionId };
-        }
 
-        const seedFiles = request.seedFiles;
-        // A companion left from an earlier container of this session belongs to that one.
-        await removeBrowserContainer(input.docker, sessionId);
-        if (request.access === "trusted") {
-          // No container of the session runs now, so Bash cannot read the logged-in state while
-          // it leaves the tool environment.
-          await migrateBrowserState(input.roots.toolsRoot, resolveTrustedToolMount(request.mounts).workspaceId);
-        }
-        const options = buildSandboxContainerOptions(input.runtime, request);
-        options.name = sandboxContainerName(sessionId);
-        options.Labels = {
-          ...options.Labels,
-          [SANDBOX_REQUEST_HASH_LABEL]: sandboxRequestHash(request),
-        };
-        await withCapacity(sessionId, async () => {
-          const container = await input.docker.createContainer(options);
-          try {
-            await container.start();
-            await afterStart(container);
-            await ensureToolDirectories(input.docker, container, request);
-            await writeSeedFiles(input.docker, container, seedFiles);
-          } catch (error) {
-            await container.remove({ force: true, v: true }).catch(() => undefined);
-            throw error;
+          const seedFiles = request.seedFiles;
+          // A companion left from an earlier container of this session belongs to that one.
+          await removeBrowserContainer(input.docker, sessionId);
+          if (request.access === "trusted") {
+            // No container of the session runs now, so Bash cannot read the logged-in state while
+            // it leaves the tool environment.
+            await migrateBrowserState(
+              input.roots.toolsRoot,
+              resolveTrustedToolMount(request.mounts).workspaceId,
+            );
           }
-        });
-        return { created: true, seedRequired: false, sessionId };
-      }));
+          const options = buildSandboxContainerOptions(input.runtime, request);
+          options.name = sandboxContainerName(sessionId);
+          options.Labels = {
+            ...options.Labels,
+            [SANDBOX_REQUEST_HASH_LABEL]: sandboxRequestHash(request),
+          };
+          await withCapacity(sessionId, async () => {
+            const container = await input.docker.createContainer(options);
+            try {
+              await container.start();
+              await afterStart(container);
+              await ensureToolDirectories(input.docker, container, request);
+              await writeSeedFiles(input.docker, container, seedFiles);
+            } catch (error) {
+              await container.remove({ force: true, v: true }).catch(() => undefined);
+              throw error;
+            }
+          });
+          return { created: true, seedRequired: false, sessionId };
+        }),
+      );
     },
     async runProcess(sessionId, request, signal) {
       if (request.target === "browser") {
@@ -330,15 +383,17 @@ export function createDockerSandboxEngine(input: {
         return await activity.runActive(sessionId, async () => {
           // The session's creation lock: creating the companion cannot interleave with the
           // session's container being created, replaced or stopped.
-          const container = await activity.runExclusive(sessionId, () => requireBrowserContainer({
-            activeOperations: activity.activeCount(sessionId),
-            afterStart,
-            docker: input.docker,
-            gateStart: gateFor(sessionId),
-            runtime: input.runtime,
-            sessionId,
-            toolsRoot: input.roots.toolsRoot,
-          }));
+          const container = await activity.runExclusive(sessionId, () =>
+            requireBrowserContainer({
+              activeOperations: activity.activeCount(sessionId),
+              afterStart,
+              docker: input.docker,
+              gateStart: gateFor(sessionId),
+              runtime: input.runtime,
+              sessionId,
+              toolsRoot: input.roots.toolsRoot,
+            }),
+          );
           const { target: _target, ...processRequest } = request;
           return await executeSandboxProcess(input.docker, container, processRequest, signal);
         });
@@ -352,10 +407,12 @@ export function createDockerSandboxEngine(input: {
           processRequest.workingDirectory,
         );
         if (repeatGuard.refuses(sessionId, fingerprint)) {
-          console.error(JSON.stringify({
-            code: "AGENT_SANDBOX_RUNNER_REPEAT_REFUSED",
-            sessionId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_SANDBOX_RUNNER_REPEAT_REFUSED",
+              sessionId,
+            }),
+          );
           return {
             exitCode: SANDBOX_REPEAT_REFUSED_EXIT_CODE,
             processId: randomUUID(),
@@ -363,26 +420,49 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
+        const { container, inspection } = await requireRunningContainer(
+          input.docker,
+          sessionId,
+          activity.activeCount(sessionId),
+          gateFor(sessionId),
+          undefined,
+          afterStart,
+        );
         const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
         let allowed = processRequest;
         if (refusal) {
           if (!isCleanupCommand(processRequest.command)) {
-            console.error(JSON.stringify({ code: refusal.slice(0, refusal.indexOf(":")), sessionId }));
-            return { exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE, processId: randomUUID(), stderr: refusal, stdout: "" };
+            console.error(
+              JSON.stringify({ code: refusal.slice(0, refusal.indexOf(":")), sessionId }),
+            );
+            return {
+              exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE,
+              processId: randomUUID(),
+              stderr: refusal,
+              stdout: "",
+            };
           }
           // Past a refusal only the system's own rm/ls/du/df/find run, not ones planted in PATH.
-          allowed = { ...processRequest, environment: { ...processRequest.environment, PATH: SANDBOX_SYSTEM_PATH } };
+          allowed = {
+            ...processRequest,
+            environment: { ...processRequest.environment, PATH: SANDBOX_SYSTEM_PATH },
+          };
         }
         const result = await executeSandboxProcess(input.docker, container, allowed, signal);
         // Nothing a command started may outlive it; with another operation of the session still
         // running, its processes are not this command's to end, and none starts until it is done.
         if (hardening) {
-          await activity.runAlone(sessionId, () => hardening.afterCommand(container, sessionId)).catch((error: unknown) => console.error(JSON.stringify({
-            code: "AGENT_SANDBOX_RUNNER_CLEANUP_FAILED",
-            error: error instanceof Error ? error.message.slice(0, 200) : String(error),
-            sessionId,
-          })));
+          await activity
+            .runAlone(sessionId, () => hardening.afterCommand(container, sessionId))
+            .catch((error: unknown) =>
+              console.error(
+                JSON.stringify({
+                  code: "AGENT_SANDBOX_RUNNER_CLEANUP_FAILED",
+                  error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+                  sessionId,
+                }),
+              ),
+            );
         }
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
@@ -398,10 +478,22 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
+        const { container } = await requireRunningContainer(
+          input.docker,
+          sessionId,
+          activity.activeCount(sessionId),
+          gateFor(sessionId),
+          undefined,
+          afterStart,
+        );
         // Through the stdout of a process in the container: the archive API reads neither the
         // read-only root nor a tmpfs HOME, and nothing is staged where the model could swap it.
-        return await readContainerFile(input.docker, container, resolvePath(path), WORKSPACE_MAX_FILE_BYTES);
+        return await readContainerFile(
+          input.docker,
+          container,
+          resolvePath(path),
+          WORKSPACE_MAX_FILE_BYTES,
+        );
       });
     },
     async writeFile(sessionId, path, content) {
@@ -424,7 +516,8 @@ export function createDockerSandboxEngine(input: {
         // and spend nothing of the disk budget or of its skill allowance.
         if (writeMemo.hasSkillFile(generation, resolved, content)) return;
         const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
-        if (refusal && !skillWriteExempt(generation, resolved, content.byteLength)) throw new Error(refusal);
+        if (refusal && !skillWriteExempt(generation, resolved, content.byteLength))
+          throw new Error(refusal);
         // Through the stdin of a process in the container, renamed into place there: nothing is
         // staged where the model's Bash could replace it between upload and move.
         await writeContainerFile(input.docker, container, resolved, content);
@@ -433,7 +526,14 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
+        const { container } = await requireRunningContainer(
+          input.docker,
+          sessionId,
+          activity.activeCount(sessionId),
+          gateFor(sessionId),
+          undefined,
+          afterStart,
+        );
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");
@@ -445,7 +545,10 @@ export function createDockerSandboxEngine(input: {
           Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
           Tty: false,
         });
-        await collectLimitedStream(await exec.start({ Tty: false }), SANDBOX_RUNNER_MAX_OUTPUT_BYTES);
+        await collectLimitedStream(
+          await exec.start({ Tty: false }),
+          SANDBOX_RUNNER_MAX_OUTPUT_BYTES,
+        );
         const inspection = await exec.inspect();
         if (inspection.ExitCode !== 0) {
           throw new Error("AGENT_SANDBOX_RUNNER_REMOVE_FAILED: Could not remove sandbox path");
@@ -483,20 +586,29 @@ export function createDockerSandboxEngine(input: {
           label: [`${SANDBOX_PROJECT_LABEL}=${input.runtime.project}`],
         },
       });
-      const owned = containers.filter((item) =>
-        item.Labels[SANDBOX_SESSION_LABEL] !== undefined ||
-        item.Labels[GOOGLE_WORKSPACE_EXECUTION_LABEL] === "true"
+      const owned = containers.filter(
+        (item) =>
+          item.Labels[SANDBOX_SESSION_LABEL] !== undefined ||
+          item.Labels[GOOGLE_WORKSPACE_EXECUTION_LABEL] === "true",
       );
-      await Promise.all(owned.map(async (item) => {
-        await input.docker.getContainer(item.Id).remove({ force: true, v: true }).catch((error) => {
-          if (dockerStatus(error) !== 404) throw error;
-        });
-      }));
+      await Promise.all(
+        owned.map(async (item) => {
+          await input.docker
+            .getContainer(item.Id)
+            .remove({ force: true, v: true })
+            .catch((error) => {
+              if (dockerStatus(error) !== 404) throw error;
+            });
+        }),
+      );
       activity.clear();
     },
     async deleteToolEnvironment(workspaceId) {
       await rm(`${input.roots.toolsRoot}/${workspaceId}`, { force: true, recursive: true });
-      await rm(`${input.roots.toolsRoot}/${browserStateSubpath(workspaceId)}`, { force: true, recursive: true });
+      await rm(`${input.roots.toolsRoot}/${browserStateSubpath(workspaceId)}`, {
+        force: true,
+        recursive: true,
+      });
     },
   };
 }
@@ -511,7 +623,9 @@ export async function resolveSandboxDockerRuntime(docker: Docker): Promise<{
   if (!runnerId) throw new Error("AGENT_SANDBOX_RUNNER_HOSTNAME_MISSING: Container ID is required");
   const inspection = await docker.getContainer(runnerId).inspect();
   const mounts = inspection.Mounts as RunnerMount[];
-  const workspaceVolume = mounts.find((mount) => mount.Destination === MOUNT_WORKSPACES_DESTINATION)?.Name;
+  const workspaceVolume = mounts.find(
+    (mount) => mount.Destination === MOUNT_WORKSPACES_DESTINATION,
+  )?.Name;
   const toolsVolume = mounts.find((mount) => mount.Destination === MOUNT_TOOLS_DESTINATION)?.Name;
   if (!workspaceVolume || !toolsVolume) {
     throw new Error("AGENT_SANDBOX_RUNNER_VOLUME_MISSING: Compose volumes are not mounted");
@@ -531,7 +645,9 @@ export async function resolveSandboxDockerRuntime(docker: Docker): Promise<{
   });
   const egressNetwork = networks.length === 1 ? networks[0]!.Name : null;
   if (!egressNetwork) {
-    throw new Error("AGENT_SANDBOX_RUNNER_NETWORK_MISSING: Egress network is not uniquely resolved");
+    throw new Error(
+      "AGENT_SANDBOX_RUNNER_NETWORK_MISSING: Egress network is not uniquely resolved",
+    );
   }
 
   return {

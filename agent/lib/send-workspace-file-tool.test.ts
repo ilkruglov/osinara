@@ -93,21 +93,26 @@ describe("send_workspace_file group projection", () => {
   // The presentation belongs to the tool now, so a picture goes out through the image sender and
   // a document through the file sender; one file can no longer arrive twice in two shapes.
   it("records and routes a confirmed tool-delivered photo", async () => {
-    await sendWorkspaceImage.execute({
-      caption: "Фасад ресторана",
-      path: "screens/facade.png",
-      scope: "family",
-    }, context());
+    await sendWorkspaceImage.execute(
+      {
+        caption: "Фасад ресторана",
+        path: "screens/facade.png",
+        scope: "family",
+      },
+      context(),
+    );
 
     expect(mocks.complete).toHaveBeenCalledWith("call-1", "446");
-    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(expect.objectContaining({
-      applicationSessionId: "app-session-1",
-      attachment: expect.objectContaining({ fileName: "facade.png", kind: "photo" }),
-      contentText: "Фасад ресторана",
-      groupId: "group-1",
-      messageThreadId: "42",
-      telegramMessageIds: ["446"],
-    }));
+    expect(mocks.recordAgentResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationSessionId: "app-session-1",
+        attachment: expect.objectContaining({ fileName: "facade.png", kind: "photo" }),
+        contentText: "Фасад ресторана",
+        groupId: "group-1",
+        messageThreadId: "42",
+        telegramMessageIds: ["446"],
+      }),
+    );
     expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalledWith({
       applicationSessionId: "app-session-1",
       chatId: "-1001",
@@ -119,13 +124,27 @@ describe("send_workspace_file group projection", () => {
   // 3 November 2026, «Дизраптим»: in three of five turns with a picture the caption said «Готово: …»
   // and the final message said it again.
   it("tells the model the caption is already in the chat, and says nothing without a caption", async () => {
-    const captioned = await sendWorkspaceImage.execute({ caption: "Готово: волосы убрала", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
-    expect(captioned.caption_already_sent).toMatch(/^Подпись уже в чате вместе с картинкой\..*<telegram-silent>/u);
-    const bare = await sendWorkspaceImage.execute({ path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    const captioned = (await sendWorkspaceImage.execute(
+      { caption: "Готово: волосы убрала", path: "screens/facade.png", scope: "family" },
+      context(),
+    )) as Record<string, unknown>;
+    expect(captioned.caption_already_sent).toMatch(
+      /^Подпись уже в чате вместе с картинкой\..*<telegram-silent>/u,
+    );
+    const bare = (await sendWorkspaceImage.execute(
+      { path: "screens/facade.png", scope: "family" },
+      context(),
+    )) as Record<string, unknown>;
     expect(bare).not.toHaveProperty("caption_already_sent");
-    const blank = await sendWorkspaceImage.execute({ caption: "  ", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    const blank = (await sendWorkspaceImage.execute(
+      { caption: "  ", path: "screens/facade.png", scope: "family" },
+      context(),
+    )) as Record<string, unknown>;
     expect(blank).not.toHaveProperty("caption_already_sent");
-    const document = await sendWorkspaceFile.execute({ caption: "Отчёт за октябрь", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    const document = (await sendWorkspaceFile.execute(
+      { caption: "Отчёт за октябрь", path: "screens/facade.png", scope: "family" },
+      context(),
+    )) as Record<string, unknown>;
     expect(document.caption_already_sent).toMatch(/^Подпись уже в чате вместе с файлом\./u);
   });
 
@@ -133,9 +152,13 @@ describe("send_workspace_file group projection", () => {
   // turned a delivered picture into a failed run.
   it("never advises silence in a scheduled run", async () => {
     const scheduled = context();
-    (scheduled.session.auth.current!.attributes as Record<string, unknown>).scheduledRunId = "run-1";
+    (scheduled.session.auth.current!.attributes as Record<string, unknown>).scheduledRunId =
+      "run-1";
 
-    const result = await sendWorkspaceImage.execute({ caption: "Сводка дня", path: "screens/facade.png", scope: "family" }, scheduled) as Record<string, unknown>;
+    const result = (await sendWorkspaceImage.execute(
+      { caption: "Сводка дня", path: "screens/facade.png", scope: "family" },
+      scheduled,
+    )) as Record<string, unknown>;
 
     expect(String(result.caption_already_sent)).not.toContain("<telegram-silent>");
     expect(String(result.caption_already_sent)).toMatch(/итог/iu);
@@ -156,12 +179,17 @@ describe("send_workspace_file group projection", () => {
       workspaceId: "workspace-1",
     });
 
-    await expect(sendWorkspaceFile.execute({
-      caption: "Фасад ресторана",
-      path: "screens/facade.png",
-      
-      scope: "family",
-    }, context())).resolves.toMatchObject({ delivered: true, replayed: true });
+    await expect(
+      sendWorkspaceFile.execute(
+        {
+          caption: "Фасад ресторана",
+          path: "screens/facade.png",
+
+          scope: "family",
+        },
+        context(),
+      ),
+    ).resolves.toMatchObject({ delivered: true, replayed: true });
 
     expect(mocks.deliver).not.toHaveBeenCalled();
     expect(mocks.complete).not.toHaveBeenCalled();
@@ -172,12 +200,17 @@ describe("send_workspace_file group projection", () => {
   it("returns confirmed delivery with an explicit projection warning instead of throwing", async () => {
     mocks.recordAgentResponse.mockRejectedValueOnce(new Error("database unavailable"));
 
-    await expect(sendWorkspaceFile.execute({
-      caption: "Фасад ресторана",
-      path: "screens/facade.png",
-      
-      scope: "family",
-    }, context())).resolves.toMatchObject({
+    await expect(
+      sendWorkspaceFile.execute(
+        {
+          caption: "Фасад ресторана",
+          path: "screens/facade.png",
+
+          scope: "family",
+        },
+        context(),
+      ),
+    ).resolves.toMatchObject({
       delivered: true,
       projectionCompleted: false,
       retryable: false,
@@ -191,11 +224,16 @@ describe("send_workspace_file group projection", () => {
   it("does not retry Telegram when durable completion fails after confirmed delivery", async () => {
     mocks.complete.mockRejectedValueOnce(new Error("database unavailable"));
 
-    await expect(sendWorkspaceFile.execute({
-      path: "screens/facade.png",
-      
-      scope: "family",
-    }, context())).resolves.toMatchObject({
+    await expect(
+      sendWorkspaceFile.execute(
+        {
+          path: "screens/facade.png",
+
+          scope: "family",
+        },
+        context(),
+      ),
+    ).resolves.toMatchObject({
       delivered: true,
       persistenceCompleted: false,
       retryable: false,
@@ -208,16 +246,23 @@ describe("send_workspace_file group projection", () => {
   });
 
   it("keeps an ambiguous Telegram delivery reserved for explicit recovery", async () => {
-    mocks.deliver.mockRejectedValueOnce(new AppError(
-      "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
-      "Telegram не подтвердил отправку файла",
-    ));
+    mocks.deliver.mockRejectedValueOnce(
+      new AppError(
+        "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
+        "Telegram не подтвердил отправку файла",
+      ),
+    );
 
-    await expect(sendWorkspaceFile.execute({
-      path: "screens/facade.png",
-      
-      scope: "family",
-    }, context())).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      sendWorkspaceFile.execute(
+        {
+          path: "screens/facade.png",
+
+          scope: "family",
+        },
+        context(),
+      ),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
 
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.fail).not.toHaveBeenCalled();
@@ -225,14 +270,20 @@ describe("send_workspace_file group projection", () => {
 
   it("validates the forum topic before starting an external delivery", async () => {
     const invalidContext = context();
-    (invalidContext.session.auth.current!.attributes as Record<string, unknown>)
-      .telegramForumTopicId = "0";
+    (
+      invalidContext.session.auth.current!.attributes as Record<string, unknown>
+    ).telegramForumTopicId = "0";
 
-    await expect(sendWorkspaceFile.execute({
-      path: "screens/facade.png",
-      
-      scope: "family",
-    }, invalidContext)).rejects.toThrowError(/AGENT_TELEGRAM_FORUM_TOPIC_INVALID/u);
+    await expect(
+      sendWorkspaceFile.execute(
+        {
+          path: "screens/facade.png",
+
+          scope: "family",
+        },
+        invalidContext,
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_FORUM_TOPIC_INVALID/u);
 
     expect(mocks.begin).not.toHaveBeenCalled();
     expect(mocks.deliver).not.toHaveBeenCalled();

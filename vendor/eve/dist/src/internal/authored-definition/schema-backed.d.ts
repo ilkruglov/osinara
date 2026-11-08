@@ -14,21 +14,26 @@ type NormalizedAuthoredTool = Readonly<Omit<InternalToolDefinitionWithExecuteFn,
  * authored file's slug, supplied by the compiler — this layer never sees
  * a name.
  */
-type NormalizedToolEntry = {
-    readonly kind: "tool";
-    readonly definition: NormalizedAuthoredTool;
-} | {
-    readonly kind: "disabled";
-} | {
-    readonly kind: "workflow-tool";
-    readonly maxSubagents?: number;
-} | {
-    readonly kind: "web-search-tool";
-    readonly provider: "exa" | "parallel";
-} | {
-    readonly kind: "dynamic-tool";
-    readonly eventNames: readonly DynamicToolEventName[];
-};
+type NormalizedToolEntry =
+  | {
+      readonly kind: "tool";
+      readonly definition: NormalizedAuthoredTool;
+    }
+  | {
+      readonly kind: "disabled";
+    }
+  | {
+      readonly kind: "workflow-tool";
+      readonly maxSubagents?: number;
+    }
+  | {
+      readonly kind: "web-search-tool";
+      readonly provider: "exa" | "parallel";
+    }
+  | {
+      readonly kind: "dynamic-tool";
+      readonly eventNames: readonly DynamicToolEventName[];
+    };
 /**
  * Normalizes one authored tool default export. Recognizes real tool
  * definitions (`defineTool(...)`), disable sentinels (`disableTool()`), and the
@@ -36,5 +41,8 @@ type NormalizedToolEntry = {
  *
  * Authored `name` fields are rejected — tool identity is path-derived.
  */
-export declare function normalizeToolDefinition(value: unknown, message: string): NormalizedToolEntry;
+export declare function normalizeToolDefinition(
+  value: unknown,
+  message: string,
+): NormalizedToolEntry;
 export {};

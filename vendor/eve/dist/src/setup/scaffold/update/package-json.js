@@ -12,8 +12,7 @@ async function patchPackageJson(r, i) {
     (i.dependencies !== void 0 &&
       ((o.dependencies = { ...o.dependencies, ...i.dependencies }), (s = !0)),
     i.devDependencies !== void 0 &&
-      ((o.devDependencies = { ...o.devDependencies, ...i.devDependencies }),
-      (s = !0)),
+      ((o.devDependencies = { ...o.devDependencies, ...i.devDependencies }), (s = !0)),
     i.overrides !== void 0 &&
       ((o.overrides = {
         ...(isJsonObject(o.overrides) ? o.overrides : {}),
@@ -26,8 +25,7 @@ async function patchPackageJson(r, i) {
         ...i.resolutions,
       }),
       (s = !0)),
-    i.scripts !== void 0 &&
-      ((o.scripts = { ...o.scripts, ...i.scripts }), (s = !0)),
+    i.scripts !== void 0 && ((o.scripts = { ...o.scripts, ...i.scripts }), (s = !0)),
     i.nodeEngineRequirement !== void 0)
   ) {
     let t = isJsonObject(o.engines) ? o.engines : {},

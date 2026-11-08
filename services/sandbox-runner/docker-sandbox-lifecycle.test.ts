@@ -33,31 +33,50 @@ const BASE_REQUEST: SandboxRunnerCreateRequest = {
 
 describe("Docker sandbox lifecycle", () => {
   it("keeps one policy identity across Eve roots and changes it for another mount", () => {
-    expect(sandboxRequestHash({ ...BASE_REQUEST, eveSessionId: NEXT_EVE_SESSION_ID }))
-      .toBe(sandboxRequestHash(BASE_REQUEST));
-    expect(sandboxRequestHash({
-      ...BASE_REQUEST,
-      mounts: [{ mountPoint: "personal", workspaceId: OTHER_WORKSPACE_ID }],
-    })).not.toBe(sandboxRequestHash(BASE_REQUEST));
-    expect(sandboxRequestHash({ ...BASE_REQUEST, seedDigest: "a".repeat(64) }))
-      .not.toBe(sandboxRequestHash(BASE_REQUEST));
+    expect(sandboxRequestHash({ ...BASE_REQUEST, eveSessionId: NEXT_EVE_SESSION_ID })).toBe(
+      sandboxRequestHash(BASE_REQUEST),
+    );
+    expect(
+      sandboxRequestHash({
+        ...BASE_REQUEST,
+        mounts: [{ mountPoint: "personal", workspaceId: OTHER_WORKSPACE_ID }],
+      }),
+    ).not.toBe(sandboxRequestHash(BASE_REQUEST));
+    expect(sandboxRequestHash({ ...BASE_REQUEST, seedDigest: "a".repeat(64) })).not.toBe(
+      sandboxRequestHash(BASE_REQUEST),
+    );
   });
 
   it("replaces compute with stale policy or a different application owner", () => {
     const requestHash = sandboxRequestHash(BASE_REQUEST);
 
-    expect(sandboxContainerNeedsReplacement({
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      requestHash,
-    }, BASE_REQUEST)).toBe(false);
-    expect(sandboxContainerNeedsReplacement({
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      requestHash: "stale-policy",
-    }, BASE_REQUEST)).toBe(true);
-    expect(sandboxContainerNeedsReplacement({
-      sandboxSessionId: OTHER_WORKSPACE_ID,
-      requestHash,
-    }, BASE_REQUEST)).toBe(true);
+    expect(
+      sandboxContainerNeedsReplacement(
+        {
+          sandboxSessionId: SANDBOX_SESSION_ID,
+          requestHash,
+        },
+        BASE_REQUEST,
+      ),
+    ).toBe(false);
+    expect(
+      sandboxContainerNeedsReplacement(
+        {
+          sandboxSessionId: SANDBOX_SESSION_ID,
+          requestHash: "stale-policy",
+        },
+        BASE_REQUEST,
+      ),
+    ).toBe(true);
+    expect(
+      sandboxContainerNeedsReplacement(
+        {
+          sandboxSessionId: OTHER_WORKSPACE_ID,
+          requestHash,
+        },
+        BASE_REQUEST,
+      ),
+    ).toBe(true);
   });
 
   it("marks inactive compute idle without interrupting active operations", async () => {
@@ -70,9 +89,10 @@ describe("Docker sandbox lifecycle", () => {
     let release!: () => void;
     const operation = registry.runActive(
       SANDBOX_SESSION_ID,
-      () => new Promise<void>((resolve) => {
-        release = resolve;
-      }),
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
     );
     expect(registry.isIdle(SANDBOX_SESSION_ID, 5_000)).toBe(false);
 
@@ -133,12 +153,18 @@ describe("Docker sandbox lifecycle", () => {
     expect(events).toEqual(["cleanup-start", "cleanup-end", "next"]);
 
     let releaseOther!: () => void;
-    const other = registry.runActive(SANDBOX_SESSION_ID, () => new Promise<void>((resolve) => {
-      releaseOther = resolve;
-    }));
-    const skipped = await registry.runActive(SANDBOX_SESSION_ID, () => registry.runAlone(SANDBOX_SESSION_ID, async () => {
-      events.push("not-alone");
-    }));
+    const other = registry.runActive(
+      SANDBOX_SESSION_ID,
+      () =>
+        new Promise<void>((resolve) => {
+          releaseOther = resolve;
+        }),
+    );
+    const skipped = await registry.runActive(SANDBOX_SESSION_ID, () =>
+      registry.runAlone(SANDBOX_SESSION_ID, async () => {
+        events.push("not-alone");
+      }),
+    );
     expect(skipped).toBe(false);
     releaseOther();
     await other;

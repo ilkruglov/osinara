@@ -5,37 +5,39 @@
  * module owns how an agent config is read.
  */
 export type Program = {
-    readonly body?: readonly AstNode[];
+  readonly body?: readonly AstNode[];
 };
 export type AstNode = {
-    readonly arguments?: readonly AstNode[];
-    readonly callee?: AstNode;
-    readonly computed?: boolean;
-    readonly declaration?: AstNode | null;
-    readonly end?: number;
-    readonly expression?: AstNode | null;
-    readonly key?: AstNode;
-    readonly name?: string;
-    readonly properties?: readonly AstNode[];
-    readonly raw?: string;
-    readonly start?: number;
-    readonly type?: string;
-    readonly value?: AstNode | string | number | boolean | null;
+  readonly arguments?: readonly AstNode[];
+  readonly callee?: AstNode;
+  readonly computed?: boolean;
+  readonly declaration?: AstNode | null;
+  readonly end?: number;
+  readonly expression?: AstNode | null;
+  readonly key?: AstNode;
+  readonly name?: string;
+  readonly properties?: readonly AstNode[];
+  readonly raw?: string;
+  readonly start?: number;
+  readonly type?: string;
+  readonly value?: AstNode | string | number | boolean | null;
 };
 export type ObjectExpression = AstNode & {
-    readonly end: number;
-    readonly properties: readonly AstNode[];
-    readonly start: number;
-    readonly type: "ObjectExpression";
+  readonly end: number;
+  readonly properties: readonly AstNode[];
+  readonly start: number;
+  readonly type: "ObjectExpression";
 };
-export type ParsedAgentObject = {
-    readonly kind: "ok";
-    readonly object: ObjectExpression;
-} | {
-    readonly kind: "bail";
-    readonly reason: string;
-    readonly line: number;
-};
+export type ParsedAgentObject =
+  | {
+      readonly kind: "ok";
+      readonly object: ObjectExpression;
+    }
+  | {
+      readonly kind: "bail";
+      readonly reason: string;
+      readonly line: number;
+    };
 /** Parses a source and locates the `export default defineAgent({ ... })` object. */
 export declare function parseAgentObject(sourceText: string): Promise<ParsedAgentObject>;
 /**

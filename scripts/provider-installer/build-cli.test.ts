@@ -25,12 +25,7 @@ describe("standalone provider installer CLI", () => {
     temporaryDirectories.push(directory);
     const executable = join(directory, "osinara-linux-x64");
 
-    const build = spawnSync("bash", [
-      buildScript,
-      executable,
-      "0.15.2",
-      "a".repeat(64),
-    ], {
+    const build = spawnSync("bash", [buildScript, executable, "0.15.2", "a".repeat(64)], {
       cwd: resolve("."),
       encoding: "utf8",
     });

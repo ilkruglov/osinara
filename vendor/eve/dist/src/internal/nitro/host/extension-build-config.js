@@ -24,13 +24,9 @@ async function tryReadExtensionBuildConfig(t) {
     assertManagedPackagePath(i, f, `eve.extension.dist output directory`),
     u === d)
   )
-    throw Error(
-      "`eve.extension.source` and `eve.extension.dist` must be different paths.",
-    );
+    throw Error("`eve.extension.source` and `eve.extension.dist` must be different paths.");
   if (u === f || u.startsWith(`${f}${sep}`) || f.startsWith(`${u}${sep}`))
-    throw Error(
-      "`eve.extension.source` and the managed dist output cannot overlap.",
-    );
+    throw Error("`eve.extension.source` and the managed dist output cannot overlap.");
   let p = typeof c.name == `string` && c.name.length > 0 ? c.name : `extension`,
     m = p.slice(p.lastIndexOf(`/`) + 1),
     h = [
@@ -70,30 +66,21 @@ async function ensureExtensionExports(n, a) {
       },
     },
     f =
-      typeof c.exports == `object` &&
-      c.exports !== null &&
-      !Array.isArray(c.exports)
+      typeof c.exports == `object` && c.exports !== null && !Array.isArray(c.exports)
         ? c.exports
         : {},
     p = !1;
   for (let [e, t] of Object.entries(d)) {
     let n = f[e];
-    (typeof n == `object` &&
-      n &&
-      n.types === t.types &&
-      n.default === t.default) ||
+    (typeof n == `object` && n && n.types === t.types && n.default === t.default) ||
       ((f[e] = t), (p = !0));
   }
-  p &&
-    ((c.exports = f),
-    await writeFile(o, `${JSON.stringify(c, null, 2)}\n`, `utf8`));
+  p && ((c.exports = f), await writeFile(o, `${JSON.stringify(c, null, 2)}\n`, `utf8`));
 }
 function assertManagedPackagePath(e, t, n) {
   let r = relative(e, t);
   if (r === `` || r === `..` || r.startsWith(`..${sep}`))
-    throw Error(
-      `\`${n}\` must point to a directory inside the extension package.`,
-    );
+    throw Error(`\`${n}\` must point to a directory inside the extension package.`);
 }
 function safeJsIdentifier(e) {
   let t = e.replace(/[^A-Za-z0-9_$]/g, `_`);

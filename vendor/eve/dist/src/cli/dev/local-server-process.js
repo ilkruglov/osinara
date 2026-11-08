@@ -2,9 +2,7 @@ import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { EVE_DEV_ENV_FLAG } from "#internal/application/optional-package-install.js";
-const childPath = fileURLToPath(
-    new URL(`./local-server-child.js`, import.meta.url),
-  ),
+const childPath = fileURLToPath(new URL(`./local-server-child.js`, import.meta.url)),
   DEV_SERVER_CLOSE_BUDGET_MS = 800;
 function createDevelopmentServer(n, a = {}) {
   let o,
@@ -25,11 +23,9 @@ function createDevelopmentServer(n, a = {}) {
   };
   return {
     start: () => {
-      if (o !== void 0)
-        throw Error(`DevelopmentServer.start() was already called.`);
+      if (o !== void 0) throw Error(`DevelopmentServer.start() was already called.`);
       let s = { ...process.env };
-      (loadDevelopmentEnvironmentFiles(n),
-        (process.env[EVE_DEV_ENV_FLAG] ??= `1`));
+      (loadDevelopmentEnvironmentFiles(n), (process.env[EVE_DEV_ENV_FLAG] ??= `1`));
       let f = fork(
         childPath,
         [JSON.stringify({ existing: a.existing, host: a.host, port: a.port })],
@@ -72,9 +68,7 @@ function createDevelopmentServer(n, a = {}) {
                 (r.type === `progress` && a.onBootProgress?.(r.event),
                 r.type === `started` &&
                   !n &&
-                  ((n = !0),
-                  e(r.handle),
-                  r.handle.kind === `existing` && ((c = !0), release())),
+                  ((n = !0), e(r.handle), r.handle.kind === `existing` && ((c = !0), release())),
                 r.type === `failed` && !n)
               ) {
                 n = !0;
@@ -107,11 +101,7 @@ function createDevelopmentServer(n, a = {}) {
 }
 async function terminatesWithin(e, t, n, r) {
   let i = Date.now() + r;
-  for (
-    await settlesOrTimesOut(t, r);
-    !hasTerminated(e, n()) && Date.now() < i;
-
-  )
+  for (await settlesOrTimesOut(t, r); !hasTerminated(e, n()) && Date.now() < i;)
     await sleep(Math.min(25, i - Date.now()));
   return hasTerminated(e, n());
 }

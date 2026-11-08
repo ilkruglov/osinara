@@ -18,7 +18,11 @@ import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
 import type { RegisteredGroup } from "../family-access.js";
-import { createTelegramWhisperGate, WHISPER_PLACEHOLDER_TEXT, WHISPER_USAGE_HINT } from "./telegram-whisper-gate.js";
+import {
+  createTelegramWhisperGate,
+  WHISPER_PLACEHOLDER_TEXT,
+  WHISPER_USAGE_HINT,
+} from "./telegram-whisper-gate.js";
 import { memoryPlaceholders } from "./whisper-placeholder.test-fixtures.js";
 
 const FAMILY_GROUP: RegisteredGroup = {
@@ -38,17 +42,30 @@ function whisper(text = "/whisper о чём спор?", topic = false): Telegram
     from: { firstName: "Анна", id: "101", isBot: false, username: "anna" },
     messageId: "0",
     ...(topic ? { messageThreadId: 12 } : {}),
-    raw: { ephemeral_message_id: 7, ...(topic ? { is_topic_message: true, message_thread_id: 12 } : {}), message_id: 0, text },
+    raw: {
+      ephemeral_message_id: 7,
+      ...(topic ? { is_topic_message: true, message_thread_id: 12 } : {}),
+      message_id: 0,
+      text,
+    },
     text,
   };
 }
 
-function gate(overrides: { group?: RegisteredGroup | null; identity?: unknown; send?: unknown } = {}) {
+function gate(
+  overrides: { group?: RegisteredGroup | null; identity?: unknown; send?: unknown } = {},
+) {
   const telegram = {
-    findGroup: vi.fn().mockResolvedValue(overrides.group === undefined ? FAMILY_GROUP : overrides.group),
-    findIdentity: vi.fn().mockResolvedValue(overrides.identity === undefined
-      ? { familyId: "family-1", role: "member", userId: "user-1" }
-      : overrides.identity),
+    findGroup: vi
+      .fn()
+      .mockResolvedValue(overrides.group === undefined ? FAMILY_GROUP : overrides.group),
+    findIdentity: vi
+      .fn()
+      .mockResolvedValue(
+        overrides.identity === undefined
+          ? { familyId: "family-1", role: "member", userId: "user-1" }
+          : overrides.identity,
+      ),
   };
   const api = {
     delete: vi.fn().mockResolvedValue({ ok: true }),
@@ -58,7 +75,12 @@ function gate(overrides: { group?: RegisteredGroup | null; identity?: unknown; s
   const store = memoryPlaceholders();
   return {
     api,
-    gate: createTelegramWhisperGate({ api, botUsername: "osinara_bot", placeholders: store.repository, telegram }),
+    gate: createTelegramWhisperGate({
+      api,
+      botUsername: "osinara_bot",
+      placeholders: store.repository,
+      telegram,
+    }),
     store,
     telegram,
   };
@@ -74,10 +96,17 @@ describe("createTelegramWhisperGate", () => {
       receiverUserId: "101",
     });
     expect(api.reply).toHaveBeenCalledExactlyOnceWith({
-      chatId: "-1001", ephemeralMessageId: 7, messageThreadId: 12, receiverUserId: "101", text: WHISPER_PLACEHOLDER_TEXT,
+      chatId: "-1001",
+      ephemeralMessageId: 7,
+      messageThreadId: 12,
+      receiverUserId: "101",
+      text: WHISPER_PLACEHOLDER_TEXT,
     });
     expect(store.repository.record).toHaveBeenCalledExactlyOnceWith({
-      chatId: "-1001", placeholderMessageId: 31, receiverUserId: "101", updateId: "5001",
+      chatId: "-1001",
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+      updateId: "5001",
     });
     expect(store.row()?.status).toBe("open");
   });
@@ -87,14 +116,21 @@ describe("createTelegramWhisperGate", () => {
     vi.mocked(store.repository.record).mockRejectedValueOnce(new Error("connection terminated"));
 
     await expect(whisperGate.open(whisper(), "5001")).rejects.toThrow("connection terminated");
-    expect(api.delete).toHaveBeenCalledExactlyOnceWith({ chatId: "-1001", placeholderMessageId: 31, receiverUserId: "101" });
+    expect(api.delete).toHaveBeenCalledExactlyOnceWith({
+      chatId: "-1001",
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+    });
   });
 
   it.each([
     ["an unregistered group", { group: null }],
     ["a stranger in a family group", { identity: null }],
     ["another family", { identity: { familyId: "family-2", role: "member", userId: "user-9" } }],
-    ["a member in owner-only mode", { group: { ...FAMILY_GROUP, messageMode: "owner_only" } as RegisteredGroup }],
+    [
+      "a member in owner-only mode",
+      { group: { ...FAMILY_GROUP, messageMode: "owner_only" } as RegisteredGroup },
+    ],
   ])("stays silent for %s", async (_name, overrides) => {
     const { api, gate: whisperGate } = gate(overrides);
 
@@ -103,7 +139,11 @@ describe("createTelegramWhisperGate", () => {
   });
 
   it("stays silent when the group switched to owner-only while the author was looked up", async () => {
-    const { api, gate: whisperGate, telegram } = gate({
+    const {
+      api,
+      gate: whisperGate,
+      telegram,
+    } = gate({
       group: { ...FAMILY_GROUP, messageMode: "all", type: "external" } as RegisteredGroup,
       identity: null,
     });
@@ -121,7 +161,9 @@ describe("createTelegramWhisperGate", () => {
       identity: null,
     });
 
-    await expect(whisperGate.open(whisper(), "5001")).resolves.toEqual(expect.objectContaining({ placeholderMessageId: 31 }));
+    await expect(whisperGate.open(whisper(), "5001")).resolves.toEqual(
+      expect.objectContaining({ placeholderMessageId: 31 }),
+    );
     expect(api.reply).toHaveBeenCalledOnce();
   });
 
@@ -129,19 +171,29 @@ describe("createTelegramWhisperGate", () => {
     const { api, gate: whisperGate } = gate();
 
     await expect(whisperGate.open(whisper("/whisper"), "5001")).resolves.toBeNull();
-    expect(api.reply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text: WHISPER_USAGE_HINT }));
+    expect(api.reply).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ text: WHISPER_USAGE_HINT }),
+    );
   });
 
   it("ignores a message that is not a whisper to this bot", async () => {
     const { api, gate: whisperGate, telegram } = gate();
 
-    await expect(whisperGate.open(whisper("/whisper@other_bot привет"), "5001")).resolves.toBeNull();
+    await expect(
+      whisperGate.open(whisper("/whisper@other_bot привет"), "5001"),
+    ).resolves.toBeNull();
     expect(telegram.findGroup).not.toHaveBeenCalled();
     expect(api.reply).not.toHaveBeenCalled();
   });
 
   it("queues nothing when Telegram refused the placeholder", async () => {
-    const { gate: whisperGate } = gate({ send: { body: { description: "Bad Request: message to be replied not found" }, ok: false, status: 400 } });
+    const { gate: whisperGate } = gate({
+      send: {
+        body: { description: "Bad Request: message to be replied not found" },
+        ok: false,
+        status: 400,
+      },
+    });
 
     await expect(whisperGate.open(whisper(), "5001")).resolves.toBeNull();
   });
@@ -152,8 +204,18 @@ describe("createTelegramWhisperGate", () => {
     api.delete.mockResolvedValueOnce({ body: {}, ok: false, status: 400 });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    await expect(whisperGate.close("-1001", { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "101" })).resolves.toBeUndefined();
-    expect(api.delete).toHaveBeenCalledExactlyOnceWith({ chatId: "-1001", placeholderMessageId: 31, receiverUserId: "101" });
+    await expect(
+      whisperGate.close("-1001", {
+        ephemeralMessageId: 7,
+        placeholderMessageId: 31,
+        receiverUserId: "101",
+      }),
+    ).resolves.toBeUndefined();
+    expect(api.delete).toHaveBeenCalledExactlyOnceWith({
+      chatId: "-1001",
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+    });
     expect(store.row()).toMatchObject({ pendingContent: null, status: "closed" });
     warn.mockRestore();
   });
@@ -162,9 +224,17 @@ describe("createTelegramWhisperGate", () => {
     const { api, gate: whisperGate } = gate();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    await whisperGate.close("-1001", { ephemeralMessageId: 7, placeholderMessageId: 31, receiverUserId: "101" });
+    await whisperGate.close("-1001", {
+      ephemeralMessageId: 7,
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+    });
 
-    expect(api.delete).toHaveBeenCalledExactlyOnceWith({ chatId: "-1001", placeholderMessageId: 31, receiverUserId: "101" });
+    expect(api.delete).toHaveBeenCalledExactlyOnceWith({
+      chatId: "-1001",
+      placeholderMessageId: 31,
+      receiverUserId: "101",
+    });
     warn.mockRestore();
   });
 });

@@ -14,4 +14,7 @@ export declare function requireSandboxSession(abortSignal?: AbortSignal): Promis
  * Resolves a model-supplied `$HOME` prefix and validates that the resulting
  * sandbox file path is absolute.
  */
-export declare function resolveAbsoluteFilePath(sandbox: SandboxSession, filePath: string): Promise<string>;
+export declare function resolveAbsoluteFilePath(
+  sandbox: SandboxSession,
+  filePath: string,
+): Promise<string>;

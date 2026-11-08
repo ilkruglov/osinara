@@ -4,12 +4,12 @@ import type { RuntimeSandboxTemplatePlan } from "#runtime/sandbox/template-plan.
  * Input for deriving the stable runtime keys used for one sandbox definition.
  */
 interface CreateRuntimeSandboxKeysInput {
-    readonly backendName: string;
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly nodeId: string;
-    readonly sessionId: string;
-    readonly sourceId: string;
-    readonly templatePlan: RuntimeSandboxTemplatePlan;
+  readonly backendName: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly nodeId: string;
+  readonly sessionId: string;
+  readonly sourceId: string;
+  readonly templatePlan: RuntimeSandboxTemplatePlan;
 }
 /**
  * Creates the stable runtime template and session keys for one sandbox
@@ -20,8 +20,8 @@ interface CreateRuntimeSandboxKeysInput {
  * the template content rotates.
  */
 export declare function createRuntimeSandboxKeys(input: CreateRuntimeSandboxKeysInput): Promise<{
-    readonly sessionKey: string;
-    readonly templateKey: string | null;
+  readonly sessionKey: string;
+  readonly templateKey: string | null;
 }>;
 /**
  * Creates the stable reusable template key for one sandbox definition,
@@ -33,10 +33,10 @@ export declare function createRuntimeSandboxKeys(input: CreateRuntimeSandboxKeys
  * path.
  */
 export declare function createRuntimeSandboxTemplateKey(input: {
-    readonly backendName: string;
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly nodeId: string;
-    readonly sourceId: string;
-    readonly templatePlan: RuntimeSandboxTemplatePlan;
+  readonly backendName: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly nodeId: string;
+  readonly sourceId: string;
+  readonly templatePlan: RuntimeSandboxTemplatePlan;
 }): Promise<string | null>;
 export {};

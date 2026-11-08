@@ -1,22 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
-import {
-  isCurrentTurnBoundaryEvent,
-  isTurnFailureEvent,
-} from "#protocol/message.js";
+import { isCurrentTurnBoundaryEvent, isTurnFailureEvent } from "#protocol/message.js";
 import { summarizeTurnEvents } from "#client/session-utils.js";
 import { createTextWithFileContent } from "#client/file-parts.js";
 import { extractCompletedResult } from "#client/output-schema.js";
-import {
-  inputRequestMatches,
-  matchesValue,
-  toolCallMatches,
-} from "#evals/match.js";
+import { inputRequestMatches, matchesValue, toolCallMatches } from "#evals/match.js";
 import { AssertionCollector } from "#evals/assertions/collector.js";
-import {
-  createOutputAssertions,
-  createScopedAssertions,
-} from "#evals/assertions/scoped.js";
+import { createOutputAssertions, createScopedAssertions } from "#evals/assertions/scoped.js";
 import { EvalRequirementFailed } from "#evals/control-flow.js";
 import { deriveRunFacts } from "#evals/runner/derive-run-facts.js";
 var EveEvalTurnFailedError = class extends Error {
@@ -106,30 +96,21 @@ var EveEvalTurnFailedError = class extends Error {
       );
     }
     async respond(e, t = {}) {
-      if (e.length === 0)
-        throw Error(`respond() requires at least one input response.`);
+      if (e.length === 0) throw Error(`respond() requires at least one input response.`);
       return await (await this.#f({ ...t, inputResponses: e })).result();
     }
     async startRespond(e, t = {}) {
-      if (e.length === 0)
-        throw Error(`startRespond() requires input responses.`);
+      if (e.length === 0) throw Error(`startRespond() requires input responses.`);
       return await this.#f({ ...t, inputResponses: e });
     }
     async respondAll(e) {
       let t = this.#d;
-      if (t.length === 0)
-        throw Error(
-          `respondAll() requires at least one pending input request.`,
-        );
+      if (t.length === 0) throw Error(`respondAll() requires at least one pending input request.`);
       for (let n of t) assertRequestHasOption(n, e);
-      return await this.respond(
-        t.map((t) => ({ optionId: e, requestId: t.requestId })),
-      );
+      return await this.respond(t.map((t) => ({ optionId: e, requestId: t.requestId })));
     }
     async send(e, t = {}) {
-      return await (
-        await this.#f({ turnPolicy: `queue`, ...t, message: e })
-      ).result();
+      return await (await this.#f({ turnPolicy: `queue`, ...t, message: e })).result();
     }
     async start(e, t = {}) {
       return await this.#f({ turnPolicy: `queue`, ...t, message: e });
@@ -143,8 +124,7 @@ var EveEvalTurnFailedError = class extends Error {
         ((this.#t = e.session), (n = e.response));
       } else {
         let { inputResponses: e, message: r, ...i } = t;
-        n =
-          e === void 0 ? await this.#t.send(r, i) : await this.#t.respond(e, i);
+        n = e === void 0 ? await this.#t.send(r, i) : await this.#t.respond(e, i);
       }
       return new EvalLiveTurn({
         events: n,
@@ -206,8 +186,7 @@ var EveEvalTurnFailedError = class extends Error {
           })));
     }
     #m(e) {
-      (this.#i.push(...e.events),
-        (this.#d = e.status === `waiting` ? e.inputRequests : []));
+      (this.#i.push(...e.events), (this.#d = e.status === `waiting` ? e.inputRequests : []));
       let t = deriveRunFacts(e.events, { sessionId: e.sessionId }),
         n = new EvalTurn({
           collector: this.#r,
@@ -274,8 +253,7 @@ var EveEvalTurnFailedError = class extends Error {
     async waitForEvent(e, t) {
       let matches = (n) =>
           n.type === e &&
-          (t?.data === void 0 ||
-            matchesValue(t.data, `data` in n ? n.data : void 0)),
+          (t?.data === void 0 || matchesValue(t.data, `data` in n ? n.data : void 0)),
         n = this.#t.find(matches);
       if (n !== void 0) return n;
       if (this.#r !== void 0) throw this.#r;
@@ -294,24 +272,18 @@ var EveEvalTurnFailedError = class extends Error {
             this.#a(n),
             isTurnFailureEvent(n) &&
               this.#o(
-                Error(
-                  `Session ${this.sessionId} failed before the expected event (${n.type}).`,
-                ),
+                Error(`Session ${this.sessionId} failed before the expected event (${n.type}).`),
               ),
             isCurrentTurnBoundaryEvent(n))
           ) {
             ((a = !0),
               this.#o(
-                Error(
-                  `Session ${this.sessionId} reached ${n.type} before the expected event.`,
-                ),
+                Error(`Session ${this.sessionId} reached ${n.type} before the expected event.`),
               ));
             break;
           }
         if (!a)
-          throw Error(
-            `Stream for session "${this.sessionId}" closed before a turn boundary.`,
-          );
+          throw Error(`Stream for session "${this.sessionId}" closed before a turn boundary.`);
         return n(this.#t);
       } catch (e) {
         let t = e instanceof Error ? e : Error(String(e));
@@ -366,9 +338,7 @@ var EveEvalTurnFailedError = class extends Error {
       throw new EveEvalTurnFailedError(this);
     }
     requireToolCall(e, t = {}) {
-      let n = this.toolCalls.filter(
-        (n) => n.name === e && toolCallMatches(n, t),
-      );
+      let n = this.toolCalls.filter((n) => n.name === e && toolCallMatches(n, t));
       return (
         n.length !== 1 &&
           inputRequirementFailed(
@@ -422,9 +392,7 @@ var EveEvalTurnFailedError = class extends Error {
       return this.#i.map((e) => e.snapshot());
     }
     lastTurnSession() {
-      return this.#a?.lastTurn === void 0
-        ? this.#i.find((e) => e.lastTurn !== void 0)
-        : this.#a;
+      return this.#a?.lastTurn === void 0 ? this.#i.find((e) => e.lastTurn !== void 0) : this.#a;
     }
     hasActivity() {
       return this.#i.length > 0;
@@ -469,8 +437,7 @@ function outputOf(e) {
   return e === void 0 ? null : e.data === void 0 ? (e.message ?? null) : e.data;
 }
 function requireSessionId(e) {
-  if (e === void 0)
-    throw Error(`Eval session produced a turn without a session id.`);
+  if (e === void 0) throw Error(`Eval session produced a turn without a session id.`);
   return e;
 }
 function assertRequestHasOption(e, t) {

@@ -4,53 +4,57 @@ import type { VercelProjectReference } from "#setup/project-resolution.js";
 import type { RegistrySetupCompletion } from "#setup/registry-setup-protocol.js";
 import type { IntegrationSetupEnvironment } from "./shared/environment.js";
 export interface SetupExternalAction {
-    complete(): void;
+  complete(): void;
 }
 export type SetupPresenter = Pick<Prompter, "log" | "note"> & {
-    nextSteps(lines: readonly string[]): void;
-    beginExternalAction(input: {
-        url: string;
-        userCode?: string;
-        message: string;
-    }): SetupExternalAction;
+  nextSteps(lines: readonly string[]): void;
+  beginExternalAction(input: {
+    url: string;
+    userCode?: string;
+    message: string;
+  }): SetupExternalAction;
 };
 export interface SetupPrepareContext {
-    readonly appRoot: string;
-    readonly asker: Asker;
-    readonly environment: IntegrationSetupEnvironment;
-    readonly presenter: SetupPresenter;
-    readonly resolveVercelProject: (integration: string) => Promise<VercelProjectReference>;
-    signal?: AbortSignal;
-    force?: boolean;
+  readonly appRoot: string;
+  readonly asker: Asker;
+  readonly environment: IntegrationSetupEnvironment;
+  readonly presenter: SetupPresenter;
+  readonly resolveVercelProject: (integration: string) => Promise<VercelProjectReference>;
+  signal?: AbortSignal;
+  force?: boolean;
 }
 export interface SetupApplyContext {
-    readonly appRoot: string;
-    readonly presenter: SetupPresenter;
-    signal?: AbortSignal;
-    force?: boolean;
+  readonly appRoot: string;
+  readonly presenter: SetupPresenter;
+  signal?: AbortSignal;
+  force?: boolean;
 }
-export type IntegrationSetupResult = {
-    readonly kind: "done";
-    readonly completion: RegistrySetupCompletion;
-} | {
-    readonly kind: "cancelled";
-};
+export type IntegrationSetupResult =
+  | {
+      readonly kind: "done";
+      readonly completion: RegistrySetupCompletion;
+    }
+  | {
+      readonly kind: "cancelled";
+    };
 interface SetupIntegrationDefinition<Plan> {
-    readonly kind: string;
-    readonly label: string;
-    readonly hint?: string;
-    prepare(context: SetupPrepareContext): Promise<Plan>;
-    apply(plan: Plan, context: SetupApplyContext): Promise<RegistrySetupCompletion>;
+  readonly kind: string;
+  readonly label: string;
+  readonly hint?: string;
+  prepare(context: SetupPrepareContext): Promise<Plan>;
+  apply(plan: Plan, context: SetupApplyContext): Promise<RegistrySetupCompletion>;
 }
 export interface SetupIntegration {
-    readonly kind: string;
-    readonly label: string;
-    hint?: string;
-    run(input: {
-        prepare: SetupPrepareContext;
-        apply: SetupApplyContext;
-    }): Promise<IntegrationSetupResult>;
+  readonly kind: string;
+  readonly label: string;
+  hint?: string;
+  run(input: {
+    prepare: SetupPrepareContext;
+    apply: SetupApplyContext;
+  }): Promise<IntegrationSetupResult>;
 }
 /** Captures an integration's private plan type behind one executable lifecycle. */
-export declare function defineSetupIntegration<Plan>(definition: SetupIntegrationDefinition<Plan>): SetupIntegration;
+export declare function defineSetupIntegration<Plan>(
+  definition: SetupIntegrationDefinition<Plan>,
+): SetupIntegration;
 export {};

@@ -22,7 +22,9 @@ import type { SessionAuth } from "eve/context";
 import { turnInterjectionRepository } from "./turn-interjection-repository.js";
 import { resolveTurnInterjectionScope } from "./turn-interjection-scope.js";
 
-type DeliveryContext = { session: { auth: SessionAuth; id: string; parent?: unknown; turn: { id: string } } };
+type DeliveryContext = {
+  session: { auth: SessionAuth; id: string; parent?: unknown; turn: { id: string } };
+};
 type Repository = Pick<typeof turnInterjectionRepository, "finishTurn" | "stepStarted">;
 
 /**
@@ -37,20 +39,26 @@ export function isTurnInterjectionDeliveryUntracked(ctx: DeliveryContext): boole
   return untrackedTurns.has(turnKey(ctx));
 }
 
-async function twice(ctx: DeliveryContext, stage: string, operation: () => Promise<unknown>): Promise<boolean> {
+async function twice(
+  ctx: DeliveryContext,
+  stage: string,
+  operation: () => Promise<unknown>,
+): Promise<boolean> {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       await operation();
       return true;
     } catch (error) {
-      console.error(JSON.stringify({
-        attempt,
-        code: "AGENT_TURN_INTERJECTION_DELIVERY_RECORD_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-        eveSessionId: ctx.session.id,
-        eveTurnId: ctx.session.turn.id,
-        stage,
-      }));
+      console.error(
+        JSON.stringify({
+          attempt,
+          code: "AGENT_TURN_INTERJECTION_DELIVERY_RECORD_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+          stage,
+        }),
+      );
     }
   }
   return false;
@@ -62,7 +70,9 @@ export async function recordTurnInterjectionDelivery(
   repository: Repository = turnInterjectionRepository,
 ): Promise<void> {
   if (resolveTurnInterjectionScope(ctx) === null) return;
-  const recorded = await twice(ctx, "step", () => repository.stepStarted(ctx.session.id, ctx.session.turn.id, stepIndex));
+  const recorded = await twice(ctx, "step", () =>
+    repository.stepStarted(ctx.session.id, ctx.session.turn.id, stepIndex),
+  );
   if (recorded) untrackedTurns.delete(turnKey(ctx));
   else untrackedTurns.add(turnKey(ctx));
 }

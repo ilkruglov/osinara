@@ -1,7 +1,4 @@
-import {
-  expectObjectRecord,
-  expectOnlyKnownKeys,
-} from "#internal/authored-module.js";
+import { expectObjectRecord, expectOnlyKnownKeys } from "#internal/authored-module.js";
 import { parseJsonValue } from "#shared/json.js";
 import { normalizeAuthorizationSpec } from "#runtime/connections/validate-authorization.js";
 import { normalizeApproval } from "#internal/authored-definition/approval.js";
@@ -35,9 +32,7 @@ const KNOWN_TOP_LEVEL_KEYS = [
   KNOWN_TOOL_CALL_KEYS = [`providedArguments`];
 function normalizeMcpClientConnectionDefinition(n, r) {
   let o = expectObjectRecord(n, r);
-  (expectOnlyKnownKeys(o, KNOWN_TOP_LEVEL_KEYS, r),
-    validateUrl(o, r),
-    validateDescription(o, r));
+  (expectOnlyKnownKeys(o, KNOWN_TOP_LEVEL_KEYS, r), validateUrl(o, r), validateDescription(o, r));
   let s = normalizeAuthorization(o, r),
     c = normalizeHeaders(o, r),
     l = normalizeConnectionToolCall(o, r),
@@ -63,10 +58,7 @@ function normalizeMcpClientConnectionDefinition(n, r) {
 }
 function normalizeConnectionToolCall(r, i) {
   if (r.toolCall === void 0) return;
-  let a = expectObjectRecord(
-    r.toolCall,
-    `${i} The "toolCall" field must be a plain object.`,
-  );
+  let a = expectObjectRecord(r.toolCall, `${i} The "toolCall" field must be a plain object.`);
   if (
     (expectOnlyKnownKeys(a, KNOWN_TOOL_CALL_KEYS, `${i} The "toolCall" field`),
     a.providedArguments === void 0)
@@ -77,10 +69,7 @@ function normalizeConnectionToolCall(r, i) {
     `${i} The "toolCall.providedArguments" field must be a plain object.`,
   );
   for (let [e, t] of Object.entries(o))
-    if (
-      typeof t != `function` &&
-      !(typeof t == `object` && t && typeof t.then == `function`)
-    )
+    if (typeof t != `function` && !(typeof t == `object` && t && typeof t.then == `function`))
       try {
         parseJsonValue(t);
       } catch {
@@ -124,20 +113,14 @@ function validateSpec(e, t) {
   let n = e.spec;
   if (typeof n == `string`) {
     if (!URL.canParse(n))
-      throw Error(
-        `${t} The "spec" field must be a valid URL when provided as a string.`,
-      );
+      throw Error(`${t} The "spec" field must be a valid URL when provided as a string.`);
     let e = new URL(n);
     if (e.protocol !== `https:` && e.protocol !== `http:`)
-      throw Error(
-        `${t} The "spec" URL must use the http or https protocol, got "${e.protocol}".`,
-      );
+      throw Error(`${t} The "spec" URL must use the http or https protocol, got "${e.protocol}".`);
     return;
   }
   if (typeof n != `object` || !n || Array.isArray(n))
-    throw Error(
-      `${t} The "spec" field must be a URL string or an inline OpenAPI document object.`,
-    );
+    throw Error(`${t} The "spec" field must be a URL string or an inline OpenAPI document object.`);
 }
 function validateBaseUrl(e, t) {
   if (e.baseUrl === void 0) return;
@@ -154,9 +137,7 @@ function validateUrl(e, t) {
     throw Error(`${t} The "url" field must be a valid URL.`);
   let n = new URL(e.url);
   if (n.protocol !== `https:` && n.protocol !== `http:`)
-    throw Error(
-      `${t} The "url" field must use the http or https protocol, got "${n.protocol}".`,
-    );
+    throw Error(`${t} The "url" field must use the http or https protocol, got "${n.protocol}".`);
 }
 function validateDescription(e, t) {
   if (typeof e.description != `string` || e.description.length === 0)
@@ -177,14 +158,8 @@ function normalizeAuthorization(n, i) {
 function normalizeHeaders(e, t) {
   if (e.headers === void 0) return;
   if (typeof e.headers == `function`) return e.headers;
-  if (
-    typeof e.headers != `object` ||
-    e.headers === null ||
-    Array.isArray(e.headers)
-  )
-    throw Error(
-      `${t} The "headers" field must be a plain object or a function.`,
-    );
+  if (typeof e.headers != `object` || e.headers === null || Array.isArray(e.headers))
+    throw Error(`${t} The "headers" field must be a plain object or a function.`);
   let n = e.headers;
   for (let [e, r] of Object.entries(n)) {
     let n = typeof r;
@@ -192,9 +167,7 @@ function normalizeHeaders(e, t) {
       (n !== `string` && n !== `function` && n !== `object`) ||
       (n === `object` && (r === null || typeof r.then != `function`))
     )
-      throw Error(
-        `${t} The "headers.${e}" value must be a string, Promise, or function.`,
-      );
+      throw Error(`${t} The "headers.${e}" value must be a string, Promise, or function.`);
   }
   return n;
 }
@@ -205,32 +178,20 @@ function normalizeFilterField(e, t, n) {
   let r = e[t];
   if (r === void 0) return;
   if (typeof r != `object` || !r || Array.isArray(r))
-    throw Error(
-      `${n} The "${t}" field must specify either "allow" or "block".`,
-    );
+    throw Error(`${n} The "${t}" field must specify either "allow" or "block".`);
   let i = r,
     a = `allow` in i,
     o = `block` in i;
   if (a && o)
-    throw Error(
-      `${n} The "${t}" field must specify either "allow" or "block", not both.`,
-    );
-  if (!a && !o)
-    throw Error(
-      `${n} The "${t}" field must specify either "allow" or "block".`,
-    );
+    throw Error(`${n} The "${t}" field must specify either "allow" or "block", not both.`);
+  if (!a && !o) throw Error(`${n} The "${t}" field must specify either "allow" or "block".`);
   return a
-    ? (validateStringArray(i.allow, `${n} The "${t}.allow"`),
-      { allow: i.allow })
-    : (validateStringArray(i.block, `${n} The "${t}.block"`),
-      { block: i.block });
+    ? (validateStringArray(i.allow, `${n} The "${t}.allow"`), { allow: i.allow })
+    : (validateStringArray(i.block, `${n} The "${t}.block"`), { block: i.block });
 }
 function validateStringArray(e, t) {
   if (!Array.isArray(e)) throw Error(`${t} field must be an array of strings.`);
   for (let n = 0; n < e.length; n++)
     if (typeof e[n] != `string`) throw Error(`${t}[${n}] must be a string.`);
 }
-export {
-  normalizeMcpClientConnectionDefinition,
-  normalizeOpenApiConnectionDefinition,
-};
+export { normalizeMcpClientConnectionDefinition, normalizeOpenApiConnectionDefinition };

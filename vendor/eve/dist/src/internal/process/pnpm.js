@@ -4,8 +4,7 @@ function resolvePnpmInvocation(n) {
   let r = process.env.PNPM_HOME;
   if (r !== void 0) {
     let e = join(r, process.platform === `win32` ? `pnpm.CMD` : `pnpm`);
-    if (existsSync(e))
-      return { args: n, command: e, shell: process.platform === `win32` };
+    if (existsSync(e)) return { args: n, command: e, shell: process.platform === `win32` };
   }
   let i = process.env.npm_execpath;
   if (i !== void 0 && i.toLowerCase().includes(`pnpm`)) {

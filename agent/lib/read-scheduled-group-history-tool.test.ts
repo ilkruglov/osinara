@@ -62,45 +62,58 @@ describe("read_scheduled_group_history", () => {
   });
 
   it("rejects an ordinary external turn before repository access", async () => {
-    await expect(readScheduledGroupHistory.execute({}, context({
-      groupId: "group-1",
-      groupType: "external",
-    }))).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
+    await expect(
+      readScheduledGroupHistory.execute(
+        {},
+        context({
+          groupId: "group-1",
+          groupType: "external",
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
     expect(readChunk).not.toHaveBeenCalled();
   });
 
   it("rejects initiator-only scheduled history before repository access", async () => {
-    await expect(readScheduledGroupHistory.execute(
-      {},
-      context(null, scheduledAttributes()),
-    )).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
+    await expect(
+      readScheduledGroupHistory.execute({}, context(null, scheduledAttributes())),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
 
     expect(readChunk).not.toHaveBeenCalled();
   });
 
   it("rejects an ordinary current caller even when the initiator is scheduled", async () => {
-    await expect(readScheduledGroupHistory.execute({}, context(
-      { groupId: "group-1", groupType: "external", memoryScopes: ["group"] },
-      scheduledAttributes(),
-    ))).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
+    await expect(
+      readScheduledGroupHistory.execute(
+        {},
+        context(
+          { groupId: "group-1", groupType: "external", memoryScopes: ["group"] },
+          scheduledAttributes(),
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
 
     expect(readChunk).not.toHaveBeenCalled();
   });
 
   it("rejects mismatched scheduled run identity before repository access", async () => {
-    await expect(readScheduledGroupHistory.execute({}, context(
-      scheduledAttributes({ scheduledRunId: "run-2" }),
-      scheduledAttributes(),
-    ))).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
+    await expect(
+      readScheduledGroupHistory.execute(
+        {},
+        context(scheduledAttributes({ scheduledRunId: "run-2" }), scheduledAttributes()),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
 
     expect(readChunk).not.toHaveBeenCalled();
   });
 
   it("rejects mismatched scheduled group identity before repository access", async () => {
-    await expect(readScheduledGroupHistory.execute({}, context(
-      scheduledAttributes({ groupId: "group-2" }),
-      scheduledAttributes(),
-    ))).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
+    await expect(
+      readScheduledGroupHistory.execute(
+        {},
+        context(scheduledAttributes({ groupId: "group-2" }), scheduledAttributes()),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_HISTORY_SCOPE_DENIED" });
 
     expect(readChunk).not.toHaveBeenCalled();
   });

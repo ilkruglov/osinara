@@ -41,10 +41,7 @@ async function compileInstructionsEntry(a, o, s = {}) {
       throw Error(
         `Expected the instructions export "${o.exportName ?? `default`}" from "${o.logicalPath}" to use only "session.started" or "turn.started" events. Unsupported event: "${n}".`,
       );
-    let i = stripLogicalPathExtension(o.logicalPath).replace(
-      /^instructions\//,
-      ``,
-    );
+    let i = stripLogicalPathExtension(o.logicalPath).replace(/^instructions\//, ``);
     return {
       kind: `dynamic-instructions`,
       definition: {

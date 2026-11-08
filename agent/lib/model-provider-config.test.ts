@@ -52,12 +52,23 @@ describe("parseModelProviderConfig", () => {
 
   it("accepts a separate reasoning effort for silent memory review on the primary model", () => {
     const primary = { ...validConfig.agent.models.primary, memoryReviewReasoningEffort: "low" };
-    const config = { ...validConfig, agent: { ...validConfig.agent, models: { ...validConfig.agent.models, primary } } };
+    const config = {
+      ...validConfig,
+      agent: { ...validConfig.agent, models: { ...validConfig.agent.models, primary } },
+    };
     expect(parseModelProviderConfig(config)).toEqual(config);
-    expect(() => parseModelProviderConfig({
-      ...config,
-      agent: { ...config.agent, models: { ...config.agent.models, primary: { ...primary, memoryReviewReasoningEffort: "medium" } } },
-    })).toThrow();
+    expect(() =>
+      parseModelProviderConfig({
+        ...config,
+        agent: {
+          ...config.agent,
+          models: {
+            ...config.agent.models,
+            primary: { ...primary, memoryReviewReasoningEffort: "medium" },
+          },
+        },
+      }),
+    ).toThrow();
   });
 
   it("accepts the native DeepSeek Responses transport only on the DeepSeek host", () => {
@@ -65,7 +76,11 @@ describe("parseModelProviderConfig", () => {
       ...validConfig,
       agent: {
         models: {
-          primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 128_000 },
+          primary: {
+            contextWindowTokens: 1_000_000,
+            id: "deepseek-v4-flash",
+            maxOutputTokens: 128_000,
+          },
           vision: { supportsImageInput: false },
         },
         transport: {
@@ -77,14 +92,27 @@ describe("parseModelProviderConfig", () => {
       provider: "deepseek",
     } as const;
     expect(parseModelProviderConfig(responses)).toEqual(responses);
-    expect(() => parseModelProviderConfig({
-      ...responses,
-      agent: { ...responses.agent, transport: { ...responses.agent.transport, baseUrl: "https://api.deepseek.com/anthropic" } },
-    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
-    expect(() => parseModelProviderConfig({
-      ...responses,
-      agent: { ...responses.agent, transport: { ...responses.agent.transport, reasoning: { effort: "medium" } } },
-    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() =>
+      parseModelProviderConfig({
+        ...responses,
+        agent: {
+          ...responses.agent,
+          transport: {
+            ...responses.agent.transport,
+            baseUrl: "https://api.deepseek.com/anthropic",
+          },
+        },
+      }),
+    ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() =>
+      parseModelProviderConfig({
+        ...responses,
+        agent: {
+          ...responses.agent,
+          transport: { ...responses.agent.transport, reasoning: { effort: "medium" } },
+        },
+      }),
+    ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
   it("accepts DeepSeek over its Anthropic-compatible endpoint as well as Chat Completions", () => {
@@ -92,7 +120,11 @@ describe("parseModelProviderConfig", () => {
       ...validConfig,
       agent: {
         models: {
-          primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 128_000 },
+          primary: {
+            contextWindowTokens: 1_000_000,
+            id: "deepseek-v4-flash",
+            maxOutputTokens: 128_000,
+          },
           vision: { supportsImageInput: false },
         },
         transport: {
@@ -105,37 +137,55 @@ describe("parseModelProviderConfig", () => {
       provider: "deepseek",
     } as const;
     expect(parseModelProviderConfig(deepseekAnthropic)).toEqual(deepseekAnthropic);
-    expect(() => parseModelProviderConfig({
-      ...deepseekAnthropic,
-      agent: {
-        ...deepseekAnthropic.agent,
-        transport: { ...deepseekAnthropic.agent.transport, baseUrl: "https://proxy.example/anthropic" },
-      },
-    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
-    expect(() => parseModelProviderConfig({
-      ...deepseekAnthropic,
-      agent: {
-        ...deepseekAnthropic.agent,
-        transport: { ...deepseekAnthropic.agent.transport, compatibility: "minimax-anthropic" },
-      },
-    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() =>
+      parseModelProviderConfig({
+        ...deepseekAnthropic,
+        agent: {
+          ...deepseekAnthropic.agent,
+          transport: {
+            ...deepseekAnthropic.agent.transport,
+            baseUrl: "https://proxy.example/anthropic",
+          },
+        },
+      }),
+    ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() =>
+      parseModelProviderConfig({
+        ...deepseekAnthropic,
+        agent: {
+          ...deepseekAnthropic.agent,
+          transport: { ...deepseekAnthropic.agent.transport, compatibility: "minimax-anthropic" },
+        },
+      }),
+    ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
   it("accepts Chat Completions only with DeepSeek's provider name and reasoning format", () => {
     for (const reasoning of [null, { format: "deepseek", type: "none" }] as const) {
-      const config = { ...validConfig, agent: { ...validConfig.agent, transport: { ...validConfig.agent.transport, reasoning } } };
+      const config = {
+        ...validConfig,
+        agent: { ...validConfig.agent, transport: { ...validConfig.agent.transport, reasoning } },
+      };
       expect(parseModelProviderConfig(config)).toEqual(config);
     }
     for (const transport of [
       { ...validConfig.agent.transport, providerName: "openrouter" },
       { ...validConfig.agent.transport, baseUrl: "https://openrouter.ai/api/v1" },
-      { ...validConfig.agent.transport, reasoning: { effort: "high", format: "reasoning-effort", type: "effort" } },
-      { ...validConfig.agent.transport, reasoning: { effort: "high", format: "reasoning-object", type: "effort" } },
+      {
+        ...validConfig.agent.transport,
+        reasoning: { effort: "high", format: "reasoning-effort", type: "effort" },
+      },
+      {
+        ...validConfig.agent.transport,
+        reasoning: { effort: "high", format: "reasoning-object", type: "effort" },
+      },
     ]) {
-      expect(() => parseModelProviderConfig({
-        ...validConfig,
-        agent: { ...validConfig.agent, transport },
-      })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+      expect(() =>
+        parseModelProviderConfig({
+          ...validConfig,
+          agent: { ...validConfig.agent, transport },
+        }),
+      ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
     }
   });
 
@@ -149,29 +199,40 @@ describe("parseModelProviderConfig", () => {
   );
 
   it("rejects the former plain-HTTP internal gateway", () => {
-    expect(() => parseModelProviderConfig({
-      ...validConfig,
-      agent: {
-        ...validConfig.agent,
-        transport: { ...validConfig.agent.transport, baseUrl: "http://cli-proxy-api:8317/v1" },
-      },
-    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() =>
+      parseModelProviderConfig({
+        ...validConfig,
+        agent: {
+          ...validConfig.agent,
+          transport: { ...validConfig.agent.transport, baseUrl: "http://cli-proxy-api:8317/v1" },
+        },
+      }),
+    ).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
   it("requires GROQ_API_KEY at startup only when voice is enabled", () => {
     expect(() => validateModelProviderRuntimeEnvironment(validConfig, {})).toThrow(
       "AGENT_GROQ_API_KEY_REQUIRED: Для включённого распознавания голосовых сообщений задайте GROQ_API_KEY",
     );
-    expect(() => validateModelProviderRuntimeEnvironment(validConfig, {
-      GROQ_API_KEY: "   ",
-    })).toThrow("AGENT_GROQ_API_KEY_REQUIRED");
-    expect(validateModelProviderRuntimeEnvironment(validConfig, {
-      GROQ_API_KEY: "groq-secret",
-    })).toEqual({ GROQ_API_KEY: "groq-secret" });
-    expect(validateModelProviderRuntimeEnvironment({
-      ...validConfig,
-      voice: { enabled: false },
-    }, {})).toEqual({ GROQ_API_KEY: undefined });
+    expect(() =>
+      validateModelProviderRuntimeEnvironment(validConfig, {
+        GROQ_API_KEY: "   ",
+      }),
+    ).toThrow("AGENT_GROQ_API_KEY_REQUIRED");
+    expect(
+      validateModelProviderRuntimeEnvironment(validConfig, {
+        GROQ_API_KEY: "groq-secret",
+      }),
+    ).toEqual({ GROQ_API_KEY: "groq-secret" });
+    expect(
+      validateModelProviderRuntimeEnvironment(
+        {
+          ...validConfig,
+          voice: { enabled: false },
+        },
+        {},
+      ),
+    ).toEqual({ GROQ_API_KEY: undefined });
   });
 
   it("accepts explicit DeepSeek thinking and an unavailable vision capability", () => {
@@ -270,8 +331,6 @@ describe("parseModelProviderConfig", () => {
       },
     },
   ])("rejects invalid or ambiguous required config %#", (input) => {
-    expect(() => parseModelProviderConfig(input)).toThrow(
-      "AGENT_MODEL_PROVIDER_CONFIG_INVALID",
-    );
+    expect(() => parseModelProviderConfig(input)).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 });

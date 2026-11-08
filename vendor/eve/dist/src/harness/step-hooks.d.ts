@@ -1,70 +1,84 @@
 import type { PrepareStepFunction, StepResult, ToolSet } from "ai";
 import type { HarnessEmissionState } from "#harness/emission.js";
 import { type AnthropicCacheMarker, type PromptCachePath } from "#harness/prompt-cache.js";
-import { type HarnessEmitFn, type HarnessSession, type ToolLoopHarnessConfig } from "#harness/types.js";
+import {
+  type HarnessEmitFn,
+  type HarnessSession,
+  type ToolLoopHarnessConfig,
+} from "#harness/types.js";
 /**
  * The subset of `StepResult` that the harness reads after a step completes.
  *
  * Used by both the streaming (`onStepFinish` callback) and non-streaming
  * (`generateText` result) code paths.
  */
-export type HarnessStepResult = Pick<StepResult<ToolSet>, "content" | "finishReason" | "providerMetadata" | "response" | "text" | "toolCalls" | "toolResults" | "usage"> & {
-    readonly invalidInputToolCallIds?: ReadonlySet<string>;
+export type HarnessStepResult = Pick<
+  StepResult<ToolSet>,
+  | "content"
+  | "finishReason"
+  | "providerMetadata"
+  | "response"
+  | "text"
+  | "toolCalls"
+  | "toolResults"
+  | "usage"
+> & {
+  readonly invalidInputToolCallIds?: ReadonlySet<string>;
 };
 /**
  * Input for {@link buildStepHooks}.
  */
 interface StepHooksInput {
-    readonly cachePath: PromptCachePath;
-    readonly emit?: HarnessEmitFn;
-    readonly emissionState: HarnessEmissionState;
-    /**
-     * When `false`, `prepareStep` skips the `step.started` emission.
-     * Used by the harness recovery path to avoid emitting `step.started`
-     * twice when retrying the same step with a degraded toolset.
-     *
-     * Defaults to `true`.
-     */
-    readonly emitStepStarted?: boolean;
-    readonly marker: AnthropicCacheMarker | undefined;
-    readonly session: HarnessSession;
+  readonly cachePath: PromptCachePath;
+  readonly emit?: HarnessEmitFn;
+  readonly emissionState: HarnessEmissionState;
+  /**
+   * When `false`, `prepareStep` skips the `step.started` emission.
+   * Used by the harness recovery path to avoid emitting `step.started`
+   * twice when retrying the same step with a degraded toolset.
+   *
+   * Defaults to `true`.
+   */
+  readonly emitStepStarted?: boolean;
+  readonly marker: AnthropicCacheMarker | undefined;
+  readonly session: HarnessSession;
 }
 /**
  * Composable hooks returned by {@link buildStepHooks}.
  */
 interface StepHooks {
-    /**
-     * `ToolLoopAgent` `onStepFinish` callback.
-     *
-     * Emits `actions.requested`, `action.result`, and `step.completed` events
-     * from the captured step result.
-     */
-    readonly onStepFinish: (step: StepResult<ToolSet>) => Promise<void>;
-    /**
-     * `ToolLoopAgent` `prepareStep` callback.
-     *
-     * Handles `step.started` emission and cache/provider metadata. Compaction
-     * happens in the tool-loop before `agent.stream()`.
-     */
-    readonly prepareStep: PrepareStepFunction<ToolSet>;
-    /**
-     * Promise that resolves when `onStepFinish` has completed.
-     *
-     * Await this after consuming the stream to ensure all step events
-     * have been emitted before proceeding to post-step handling.
-     *
-     * Resolves once per hooks instance: a retried model call must rebuild
-     * hooks via a fresh `runOneModelCall` attempt. Re-running a call against
-     * hooks whose `stepResult` already resolved reads the previous attempt's
-     * result, not the retry's.
-     *
-     * Never settles when the step does not finish — e.g. the AI SDK's
-     * incomplete-stream rejection (`NoOutputGeneratedError`) skips
-     * `onStepFinish` entirely. Consumers must surface stream errors as
-     * throws before awaiting this promise (`emitStreamContent` does), or
-     * the await hangs.
-     */
-    readonly stepResult: Promise<HarnessStepResult>;
+  /**
+   * `ToolLoopAgent` `onStepFinish` callback.
+   *
+   * Emits `actions.requested`, `action.result`, and `step.completed` events
+   * from the captured step result.
+   */
+  readonly onStepFinish: (step: StepResult<ToolSet>) => Promise<void>;
+  /**
+   * `ToolLoopAgent` `prepareStep` callback.
+   *
+   * Handles `step.started` emission and cache/provider metadata. Compaction
+   * happens in the tool-loop before `agent.stream()`.
+   */
+  readonly prepareStep: PrepareStepFunction<ToolSet>;
+  /**
+   * Promise that resolves when `onStepFinish` has completed.
+   *
+   * Await this after consuming the stream to ensure all step events
+   * have been emitted before proceeding to post-step handling.
+   *
+   * Resolves once per hooks instance: a retried model call must rebuild
+   * hooks via a fresh `runOneModelCall` attempt. Re-running a call against
+   * hooks whose `stepResult` already resolved reads the previous attempt's
+   * result, not the retry's.
+   *
+   * Never settles when the step does not finish — e.g. the AI SDK's
+   * incomplete-stream rejection (`NoOutputGeneratedError`) skips
+   * `onStepFinish` entirely. Consumers must surface stream errors as
+   * throws before awaiting this promise (`emitStreamContent` does), or
+   * the await hangs.
+   */
+  readonly stepResult: Promise<HarnessStepResult>;
 }
 /**
  * Builds composable `prepareStep` and `onStepFinish` closures that
@@ -89,11 +103,16 @@ export declare function buildStepHooks(input: StepHooksInput): StepHooks;
  * `handledInlineToolResultCallIds` contains results emitted by
  * `emitStreamContent` or sent to authorization. Skip them here.
  */
-export declare function emitStepActions(emitFn: HarnessEmitFn, state: HarnessEmissionState, step: HarnessStepResult, options: {
+export declare function emitStepActions(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+  step: HarnessStepResult,
+  options: {
     readonly emittedActionCallIds?: ReadonlySet<string>;
     readonly excludedActionCallIds?: ReadonlySet<string>;
     readonly excludedActionToolNames: ReadonlySet<string>;
     readonly handledInlineToolResultCallIds?: ReadonlySet<string>;
     readonly tools: ToolLoopHarnessConfig["tools"];
-}): Promise<void>;
+  },
+): Promise<void>;
 export {};

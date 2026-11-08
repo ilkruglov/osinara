@@ -12,10 +12,7 @@ import {
   stateFromReceiveTarget,
 } from "#public/channels/github/state.js";
 import { GITHUB_CHANNEL_DEFAULT_ROUTE } from "#public/channels/github/constants.js";
-import {
-  createDefaultEvents,
-  defaultOnComment,
-} from "#public/channels/github/defaults.js";
+import { createDefaultEvents, defaultOnComment } from "#public/channels/github/defaults.js";
 import {
   dispatchCheckRun,
   dispatchCheckSuite,
@@ -50,138 +47,120 @@ function githubChannel(e = {}) {
       return rebuildGitHubContext(t, n, e);
     },
     routes: [
-      POST(
-        e.route ?? GITHUB_CHANNEL_DEFAULT_ROUTE,
-        async (t, { from: n, waitUntil: r }) => {
-          let i = await verifyInbound(t, e.credentials);
-          if (i === null) return new Response(`unauthorized`, { status: 401 });
-          let a = missingGitHubWebhookHeaders(t.headers),
-            s;
-          try {
-            s = parseGitHubWebhookEvent({
-              body: i,
-              contentType: t.headers.get(`content-type`) ?? void 0,
-              headers: t.headers,
-            });
-          } catch (e) {
-            return (
-              log.warn(`inbound GitHub body is not valid JSON`, { error: e }),
-              jsonOk({ ignored: !0, ok: !0 })
-            );
-          }
-          return s === null
-            ? (a.length > 0 &&
-                log.warn(
-                  `GitHub webhook ignored because standard headers were missing`,
-                  { missingHeaders: a },
-                ),
-              jsonOk({ ignored: !0, ok: !0 }))
-            : (a.length > 0 &&
-                log.warn(
-                  `GitHub webhook missing standard headers; inferred metadata from payload`,
-                  {
-                    deliveryId: s.delivery.id,
-                    event: s.delivery.event,
-                    missingHeaders: a,
-                    repository: s.repository.fullName,
-                  },
-                ),
-              s.kind === `ping`
-                ? jsonOk({ ok: !0 })
-                : s.kind === `issue_comment` && s.action === `created`
+      POST(e.route ?? GITHUB_CHANNEL_DEFAULT_ROUTE, async (t, { from: n, waitUntil: r }) => {
+        let i = await verifyInbound(t, e.credentials);
+        if (i === null) return new Response(`unauthorized`, { status: 401 });
+        let a = missingGitHubWebhookHeaders(t.headers),
+          s;
+        try {
+          s = parseGitHubWebhookEvent({
+            body: i,
+            contentType: t.headers.get(`content-type`) ?? void 0,
+            headers: t.headers,
+          });
+        } catch (e) {
+          return (
+            log.warn(`inbound GitHub body is not valid JSON`, { error: e }),
+            jsonOk({ ignored: !0, ok: !0 })
+          );
+        }
+        return s === null
+          ? (a.length > 0 &&
+              log.warn(`GitHub webhook ignored because standard headers were missing`, {
+                missingHeaders: a,
+              }),
+            jsonOk({ ignored: !0, ok: !0 }))
+          : (a.length > 0 &&
+              log.warn(`GitHub webhook missing standard headers; inferred metadata from payload`, {
+                deliveryId: s.delivery.id,
+                event: s.delivery.event,
+                missingHeaders: a,
+                repository: s.repository.fullName,
+              }),
+            s.kind === `ping`
+              ? jsonOk({ ok: !0 })
+              : s.kind === `issue_comment` && s.action === `created`
+                ? (r(
+                    dispatchIssueComment({
+                      botName: c,
+                      config: e,
+                      event: s,
+                      handler: e.onComment ?? ((e, t) => defaultOnComment(e, t, u)),
+                      from: n,
+                    }),
+                  ),
+                  jsonOk({ ok: !0 }))
+                : s.kind === `pull_request_review_comment` && s.action === `created`
                   ? (r(
-                      dispatchIssueComment({
+                      dispatchPullRequestReviewComment({
                         botName: c,
                         config: e,
                         event: s,
-                        handler:
-                          e.onComment ?? ((e, t) => defaultOnComment(e, t, u)),
+                        handler: e.onComment ?? ((e, t) => defaultOnComment(e, t, u)),
                         from: n,
                       }),
                     ),
                     jsonOk({ ok: !0 }))
-                  : s.kind === `pull_request_review_comment` &&
-                      s.action === `created`
+                  : s.kind === `issues` && e.onIssue !== void 0
                     ? (r(
-                        dispatchPullRequestReviewComment({
-                          botName: c,
+                        dispatchIssue({
                           config: e,
                           event: s,
-                          handler:
-                            e.onComment ??
-                            ((e, t) => defaultOnComment(e, t, u)),
+                          handler: e.onIssue,
                           from: n,
                         }),
                       ),
                       jsonOk({ ok: !0 }))
-                    : s.kind === `issues` && e.onIssue !== void 0
+                    : s.kind === `pull_request` && e.onPullRequest !== void 0
                       ? (r(
-                          dispatchIssue({
+                          dispatchPullRequest({
                             config: e,
                             event: s,
-                            handler: e.onIssue,
+                            handler: e.onPullRequest,
                             from: n,
                           }),
                         ),
                         jsonOk({ ok: !0 }))
-                      : s.kind === `pull_request` && e.onPullRequest !== void 0
+                      : s.kind === `check_suite` && e.onCheckSuite !== void 0
                         ? (r(
-                            dispatchPullRequest({
+                            dispatchCheckSuite({
                               config: e,
                               event: s,
-                              handler: e.onPullRequest,
+                              handler: e.onCheckSuite,
                               from: n,
                             }),
                           ),
                           jsonOk({ ok: !0 }))
-                        : s.kind === `check_suite` && e.onCheckSuite !== void 0
+                        : s.kind === `check_run` && e.onCheckRun !== void 0
                           ? (r(
-                              dispatchCheckSuite({
+                              dispatchCheckRun({
                                 config: e,
                                 event: s,
-                                handler: e.onCheckSuite,
+                                handler: e.onCheckRun,
                                 from: n,
                               }),
                             ),
                             jsonOk({ ok: !0 }))
-                          : s.kind === `check_run` && e.onCheckRun !== void 0
+                          : s.kind === `workflow_run` && e.onWorkflowRun !== void 0
                             ? (r(
-                                dispatchCheckRun({
+                                dispatchWorkflowRun({
                                   config: e,
                                   event: s,
-                                  handler: e.onCheckRun,
+                                  handler: e.onWorkflowRun,
                                   from: n,
                                 }),
                               ),
                               jsonOk({ ok: !0 }))
-                            : s.kind === `workflow_run` &&
-                                e.onWorkflowRun !== void 0
-                              ? (r(
-                                  dispatchWorkflowRun({
-                                    config: e,
-                                    event: s,
-                                    handler: e.onWorkflowRun,
-                                    from: n,
-                                  }),
-                                ),
-                                jsonOk({ ok: !0 }))
-                              : jsonOk({ ignored: !0, ok: !0 }));
-        },
-      ),
+                            : jsonOk({ ignored: !0, ok: !0 }));
+      }),
     ],
     async receive(n, { from: r }) {
       let i = n.target,
         o = readNonEmptyString(i.owner),
         c = readNonEmptyString(i.repo);
       if (o === void 0 || c === void 0)
-        throw Error(
-          `githubChannel().receive requires target.owner and target.repo.`,
-        );
-      if (
-        [i.issueNumber !== void 0, i.pullRequestNumber !== void 0].filter(
-          Boolean,
-        ).length !== 1
-      )
+        throw Error(`githubChannel().receive requires target.owner and target.repo.`);
+      if ([i.issueNumber !== void 0, i.pullRequestNumber !== void 0].filter(Boolean).length !== 1)
         throw Error(
           `githubChannel().receive requires exactly one of issueNumber or pullRequestNumber.`,
         );

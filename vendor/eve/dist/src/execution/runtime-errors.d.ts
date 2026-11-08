@@ -5,21 +5,25 @@
  * a fresh session.
  */
 export declare class RuntimeNoActiveSessionError extends Error {
-    readonly code: "NO_ACTIVE_SESSION";
-    readonly continuationToken: string;
-    constructor(continuationToken: string);
+  readonly code: "NO_ACTIVE_SESSION";
+  readonly continuationToken: string;
+  constructor(continuationToken: string);
 }
 /** Type guard for {@link RuntimeNoActiveSessionError}. */
-export declare function isRuntimeNoActiveSessionError(error: unknown): error is RuntimeNoActiveSessionError;
+export declare function isRuntimeNoActiveSessionError(
+  error: unknown,
+): error is RuntimeNoActiveSessionError;
 /** Signals that another session won a concurrent channel-address claim. */
 export declare class RuntimeSessionOwnershipConflictError extends Error {
+  readonly continuationToken: string;
+  readonly ownerSessionId: string;
+  readonly sessionId: string;
+  constructor(input: {
     readonly continuationToken: string;
     readonly ownerSessionId: string;
     readonly sessionId: string;
-    constructor(input: {
-        readonly continuationToken: string;
-        readonly ownerSessionId: string;
-        readonly sessionId: string;
-    });
+  });
 }
-export declare function isRuntimeSessionOwnershipConflictError(error: unknown): error is RuntimeSessionOwnershipConflictError;
+export declare function isRuntimeSessionOwnershipConflictError(
+  error: unknown,
+): error is RuntimeSessionOwnershipConflictError;

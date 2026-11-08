@@ -11,8 +11,7 @@ function validateMcpHttpRequest(e) {
   } catch {
     return securityError(`Invalid Origin header.`);
   }
-  if (i.origin !== n.origin)
-    return securityError(`Invalid Origin: ${i.origin}`);
+  if (i.origin !== n.origin) return securityError(`Invalid Origin: ${i.origin}`);
 }
 function validateMcpMetadataRequest(e) {
   return validateMcpHttpRequestBase(e);
@@ -24,10 +23,7 @@ function validateMcpHttpRequestBase(t) {
   } catch {
     return securityError(`Invalid MCP request URL.`, 400);
   }
-  if (
-    n.protocol !== `https:` &&
-    !(n.protocol === `http:` && isLoopbackHostname(n.hostname))
-  )
+  if (n.protocol !== `https:` && !(n.protocol === `http:` && isLoopbackHostname(n.hostname)))
     return securityError(`MCP endpoints require HTTPS except on loopback.`);
   let r = validateHostHeader(t, n);
   if (r !== void 0) return r;

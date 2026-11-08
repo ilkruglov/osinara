@@ -3,4 +3,7 @@ import type { DiscordChannelCredentials } from "#public/channels/discord/discord
  * Verifies an inbound Discord request and returns its raw body, or
  * `null` when verification fails.
  */
-export declare function verifyDiscordInbound(req: Request, credentials: DiscordChannelCredentials | undefined): Promise<string | null>;
+export declare function verifyDiscordInbound(
+  req: Request,
+  credentials: DiscordChannelCredentials | undefined,
+): Promise<string | null>;

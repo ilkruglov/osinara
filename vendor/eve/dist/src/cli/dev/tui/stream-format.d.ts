@@ -4,82 +4,109 @@
  * focused on painting.
  */
 import type { AssistantResponseStatsMode } from "./types.js";
-export type TerminalKey = {
-    type: "text";
-    value: string;
-    /** Terminal framing, not proof that the text came from a physical keypress. */
-    framing: "unframed" | "bracketed-paste";
-} | {
-    type: "newline";
-} | {
-    type: "backspace";
-} | {
-    type: "delete";
-} | {
-    type: "enter";
-} | {
-    type: "up";
-} | {
-    type: "down";
-} | {
-    type: "left";
-} | {
-    type: "right";
-} | {
-    type: "home";
-} | {
-    type: "end";
-} | {
-    type: "tab";
-} | {
-    type: "escape";
-} | {
-    type: "mouse";
-    action: "press" | "release";
-    /** SGR button code (0 = left). */
-    button: number;
-    /** 1-based terminal cell coordinates. */
-    x: number;
-    y: number;
-} | {
-    type: "ctrl-a";
-} | {
-    type: "ctrl-e";
-} | {
-    type: "ctrl-d";
-} | {
-    type: "ctrl-k";
-} | {
-    type: "ctrl-n";
-} | {
-    type: "ctrl-p";
-} | {
-    type: "ctrl-u";
-} | {
-    type: "ctrl-w";
-} | {
-    type: "ctrl-l";
-} | {
-    type: "ctrl-r";
-} | {
-    type: "ctrl-c";
-} | {
-    /**
-     * An OSC sequence from the terminal (`ESC ] … BEL`/`ST`) — a reply to a
-     * query such as the OSC 11 background-color probe, never a keypress.
-     * `value` is the payload between the opener and the terminator.
-     */
-    type: "osc";
-    value: string;
-} | {
-    type: "ignore";
-};
+export type TerminalKey =
+  | {
+      type: "text";
+      value: string;
+      /** Terminal framing, not proof that the text came from a physical keypress. */
+      framing: "unframed" | "bracketed-paste";
+    }
+  | {
+      type: "newline";
+    }
+  | {
+      type: "backspace";
+    }
+  | {
+      type: "delete";
+    }
+  | {
+      type: "enter";
+    }
+  | {
+      type: "up";
+    }
+  | {
+      type: "down";
+    }
+  | {
+      type: "left";
+    }
+  | {
+      type: "right";
+    }
+  | {
+      type: "home";
+    }
+  | {
+      type: "end";
+    }
+  | {
+      type: "tab";
+    }
+  | {
+      type: "escape";
+    }
+  | {
+      type: "mouse";
+      action: "press" | "release";
+      /** SGR button code (0 = left). */
+      button: number;
+      /** 1-based terminal cell coordinates. */
+      x: number;
+      y: number;
+    }
+  | {
+      type: "ctrl-a";
+    }
+  | {
+      type: "ctrl-e";
+    }
+  | {
+      type: "ctrl-d";
+    }
+  | {
+      type: "ctrl-k";
+    }
+  | {
+      type: "ctrl-n";
+    }
+  | {
+      type: "ctrl-p";
+    }
+  | {
+      type: "ctrl-u";
+    }
+  | {
+      type: "ctrl-w";
+    }
+  | {
+      type: "ctrl-l";
+    }
+  | {
+      type: "ctrl-r";
+    }
+  | {
+      type: "ctrl-c";
+    }
+  | {
+      /**
+       * An OSC sequence from the terminal (`ESC ] … BEL`/`ST`) — a reply to a
+       * query such as the OSC 11 background-color probe, never a keypress.
+       * `value` is the payload between the opener and the terminator.
+       */
+      type: "osc";
+      value: string;
+    }
+  | {
+      type: "ignore";
+    };
 /** One decoded key plus the UTF-16 code units it consumed from the input buffer. */
 export interface KeyToken {
-    key?: TerminalKey;
-    consumed: number;
-    /** The buffer ends mid-sequence; wait for more bytes before decoding. */
-    incomplete?: boolean;
+  key?: TerminalKey;
+  consumed: number;
+  /** The buffer ends mid-sequence; wait for more bytes before decoding. */
+  incomplete?: boolean;
 }
 /**
  * Preserves newlines and tabs, normalizes CR to LF, and drops C0, DEL, and C1
@@ -114,11 +141,14 @@ export declare function stripPromptControlCharacters(text: string): string;
 export declare function nextKey(buffer: string): KeyToken;
 export declare function parseKey(chunk: Buffer): TerminalKey;
 export interface AssistantResponseStats {
-    totalTokens: number | undefined;
-    outputTokens: number | undefined;
-    tokensPerSecond: number | undefined;
+  totalTokens: number | undefined;
+  outputTokens: number | undefined;
+  tokensPerSecond: number | undefined;
 }
-export declare function takeUntil<T>(source: AsyncIterable<T>, stop: Promise<void>): AsyncIterable<T>;
+export declare function takeUntil<T>(
+  source: AsyncIterable<T>,
+  stop: Promise<void>,
+): AsyncIterable<T>;
 /** `394.4K`-style compact count: plain below 1000, then K/M with one trimmed decimal. */
 export declare function formatCompactTokenCount(count: number): string;
 /**
@@ -139,12 +169,18 @@ export declare function formatTurnDuration(elapsedMs: number): string;
  * (prompt) tokens up, output tokens down. A known `--context-size` appends
  * the context-fill percentage of the input side.
  */
-export declare function formatTokenFlow(flow: {
+export declare function formatTokenFlow(
+  flow: {
     inputTokens: number;
     outputTokens: number;
     contextSize?: number;
-}, glyph: {
+  },
+  glyph: {
     arrowUp: string;
     arrowDown: string;
-}): string;
-export declare function formatAssistantResponseStats(stats: AssistantResponseStats, mode: AssistantResponseStatsMode): string | undefined;
+  },
+): string;
+export declare function formatAssistantResponseStats(
+  stats: AssistantResponseStats,
+  mode: AssistantResponseStatsMode,
+): string | undefined;

@@ -19,4 +19,5 @@ export function lavkaNothingSent<E>(error: E): E {
   return error;
 }
 
-export const isLavkaNothingSent = (error: unknown): boolean => typeof error === "object" && error !== null && NOTHING_SENT.has(error);
+export const isLavkaNothingSent = (error: unknown): boolean =>
+  typeof error === "object" && error !== null && NOTHING_SENT.has(error);

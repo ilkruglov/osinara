@@ -25,7 +25,9 @@ const describeWithDatabase = enabled ? describe : describe.skip;
 const NOW = new Date("2026-11-06T18:00:00.000Z");
 
 async function fixture() {
-  const family = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ('Whisper') RETURNING id");
+  const family = await database().query<{ id: string }>(
+    "INSERT INTO families (name) VALUES ('Whisper') RETURNING id",
+  );
   const group = await database().query<{ id: string }>(
     `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
      VALUES ($1, '-100-whisper', 'Whisper', 'family_private', 'addressed_only') RETURNING id`,
@@ -34,7 +36,11 @@ async function fixture() {
   return { familyId: family.rows[0]!.id, groupId: group.rows[0]!.id };
 }
 
-function input(f: Awaited<ReturnType<typeof fixture>>, kind: "canonical" | "whisper", token: string) {
+function input(
+  f: Awaited<ReturnType<typeof fixture>>,
+  kind: "canonical" | "whisper",
+  token: string,
+) {
   return {
     baseContinuationToken: token,
     familyId: f.familyId,
@@ -57,25 +63,37 @@ describeWithDatabase("whisper session repository", () => {
 
   it("opens a whisper session beside the group's canonical one on the group's thread", async () => {
     const f = await fixture();
-    const group = await sessionRepository.prepareTurn(input(f, "canonical", `osinara:group:${f.groupId}:main`));
+    const group = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
 
-    const whisper = await sessionRepository.prepareTurn(input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`));
+    const whisper = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
 
     expect(whisper.id).not.toBe(group.id);
     expect(whisper.continuationToken).not.toBe(group.continuationToken);
     expect(whisper.sandboxSessionId).toBe(group.sandboxSessionId);
-    const again = await sessionRepository.prepareTurn(input(f, "canonical", `osinara:group:${f.groupId}:main`));
+    const again = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
     expect(again.id).toBe(group.id);
   });
 
   it("ends a whisper session with its turn and opens a fresh one for the next whisper", async () => {
     const f = await fixture();
-    const group = await sessionRepository.prepareTurn(input(f, "canonical", `osinara:group:${f.groupId}:main`));
-    const first = await sessionRepository.prepareTurn(input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`));
+    const group = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
+    const first = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
     await sessionRepository.bindEveSession(first.id, "eve-whisper-1");
     await sessionRepository.recordTurnCompleted(first.id, "eve-whisper-1", false);
 
-    const second = await sessionRepository.prepareTurn(input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`));
+    const second = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
 
     expect(second.id).not.toBe(first.id);
     expect(second.continuationToken).not.toBe(first.continuationToken);
@@ -84,7 +102,10 @@ describeWithDatabase("whisper session repository", () => {
       "SELECT id, retired_at IS NOT NULL AS retired FROM conversation_sessions WHERE id = ANY($1::uuid[])",
       [[group.id, first.id]],
     );
-    expect(Object.fromEntries(rows.rows.map((row) => [row.id, row.retired]))).toEqual({ [group.id]: false, [first.id]: true });
+    expect(Object.fromEntries(rows.rows.map((row) => [row.id, row.retired]))).toEqual({
+      [group.id]: false,
+      [first.id]: true,
+    });
   });
 
   it("opens one whisper after another in a topic that has no group session yet", async () => {
@@ -106,21 +127,29 @@ describeWithDatabase("whisper session repository", () => {
     const first = await sessionRepository.prepareTurn(input(f, "whisper", token));
     await sessionRepository.bindEveSession(first.id, "eve-whisper-1");
     await sessionRepository.recordTurnCompleted(first.id, "eve-whisper-1", false);
-    const group = await sessionRepository.prepareTurn(input(f, "canonical", `osinara:group:${f.groupId}:main`));
+    const group = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
 
     const second = await sessionRepository.prepareTurn(input(f, "whisper", token));
 
     expect(second.continuationToken).not.toBe(first.continuationToken);
     expect(second.sandboxSessionId).toBe(group.sandboxSessionId);
-    const audit = await database().query("SELECT 1 FROM audit_events WHERE event_type = 'session.canonical_replaced'");
+    const audit = await database().query(
+      "SELECT 1 FROM audit_events WHERE event_type = 'session.canonical_replaced'",
+    );
     expect(audit.rowCount).toBe(0);
   });
 
   it("keeps two people's whispers apart", async () => {
     const f = await fixture();
 
-    const anna = await sessionRepository.prepareTurn(input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`));
-    const ilya = await sessionRepository.prepareTurn(input(f, "whisper", `osinara:whisper:${f.groupId}:main:102`));
+    const anna = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
+    const ilya = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:102`),
+    );
 
     expect(ilya.id).not.toBe(anna.id);
   });

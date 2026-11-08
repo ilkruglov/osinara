@@ -66,11 +66,13 @@ function refuseFailedLookup(response: TelegramApiResponse): never {
   const code = definite
     ? "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_REJECTED"
     : "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_UNAVAILABLE";
-  console.error(JSON.stringify({
-    code,
-    providerDescription: providerDescription(response.body),
-    providerStatus: response.status,
-  }));
+  console.error(
+    JSON.stringify({
+      code,
+      providerDescription: providerDescription(response.body),
+      providerStatus: response.status,
+    }),
+  );
   throw new AppError(
     code,
     definite
@@ -84,10 +86,11 @@ function refuseFailedLookup(response: TelegramApiResponse): never {
 export function createTelegramGroupAdminVerifier(
   dependencies: TelegramGroupAdminVerifierDependencies,
 ): TelegramGroupAdminVerifier {
-  if (!dependencies.botToken) throw new AppError(
-    "AGENT_TELEGRAM_CONFIG_MISSING",
-    "Не задан токен Telegram для проверки прав владельца в группе",
-  );
+  if (!dependencies.botToken)
+    throw new AppError(
+      "AGENT_TELEGRAM_CONFIG_MISSING",
+      "Не задан токен Telegram для проверки прав владельца в группе",
+    );
 
   return {
     async requireAdministrator(input): Promise<void> {
@@ -97,14 +100,20 @@ export function createTelegramGroupAdminVerifier(
         response = await callTelegramApi({
           body: { chat_id: input.telegramChatId, user_id: userId },
           botToken: dependencies.botToken,
-          fetch: withRequestTimeout(dependencies.fetch, dependencies.timeoutMilliseconds, input.signal),
+          fetch: withRequestTimeout(
+            dependencies.fetch,
+            dependencies.timeoutMilliseconds,
+            input.signal,
+          ),
           method: "getChatMember",
         });
       } catch (error) {
-        console.error(JSON.stringify({
-          code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_UNAVAILABLE",
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_UNAVAILABLE",
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          }),
+        );
         throw new AppError(
           "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_UNAVAILABLE",
           "Не удалось связаться с Telegram для проверки ваших прав в группе. Группа не " +
@@ -116,21 +125,25 @@ export function createTelegramGroupAdminVerifier(
       const answer = chatMemberAnswerSchema.safeParse(response.body);
       // The answer must describe exactly the owner that was asked about, or it proves nothing.
       if (!answer.success || answer.data.result.user.id !== userId) {
-        console.error(JSON.stringify({
-          code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_RESPONSE_INVALID",
-          providerStatus: response.status,
-          userMatches: answer.success ? false : null,
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_RESPONSE_INVALID",
+            providerStatus: response.status,
+            userMatches: answer.success ? false : null,
+          }),
+        );
         throw new AppError(
           "AGENT_TELEGRAM_GROUP_ADMIN_CHECK_RESPONSE_INVALID",
           "Telegram вернул непонятный ответ на проверку ваших прав в группе. Группа не зарегистрирована",
         );
       }
       if (!ADMIN_STATUSES.has(answer.data.result.status)) {
-        console.error(JSON.stringify({
-          code: "AGENT_TELEGRAM_GROUP_OWNER_NOT_ADMIN",
-          memberStatus: answer.data.result.status,
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_TELEGRAM_GROUP_OWNER_NOT_ADMIN",
+            memberStatus: answer.data.result.status,
+          }),
+        );
         throw new AppError(
           "AGENT_TELEGRAM_GROUP_OWNER_NOT_ADMIN",
           "Зарегистрировать группу можно, только если вы её создатель или администратор в Telegram. " +

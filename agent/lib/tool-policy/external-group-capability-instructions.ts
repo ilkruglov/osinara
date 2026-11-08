@@ -11,15 +11,16 @@ import {
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
-import { KNOWLEDGE_SKILL_CAPABILITY, KNOWLEDGE_SKILL_NAMES } from "../group-skills/knowledge-skills.js";
+import {
+  KNOWLEDGE_SKILL_CAPABILITY,
+  KNOWLEDGE_SKILL_NAMES,
+} from "../group-skills/knowledge-skills.js";
 
 function modelInvocation(name: string): string {
   const memoryAction = /^manage_memory\.(edit|delete|undo)$/u.exec(name)?.[1];
   if (memoryAction) return `\`manage_memory\` с \`action=${memoryAction}\``;
   const threadAction = /^manage_memory_thread\.(complete|reactivate)$/u.exec(name)?.[1];
-  return threadAction
-    ? `\`manage_memory_thread\` с \`action=${threadAction}\``
-    : `\`${name}\``;
+  return threadAction ? `\`manage_memory_thread\` с \`action=${threadAction}\`` : `\`${name}\``;
 }
 
 export interface ExternalGroupCapabilityInstructionOptions {
@@ -43,22 +44,39 @@ export function externalGroupCapabilityInstructions(
   // Catalog order makes the prompt deterministic while the set keeps authorization exact.
   const effectiveCapabilities = [
     ...SANDBOX_FILE_CAPABILITY_CATALOG,
-    ...EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(({ name }) =>
-      allowed.has(name) && !((name === "generate_image" || name === "fetch_telegram_avatars") && (
-        options.scheduledRun || !IMAGE_GENERATION_AVAILABLE
-      )) && !(name === "fetch_telegram_avatars" && !allowed.has("generate_image"))
+    ...EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(
+      ({ name }) =>
+        allowed.has(name) &&
+        !(
+          (name === "generate_image" || name === "fetch_telegram_avatars") &&
+          (options.scheduledRun || !IMAGE_GENERATION_AVAILABLE)
+        ) &&
+        !(name === "fetch_telegram_avatars" && !allowed.has("generate_image")),
     ),
   ];
   const applicationCore = options.includeApplicationCore
     ? [
-      { name: "read_profile_view", usage: "прочитать выданный текущему чату снимок профиля по profileViewRef" },
-      ...(options.scheduledRun
-        ? []
-        : [{ name: "manage_behavior_preference", usage: "прочитать или изменить стиль ответов текущего чата по явной просьбе" }]),
-      ...(options.scheduledHistory
-        ? [{ name: "read_scheduled_group_history", usage: "последовательно прочитать разрешённый snapshot истории scheduled run" }]
-        : []),
-    ]
+        {
+          name: "read_profile_view",
+          usage: "прочитать выданный текущему чату снимок профиля по profileViewRef",
+        },
+        ...(options.scheduledRun
+          ? []
+          : [
+              {
+                name: "manage_behavior_preference",
+                usage: "прочитать или изменить стиль ответов текущего чата по явной просьбе",
+              },
+            ]),
+        ...(options.scheduledHistory
+          ? [
+              {
+                name: "read_scheduled_group_history",
+                usage: "последовательно прочитать разрешённый snapshot истории scheduled run",
+              },
+            ]
+          : []),
+      ]
     : [];
   const completeSurface = [...effectiveCapabilities, ...applicationCore];
   const usage = completeSurface
@@ -78,12 +96,18 @@ export function externalGroupCapabilityInstructions(
   ];
   const skillPurpose: Readonly<Record<string, string>> = {
     "auto-analyst": "аналитик по машинам и автопрому",
-    "car-diagnostics": "диагностика неисправностей BMW E60 530i (N52B30) и Subaru BRZ / Toyota GT86 первого поколения",
+    "car-diagnostics":
+      "диагностика неисправностей BMW E60 530i (N52B30) и Subaru BRZ / Toyota GT86 первого поколения",
     "policy-finance-analyst": "аналитик по политике и финансам",
-    ...Object.fromEntries((options.authoredSkills ?? []).map((skill) => [skill.name, skill.description])),
+    ...Object.fromEntries(
+      (options.authoredSkills ?? []).map((skill) => [skill.name, skill.description]),
+    ),
   };
   const skillUsage = [...effectiveSkills]
-    .map((name) => `- \`load_skill\` с \`skill=${name}\`: ${skillPurpose[name] ?? `загрузить инструкции разрешённого skill \`${name}\``}.`)
+    .map(
+      (name) =>
+        `- \`load_skill\` с \`skill=${name}\`: ${skillPurpose[name] ?? `загрузить инструкции разрешённого skill \`${name}\``}.`,
+    )
     .join("\n");
   const effectiveSkillNames = [...effectiveSkills].map((name) => `\`${name}\``).join(", ");
   // Naming an action-level tool that was never granted would reintroduce the capability the

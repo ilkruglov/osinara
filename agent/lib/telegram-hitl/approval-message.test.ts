@@ -40,13 +40,17 @@ describe("buildApprovalMessage", () => {
       actionLabel: "удалить регистрацию группы. Бот останется в чате.",
       facts: [],
     });
-    expect(text.startsWith("Подтверждение: удалить регистрацию группы. Бот останется в чате.\n")).toBe(true);
+    expect(
+      text.startsWith("Подтверждение: удалить регистрацию группы. Бот останется в чате.\n"),
+    ).toBe(true);
   });
 
   it("falls back to a neutral header when the action is not described", () => {
     const text = buildApprovalMessage({ actionLabel: null, facts: [] });
     // Internal tool names are never shown to the user, so the neutral header stays generic.
-    expect(text).toBe("Подтверждение: выполнение действия.\n\nДействие будет выполнено один раз. Автоматического повтора при ошибке не будет.");
+    expect(text).toBe(
+      "Подтверждение: выполнение действия.\n\nДействие будет выполнено один раз. Автоматического повтора при ошибке не будет.",
+    );
   });
 
   it("omits the purpose line when the agent supplied nothing usable", () => {
@@ -55,7 +59,7 @@ describe("buildApprovalMessage", () => {
         actionLabel: "изменить напоминание",
         facts: ["ID: 1"],
         reason,
-        });
+      });
       expect(text).not.toContain("Зачем:");
     }
   });
@@ -75,21 +79,22 @@ describe("buildApprovalMessage", () => {
 
 describe("genericApprovalFacts", () => {
   it("renders readable scalar fields for a tool without a description", () => {
-    expect(genericApprovalFacts({
-      action: "update",
-      enabled: true,
-      limit: 5,
-      title: "Отчёт",
-    })).toEqual([
-      "action: update",
-      "enabled: да",
-      "limit: 5",
-      "title: Отчёт",
-    ]);
+    expect(
+      genericApprovalFacts({
+        action: "update",
+        enabled: true,
+        limit: 5,
+        title: "Отчёт",
+      }),
+    ).toEqual(["action: update", "enabled: да", "limit: 5", "title: Отчёт"]);
   });
 
   it("skips structures and bounds the number and length of fields", () => {
-    const wide: Record<string, unknown> = { nested: { a: 1 }, list: [1, 2], long: "x".repeat(1000) };
+    const wide: Record<string, unknown> = {
+      nested: { a: 1 },
+      list: [1, 2],
+      long: "x".repeat(1000),
+    };
     for (let index = 0; index < 20; index += 1) wide[`field${index}`] = `value${index}`;
     const facts = genericApprovalFacts(wide);
 
@@ -103,7 +108,14 @@ describe("genericApprovalFacts", () => {
 describe("googleWorkspaceFacts", () => {
   it("decodes service, command and parameters and keeps the exact command", () => {
     const facts = googleWorkspaceFacts({
-      argv: ["gmail", "users", "messages", "trash", "--params", '{"userId":"me","id":"1a00f098dc056c3b"}'],
+      argv: [
+        "gmail",
+        "users",
+        "messages",
+        "trash",
+        "--params",
+        '{"userId":"me","id":"1a00f098dc056c3b"}',
+      ],
     });
 
     expect(facts).toEqual([
@@ -129,7 +141,9 @@ describe("googleWorkspaceFacts", () => {
   });
 
   it("still shows the exact command when parameters cannot be decoded", () => {
-    const facts = googleWorkspaceFacts({ argv: ["drive", "files", "list", "--params", "not-json"] });
+    const facts = googleWorkspaceFacts({
+      argv: ["drive", "files", "list", "--params", "not-json"],
+    });
     expect(facts).toContain("Сервис: Drive");
     expect(facts.at(-1)).toBe("Точная команда: drive files list --params not-json");
   });
@@ -174,7 +188,16 @@ describe("googleWorkspaceFacts", () => {
     expect(inline).toContain("pageSize: 10");
 
     const duplicated = googleWorkspaceFacts({
-      argv: ["gmail", "users", "messages", "trash", "--params", '{"id":"A"}', "--params", '{"id":"B"}'],
+      argv: [
+        "gmail",
+        "users",
+        "messages",
+        "trash",
+        "--params",
+        '{"id":"A"}',
+        "--params",
+        '{"id":"B"}',
+      ],
     });
     // Showing only the first payload would describe one action while another one runs.
     expect(duplicated.filter((fact) => fact.startsWith("id: "))).toEqual(["id: A", "id: B"]);

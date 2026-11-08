@@ -1,18 +1,8 @@
 import { createHash } from "node:crypto";
-import {
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  readlink,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, readlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { existsSync } from "node:fs";
-import {
-  COMPILED_AGENT_MANIFEST_KIND,
-  ROOT_COMPILED_AGENT_NODE_ID,
-} from "#compiler/manifest.js";
+import { COMPILED_AGENT_MANIFEST_KIND, ROOT_COMPILED_AGENT_NODE_ID } from "#compiler/manifest.js";
 import {
   bundleAuthoredModuleForGeneration,
   bundleAuthoredModuleMapForGeneration,
@@ -25,8 +15,7 @@ async function prepareMaterializedAuthoredModules(e) {
   let t = await bundleAuthoredModuleMapForGeneration(e),
     n = resolveInstrumentationLayout({
       agentRoot: e.manifest.agentRoot,
-      providersEnabled:
-        e.manifest.config.experimental?.instrumentationProviders ?? !1,
+      providersEnabled: e.manifest.config.experimental?.instrumentationProviders ?? !1,
     }),
     r = e.manifest.config.build?.externalDependencies ?? [],
     bundleInstrumentationModule = async (e) =>
@@ -43,9 +32,7 @@ async function prepareMaterializedAuthoredModules(e) {
       e[t] = await bundleInstrumentationModule(r);
     i = { kind: `directory`, moduleCodeBySlot: e };
   }
-  return i === void 0
-    ? { moduleMapCode: t }
-    : { instrumentation: i, moduleMapCode: t };
+  return i === void 0 ? { moduleMapCode: t } : { instrumentation: i, moduleMapCode: t };
 }
 async function writeMaterializedAuthoredModules(t) {
   let r = join(t.runtimeAppRoot, `.eve`, `compile`),
@@ -93,9 +80,7 @@ async function writeMaterializedAuthoredModules(t) {
     };
   else if (t.prepared.instrumentation?.kind === `directory`) {
     let e = {};
-    for (let [n, r] of Object.entries(
-      t.prepared.instrumentation.moduleCodeBySlot,
-    ))
+    for (let [n, r] of Object.entries(t.prepared.instrumentation.moduleCodeBySlot))
       e[n] = await materializeInstrumentationModule(n, r);
     u = { kind: `directory`, modulePathsBySlot: e };
   }
@@ -107,10 +92,7 @@ async function writeMaterializedAuthoredModules(t) {
   let d = { fingerprint: s.digest(`hex`), moduleMap: l, version: 3 };
   return (
     u !== void 0 && (d.instrumentation = u),
-    await writeFile(
-      join(r, MATERIALIZED_MODULES_INDEX),
-      `${JSON.stringify(d)}\n`,
-    ),
+    await writeFile(join(r, MATERIALIZED_MODULES_INDEX), `${JSON.stringify(d)}\n`),
     d
   );
 }
@@ -136,11 +118,7 @@ function isMaterializedInstrumentation(e) {
   if (t.kind === `file`) return typeof t.modulePath == `string`;
   if (t.kind === `directory`) {
     let e = t.modulePathsBySlot;
-    return (
-      typeof e == `object` &&
-      !!e &&
-      Object.values(e).every((e) => typeof e == `string`)
-    );
+    return typeof e == `object` && !!e && Object.values(e).every((e) => typeof e == `string`);
   }
   return !1;
 }

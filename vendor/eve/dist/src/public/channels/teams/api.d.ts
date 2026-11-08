@@ -15,74 +15,76 @@ export type TeamsTenantId = string | (() => string | Promise<string>);
 /** Fetch implementation override used by tests or non-standard runtimes. */
 export type TeamsFetch = typeof fetch;
 /** Result shape accepted from a caller-owned Bot Connector token provider. */
-export type TeamsAccessTokenResult = string | {
-    readonly accessToken: string;
-    readonly expiresAt?: Date | number;
-};
+export type TeamsAccessTokenResult =
+  | string
+  | {
+      readonly accessToken: string;
+      readonly expiresAt?: Date | number;
+    };
 /** Caller-owned Bot Connector token provider. */
 export type TeamsTokenProvider = () => TeamsAccessTokenResult | Promise<TeamsAccessTokenResult>;
 /** Credentials used by the native Teams channel. */
 export interface TeamsCredentials {
-    readonly appId?: TeamsAppId;
-    readonly appPassword?: TeamsAppPassword;
-    readonly tenantId?: TeamsTenantId;
-    readonly tokenProvider?: TeamsTokenProvider;
+  readonly appId?: TeamsAppId;
+  readonly appPassword?: TeamsAppPassword;
+  readonly tenantId?: TeamsTenantId;
+  readonly tokenProvider?: TeamsTokenProvider;
 }
 /** Shared Teams API options. */
 export interface TeamsApiOptions {
-    readonly credentials?: TeamsCredentials;
-    /** Fetch override for tests or non-standard runtimes. */
-    readonly fetch?: TeamsFetch;
-    /**
-     * Microsoft OAuth host for the client-credentials token flow. Defaults to
-     * `https://login.microsoftonline.com`. eve ignores it when
-     * `credentials.tokenProvider` is set.
-     */
-    readonly loginBaseUrl?: string;
+  readonly credentials?: TeamsCredentials;
+  /** Fetch override for tests or non-standard runtimes. */
+  readonly fetch?: TeamsFetch;
+  /**
+   * Microsoft OAuth host for the client-credentials token flow. Defaults to
+   * `https://login.microsoftonline.com`. eve ignores it when
+   * `credentials.tokenProvider` is set.
+   */
+  readonly loginBaseUrl?: string;
 }
 /** Raw Teams Connector API response body. */
 export interface TeamsApiResponse {
-    readonly status: number;
-    readonly ok: boolean;
-    readonly body: unknown;
+  readonly status: number;
+  readonly ok: boolean;
+  readonly body: unknown;
 }
 /** Minimal ResourceResponse object returned by Teams write operations. */
 export interface TeamsPostedActivity {
-    /** Teams/Bot Framework activity id, when one was returned. */
-    readonly id: string;
-    /** Connector's raw JSON response. */
-    readonly raw: unknown;
+  /** Teams/Bot Framework activity id, when one was returned. */
+  readonly id: string;
+  /** Connector's raw JSON response. */
+  readonly raw: unknown;
 }
 /** Bot Framework channel account shape surfaced by the native Teams channel. */
 export interface TeamsChannelAccount {
-    readonly aadObjectId?: string;
-    readonly id: string;
-    readonly name?: string;
-    readonly role?: string;
+  readonly aadObjectId?: string;
+  readonly id: string;
+  readonly name?: string;
+  readonly role?: string;
 }
 /** Bot Framework mention entity shape used by Teams messages. */
 export interface TeamsMention {
-    readonly mentioned: TeamsChannelAccount;
-    readonly text: string;
-    readonly type: "mention";
+  readonly mentioned: TeamsChannelAccount;
+  readonly text: string;
+  readonly type: "mention";
 }
 /** Bot Framework/Teams attachment shape supported by eve-owned APIs. */
 export interface TeamsAttachment {
-    readonly content?: JsonObject;
-    readonly contentType: string;
-    readonly contentUrl?: string;
-    readonly name?: string;
+  readonly content?: JsonObject;
+  readonly contentType: string;
+  readonly contentUrl?: string;
+  readonly name?: string;
 }
 /** JSON body supported by Teams message endpoints used by eve. */
 export interface TeamsMessageBody {
-    readonly attachments?: readonly TeamsAttachment[];
-    readonly channelData?: JsonObject;
-    readonly entities?: readonly TeamsMention[];
-    readonly inputHint?: string;
-    readonly speak?: string;
-    readonly suggestedActions?: JsonObject;
-    readonly text?: string;
-    readonly textFormat?: "markdown" | "plain" | "xml";
+  readonly attachments?: readonly TeamsAttachment[];
+  readonly channelData?: JsonObject;
+  readonly entities?: readonly TeamsMention[];
+  readonly inputHint?: string;
+  readonly speak?: string;
+  readonly suggestedActions?: JsonObject;
+  readonly text?: string;
+  readonly textFormat?: "markdown" | "plain" | "xml";
 }
 /**
  * Outbound Bot Framework activity body sent through the Connector API.
@@ -91,27 +93,27 @@ export interface TeamsMessageBody {
  * channelData merging.
  */
 export interface TeamsOutboundActivity extends TeamsMessageBody {
-    readonly conversation?: JsonObject;
-    readonly from?: TeamsChannelAccount;
-    readonly recipient?: TeamsChannelAccount;
-    readonly replyToId?: string;
-    readonly type: "message" | "typing";
+  readonly conversation?: JsonObject;
+  readonly from?: TeamsChannelAccount;
+  readonly recipient?: TeamsChannelAccount;
+  readonly replyToId?: string;
+  readonly type: "message" | "typing";
 }
 /** Maximum character length for a single outbound Teams activity before `splitTeamsMessageText` chunks it (80 KiB). */
 export declare const TEAMS_MESSAGE_TEXT_MAX_LENGTH: number;
 /** Builds the channel-local continuation token for one Teams conversation/thread. */
 export declare function teamsContinuationToken(input: {
-    readonly conversationId: string;
-    readonly replyToActivityId?: string | null;
-    readonly tenantId?: string | null;
+  readonly conversationId: string;
+  readonly replyToActivityId?: string | null;
+  readonly tenantId?: string | null;
 }): string;
 /** Normalizes the thread suffix that Teams inconsistently includes in channel conversation ids. */
 export declare function normalizeTeamsContinuationAddress(input: {
-    readonly conversationId: string;
-    readonly replyToActivityId?: string | null;
+  readonly conversationId: string;
+  readonly replyToActivityId?: string | null;
 }): {
-    readonly conversationId: string;
-    readonly replyToActivityId: string | null;
+  readonly conversationId: string;
+  readonly replyToActivityId: string | null;
 };
 /** Resolves a Teams app id, falling back to `MICROSOFT_APP_ID` then `TEAMS_APP_ID`. */
 export declare function resolveTeamsAppId(appId?: TeamsAppId): Promise<string>;
@@ -122,37 +124,47 @@ export declare function resolveTeamsTenantId(tenantId?: TeamsTenantId): Promise<
 /** Resolves a Bot Connector access token, using a custom provider or client credentials. */
 export declare function resolveTeamsAccessToken(options?: TeamsApiOptions): Promise<string>;
 /** Low-level Bot Framework Connector API call. */
-export declare function callTeamsConnectorApi(input: TeamsApiOptions & {
+export declare function callTeamsConnectorApi(
+  input: TeamsApiOptions & {
     readonly body?: TeamsOutboundActivity | JsonObject;
     readonly method?: "DELETE" | "GET" | "POST" | "PUT";
     readonly path: string;
     readonly serviceUrl: string;
-}): Promise<TeamsApiResponse>;
+  },
+): Promise<TeamsApiResponse>;
 /** Sends a non-reply activity to one Teams conversation. */
-export declare function sendTeamsActivity(input: TeamsApiOptions & {
+export declare function sendTeamsActivity(
+  input: TeamsApiOptions & {
     readonly body: TeamsOutboundActivity;
     readonly conversationId: string;
     readonly serviceUrl: string;
-}): Promise<TeamsPostedActivity>;
+  },
+): Promise<TeamsPostedActivity>;
 /** Sends a reply activity to one Teams conversation activity. */
-export declare function replyToTeamsActivity(input: TeamsApiOptions & {
+export declare function replyToTeamsActivity(
+  input: TeamsApiOptions & {
     readonly activityId: string;
     readonly body: TeamsOutboundActivity;
     readonly conversationId: string;
     readonly serviceUrl: string;
-}): Promise<TeamsPostedActivity>;
+  },
+): Promise<TeamsPostedActivity>;
 /** Updates an existing Teams bot activity. */
-export declare function updateTeamsActivity(input: TeamsApiOptions & {
+export declare function updateTeamsActivity(
+  input: TeamsApiOptions & {
     readonly activityId: string;
     readonly body: TeamsOutboundActivity;
     readonly conversationId: string;
     readonly serviceUrl: string;
-}): Promise<TeamsPostedActivity>;
+  },
+): Promise<TeamsPostedActivity>;
 /** Triggers Teams' typing indicator for one conversation. */
-export declare function triggerTeamsTypingIndicator(input: TeamsApiOptions & {
+export declare function triggerTeamsTypingIndicator(
+  input: TeamsApiOptions & {
     readonly conversationId: string;
     readonly serviceUrl: string;
-}): Promise<void>;
+  },
+): Promise<void>;
 /**
  * Splits `content` into chunks no longer than `TEAMS_MESSAGE_TEXT_MAX_LENGTH`,
  * breaking on paragraph, then line, then word boundaries before a hard cut.
@@ -160,4 +172,6 @@ export declare function triggerTeamsTypingIndicator(input: TeamsApiOptions & {
  */
 export declare function splitTeamsMessageText(content: string): readonly string[];
 /** Normalizes a string or message body into a Teams message activity body. */
-export declare function normalizeTeamsPostInput(message: string | TeamsMessageBody): TeamsMessageBody;
+export declare function normalizeTeamsPostInput(
+  message: string | TeamsMessageBody,
+): TeamsMessageBody;

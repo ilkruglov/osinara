@@ -10,8 +10,7 @@ const connectionProvider = {
   create(e, t) {
     if (e.get(BundleKey) === void 0) return;
     let n = getActiveRuntimeNode(e).agent?.connections;
-    if (!(!n || n.length === 0))
-      return { value: new ConnectionRegistryImpl(n) };
+    if (!(!n || n.length === 0)) return { value: new ConnectionRegistryImpl(n) };
   },
 };
 export { ConnectionRegistryKey, connectionProvider };

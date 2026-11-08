@@ -63,10 +63,12 @@ export interface TelegramGroupAttachmentRepository {
   ): Promise<TelegramGroupAttachmentSummary & { telegramMessageId: string }>;
 }
 
-function attachmentSummary(row: Pick<
-  AttachmentRow,
-  "attachment_file_name" | "attachment_kind" | "attachment_media_type" | "attachment_size" | "id"
->): TelegramGroupAttachmentSummary {
+function attachmentSummary(
+  row: Pick<
+    AttachmentRow,
+    "attachment_file_name" | "attachment_kind" | "attachment_media_type" | "attachment_size" | "id"
+  >,
+): TelegramGroupAttachmentSummary {
   return {
     attachmentId: row.id,
     ...(row.attachment_file_name === null ? {} : { fileName: row.attachment_file_name }),
@@ -76,7 +78,9 @@ function attachmentSummary(row: Pick<
   };
 }
 
-function assertRegisteredGroupAttachmentAccess(auth: WorkspaceAuthorization): asserts auth is WorkspaceAuthorization & {
+function assertRegisteredGroupAttachmentAccess(
+  auth: WorkspaceAuthorization,
+): asserts auth is WorkspaceAuthorization & {
   groupId: string;
   groupType: "external" | "family_private";
   telegramChatType: "group" | "supergroup";
@@ -102,7 +106,10 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
       );
     }
     const attachment = target.attachments[0]!;
-    const sourceMessageId = requireTelegramPositiveBigint(target.messageId, "attachment_source_message_id");
+    const sourceMessageId = requireTelegramPositiveBigint(
+      target.messageId,
+      "attachment_source_message_id",
+    );
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -145,9 +152,17 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
                    message.attachment_file_name, message.attachment_media_type,
                    message.attachment_size::text, message.attachment_kind,
                    ''::text AS telegram_chat_id`,
-        [groupId, currentEntryId, attachment.fileId, attachment.fileUniqueId ?? null,
-          attachment.fileName ?? null, attachment.mediaType ?? null, attachment.size ?? null,
-          attachment.kind, sourceMessageId],
+        [
+          groupId,
+          currentEntryId,
+          attachment.fileId,
+          attachment.fileUniqueId ?? null,
+          attachment.fileName ?? null,
+          attachment.mediaType ?? null,
+          attachment.size ?? null,
+          attachment.kind,
+          sourceMessageId,
+        ],
       );
       await client.query("COMMIT");
       const row = result.rows[0];

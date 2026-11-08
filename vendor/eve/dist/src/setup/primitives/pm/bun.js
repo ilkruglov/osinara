@@ -1,7 +1,4 @@
-import {
-  applyNoProjectConfiguration,
-  resolveStandardInvocation,
-} from "./shared.js";
+import { applyNoProjectConfiguration, resolveStandardInvocation } from "./shared.js";
 const bunPackageManager = {
   kind: `bun`,
   scaffoldFiles: {},

@@ -22,8 +22,7 @@ function redactSignalResume(e) {
 }
 function getAuthorizationResult(e) {
   let t = loadContext().get(PendingAuthorizationResultKey);
-  if (!(!t || t.length === 0))
-    return e === void 0 ? t[0] : t.find((t) => t.name === e);
+  if (!(!t || t.length === 0)) return e === void 0 ? t[0] : t.find((t) => t.name === e);
 }
 function consumeAuthorizationResult(e) {
   let t = loadContext(),
@@ -45,10 +44,7 @@ function getHookUrl(r, a) {
     c = o.get(CallbackBaseUrlKey);
   return !s || !c
     ? void 0
-    : createWorkflowCallbackUrl(
-        c,
-        createEveConnectionCallbackRoutePath(r, a, authHookToken(s)),
-      );
+    : createWorkflowCallbackUrl(c, createEveConnectionCallbackRoutePath(r, a, authHookToken(s)));
 }
 function createAuthorizationAttempt(e) {
   let t = createUlid(),
@@ -59,9 +55,7 @@ function isAuthorizationSignal(e) {
   return typeof e != `object` || !e ? !1 : e[AUTHORIZATION_BRAND] === !0;
 }
 function isAuthorizationPendingModelOutput(e) {
-  return typeof e != `object` || !e
-    ? !1
-    : e[AUTHORIZATION_PENDING_BRAND] === !0;
+  return typeof e != `object` || !e ? !1 : e[AUTHORIZATION_PENDING_BRAND] === !0;
 }
 function authorizationPendingAsJsonObject(e) {
   return { [AUTHORIZATION_PENDING_BRAND]: !0, connections: [...e.connections] };
@@ -84,9 +78,7 @@ function isPendingAuthorizationToolOutput(e) {
 function authHookToken(e) {
   return `${e}:auth`;
 }
-const PendingAuthorizationResultKey = new ContextKey(
-    `eve.pendingAuthorizationResult`,
-  ),
+const PendingAuthorizationResultKey = new ContextKey(`eve.pendingAuthorizationResult`),
   CallbackBaseUrlKey = new ContextKey(`eve.callbackBaseUrl`),
   PENDING_AUTHORIZATION_KEY = `eve.runtime.pendingAuthorization`;
 function setPendingAuthorization(e, t) {
@@ -119,15 +111,11 @@ function clearPendingAuthorization(e, t) {
     if (n !== void 0) {
       let r = new Set(t),
         i = n.challenges.filter((e) => !r.has(e.attemptId ?? e.name));
-      if (i.length > 0)
-        return { ...e, [PENDING_AUTHORIZATION_KEY]: { challenges: i } };
+      if (i.length > 0) return { ...e, [PENDING_AUTHORIZATION_KEY]: { challenges: i } };
     }
   }
   let n = { ...e };
-  return (
-    delete n[PENDING_AUTHORIZATION_KEY],
-    Object.keys(n).length > 0 ? n : void 0
-  );
+  return (delete n[PENDING_AUTHORIZATION_KEY], Object.keys(n).length > 0 ? n : void 0);
 }
 function getPendingAuthorization(e) {
   if (!e) return;

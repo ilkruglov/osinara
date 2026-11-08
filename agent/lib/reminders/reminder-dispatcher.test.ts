@@ -33,14 +33,20 @@ describe("reminder dispatcher", () => {
     const groupJob = { ...job, groupId: "00000000-0000-4000-8000-000000000012" };
     const repository = {
       claimDue: vi.fn().mockResolvedValue([groupJob]),
-      complete: vi.fn().mockImplementation(async () => { order.push("complete"); }),
+      complete: vi.fn().mockImplementation(async () => {
+        order.push("complete");
+      }),
       fail: vi.fn(),
-      markDispatchStarted: vi.fn().mockImplementation(async () => { order.push("mark"); }),
+      markDispatchStarted: vi.fn().mockImplementation(async () => {
+        order.push("mark");
+      }),
     };
     const receipt = { messageId: "55", text: "Напоминание:\n\nПозвонить врачу" };
-    const timeline = { recordAgentResponse: vi.fn().mockImplementation(async () => {
-      order.push("timeline");
-    }) };
+    const timeline = {
+      recordAgentResponse: vi.fn().mockImplementation(async () => {
+        order.push("timeline");
+      }),
+    };
     const deliver = vi.fn().mockImplementation(async () => {
       order.push("deliver");
       return receipt;
@@ -82,11 +88,14 @@ describe("reminder dispatcher", () => {
     const dispatch = createReminderDispatcher({
       deliver: vi.fn().mockResolvedValue({ messageId: "55", text: "Напоминание" }),
       repository,
-      timeline: { recordAgentResponse: vi.fn().mockRejectedValue(new Error("timeline unavailable")) },
+      timeline: {
+        recordAgentResponse: vi.fn().mockRejectedValue(new Error("timeline unavailable")),
+      },
     });
 
-    await expect(dispatch(new Date("2026-07-13T06:00:00.000Z")))
-      .rejects.toThrowError("timeline unavailable");
+    await expect(dispatch(new Date("2026-07-13T06:00:00.000Z"))).rejects.toThrowError(
+      "timeline unavailable",
+    );
     expect(repository.complete).toHaveBeenCalledOnce();
     expect(repository.fail).not.toHaveBeenCalled();
   });

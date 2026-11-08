@@ -21,9 +21,4 @@ function setupIntegration(e) {
     );
   return t;
 }
-export {
-  SETUP_INTEGRATIONS,
-  createSetupContexts,
-  createSetupPresenter,
-  setupIntegration,
-};
+export { SETUP_INTEGRATIONS, createSetupContexts, createSetupPresenter, setupIntegration };

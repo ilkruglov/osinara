@@ -10,7 +10,7 @@ function stripAnsi(e) {
 function stripTerminalControls(e) {
   let t = ``,
     n = 0;
-  for (; n < e.length; ) {
+  for (; n < e.length;) {
     let r = e.codePointAt(n);
     if (r == null) break;
     let i = String.fromCodePoint(r);
@@ -31,12 +31,12 @@ function sliceUnits(e, t, n) {
   let r = ``,
     i = 0,
     a = t;
-  for (; a < e.length && i < n; ) {
+  for (; a < e.length && i < n;) {
     let t = e[a];
     if (t.width > 0 && i + t.width > n) break;
     ((r += t.text), (i += t.width), (a += 1));
   }
-  for (; e[a]?.ansi === !0; ) ((r += e[a].text), (a += 1));
+  for (; e[a]?.ansi === !0;) ((r += e[a].text), (a += 1));
   return r;
 }
 function clipVisible(e, t) {
@@ -84,7 +84,7 @@ function terminalGraphemeWidth(e) {
 function terminalTextUnits(r) {
   let i = [],
     a = 0;
-  for (; a < r.length; ) {
+  for (; a < r.length;) {
     let o = r.slice(a),
       s = o.match(ansiPrefixPattern);
     if (s !== null) {
@@ -111,12 +111,12 @@ function wrapVisibleLine(e, t) {
       let e = n[a];
       ((o += e.text.length), (r -= e.width), (a += 1));
     };
-  for (; r > t; ) {
+  for (; r > t;) {
     let r = findVisibleBreakPoint(n, a, t);
     i.push(e.slice(o, o + r).trimEnd());
     let s = o + r;
-    for (; o < s && a < n.length; ) consume();
-    for (; a < n.length; ) {
+    for (; o < s && a < n.length;) consume();
+    for (; a < n.length;) {
       let e = n[a];
       if (e.ansi || e.text.trimStart().length > 0) break;
       consume();

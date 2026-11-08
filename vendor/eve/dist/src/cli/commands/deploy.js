@@ -1,17 +1,12 @@
 import { hasInteractiveTerminal } from "./preconditions.js";
-import {
-  isNonInteractiveProjectCommand,
-  runNonInteractiveLink,
-} from "./vercel-non-interactive.js";
+import { isNonInteractiveProjectCommand, runNonInteractiveLink } from "./vercel-non-interactive.js";
 import { runDeployFlow } from "#setup/flows/deploy.js";
 import { createPrompter } from "#setup/prompter.js";
 const defaultDependencies = { hasInteractiveTerminal };
 async function runDeployCommand(e, r, i = defaultDependencies, a = {}) {
   if (isNonInteractiveProjectCommand(a)) {
     if (a.yes !== !0) {
-      (e.error(
-        "`eve deploy --non-interactive` requires `--yes` to confirm production deployment.",
-      ),
+      (e.error("`eve deploy --non-interactive` requires `--yes` to confirm production deployment."),
         (process.exitCode = 1));
       return;
     }
@@ -27,8 +22,7 @@ async function runDeployCommand(e, r, i = defaultDependencies, a = {}) {
     let n = await runDeployFlow({
       appRoot: r,
       prompter: o,
-      interactive:
-        !isNonInteractiveProjectCommand(a) && i.hasInteractiveTerminal(),
+      interactive: !isNonInteractiveProjectCommand(a) && i.hasInteractiveTerminal(),
       deps: i.flowDeps,
     });
     if (n.kind === `needs-link`) {
@@ -53,8 +47,7 @@ async function runDeployCommand(e, r, i = defaultDependencies, a = {}) {
           : `Deployed: ${n.productionUrl}`,
     );
   } catch (t) {
-    (e.error(t instanceof Error ? t.message : String(t)),
-      (process.exitCode = 1));
+    (e.error(t instanceof Error ? t.message : String(t)), (process.exitCode = 1));
   }
 }
 export { runDeployCommand };

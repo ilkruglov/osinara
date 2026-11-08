@@ -17,9 +17,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_memory_upgrade_ledger";
 const MIGRATION_FILE_PATTERN = /^\d{3}_.+\.sql$/u;
 const execFileAsync = promisify(execFile);
@@ -221,14 +220,10 @@ function testDatabaseUrlForSchema(): string {
 }
 
 async function runMigrationRunner(): Promise<void> {
-  await execFileAsync(
-    process.execPath,
-    ["--experimental-strip-types", "scripts/migrate.ts"],
-    {
-      cwd: resolve("."),
-      env: { ...process.env, DATABASE_URL: testDatabaseUrlForSchema() },
-    },
-  );
+  await execFileAsync(process.execPath, ["--experimental-strip-types", "scripts/migrate.ts"], {
+    cwd: resolve("."),
+    env: { ...process.env, DATABASE_URL: testDatabaseUrlForSchema() },
+  });
 }
 
 describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrations", () => {
@@ -251,11 +246,12 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
           applied_at timestamptz NOT NULL DEFAULT now()
         )
       `);
+      await client.query("INSERT INTO schema_migrations (name) SELECT unnest($1::text[])", [
+        [...V0101_LEDGER],
+      ]);
       await client.query(
-        "INSERT INTO schema_migrations (name) SELECT unnest($1::text[])",
-        [[...V0101_LEDGER]],
+        "INSERT INTO families (id, name) VALUES ('00000000-0000-4000-8000-000000000083', 'Legacy skill')",
       );
-      await client.query("INSERT INTO families (id, name) VALUES ('00000000-0000-4000-8000-000000000083', 'Legacy skill')");
       await client.query(`
         INSERT INTO telegram_groups
           (family_id, telegram_chat_id, title, type, message_mode, skill_allowlist)
@@ -270,16 +266,18 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         .sort();
       const migrationPurposes = migrationNames.map((name) => name.replace(/^\d{3}_/u, ""));
       expect(new Set(migrationPurposes).size).toBe(migrationPurposes.length);
-      expect(migrationNames.filter((name) => name >= "049_" && name < "062_"))
-        .toEqual(MEMORY_RELEASE_MIGRATIONS);
+      expect(migrationNames.filter((name) => name >= "049_" && name < "062_")).toEqual(
+        MEMORY_RELEASE_MIGRATIONS,
+      );
 
       const before = await client.query<{ name: string }>(
         "SELECT name FROM schema_migrations ORDER BY name",
       );
       expect(before.rows.map(({ name }) => name)).toEqual(V0101_LEDGER);
       const namesBefore = new Set(before.rows.map(({ name }) => name));
-      expect(migrationNames.filter((name) => !namesBefore.has(name)))
-        .toEqual(POST_V0101_MIGRATIONS);
+      expect(migrationNames.filter((name) => !namesBefore.has(name))).toEqual(
+        POST_V0101_MIGRATIONS,
+      );
 
       await runMigrationRunner();
 
@@ -287,18 +285,21 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
       const after = await client.query<{ name: string }>(
         "SELECT name FROM schema_migrations ORDER BY name",
       );
-      expect(after.rows.map(({ name }) => name).filter((name) => !namesBefore.has(name)))
-        .toEqual(POST_V0101_MIGRATIONS);
+      expect(after.rows.map(({ name }) => name).filter((name) => !namesBefore.has(name))).toEqual(
+        POST_V0101_MIGRATIONS,
+      );
       expect(after.rows).toHaveLength(V0101_LEDGER.length + POST_V0101_MIGRATIONS.length);
       // A legacy grant was cleared by 083 and the column dropped by 120; the group itself survives.
-      await expect(client.query(
-        "SELECT 1 FROM telegram_groups WHERE telegram_chat_id = '-100083'",
-      )).resolves.toMatchObject({ rowCount: 1 });
-      await expect(client.query(
-        `SELECT 1 FROM information_schema.columns
+      await expect(
+        client.query("SELECT 1 FROM telegram_groups WHERE telegram_chat_id = '-100083'"),
+      ).resolves.toMatchObject({ rowCount: 1 });
+      await expect(
+        client.query(
+          `SELECT 1 FROM information_schema.columns
           WHERE table_schema = $1 AND table_name = 'telegram_groups' AND column_name = 'skill_allowlist'`,
-        [TEST_SCHEMA],
-      )).resolves.toMatchObject({ rowCount: 0 });
+          [TEST_SCHEMA],
+        ),
+      ).resolves.toMatchObject({ rowCount: 0 });
 
       // Representative authoritative and projection objects prove every R0-R7 migration took effect.
       for (const table of EXPECTED_R0_R7_TABLES) {
@@ -308,16 +309,18 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         );
         expect(object.rows[0]?.relation).not.toBeNull();
       }
-      await expect(client.query(
-        `SELECT russian_search_vector FROM memory_items LIMIT 0`,
-      )).resolves.toBeDefined();
-      await expect(client.query(
-        `SELECT delivery_status FROM external_profile_projection_notices LIMIT 0`,
-      )).resolves.toBeDefined();
-      await expect(client.query(
-        `SELECT recovery_attempts, last_recovery_diagnostic_code, last_recovered_at
+      await expect(
+        client.query(`SELECT russian_search_vector FROM memory_items LIMIT 0`),
+      ).resolves.toBeDefined();
+      await expect(
+        client.query(`SELECT delivery_status FROM external_profile_projection_notices LIMIT 0`),
+      ).resolves.toBeDefined();
+      await expect(
+        client.query(
+          `SELECT recovery_attempts, last_recovery_diagnostic_code, last_recovered_at
            FROM memory_review_batches LIMIT 0`,
-      )).resolves.toBeDefined();
+        ),
+      ).resolves.toBeDefined();
     } finally {
       try {
         await client.query("RESET search_path");

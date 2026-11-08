@@ -13,26 +13,19 @@ function isMicrosandboxPlatformSupported() {
 }
 function isGlibcLinux() {
   try {
-    return (
-      typeof process.report?.getReport()?.header?.glibcVersionRuntime ==
-      `string`
-    );
+    return typeof process.report?.getReport()?.header?.glibcVersionRuntime == `string`;
   } catch {
     return !1;
   }
 }
 async function assertMicrosandboxPlatformCandidate() {
   if (!(process.platform === `darwin` && process.arch === `arm64`)) {
-    if (
-      process.platform === `linux` &&
-      (process.arch === `x64` || process.arch === `arm64`)
-    ) {
+    if (process.platform === `linux` && (process.arch === `x64` || process.arch === `arm64`)) {
       if (!isGlibcLinux())
         throw Error(
           `The microsandbox sandbox backend requires a glibc-based Linux distribution; musl hosts are not supported. Use docker() or vercel() instead.`,
         );
-      if (process.env.MSB_PATH !== void 0 || (await doesPathExist(`/dev/kvm`)))
-        return;
+      if (process.env.MSB_PATH !== void 0 || (await doesPathExist(`/dev/kvm`))) return;
       throw Error(
         "The microsandbox sandbox backend requires Linux with KVM enabled. `/dev/kvm` is not available on this host. Enable KVM, set MSB_PATH for a custom runtime, or use docker() / vercel().",
       );
@@ -72,12 +65,10 @@ async function collectMicrosandboxBaseRuntimeOutput(e, t) {
   for await (let l of e)
     if (l.kind === `stdout`) {
       let e = n.decode(l.data, { stream: !0 });
-      ((i = appendOutput(i, e)),
-        (o = emitMicrosandboxBaseRuntimeLogs(o + e, t)));
+      ((i = appendOutput(i, e)), (o = emitMicrosandboxBaseRuntimeLogs(o + e, t)));
     } else if (l.kind === `stderr`) {
       let e = r.decode(l.data, { stream: !0 });
-      ((a = appendOutput(a, e)),
-        (s = emitMicrosandboxBaseRuntimeLogs(s + e, t)));
+      ((a = appendOutput(a, e)), (s = emitMicrosandboxBaseRuntimeLogs(s + e, t)));
     } else if (l.kind === `exited`) {
       c = l.code;
       break;
@@ -85,12 +76,8 @@ async function collectMicrosandboxBaseRuntimeOutput(e, t) {
   let l = n.decode(),
     u = r.decode();
   if (
-    (l.length > 0 &&
-      ((i = appendOutput(i, l)),
-      (o = emitMicrosandboxBaseRuntimeLogs(o + l, t))),
-    u.length > 0 &&
-      ((a = appendOutput(a, u)),
-      (s = emitMicrosandboxBaseRuntimeLogs(s + u, t))),
+    (l.length > 0 && ((i = appendOutput(i, l)), (o = emitMicrosandboxBaseRuntimeLogs(o + l, t))),
+    u.length > 0 && ((a = appendOutput(a, u)), (s = emitMicrosandboxBaseRuntimeLogs(s + u, t))),
     emitMicrosandboxBaseRuntimeLogLine(o, t),
     emitMicrosandboxBaseRuntimeLogLine(s, t),
     c === void 0)

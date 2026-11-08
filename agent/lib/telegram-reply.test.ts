@@ -36,30 +36,50 @@ function context(attributes: Record<string, unknown>) {
 
 describe("telegramTurnReplyParameters", () => {
   it("replies to the verified message that triggered a group turn", () => {
-    expect(telegramTurnReplyParameters(state(), context({
-      telegramChatId: "-1001",
-      telegramChatType: "supergroup",
-      telegramReplyToMessageId: "77",
-    }))).toEqual({ allow_sending_without_reply: true, message_id: 77 });
+    expect(
+      telegramTurnReplyParameters(
+        state(),
+        context({
+          telegramChatId: "-1001",
+          telegramChatType: "supergroup",
+          telegramReplyToMessageId: "77",
+        }),
+      ),
+    ).toEqual({ allow_sending_without_reply: true, message_id: 77 });
   });
 
   it("does not add reply metadata to private or callback-originated turns", () => {
-    expect(telegramTurnReplyParameters(state("private"), context({
-      telegramChatId: "101",
-      telegramChatType: "private",
-      telegramReplyToMessageId: "77",
-    }))).toBeUndefined();
-    expect(telegramTurnReplyParameters(state(), context({
-      telegramChatId: "-1001",
-      telegramChatType: "supergroup",
-    }))).toBeUndefined();
+    expect(
+      telegramTurnReplyParameters(
+        state("private"),
+        context({
+          telegramChatId: "101",
+          telegramChatType: "private",
+          telegramReplyToMessageId: "77",
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      telegramTurnReplyParameters(
+        state(),
+        context({
+          telegramChatId: "-1001",
+          telegramChatType: "supergroup",
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it("rejects a reply target copied from another Telegram chat", () => {
-    expect(() => telegramTurnReplyParameters(state(), context({
-      telegramChatId: "-1002",
-      telegramChatType: "supergroup",
-      telegramReplyToMessageId: "77",
-    }))).toThrow("AGENT_TELEGRAM_REPLY_CONTEXT_INVALID");
+    expect(() =>
+      telegramTurnReplyParameters(
+        state(),
+        context({
+          telegramChatId: "-1002",
+          telegramChatType: "supergroup",
+          telegramReplyToMessageId: "77",
+        }),
+      ),
+    ).toThrow("AGENT_TELEGRAM_REPLY_CONTEXT_INVALID");
   });
 });

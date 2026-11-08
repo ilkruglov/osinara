@@ -26,9 +26,7 @@ function addChannelVirtualHandler(r, i) {
   let a = createChannelRouteKey(i.route),
     o = `${EVE_CHANNEL_VIRTUAL_ID_PREFIX}${a}`,
     s = stringifyEsmImportSpecifier(
-      resolvePackageSourceFilePath(
-        `src/internal/nitro/routes/channel-dispatch.ts`,
-      ),
+      resolvePackageSourceFilePath(`src/internal/nitro/routes/channel-dispatch.ts`),
     ),
     c = stringifyEsmImportSpecifier(resolvePackageDependencyPath(`nitro`)),
     l = stringifyEsmImportSpecifier(resolvePackageDependencyPath(`nitro/h3`));
@@ -51,10 +49,7 @@ function addChannelVirtualHandler(r, i) {
     (r.options.virtual[o] = [
       ...(i.route.cors === void 0
         ? []
-        : [
-            `import { handleCors } from ${l};`,
-            `const cors = ${JSON.stringify(i.route.cors)};`,
-          ]),
+        : [`import { handleCors } from ${l};`, `const cors = ${JSON.stringify(i.route.cors)};`]),
       `import { dispatchChannelRequest } from ${s};`,
       `const config = ${JSON.stringify(i.artifactsConfig)};`,
       i.route.cors === void 0

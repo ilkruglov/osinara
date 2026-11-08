@@ -36,7 +36,12 @@ interface SkillSignalAction {
 }
 
 interface SkillSignalDependencies {
-  conversationId(owner: { chatKind: TrustedChatKind; familyId: string; groupId: string | null; userId: string }): Promise<string | null>;
+  conversationId(owner: {
+    chatKind: TrustedChatKind;
+    familyId: string;
+    groupId: string | null;
+    userId: string;
+  }): Promise<string | null>;
   /** Conversation of a registered external group, for loads of skills granted to it. */
   groupConversationId(groupId: string): Promise<string | null>;
   recordUsage(input: {
@@ -63,12 +68,16 @@ const MAX_TRACKED_TURNS = 200;
 export function trustedChatKind(auth: SessionAuth): TrustedChatKind | null {
   const attributes = auth.current?.attributes;
   if (auth.current?.authenticator !== "telegram" || !attributes) return null;
-  if (attributes.telegramChatType === "private") return attributes.role === "owner" ? "private" : null;
+  if (attributes.telegramChatType === "private")
+    return attributes.role === "owner" ? "private" : null;
   return attributes.groupType === "family_private" ? "family" : null;
 }
 
 function trustedIdentity(ctx: SkillSignalContext): {
-  chatKind: TrustedChatKind; familyId: string; groupId: string | null; userId: string;
+  chatKind: TrustedChatKind;
+  familyId: string;
+  groupId: string | null;
+  userId: string;
 } | null {
   if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx)) return null;
   const chatKind = trustedChatKind(ctx.session.auth);
@@ -76,15 +85,21 @@ function trustedIdentity(ctx: SkillSignalContext): {
   const familyId = attributes?.familyId;
   const userId = ctx.session.auth.current?.principalId;
   if (chatKind === null || typeof familyId !== "string" || typeof userId !== "string") return null;
-  const groupId = chatKind === "family" && typeof attributes?.groupId === "string" ? attributes.groupId : null;
+  const groupId =
+    chatKind === "family" && typeof attributes?.groupId === "string" ? attributes.groupId : null;
   return { chatKind, familyId, groupId, userId };
 }
 
 /** A live external group turn: its granted skills are loaded here, so usage is recorded here too. */
 function externalIdentity(ctx: SkillSignalContext): { familyId: string; groupId: string } | null {
-  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx) || isScheduledSession(ctx)) return null;
+  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx) || isScheduledSession(ctx))
+    return null;
   const attributes = ctx.session.auth.current?.attributes;
-  if (ctx.session.auth.current?.authenticator !== "telegram" || attributes?.groupType !== "external") return null;
+  if (
+    ctx.session.auth.current?.authenticator !== "telegram" ||
+    attributes?.groupType !== "external"
+  )
+    return null;
   const familyId = attributes.familyId;
   const groupId = attributes.groupId;
   return typeof familyId === "string" && typeof groupId === "string" ? { familyId, groupId } : null;
@@ -107,7 +122,10 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
   }
 
   return {
-    async actionsRequested(event: { data: { actions: readonly SkillSignalAction[]; turnId: string } }, ctx: SkillSignalContext): Promise<void> {
+    async actionsRequested(
+      event: { data: { actions: readonly SkillSignalAction[]; turnId: string } },
+      ctx: SkillSignalContext,
+    ): Promise<void> {
       // A whisper leaves no trace in its group's conversation: no usage, no repeat hint.
       if (isTelegramWhisperSession(ctx.session.auth)) return;
       const identity = trustedIdentity(ctx);
@@ -123,8 +141,11 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
             ? await dependencies.conversationId(identity)
             : await dependencies.groupConversationId(external!.groupId);
           await dependencies.recordUsage({
-            conversationId, eveSessionId: ctx.session.id, eveTurnId: event.data.turnId,
-            familyId, skillName: skill,
+            conversationId,
+            eveSessionId: ctx.session.id,
+            eveTurnId: event.data.turnId,
+            familyId,
+            skillName: skill,
           });
           continue;
         }
@@ -136,7 +157,10 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
       }
     },
 
-    async turnCompleted(event: { data: { turnId: string } }, ctx: SkillSignalContext): Promise<void> {
+    async turnCompleted(
+      event: { data: { turnId: string } },
+      ctx: SkillSignalContext,
+    ): Promise<void> {
       const key = `${ctx.session.id}:${event.data.turnId}`;
       const names = toolCalls.get(key);
       toolCalls.delete(key);
@@ -146,8 +170,13 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
       const conversationId = await dependencies.conversationId(identity);
       if (conversationId === null) return;
       await dependencies.saveHint({
-        conversationId, eveSessionId: ctx.session.id, eveTurnId: event.data.turnId,
-        familyId: identity.familyId, kind: "repeat", stepCount: names.length, toolNames: [...new Set(names)],
+        conversationId,
+        eveSessionId: ctx.session.id,
+        eveTurnId: event.data.turnId,
+        familyId: identity.familyId,
+        kind: "repeat",
+        stepCount: names.length,
+        toolNames: [...new Set(names)],
       });
     },
   };

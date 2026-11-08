@@ -22,9 +22,9 @@ export declare const SANDBOX_URL_SCHEME = "eve-sandbox:";
  * re-reading the file.
  */
 export interface SandboxRef {
-    readonly path: string;
-    readonly size: number;
-    readonly mediaType: string;
+  readonly path: string;
+  readonly size: number;
+  readonly mediaType: string;
 }
 /**
  * Encodes a {@link SandboxRef} as a URL suitable for use as

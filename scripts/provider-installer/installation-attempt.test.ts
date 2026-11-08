@@ -50,12 +50,14 @@ describe("recoverPreMigrationInstallationAttempt", () => {
   it("removes an installer-owned attempt only when no migration marker exists", async () => {
     const fs = filesystem(false);
 
-    await expect(recoverPreMigrationInstallationAttempt({
-      attemptDir: ATTEMPT_DIR,
-      baseDir: BASE_DIR,
-      filesystem: fs,
-      migrationMarker: MIGRATION_MARKER,
-    })).resolves.toBe(true);
+    await expect(
+      recoverPreMigrationInstallationAttempt({
+        attemptDir: ATTEMPT_DIR,
+        baseDir: BASE_DIR,
+        filesystem: fs,
+        migrationMarker: MIGRATION_MARKER,
+      }),
+    ).resolves.toBe(true);
 
     expect(fs.rm).toHaveBeenCalledWith(BASE_DIR, { recursive: true });
   });
@@ -63,12 +65,14 @@ describe("recoverPreMigrationInstallationAttempt", () => {
   it("fails closed and preserves the attempt after the durable migration marker", async () => {
     const fs = filesystem(true);
 
-    await expect(recoverPreMigrationInstallationAttempt({
-      attemptDir: ATTEMPT_DIR,
-      baseDir: BASE_DIR,
-      filesystem: fs,
-      migrationMarker: MIGRATION_MARKER,
-    })).rejects.toMatchObject({ code: "OSINARA_INSTALL_STATE_AMBIGUOUS" });
+    await expect(
+      recoverPreMigrationInstallationAttempt({
+        attemptDir: ATTEMPT_DIR,
+        baseDir: BASE_DIR,
+        filesystem: fs,
+        migrationMarker: MIGRATION_MARKER,
+      }),
+    ).rejects.toMatchObject({ code: "OSINARA_INSTALL_STATE_AMBIGUOUS" });
 
     expect(fs.rm).not.toHaveBeenCalled();
   });
@@ -80,12 +84,14 @@ describe("recoverPreMigrationInstallationAttempt", () => {
       throw missing(path);
     });
 
-    await expect(recoverPreMigrationInstallationAttempt({
-      attemptDir: ATTEMPT_DIR,
-      baseDir: BASE_DIR,
-      filesystem: fs,
-      migrationMarker: MIGRATION_MARKER,
-    })).rejects.toMatchObject({ code: "OSINARA_INSTALL_EXISTING_STATE" });
+    await expect(
+      recoverPreMigrationInstallationAttempt({
+        attemptDir: ATTEMPT_DIR,
+        baseDir: BASE_DIR,
+        filesystem: fs,
+        migrationMarker: MIGRATION_MARKER,
+      }),
+    ).rejects.toMatchObject({ code: "OSINARA_INSTALL_EXISTING_STATE" });
 
     expect(fs.rm).not.toHaveBeenCalled();
   });
@@ -98,12 +104,14 @@ describe("recoverPreMigrationInstallationAttempt", () => {
       throw missing(path);
     });
 
-    await expect(recoverPreMigrationInstallationAttempt({
-      attemptDir: ATTEMPT_DIR,
-      baseDir: BASE_DIR,
-      filesystem: fs,
-      migrationMarker: MIGRATION_MARKER,
-    })).rejects.toMatchObject({ code: "OSINARA_INSTALL_ATTEMPT_OWNERSHIP_INVALID" });
+    await expect(
+      recoverPreMigrationInstallationAttempt({
+        attemptDir: ATTEMPT_DIR,
+        baseDir: BASE_DIR,
+        filesystem: fs,
+        migrationMarker: MIGRATION_MARKER,
+      }),
+    ).rejects.toMatchObject({ code: "OSINARA_INSTALL_ATTEMPT_OWNERSHIP_INVALID" });
 
     expect(fs.rm).not.toHaveBeenCalled();
   });

@@ -7,11 +7,7 @@ import {
   createTraceViewerState,
   reduceTraceViewerKey,
 } from "./trace-viewer-state.js";
-import {
-  conversationSelectionText,
-  panelSelectionText,
-  renderTraceViewer,
-} from "./trace-view.js";
+import { conversationSelectionText, panelSelectionText, renderTraceViewer } from "./trace-view.js";
 var TraceViewerSession = class {
   #e;
   #t;
@@ -57,20 +53,12 @@ var TraceViewerSession = class {
       (e.value === `[` || e.value === `]`) &&
       ((this.#r = void 0), (this.#i = void 0));
     let t = this.#n.trace !== void 0,
-      {
-        state: n,
-        effect: r,
-        copySelection: i,
-      } = reduceTraceViewerKey(this.#n, e, this.#f);
+      { state: n, effect: r, copySelection: i } = reduceTraceViewerKey(this.#n, e, this.#f);
     if (((this.#n = n), r === `close`)) return `close`;
-    (i !== void 0 && this.#p(i),
-      this.repaint(),
-      t && n.trace === void 0 && this.#m());
+    (i !== void 0 && this.#p(i), this.repaint(), t && n.trace === void 0 && this.#m());
   }
   setTerminalBackground(e) {
-    this.#c ||
-      !this.#e.theme.color ||
-      ((this.#d = deriveTraceViewerSurfaces(e)), this.repaint());
+    this.#c || !this.#e.theme.color || ((this.#d = deriveTraceViewerSurfaces(e)), this.repaint());
   }
   repaint() {
     if (this.#c) return;
@@ -90,12 +78,7 @@ var TraceViewerSession = class {
       panelTotalRows: r.panelTotalRows,
       contentWidth: r.contentWidth,
       conversationLineCounts: this.#n.conversationItems.map((e, t) =>
-        conversationItemLineCount(
-          e,
-          r.contentWidth,
-          this.#e.theme,
-          this.#n.expandedItems.has(t),
-        ),
+        conversationItemLineCount(e, r.contentWidth, this.#e.theme, this.#n.expandedItems.has(t)),
       ),
     }),
       this.#e.paint(r.rows));
@@ -108,19 +91,8 @@ var TraceViewerSession = class {
   #p(e) {
     let t =
       e.region === `panel`
-        ? panelSelectionText(
-            this.#n,
-            this.#e.dimensions().width,
-            this.#e.theme,
-            e,
-          )
-        : conversationSelectionText(
-            this.#n,
-            this.#f.contentWidth,
-            this.#e.theme,
-            e,
-            this.#d,
-          );
+        ? panelSelectionText(this.#n, this.#e.dimensions().width, this.#e.theme, e)
+        : conversationSelectionText(this.#n, this.#f.contentWidth, this.#e.theme, e, this.#d);
     t.trim().length !== 0 &&
       (this.#e.copyText?.(t),
       (this.#o = `Copied to clipboard`),
@@ -151,17 +123,13 @@ var TraceViewerSession = class {
         t = this.#r,
         n = this.#e.reference;
       if (
-        (t === void 0 &&
-          n !== void 0 &&
-          (t = e.find((e) => e.traceId.startsWith(n))?.traceId),
+        (t === void 0 && n !== void 0 && (t = e.find((e) => e.traceId.startsWith(n))?.traceId),
         t === void 0 && this.#i !== void 0 && (t = await this.#g(e, this.#i)),
         this.#c)
       )
         return;
       t !== void 0 && (this.#r = t);
-      let a =
-          e[applyTraceList(this.#n, e, { preferTraceId: t }).traceIndex]
-            ?.traceId,
+      let a = e[applyTraceList(this.#n, e, { preferTraceId: t }).traceIndex]?.traceId,
         o = a === void 0 ? void 0 : await this.#t.read(a);
       if (this.#c) return;
       let s = applyTraceList(this.#n, e, { preferTraceId: this.#r });
@@ -169,8 +137,7 @@ var TraceViewerSession = class {
         e[s.traceIndex]?.traceId === this.#r &&
         ((this.#r = void 0),
         (this.#i = void 0),
-        s.notice?.startsWith(`No local trace matches`) &&
-          (s = { ...s, notice: void 0 })),
+        s.notice?.startsWith(`No local trace matches`) && (s = { ...s, notice: void 0 })),
         e[s.traceIndex]?.traceId === a && (s = applyLoadedTrace(s, o)),
         (this.#n = s),
         this.repaint());
@@ -185,10 +152,7 @@ var TraceViewerSession = class {
   }
   #_() {
     let e = this.#n.traces[this.#n.traceIndex];
-    if (
-      !(e === void 0 || this.#n.trace === void 0) &&
-      !(Date.now() - e.lastActivityMs > 3e3)
-    )
+    if (!(e === void 0 || this.#n.trace === void 0) && !(Date.now() - e.lastActivityMs > 3e3))
       return BigInt(Date.now()) * 1000000n;
   }
 };

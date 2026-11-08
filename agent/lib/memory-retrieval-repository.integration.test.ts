@@ -87,11 +87,20 @@ describeWithDatabase("memoryRetrievalRepository", () => {
            (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
          SELECT $1, chunk_index, 'кусок ' || chunk_index, 0, 5, $2::vector, $3
            FROM generate_series(0, 29) AS chunk_index`,
-        [memory.rows[0]!.id, `[${vector(1, 0.01 * (record + 1)).join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+        [
+          memory.rows[0]!.id,
+          `[${vector(1, 0.01 * (record + 1)).join(",")}]`,
+          MEMORY_EMBEDDING_MODEL_VERSION,
+        ],
       );
     }
 
-    const results = await memoryRetrievalRepository.search(auth, "нечто без совпадения по словам", vector(1, 0), 12);
+    const results = await memoryRetrievalRepository.search(
+      auth,
+      "нечто без совпадения по словам",
+      vector(1, 0),
+      12,
+    );
 
     expect(results).toHaveLength(12);
   });
@@ -102,31 +111,57 @@ describeWithDatabase("memoryRetrievalRepository", () => {
         `INSERT INTO memory_items (family_id, owner_user_id, author_user_id, author_telegram_user_id,
            scope, kind, content, source, confirmation, sensitivity, operation_key, occurred_at)
          VALUES ($1, $2, $2, 'search-owner', 'personal', 'episode', 'Поездка в Казань', 'test:lexical',
-           'model_high', 'normal', $3, '2026-09-01')`, [auth.familyId, owner, `lexical-${owner}`],
+           'model_high', 'normal', $3, '2026-09-01')`,
+        [auth.familyId, owner, `lexical-${owner}`],
       );
     }
     const found = await memoryRetrievalRepository.searchWithConflictClosure(auth, "Казань", null);
     expect(found.results).toHaveLength(1);
     expect(found.results[0]?.evidence).toMatchObject({ semanticSimilarity: null });
     expect(found.results[0]?.retention).toBeGreaterThan(0.99);
-    expect(await memoryRetrievalRepository.search(auth, "Казань", null, 12, { occurredAfter: "2026-09-02" })).toEqual([]);
-    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [auth.familyId, auth.userId]);
-    expect((await memoryRetrievalRepository.searchWithConflictClosure(auth, "Казань", null)).results).toEqual([]);
+    expect(
+      await memoryRetrievalRepository.search(auth, "Казань", null, 12, {
+        occurredAfter: "2026-09-02",
+      }),
+    ).toEqual([]);
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      auth.familyId,
+      auth.userId,
+    ]);
+    expect(
+      (await memoryRetrievalRepository.searchWithConflictClosure(auth, "Казань", null)).results,
+    ).toEqual([]);
   });
 
   it("accepts the automatic block's candidate limit and rejects one above the candidate ceiling", async () => {
     // The turn context asks for more than it shows and filters afterwards; production lost its
     // memory for hours when the repository capped the limit at the block size instead.
-    await expect(memoryRetrievalRepository.searchWithConflictClosure(
-      auth, "гречка", vector(1, 0), MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
-    )).resolves.toMatchObject({ results: [] });
-    await expect(memoryRetrievalRepository.search(
-      auth, "гречка", vector(1, 0), MEMORY_RETRIEVAL_CANDIDATE_LIMIT + 1,
-    )).rejects.toMatchObject({ code: "AGENT_MEMORY_LIMIT_INVALID" });
+    await expect(
+      memoryRetrievalRepository.searchWithConflictClosure(
+        auth,
+        "гречка",
+        vector(1, 0),
+        MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
+      ),
+    ).resolves.toMatchObject({ results: [] });
+    await expect(
+      memoryRetrievalRepository.search(
+        auth,
+        "гречка",
+        vector(1, 0),
+        MEMORY_RETRIEVAL_CANDIDATE_LIMIT + 1,
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_MEMORY_LIMIT_INVALID" });
   });
 
   it("finds a semantically and lexically relevant record without disclosing another user's personal record", async () => {
-    const insert = async (ownerUserId: string, telegramUserId: string, content: string, embeddings: number[][], key: string) => {
+    const insert = async (
+      ownerUserId: string,
+      telegramUserId: string,
+      content: string,
+      embeddings: number[][],
+      key: string,
+    ) => {
       const memory = await database().query<{ id: string }>(
         `INSERT INTO memory_items
            (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
@@ -141,29 +176,56 @@ describeWithDatabase("memoryRetrievalRepository", () => {
           `INSERT INTO memory_embedding_chunks
              (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
            VALUES ($1, $2, $3, 0, $4, $5::vector, $6)`,
-          [memory.rows[0]!.id, chunkIndex, `${content}:${chunkIndex}`, content.length, `[${embedding.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+          [
+            memory.rows[0]!.id,
+            chunkIndex,
+            `${content}:${chunkIndex}`,
+            content.length,
+            `[${embedding.join(",")}]`,
+            MEMORY_EMBEDDING_MODEL_VERSION,
+          ],
         );
       }
     };
-    await insert(auth.userId!, auth.telegramActorId, "Пользователь не ест орехи", [vector(0, 1), vector(1, 0)], "visible");
-    await insert(auth.userId!, auth.telegramActorId, "Любимый транспорт — поезд", [vector(0, 1)], "irrelevant");
-    await insert(otherUserId, "search-other", "Скрытая аллергия на орехи", [vector(1, 0)], "hidden");
-
-    const results = await memoryRetrievalRepository.search(
-      auth,
-      "орехами",
-      vector(1, 0),
+    await insert(
+      auth.userId!,
+      auth.telegramActorId,
+      "Пользователь не ест орехи",
+      [vector(0, 1), vector(1, 0)],
+      "visible",
+    );
+    await insert(
+      auth.userId!,
+      auth.telegramActorId,
+      "Любимый транспорт — поезд",
+      [vector(0, 1)],
+      "irrelevant",
+    );
+    await insert(
+      otherUserId,
+      "search-other",
+      "Скрытая аллергия на орехи",
+      [vector(1, 0)],
+      "hidden",
     );
 
+    const results = await memoryRetrievalRepository.search(auth, "орехами", vector(1, 0));
+
     expect(results[0]?.memory.content).toBe("Пользователь не ест орехи");
-    expect(results.filter((result) => result.memory.content === "Пользователь не ест орехи"))
-      .toHaveLength(1);
-    expect(results.map((result) => result.memory.content)).not.toContain("Скрытая аллергия на орехи");
+    expect(
+      results.filter((result) => result.memory.content === "Пользователь не ест орехи"),
+    ).toHaveLength(1);
+    expect(results.map((result) => result.memory.content)).not.toContain(
+      "Скрытая аллергия на орехи",
+    );
     expect(results[0]?.evidence.russianMorphologyRank).not.toBeNull();
   });
 
   it("keeps two events with the same wording but different dates as separate results", async () => {
-    for (const [key, occurredAt] of [["trip-aug", "2026-08-10"], ["trip-sep", "2026-09-05"]] as const) {
+    for (const [key, occurredAt] of [
+      ["trip-aug", "2026-08-10"],
+      ["trip-sep", "2026-09-05"],
+    ] as const) {
       const item = await database().query<{ id: string }>(
         `INSERT INTO memory_items
            (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind, content, source,
@@ -180,11 +242,18 @@ describeWithDatabase("memoryRetrievalRepository", () => {
       );
     }
 
-    const found = await memoryRetrievalRepository.searchWithConflictClosure(auth, "Питер", vector(1, 0));
+    const found = await memoryRetrievalRepository.searchWithConflictClosure(
+      auth,
+      "Питер",
+      vector(1, 0),
+    );
 
     // The exact-duplicate collapse must not merge distinct events into one.
-    expect(found.results.map((result) => result.memory.occurredAt?.slice(0, 10)).sort((a, b) => String(a).localeCompare(String(b))))
-      .toEqual(["2026-08-10", "2026-09-05"]);
+    expect(
+      found.results
+        .map((result) => result.memory.occurredAt?.slice(0, 10))
+        .sort((a, b) => String(a).localeCompare(String(b))),
+    ).toEqual(["2026-08-10", "2026-09-05"]);
   });
 
   it("ranks a stale unreinforced record below a fresh one and reports retention", async () => {
@@ -205,20 +274,37 @@ describeWithDatabase("memoryRetrievalRepository", () => {
                  now() - ($6 * interval '1 day'), now() - ($6 * interval '1 day'), $7,
                  CASE WHEN $8::int IS NULL THEN NULL ELSE now() - ($8 * interval '1 day') END)
          RETURNING id`,
-        [auth.familyId, auth.userId, auth.telegramActorId, content, key, ageDays,
-          reinforcement?.count ?? 0, reinforcement?.daysAgo ?? null],
+        [
+          auth.familyId,
+          auth.userId,
+          auth.telegramActorId,
+          content,
+          key,
+          ageDays,
+          reinforcement?.count ?? 0,
+          reinforcement?.daysAgo ?? null,
+        ],
       );
       await database().query(
         `INSERT INTO memory_embedding_chunks
            (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
          VALUES ($1, 0, $2, 0, $3, $4::vector, $5)`,
-        [memory.rows[0]!.id, content, content.length, `[${vector(0, 1).join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+        [
+          memory.rows[0]!.id,
+          content,
+          content.length,
+          `[${vector(0, 1).join(",")}]`,
+          MEMORY_EMBEDDING_MODEL_VERSION,
+        ],
       );
       return memory.rows[0]!.id;
     };
     const freshId = await insert("Анна готовится к марафону в Казани", "fresh", 0);
     const staleId = await insert("Анна готовилась к марафону в Казани", "stale", 120);
-    const revivedId = await insert("Анна снова готовится к марафону в Казани", "revived", 120, { count: 3, daysAgo: 10 });
+    const revivedId = await insert("Анна снова готовится к марафону в Казани", "revived", 120, {
+      count: 3,
+      daysAgo: 10,
+    });
 
     const results = await memoryRetrievalRepository.search(auth, "марафон Казань", vector(0, 1));
     const byId = new Map(results.map((result) => [result.memory.id, result]));
@@ -228,14 +314,20 @@ describeWithDatabase("memoryRetrievalRepository", () => {
 
     expect(fresh.retention).toBeGreaterThan(0.95);
     expect(stale.retention).toBeLessThan(0.05);
-    expect(stale.retention).toBeCloseTo(memoryRetention({
-      attribute: null,
-      createdAt: new Date(Date.now() - 120 * 86_400_000),
-      kind: "episode",
-      lastReinforcedAt: null,
-      occurredAt: null,
-      reinforcementCount: 0,
-    }, new Date()), 2);
+    expect(stale.retention).toBeCloseTo(
+      memoryRetention(
+        {
+          attribute: null,
+          createdAt: new Date(Date.now() - 120 * 86_400_000),
+          kind: "episode",
+          lastReinforcedAt: null,
+          occurredAt: null,
+          reinforcementCount: 0,
+        },
+        new Date(),
+      ),
+      2,
+    );
     // Three reinforcements widen stability, and age counts from the last one.
     expect(revived.retention).toBeGreaterThan(0.8);
     expect(results.indexOf(fresh)).toBeLessThan(results.indexOf(stale));
@@ -347,10 +439,9 @@ describeWithDatabase("memoryRetrievalRepository", () => {
       "код сейфа 1234",
       vector(1, 0),
     );
-    expect(beforeRevocation.map((result) => result.memory.id)).toEqual(expect.arrayContaining([
-      first.rows[0]!.id,
-      ordinary.rows[0]!.id,
-    ]));
+    expect(beforeRevocation.map((result) => result.memory.id)).toEqual(
+      expect.arrayContaining([first.rows[0]!.id, ordinary.rows[0]!.id]),
+    );
 
     // Revoke through the real database immediately after base search returns, before closure SQL.
     const pool = database();
@@ -377,11 +468,9 @@ describeWithDatabase("memoryRetrievalRepository", () => {
       return result;
     }) as typeof pool.query);
     try {
-      await expect(memoryRetrievalRepository.searchWithConflictClosure(
-        auth,
-        "код сейфа 1234",
-        vector(1, 0),
-      )).resolves.toEqual({ conflicts: [], relatedClaimIds: [], results: [] });
+      await expect(
+        memoryRetrievalRepository.searchWithConflictClosure(auth, "код сейфа 1234", vector(1, 0)),
+      ).resolves.toEqual({ conflicts: [], relatedClaimIds: [], results: [] });
       expect(revoked).toBe(true);
     } finally {
       querySpy.mockRestore();

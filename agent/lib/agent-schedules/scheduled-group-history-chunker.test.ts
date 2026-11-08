@@ -55,27 +55,28 @@ describe("scheduled group history chunker", () => {
   });
 
   it("bounds exact escaped model serialization and preserves Unicode content losslessly", () => {
-    const content = `${"\\\"<&\u0000".repeat(2_000)}${"😀".repeat(5_000)}`;
+    const content = `${'\\"<&\u0000'.repeat(2_000)}${"😀".repeat(5_000)}`;
     const chunks = chunkScheduledGroupHistory([entry(1, content)]);
     const parts = chunks.flat();
 
     expect(parts.map((item) => item.content).join("")).toBe(content);
     for (const chunk of chunks) {
-      expect(serializeScheduledGroupHistoryChunk(chunk).length)
-        .toBeLessThanOrEqual(MODEL_CHUNK_MAX_CHARACTERS);
+      expect(serializeScheduledGroupHistoryChunk(chunk).length).toBeLessThanOrEqual(
+        MODEL_CHUNK_MAX_CHARACTERS,
+      );
     }
     for (const part of parts) {
       const value = part.content!;
       const first = value.charCodeAt(0);
       const last = value.charCodeAt(value.length - 1);
-      expect(first >= 0xDC00 && first <= 0xDFFF).toBe(false);
-      expect(last >= 0xD800 && last <= 0xDBFF).toBe(false);
+      expect(first >= 0xdc00 && first <= 0xdfff).toBe(false);
+      expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
     }
   });
 
   it("rejects more entries than the retained snapshot contract permits", () => {
-    expect(() => chunkScheduledGroupHistory(
-      Array.from({ length: 1_001 }, (_, index) => entry(index + 1)),
-    )).toThrowError(/AGENT_SCHEDULE_HISTORY_SNAPSHOT_TOO_LARGE/u);
+    expect(() =>
+      chunkScheduledGroupHistory(Array.from({ length: 1_001 }, (_, index) => entry(index + 1))),
+    ).toThrowError(/AGENT_SCHEDULE_HISTORY_SNAPSHOT_TOO_LARGE/u);
   });
 });

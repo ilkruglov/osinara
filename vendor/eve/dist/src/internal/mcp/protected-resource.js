@@ -4,10 +4,7 @@ function createMcpProtectedResourceMetadata(e) {
     authorization_servers: e.authorizationServers,
     resource: e.resource,
   };
-  return (
-    e.scopesSupported !== void 0 && (t.scopes_supported = e.scopesSupported),
-    t
-  );
+  return (e.scopesSupported !== void 0 && (t.scopes_supported = e.scopesSupported), t);
 }
 function createMcpResourceChallenge(t, n) {
   let r = [`resource_metadata="${escapeAuthChallengeParameter(t)}"`];

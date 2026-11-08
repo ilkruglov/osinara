@@ -31,7 +31,9 @@ async function fixture() {
      RETURNING id, telegram_user_id`,
   );
   const ownerId = users.rows.find((row) => row.telegram_user_id === "external-schedule-owner")!.id;
-  const memberId = users.rows.find((row) => row.telegram_user_id === "external-schedule-member")!.id;
+  const memberId = users.rows.find(
+    (row) => row.telegram_user_id === "external-schedule-member",
+  )!.id;
   await database().query(
     `INSERT INTO family_memberships (family_id, user_id, role)
      VALUES ($1, $2, 'owner'), ($1, $3, 'member')`,
@@ -58,23 +60,40 @@ describeWithDatabase("external agent schedule repository", () => {
   });
   afterAll(async () => closeDatabase());
 
-  it.each(["minutely", "hourly", "monthly", "yearly"] as const)("creates and updates %s automation without losing its identity", async (kind) => {
-    const setup = await fixture();
-    const auth = { familyId: setup.familyId, requestedBy: setup.ownerId };
-    const recurrence = { kind, interval: 1 };
-    const created = await externalAgentScheduleRepository.create(auth, {
-      capabilityAllowlist: [], firstRunAt: new Date("2026-10-25T02:30:00+02:00"), operationKey: "new-period",
-      recurrence, scenarioPrompt: "Проверь ресурс", telegramChatId: "-100-external-schedule",
-      timezone: "Europe/Berlin", title: "Проверка", userRequest: "Проверяй по расписанию",
-    });
-    expect(created).toMatchObject({ recurrence, scope: "group" });
-    const anchor = await database().query("SELECT recurrence_anchor_at FROM agent_schedules WHERE id = $1", [created.id]);
-    expect(anchor.rows[0].recurrence_anchor_at).toEqual(new Date("2026-10-25T00:30:00Z"));
-    const updated = await externalAgentScheduleRepository.update(auth, created.id, {
-      recurrence: { kind, interval: 2 }, operationKey: "new-period-update",
-    });
-    expect(updated).toMatchObject({ id: created.id, recurrence: { kind, interval: 2 }, scope: "group" });
-  });
+  it.each(["minutely", "hourly", "monthly", "yearly"] as const)(
+    "creates and updates %s automation without losing its identity",
+    async (kind) => {
+      const setup = await fixture();
+      const auth = { familyId: setup.familyId, requestedBy: setup.ownerId };
+      const recurrence = { kind, interval: 1 };
+      const created = await externalAgentScheduleRepository.create(auth, {
+        capabilityAllowlist: [],
+        firstRunAt: new Date("2026-10-25T02:30:00+02:00"),
+        operationKey: "new-period",
+        recurrence,
+        scenarioPrompt: "Проверь ресурс",
+        telegramChatId: "-100-external-schedule",
+        timezone: "Europe/Berlin",
+        title: "Проверка",
+        userRequest: "Проверяй по расписанию",
+      });
+      expect(created).toMatchObject({ recurrence, scope: "group" });
+      const anchor = await database().query(
+        "SELECT recurrence_anchor_at FROM agent_schedules WHERE id = $1",
+        [created.id],
+      );
+      expect(anchor.rows[0].recurrence_anchor_at).toEqual(new Date("2026-10-25T00:30:00Z"));
+      const updated = await externalAgentScheduleRepository.update(auth, created.id, {
+        recurrence: { kind, interval: 2 },
+        operationKey: "new-period-update",
+      });
+      expect(updated).toMatchObject({
+        id: created.id,
+        recurrence: { kind, interval: 2 },
+        scope: "group",
+      });
+    },
+  );
 
   it("creates an owner-approved group schedule from the registered destination", async () => {
     const setup = await fixture();
@@ -100,30 +119,34 @@ describeWithDatabase("external agent schedule repository", () => {
       telegramChatId: "-100-external-schedule",
       telegramGroupTitle: "Публичный чат",
     });
-    await expect(externalAgentScheduleRepository.list({
-      ...authorization,
-      telegramChatId: null,
-    })).resolves.toMatchObject({ total: 1 });
+    await expect(
+      externalAgentScheduleRepository.list({
+        ...authorization,
+        telegramChatId: null,
+      }),
+    ).resolves.toMatchObject({ total: 1 });
     const persisted = await database().query<{
       group_id: string;
       telegram_chat_type: string;
-    }>(
-      "SELECT group_id, telegram_chat_type FROM agent_schedules WHERE id = $1",
-      [created.id],
-    );
-    expect(persisted.rows[0]).toEqual({ group_id: setup.groupId, telegram_chat_type: "supergroup" });
-    await expect(externalAgentScheduleRepository.create(authorization, {
-      capabilityAllowlist: ["send_workspace_file"],
-      firstRunAt: new Date("2026-08-17T06:00:00.000Z"),
-      historyWindowDays: 7,
-      operationKey: "create-external-weekly-summary",
-      recurrence: { daysOfWeek: [1], interval: 1, kind: "weekly" },
-      scenarioPrompt: "Прочитай snapshot, создай HTML-выжимку и отправь файл.",
-      telegramChatId: "-100-external-schedule",
-      timezone: "Europe/Moscow",
-      title: "Другой заголовок",
-      userRequest: "Каждый понедельник присылай выжимку обсуждения за неделю",
-    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_OPERATION_CONFLICT" });
+    }>("SELECT group_id, telegram_chat_type FROM agent_schedules WHERE id = $1", [created.id]);
+    expect(persisted.rows[0]).toEqual({
+      group_id: setup.groupId,
+      telegram_chat_type: "supergroup",
+    });
+    await expect(
+      externalAgentScheduleRepository.create(authorization, {
+        capabilityAllowlist: ["send_workspace_file"],
+        firstRunAt: new Date("2026-08-17T06:00:00.000Z"),
+        historyWindowDays: 7,
+        operationKey: "create-external-weekly-summary",
+        recurrence: { daysOfWeek: [1], interval: 1, kind: "weekly" },
+        scenarioPrompt: "Прочитай snapshot, создай HTML-выжимку и отправь файл.",
+        telegramChatId: "-100-external-schedule",
+        timezone: "Europe/Moscow",
+        title: "Другой заголовок",
+        userRequest: "Каждый понедельник присылай выжимку обсуждения за неделю",
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_SCHEDULE_OPERATION_CONFLICT" });
   });
 
   it("rejects a non-owner and a capability absent from the current group policy", async () => {
@@ -140,14 +163,18 @@ describeWithDatabase("external agent schedule repository", () => {
       userRequest: "Присылай отчёт",
     };
 
-    await expect(externalAgentScheduleRepository.create(
-      { familyId: setup.familyId, requestedBy: setup.memberId },
-      { ...input, capabilityAllowlist: [...input.capabilityAllowlist] },
-    )).rejects.toMatchObject({ code: "AGENT_OWNER_REQUIRED" });
-    await expect(externalAgentScheduleRepository.create(
-      { familyId: setup.familyId, requestedBy: setup.ownerId },
-      { ...input, capabilityAllowlist: ["search_memories"], operationKey: "ungranted-create" },
-    )).rejects.toMatchObject({ code: "AGENT_EXTERNAL_SCHEDULE_CAPABILITY_NOT_GRANTED" });
+    await expect(
+      externalAgentScheduleRepository.create(
+        { familyId: setup.familyId, requestedBy: setup.memberId },
+        { ...input, capabilityAllowlist: [...input.capabilityAllowlist] },
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_OWNER_REQUIRED" });
+    await expect(
+      externalAgentScheduleRepository.create(
+        { familyId: setup.familyId, requestedBy: setup.ownerId },
+        { ...input, capabilityAllowlist: ["search_memories"], operationKey: "ungranted-create" },
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_EXTERNAL_SCHEDULE_CAPABILITY_NOT_GRANTED" });
   });
 
   it("updates lifecycle state without changing the registered destination", async () => {
@@ -166,43 +193,51 @@ describeWithDatabase("external agent schedule repository", () => {
       userRequest: "Присылай отчёт",
     });
 
-    await expect(externalAgentScheduleRepository.update(authorization, created.id, {
-      capabilityAllowlist: ["web_fetch"],
-      historyWindowDays: null,
-      operationKey: "update-external-lifecycle",
-      title: "Обновлённый отчёт",
-    })).resolves.toMatchObject({
+    await expect(
+      externalAgentScheduleRepository.update(authorization, created.id, {
+        capabilityAllowlist: ["web_fetch"],
+        historyWindowDays: null,
+        operationKey: "update-external-lifecycle",
+        title: "Обновлённый отчёт",
+      }),
+    ).resolves.toMatchObject({
       capabilityAllowlist: ["web_fetch"],
       historyWindowDays: null,
       telegramChatId: "-100-external-schedule",
       title: "Обновлённый отчёт",
     });
-    await expect(externalAgentScheduleRepository.setEnabled(
-      authorization,
-      created.id,
-      false,
-      "pause-external-lifecycle",
-    )).resolves.toMatchObject({ status: "paused" });
-    await expect(externalAgentScheduleRepository.setEnabled(
-      authorization,
-      created.id,
-      true,
-      "resume-external-lifecycle",
-    )).resolves.toMatchObject({ status: "active" });
-    await expect(externalAgentScheduleRepository.runNow(
-      authorization,
-      created.id,
-      "run-external-lifecycle",
-    )).resolves.toMatchObject({ status: "active", telegramChatId: "-100-external-schedule" });
-    await expect(externalAgentScheduleRepository.delete(
-      authorization,
-      created.id,
-      "delete-external-lifecycle",
-    )).resolves.toBe(true);
-    await expect(externalAgentScheduleRepository.list({
-      ...authorization,
-      telegramChatId: null,
-    })).resolves.toEqual({ items: [], total: 0 });
+    await expect(
+      externalAgentScheduleRepository.setEnabled(
+        authorization,
+        created.id,
+        false,
+        "pause-external-lifecycle",
+      ),
+    ).resolves.toMatchObject({ status: "paused" });
+    await expect(
+      externalAgentScheduleRepository.setEnabled(
+        authorization,
+        created.id,
+        true,
+        "resume-external-lifecycle",
+      ),
+    ).resolves.toMatchObject({ status: "active" });
+    await expect(
+      externalAgentScheduleRepository.runNow(authorization, created.id, "run-external-lifecycle"),
+    ).resolves.toMatchObject({ status: "active", telegramChatId: "-100-external-schedule" });
+    await expect(
+      externalAgentScheduleRepository.delete(
+        authorization,
+        created.id,
+        "delete-external-lifecycle",
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      externalAgentScheduleRepository.list({
+        ...authorization,
+        telegramChatId: null,
+      }),
+    ).resolves.toEqual({ items: [], total: 0 });
   });
 
   it("terminalizes a group run revoked between claim and Eve handoff", async () => {
@@ -242,20 +277,25 @@ describeWithDatabase("external agent schedule repository", () => {
       [setup.familyId, setup.ownerId],
     );
 
-    await expect(agentScheduleDispatchRepository.markDispatchStarted(job!, {
-      applicationSessionId: session.id,
-    })).resolves.toBe(false);
+    await expect(
+      agentScheduleDispatchRepository.markDispatchStarted(job!, {
+        applicationSessionId: session.id,
+      }),
+    ).resolves.toBe(false);
     await sessionRepository.retireUnstartedScheduledSession(session.id);
-    await expect(database().query(
-      "SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1",
-      [job!.runId],
-    )).resolves.toMatchObject({
+    await expect(
+      database().query("SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1", [
+        job!.runId,
+      ]),
+    ).resolves.toMatchObject({
       rows: [{ error_code: "AGENT_SCHEDULE_DESTINATION_REVOKED", status: "failed" }],
     });
-    await expect(database().query(
-      "SELECT task_state::text, retired_at IS NOT NULL AS retired FROM conversation_sessions WHERE id = $1",
-      [session.id],
-    )).resolves.toMatchObject({ rows: [{ retired: true, task_state: "failed" }] });
+    await expect(
+      database().query(
+        "SELECT task_state::text, retired_at IS NOT NULL AS retired FROM conversation_sessions WHERE id = $1",
+        [session.id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ retired: true, task_state: "failed" }] });
   });
 
   it("keeps a terminal event that beats markRunning from leaving a leased run", async () => {
@@ -294,20 +334,25 @@ describeWithDatabase("external agent schedule repository", () => {
       applicationSessionId: session.id,
     });
 
-    await expect(agentScheduleDispatchRepository.failRunByIdentityForNotification(
-      job!.runId,
-      "eve-terminal-race",
-      "MODEL_SESSION_FAILED",
-      new Date("2026-08-17T06:01:00.000Z"),
-    )).resolves.toBe(true);
-    await expect(agentScheduleDispatchRepository.markRunning(job!, {
-      applicationSessionId: session.id,
-      eveSessionId: "eve-terminal-race",
-    })).resolves.toBeUndefined();
-    await expect(database().query(
-      "SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1",
-      [job!.runId],
-    )).resolves.toMatchObject({
+    await expect(
+      agentScheduleDispatchRepository.failRunByIdentityForNotification(
+        job!.runId,
+        "eve-terminal-race",
+        "MODEL_SESSION_FAILED",
+        new Date("2026-08-17T06:01:00.000Z"),
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      agentScheduleDispatchRepository.markRunning(job!, {
+        applicationSessionId: session.id,
+        eveSessionId: "eve-terminal-race",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      database().query("SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1", [
+        job!.runId,
+      ]),
+    ).resolves.toMatchObject({
       rows: [{ error_code: "MODEL_SESSION_FAILED", status: "failed" }],
     });
   });
@@ -373,28 +418,35 @@ describeWithDatabase("external agent schedule repository", () => {
       telegramChatId: job!.telegramChatId,
     };
 
-    await expect(agentScheduleDispatchRepository.authorizeDelivery(authorization)).resolves.toBeUndefined();
+    await expect(
+      agentScheduleDispatchRepository.authorizeDelivery(authorization),
+    ).resolves.toBeUndefined();
     await expect(authorizeAgentScheduleExecution(executionAuthorization)).resolves.toBeUndefined();
     await database().query(
       "UPDATE family_memberships SET role = 'member' WHERE family_id = $1 AND user_id = $2",
       [setup.familyId, setup.ownerId],
     );
-    await expect(agentScheduleDispatchRepository.authorizeDelivery(authorization)).rejects.toMatchObject({
+    await expect(
+      agentScheduleDispatchRepository.authorizeDelivery(authorization),
+    ).rejects.toMatchObject({
       code: "AGENT_SCHEDULE_DELIVERY_AUTHORIZATION_REVOKED",
     });
     await expect(authorizeAgentScheduleExecution(executionAuthorization)).rejects.toMatchObject({
       code: "AGENT_SCHEDULE_EXECUTION_AUTHORIZATION_REVOKED",
     });
-    await expect(agentScheduleDispatchRepository.failRunByIdentityForNotification(
-      job!.runId,
-      "eve-external-schedule",
-      "MODEL_SESSION_FAILED",
-      new Date("2026-08-17T06:01:00.000Z"),
-    )).resolves.toBe(false);
-    await expect(database().query(
-      "SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1",
-      [job!.runId],
-    )).resolves.toMatchObject({
+    await expect(
+      agentScheduleDispatchRepository.failRunByIdentityForNotification(
+        job!.runId,
+        "eve-external-schedule",
+        "MODEL_SESSION_FAILED",
+        new Date("2026-08-17T06:01:00.000Z"),
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      database().query("SELECT status::text, error_code FROM agent_schedule_runs WHERE id = $1", [
+        job!.runId,
+      ]),
+    ).resolves.toMatchObject({
       rows: [{ error_code: "MODEL_SESSION_FAILED", status: "failed" }],
     });
   });

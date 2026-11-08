@@ -28,14 +28,14 @@ export declare const LINE_TRUNCATION_SUFFIX = " [truncated]";
  * Result of a {@link truncateTail} or {@link truncateHead} call.
  */
 export interface TruncationResult {
-    /** The truncated output text. */
-    readonly output: string;
-    /** True when the output was shortened. */
-    readonly truncated: boolean;
-    /** Total number of lines in the original input. */
-    readonly totalLines: number;
-    /** Number of lines included in the truncated output. */
-    readonly outputLines: number;
+  /** The truncated output text. */
+  readonly output: string;
+  /** True when the output was shortened. */
+  readonly truncated: boolean;
+  /** Total number of lines in the original input. */
+  readonly totalLines: number;
+  /** Number of lines included in the truncated output. */
+  readonly outputLines: number;
 }
 /**
  * Keeps the **first** lines of `text` that fit within the line and byte

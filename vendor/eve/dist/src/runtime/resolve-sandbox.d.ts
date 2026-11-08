@@ -10,4 +10,8 @@ import type { ResolvedSandboxDefinition } from "#runtime/types.js";
  * {@link defaultSandbox} so the rest of the runtime can rely on a
  * non-null backend value.
  */
-export declare function resolveSandboxDefinition(definition: CompiledSandboxDefinition, moduleMap: CompiledModuleMap, nodeId: string | undefined): Promise<ResolvedSandboxDefinition>;
+export declare function resolveSandboxDefinition(
+  definition: CompiledSandboxDefinition,
+  moduleMap: CompiledModuleMap,
+  nodeId: string | undefined,
+): Promise<ResolvedSandboxDefinition>;

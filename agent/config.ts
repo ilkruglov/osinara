@@ -34,7 +34,8 @@ export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;
 // turn spent its time used to require switching production statement logging on and waiting.
 export const DATABASE_SLOW_QUERY_MS = 150;
 // Compose names the runner; the load stand runs the agent on the host and points it at a published port.
-export const SANDBOX_RUNNER_BASE_URL = process.env.SANDBOX_RUNNER_BASE_URL ?? "http://sandbox-runner:8080";
+export const SANDBOX_RUNNER_BASE_URL =
+  process.env.SANDBOX_RUNNER_BASE_URL ?? "http://sandbox-runner:8080";
 export const SESSION_INACTIVITY_DAYS = 30;
 export const SESSION_GROUP_ROTATION_LOCK_HASH_SEED = 3;
 // The local Workflow world replays cumulative filesystem artifacts. Rotate with enough headroom
@@ -96,10 +97,11 @@ export const TELEGRAM_INGRESS_LEASE_MS = 15 * 60 * 1_000;
 // long, so the series behind it is complete; a steady stream waits at most the cap. Both are
 // tunable: the quiet window is paid on every private message, so a single-family installation
 // that values the answer's speed over series completeness can shorten it.
-export const TELEGRAM_PRIVATE_BURST_QUIET_MS = integerSetting(
-  "TELEGRAM_PRIVATE_BURST_QUIET_MS",
-  { absent: 2_000, min: 0, max: 60_000 },
-);
+export const TELEGRAM_PRIVATE_BURST_QUIET_MS = integerSetting("TELEGRAM_PRIVATE_BURST_QUIET_MS", {
+  absent: 2_000,
+  min: 0,
+  max: 60_000,
+});
 export const TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS = integerSetting(
   "TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS",
   { absent: 20_000, min: 0, max: 300_000 },
@@ -121,14 +123,18 @@ export const WORKSPACE_DELETION_LEASE_MS = 15 * 60 * 1_000;
 export const WORKSPACE_TOOL_MAX_TEXT_BYTES = 1024 * 1024;
 export const VISION_MAX_FILE_BYTES = 10_000_000;
 
-const secretTokenSchema = z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/u);
+const secretTokenSchema = z
+  .string()
+  .min(32)
+  .max(256)
+  .regex(/^[A-Za-z0-9_-]+$/u);
 
 const runtimeEnvironmentSchema = z
   .object({
     AGENT_INTERNAL_TOKEN: secretTokenSchema,
     DATABASE_URL: z.string().min(1),
     GROQ_API_KEY: z.preprocess(
-      (value) => value === "" ? undefined : value,
+      (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
     ),
     INVITATION_SIGNING_SECRET: z.string().min(32),
@@ -140,18 +146,19 @@ const runtimeEnvironmentSchema = z
     // webhook; the drain route and the approval sweep take AGENT_INTERNAL_TOKEN.
     TELEGRAM_WEBHOOK_SECRET_TOKEN: secretTokenSchema,
   })
-  .refine((environment) => environment.AGENT_INTERNAL_TOKEN !== environment.TELEGRAM_WEBHOOK_SECRET_TOKEN, {
-    message: "The internal token must differ from the webhook secret",
-    path: ["AGENT_INTERNAL_TOKEN"],
-  });
+  .refine(
+    (environment) => environment.AGENT_INTERNAL_TOKEN !== environment.TELEGRAM_WEBHOOK_SECRET_TOKEN,
+    {
+      message: "The internal token must differ from the webhook secret",
+      path: ["AGENT_INTERNAL_TOKEN"],
+    },
+  );
 
 export function requireRuntimeEnvironment() {
   const parsed = runtimeEnvironmentSchema.safeParse(process.env);
   if (!parsed.success) {
     const fields = parsed.error.issues.map((issue) => issue.path.join(".")).join(", ");
-    throw new Error(
-      `AGENT_REQUIRED_CONFIG_MISSING: Отсутствуют обязательные настройки: ${fields}`,
-    );
+    throw new Error(`AGENT_REQUIRED_CONFIG_MISSING: Отсутствуют обязательные настройки: ${fields}`);
   }
   return parsed.data;
 }

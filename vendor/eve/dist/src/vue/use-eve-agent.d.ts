@@ -1,11 +1,23 @@
 import { type ComputedRef } from "vue";
 import type { UserContent } from "ai";
-import { type EveAgentStoreCallbacks, type EveAgentStoreSnapshot, type EveAgentStoreStatus, type PrepareSend } from "#client/eve-agent-store.js";
+import {
+  type EveAgentStoreCallbacks,
+  type EveAgentStoreSnapshot,
+  type EveAgentStoreStatus,
+  type PrepareSend,
+} from "#client/eve-agent-store.js";
 import type { EveAgentReducer } from "#client/reducer.js";
 import type { ClientSession } from "#client/session.js";
 import { type EveMessageData } from "#client/message-reducer.js";
 import type { MessageStreamEvent } from "#protocol/message.js";
-import type { CancelSessionResult, ClientAuth, HeadersValue, RespondTurnOptions, SendTurnOptions, ClientSessionState } from "#client/types.js";
+import type {
+  CancelSessionResult,
+  ClientAuth,
+  HeadersValue,
+  RespondTurnOptions,
+  SendTurnOptions,
+  ClientSessionState,
+} from "#client/types.js";
 export type { PrepareSend };
 /**
  * Lifecycle phase of a `useEveAgent` session: `"ready"` (idle), `"submitted"`
@@ -25,24 +37,30 @@ export type UseEveAgentSnapshot<TData> = EveAgentStoreSnapshot<TData>;
  * Reactive return value from `useEveAgent`.
  */
 export interface UseEveAgentReturn<TData> {
-    /** Request durable cancellation of the active turn while continuing to receive its events. */
-    readonly cancel: () => Promise<CancelSessionResult>;
-    /** Projected state: the reducer folds every stream event into this value. */
-    readonly data: ComputedRef<TData>;
-    /** Last transport-level error, or `undefined` when healthy. */
-    readonly error: ComputedRef<Error | undefined>;
-    /** Raw server events from this session (authoritative stream). */
-    readonly events: ComputedRef<readonly MessageStreamEvent[]>;
-    /** Clear all state and start a new session. */
-    readonly reset: () => void;
-    /** Send a message with optional turn settings. */
-    readonly send: <TOutput = unknown>(message: string | UserContent, options?: SendTurnOptions<TOutput>) => Promise<void>;
-    /** Answer pending HITL input requests. */
-    readonly respond: <TOutput = unknown>(inputResponses: Parameters<ClientSession["respond"]>[0], options?: RespondTurnOptions<TOutput>) => Promise<void>;
-    /** Current session identity and stream cursor. */
-    readonly session: ComputedRef<ClientSessionState | undefined>;
-    /** Lifecycle phase: `"ready"` (idle), `"submitted"` (request sent, awaiting first event), `"streaming"` (events arriving), or `"error"`. */
-    readonly status: ComputedRef<UseEveAgentStatus>;
+  /** Request durable cancellation of the active turn while continuing to receive its events. */
+  readonly cancel: () => Promise<CancelSessionResult>;
+  /** Projected state: the reducer folds every stream event into this value. */
+  readonly data: ComputedRef<TData>;
+  /** Last transport-level error, or `undefined` when healthy. */
+  readonly error: ComputedRef<Error | undefined>;
+  /** Raw server events from this session (authoritative stream). */
+  readonly events: ComputedRef<readonly MessageStreamEvent[]>;
+  /** Clear all state and start a new session. */
+  readonly reset: () => void;
+  /** Send a message with optional turn settings. */
+  readonly send: <TOutput = unknown>(
+    message: string | UserContent,
+    options?: SendTurnOptions<TOutput>,
+  ) => Promise<void>;
+  /** Answer pending HITL input requests. */
+  readonly respond: <TOutput = unknown>(
+    inputResponses: Parameters<ClientSession["respond"]>[0],
+    options?: RespondTurnOptions<TOutput>,
+  ) => Promise<void>;
+  /** Current session identity and stream cursor. */
+  readonly session: ComputedRef<ClientSessionState | undefined>;
+  /** Lifecycle phase: `"ready"` (idle), `"submitted"` (request sent, awaiting first event), `"streaming"` (events arriving), or `"error"`. */
+  readonly status: ComputedRef<UseEveAgentStatus>;
 }
 /**
  * Configuration for creating or binding a Vue eve agent session.
@@ -57,55 +75,59 @@ export interface UseEveAgentReturn<TData> {
  * every render.
  */
 export interface UseEveAgentOptions<TData> extends EveAgentStoreCallbacks<TData> {
-    /**
-     * Named agent mounted by a framework integration such as `withEve({ agents })`.
-     *
-     * `agent: "support"` targets same-origin routes under
-     * `/eve/agents/support/eve/v1/...`. Do not combine with `host`.
-     */
-    readonly agent?: string;
-    /** Authentication configuration; a function value is resolved per request. */
-    readonly auth?: ClientAuth;
-    /** Custom headers; a function value is resolved per request. */
-    readonly headers?: HeadersValue;
-    /**
-     * Base URL used for eve client requests. Do not combine with `agent`.
-     *
-     * By default, requests target same-origin eve routes such as `/eve/v1/...`.
-     * Pass a same-origin prefix such as `/api` to use an app-owned proxy, or an
-     * absolute origin to talk to an eve server directly.
-     *
-     * @default ""
-     */
-    readonly host?: string;
-    /** Ordered prefix of the session stream used to rehydrate projected state. */
-    readonly initialEvents?: readonly MessageStreamEvent[];
-    /** Prior session cursor to resume from on mount. */
-    readonly initialSession?: ClientSessionState;
-    /**
-     * Project submitted user messages before eve confirms them with a
-     * `message.received` stream event.
-     *
-     * Optimistic events are reducer-facing projection events only. They are not
-     * exposed through `events`, which remains the authoritative eve stream.
-     *
-     * @default true
-     */
-    readonly optimistic?: boolean;
-    /**
-     * Projects stream events into `TData`.
-     *
-     * @default defaultMessageReducer()
-     */
-    readonly reducer?: EveAgentReducer<TData>;
-    /**
-     * Externally owned {@link ClientSession} to bind instead of creating one.
-     *
-     * When set, `reset()` reuses this session rather than constructing a new one.
-     */
-    readonly session?: ClientSession;
+  /**
+   * Named agent mounted by a framework integration such as `withEve({ agents })`.
+   *
+   * `agent: "support"` targets same-origin routes under
+   * `/eve/agents/support/eve/v1/...`. Do not combine with `host`.
+   */
+  readonly agent?: string;
+  /** Authentication configuration; a function value is resolved per request. */
+  readonly auth?: ClientAuth;
+  /** Custom headers; a function value is resolved per request. */
+  readonly headers?: HeadersValue;
+  /**
+   * Base URL used for eve client requests. Do not combine with `agent`.
+   *
+   * By default, requests target same-origin eve routes such as `/eve/v1/...`.
+   * Pass a same-origin prefix such as `/api` to use an app-owned proxy, or an
+   * absolute origin to talk to an eve server directly.
+   *
+   * @default ""
+   */
+  readonly host?: string;
+  /** Ordered prefix of the session stream used to rehydrate projected state. */
+  readonly initialEvents?: readonly MessageStreamEvent[];
+  /** Prior session cursor to resume from on mount. */
+  readonly initialSession?: ClientSessionState;
+  /**
+   * Project submitted user messages before eve confirms them with a
+   * `message.received` stream event.
+   *
+   * Optimistic events are reducer-facing projection events only. They are not
+   * exposed through `events`, which remains the authoritative eve stream.
+   *
+   * @default true
+   */
+  readonly optimistic?: boolean;
+  /**
+   * Projects stream events into `TData`.
+   *
+   * @default defaultMessageReducer()
+   */
+  readonly reducer?: EveAgentReducer<TData>;
+  /**
+   * Externally owned {@link ClientSession} to bind instead of creating one.
+   *
+   * When set, `reset()` reuses this session rather than constructing a new one.
+   */
+  readonly session?: ClientSession;
 }
-export declare function useEveAgent(options?: UseEveAgentOptions<EveMessageData>): UseEveAgentReturn<EveMessageData>;
-export declare function useEveAgent<TData>(options: UseEveAgentOptions<TData> & {
+export declare function useEveAgent(
+  options?: UseEveAgentOptions<EveMessageData>,
+): UseEveAgentReturn<EveMessageData>;
+export declare function useEveAgent<TData>(
+  options: UseEveAgentOptions<TData> & {
     readonly reducer: EveAgentReducer<TData>;
-}): UseEveAgentReturn<TData>;
+  },
+): UseEveAgentReturn<TData>;

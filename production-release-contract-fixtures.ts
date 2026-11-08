@@ -31,7 +31,12 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
           volume("sandbox-data", "/app/.eve/sandbox-cache"),
           volume("google-workspace-credentials", "/app/google-workspace-credentials"),
           volume("workspace-data", "/app/workspaces"),
-          volume("/opt/osinara/agent-model-providers.json", "/app/config/agent-model-providers.json", "bind", true),
+          volume(
+            "/opt/osinara/agent-model-providers.json",
+            "/app/config/agent-model-providers.json",
+            "bind",
+            true,
+          ),
         ],
       }),
       edge: service({
@@ -59,10 +64,14 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
 }
 
 export function executeComposeSecurityPredicate(config: Record<string, unknown>): void {
-  execFileSync("bash", [
-    "-c",
-    'source "$1"; validate_resolved_compose_security -',
+  execFileSync(
     "bash",
-    fileURLToPath(new URL("scripts/production-deploy/release.sh", projectRoot)),
-  ], { input: JSON.stringify(config), stdio: ["pipe", "pipe", "pipe"] });
+    [
+      "-c",
+      'source "$1"; validate_resolved_compose_security -',
+      "bash",
+      fileURLToPath(new URL("scripts/production-deploy/release.sh", projectRoot)),
+    ],
+    { input: JSON.stringify(config), stdio: ["pipe", "pipe", "pipe"] },
+  );
 }

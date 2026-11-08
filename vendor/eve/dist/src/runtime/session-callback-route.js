@@ -145,18 +145,12 @@ function channelNameForMethod(e) {
 async function handleSessionCallbackRequest(e, t) {
   let n = t.params.token;
   if (typeof n != `string` || n.length === 0)
-    return Response.json(
-      { error: `Missing callback token.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Missing callback token.`, ok: !1 }, { status: 400 });
   let r;
   try {
     r = await e.json();
   } catch {
-    return Response.json(
-      { error: `Invalid JSON body.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid JSON body.`, ok: !1 }, { status: 400 });
   }
   let i = projectTaskEvent(r, n);
   if (i instanceof Response) return i;
@@ -164,10 +158,7 @@ async function handleSessionCallbackRequest(e, t) {
     try {
       await resumeHook(n, i);
     } catch {
-      return Response.json(
-        { error: `Session callback not pending.`, ok: !1 },
-        { status: 404 },
-      );
+      return Response.json({ error: `Session callback not pending.`, ok: !1 }, { status: 404 });
     }
     return Response.json({ ok: !0 }, { status: 202 });
   }
@@ -177,10 +168,7 @@ async function handleSessionCallbackRequest(e, t) {
     try {
       await resumeHook(n, a);
     } catch {
-      return Response.json(
-        { error: `Session callback not pending.`, ok: !1 },
-        { status: 404 },
-      );
+      return Response.json({ error: `Session callback not pending.`, ok: !1 }, { status: 404 });
     }
     return Response.json({ ok: !0 }, { status: 202 });
   }
@@ -190,10 +178,7 @@ async function handleSessionCallbackRequest(e, t) {
     try {
       await resumeHook(n, o);
     } catch {
-      return Response.json(
-        { error: `Session callback not pending.`, ok: !1 },
-        { status: 404 },
-      );
+      return Response.json({ error: `Session callback not pending.`, ok: !1 }, { status: 404 });
     }
     return Response.json({ ok: !0 }, { status: 202 });
   }
@@ -202,10 +187,7 @@ async function handleSessionCallbackRequest(e, t) {
   try {
     await resumeHook(n, { kind: `runtime-action-result`, results: [s] });
   } catch {
-    return Response.json(
-      { error: `Session callback not pending.`, ok: !1 },
-      { status: 404 },
-    );
+    return Response.json({ error: `Session callback not pending.`, ok: !1 }, { status: 404 });
   }
   return Response.json({ ok: !0 }, { status: 202 });
 }
@@ -217,10 +199,7 @@ function projectTaskEvent(e, t) {
   if (n !== `task.input-requested` && n !== `task.authorization`) return;
   let r = taskEventCallbackSchema.safeParse(e);
   if (!r.success)
-    return Response.json(
-      { error: `Invalid task event callback.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid task event callback.`, ok: !1 }, { status: 400 });
   let i = r.data,
     a = rejectMismatchedTaskToken(t, i.taskId);
   return a === void 0
@@ -246,10 +225,7 @@ function projectTaskTurnStarted(e, t) {
   if (callbackKind(e) !== `turn.started`) return;
   let n = taskTurnStartedCallbackSchema.safeParse(e);
   if (!n.success)
-    return Response.json(
-      { error: `Invalid task turn-start callback.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid task turn-start callback.`, ok: !1 }, { status: 400 });
   let r = rejectMismatchedTaskToken(t, n.data.taskId);
   return r === void 0
     ? {
@@ -264,10 +240,7 @@ function projectTaskUpdate(e, t) {
   if (callbackKind(e) !== `task.update`) return;
   let n = taskUpdateCallbackSchema.safeParse(e);
   if (!n.success)
-    return Response.json(
-      { error: `Invalid task update callback.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid task update callback.`, ok: !1 }, { status: 400 });
   let r = rejectMismatchedTaskToken(t, n.data.taskId);
   return r === void 0
     ? {
@@ -282,17 +255,11 @@ function projectTaskUpdate(e, t) {
 function rejectMismatchedTaskToken(e, t) {
   return readTaskIdFromInboxToken(e) === t
     ? void 0
-    : Response.json(
-        { error: `Task callback token mismatch.`, ok: !1 },
-        { status: 403 },
-      );
+    : Response.json({ error: `Task callback token mismatch.`, ok: !1 }, { status: 403 });
 }
 function projectSessionCallbackResult(e) {
   if (typeof e != `object` || !e)
-    return Response.json(
-      { error: `Expected a JSON object.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Expected a JSON object.`, ok: !1 }, { status: 400 });
   let t = callbackKind(e);
   if (
     t !== `session.completed` &&
@@ -300,16 +267,10 @@ function projectSessionCallbackResult(e) {
     t !== `turn.completed` &&
     t !== `turn.failed`
   )
-    return Response.json(
-      { error: `Unsupported callback kind.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Unsupported callback kind.`, ok: !1 }, { status: 400 });
   let n = sessionResultCallbackSchema.safeParse(e);
   if (!n.success)
-    return Response.json(
-      { error: `Invalid session result callback.`, ok: !1 },
-      { status: 400 },
-    );
+    return Response.json({ error: `Invalid session result callback.`, ok: !1 }, { status: 400 });
   let r = n.data;
   if (r.kind === `session.completed`) {
     let e = r.output ?? ``,

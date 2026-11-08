@@ -18,8 +18,7 @@ function normalizeTeamsContinuationAddress(e) {
       }
     : {
         conversationId: e.conversationId.slice(0, t),
-        replyToActivityId:
-          e.conversationId.slice(t + 11) || e.replyToActivityId || null,
+        replyToActivityId: e.conversationId.slice(t + 11) || e.replyToActivityId || null,
       };
 }
 async function resolveTeamsAppId(e) {
@@ -28,10 +27,8 @@ async function resolveTeamsAppId(e) {
   return typeof t == `function` ? await t() : t;
 }
 async function resolveTeamsAppPassword(e) {
-  let t =
-    e ?? process.env.MICROSOFT_APP_PASSWORD ?? process.env.TEAMS_APP_PASSWORD;
-  if (!t)
-    throw Error(`MICROSOFT_APP_PASSWORD or TEAMS_APP_PASSWORD is required.`);
+  let t = e ?? process.env.MICROSOFT_APP_PASSWORD ?? process.env.TEAMS_APP_PASSWORD;
+  if (!t) throw Error(`MICROSOFT_APP_PASSWORD or TEAMS_APP_PASSWORD is required.`);
   return typeof t == `function` ? await t() : t;
 }
 async function resolveTeamsTenantId(e) {
@@ -45,9 +42,7 @@ async function resolveTeamsAccessToken(t = {}) {
   let a = await resolveTeamsAppId(n?.appId),
     o = await resolveTeamsAppPassword(n?.appPassword),
     s = await resolveTeamsTenantId(n?.tenantId),
-    c = trimTrailingSlash(
-      t.loginBaseUrl ?? `https://login.microsoftonline.com`,
-    ),
+    c = trimTrailingSlash(t.loginBaseUrl ?? `https://login.microsoftonline.com`),
     l = `${c}:${s ?? BOT_FRAMEWORK_TENANT}:${a}`,
     u = accessTokenCache.get(l),
     d = Date.now();
@@ -65,17 +60,12 @@ async function resolveTeamsAccessToken(t = {}) {
       method: `POST`,
     }),
     h = await parseResponseBody(m);
-  if (!m.ok)
-    throw Error(`Teams access-token request failed with HTTP ${m.status}.`);
+  if (!m.ok) throw Error(`Teams access-token request failed with HTTP ${m.status}.`);
   let g = isObject(h) ? h : {},
     _ = typeof g.access_token == `string` ? g.access_token : ``;
-  if (!_)
-    throw Error(`Teams access-token response did not include access_token.`);
+  if (!_) throw Error(`Teams access-token response did not include access_token.`);
   let v = typeof g.expires_in == `number` ? g.expires_in : 3600;
-  return (
-    accessTokenCache.set(l, { accessToken: _, expiresAt: d + v * 1e3 }),
-    _
-  );
+  return (accessTokenCache.set(l, { accessToken: _, expiresAt: d + v * 1e3 }), _);
 }
 async function callTeamsConnectorApi(e) {
   let n = e.fetch ?? fetch,
@@ -121,14 +111,13 @@ async function triggerTeamsTypingIndicator(e) {
     body: { type: `typing` },
     path: `/v3/conversations/${encodeURIComponent(e.conversationId)}/activities`,
   });
-  if (!t.ok)
-    throw Error(`Teams typing indicator failed with HTTP ${t.status}.`);
+  if (!t.ok) throw Error(`Teams typing indicator failed with HTTP ${t.status}.`);
 }
 function splitTeamsMessageText(e) {
   if (e.length <= 81920) return [e];
   let t = [],
     r = e;
-  for (; r.length > TEAMS_MESSAGE_TEXT_MAX_LENGTH; ) {
+  for (; r.length > TEAMS_MESSAGE_TEXT_MAX_LENGTH;) {
     let e = r.lastIndexOf(
       `
 

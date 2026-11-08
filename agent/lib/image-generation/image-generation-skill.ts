@@ -13,7 +13,9 @@ import { defineSkill, type SkillDefinition } from "eve/skills";
 
 export const IMAGE_GENERATION_SKILL_NAME = "imagegen" as const;
 
-export function isImageGenerationSkillName(value: string): value is typeof IMAGE_GENERATION_SKILL_NAME {
+export function isImageGenerationSkillName(
+  value: string,
+): value is typeof IMAGE_GENERATION_SKILL_NAME {
   return value === IMAGE_GENERATION_SKILL_NAME;
 }
 

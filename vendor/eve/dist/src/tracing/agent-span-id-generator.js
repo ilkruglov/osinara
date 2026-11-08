@@ -28,8 +28,7 @@ function randomHexId(e) {
   let t;
   do {
     t = ``;
-    for (let n = 0; n < e; n += 1)
-      t += `0123456789abcdef`[Math.trunc(Math.random() * 16)];
+    for (let n = 0; n < e; n += 1) t += `0123456789abcdef`[Math.trunc(Math.random() * 16)];
   } while (!/[1-9a-f]/u.test(t));
   return t;
 }

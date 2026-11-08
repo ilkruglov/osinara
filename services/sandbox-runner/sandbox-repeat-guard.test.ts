@@ -30,8 +30,12 @@ describe("createSandboxRepeatGuard", () => {
     guard.recordTimeout("s1", open);
 
     expect(guard.refuses("s1", open)).toBe(true);
-    expect(guard.refuses("s1", sandboxCommandFingerprint("agent-browser open https://b", "/workspace"))).toBe(false);
-    expect(guard.refuses("s1", sandboxCommandFingerprint("agent-browser open https://a", "/tmp"))).toBe(false);
+    expect(
+      guard.refuses("s1", sandboxCommandFingerprint("agent-browser open https://b", "/workspace")),
+    ).toBe(false);
+    expect(
+      guard.refuses("s1", sandboxCommandFingerprint("agent-browser open https://a", "/tmp")),
+    ).toBe(false);
     expect(guard.refuses("s2", open)).toBe(false);
     clock += 61_000;
     expect(guard.refuses("s1", open)).toBe(false);
@@ -78,15 +82,27 @@ describe("engine repeat guard", () => {
     const { container, engine } = engineWithExitCodes([124], "");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const first = await engine.runProcess(SANDBOX_SESSION_ID, { command: "agent-browser open https://a", timeoutMs: 1_000 });
+    const first = await engine.runProcess(SANDBOX_SESSION_ID, {
+      command: "agent-browser open https://a",
+      timeoutMs: 1_000,
+    });
     expect(first.exitCode).toBe(124);
     expect(first.stderr).toContain("AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT");
 
-    const second = await engine.runProcess(SANDBOX_SESSION_ID, { command: "agent-browser open https://a", timeoutMs: 1_000 });
-    expect(second).toMatchObject({ exitCode: SANDBOX_REPEAT_REFUSED_EXIT_CODE, stderr: SANDBOX_REPEAT_REFUSED_MESSAGE });
+    const second = await engine.runProcess(SANDBOX_SESSION_ID, {
+      command: "agent-browser open https://a",
+      timeoutMs: 1_000,
+    });
+    expect(second).toMatchObject({
+      exitCode: SANDBOX_REPEAT_REFUSED_EXIT_CODE,
+      stderr: SANDBOX_REPEAT_REFUSED_MESSAGE,
+    });
     expect(container.exec).toHaveBeenCalledTimes(1);
 
-    const changed = await engine.runProcess(SANDBOX_SESSION_ID, { command: "agent-browser open https://b", timeoutMs: 1_000 });
+    const changed = await engine.runProcess(SANDBOX_SESSION_ID, {
+      command: "agent-browser open https://b",
+      timeoutMs: 1_000,
+    });
     expect(changed.exitCode).toBe(0);
     expect(container.exec).toHaveBeenCalledTimes(2);
     consoleError.mockRestore();

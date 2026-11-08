@@ -6,10 +6,10 @@
  * when called outside one.
  */
 export interface StateHandle<T> {
-    /** Read the current value. Returns `initial()` on first access within a context. */
-    get(): T;
-    /** Update the value with a function that receives the current value. */
-    update(fn: (current: T) => T): void;
+  /** Read the current value. Returns `initial()` on first access within a context. */
+  get(): T;
+  /** Update the value with a function that receives the current value. */
+  update(fn: (current: T) => T): void;
 }
 /**
  * Creates a typed, named state slot backed by a durable `ContextKey`.

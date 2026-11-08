@@ -18,9 +18,7 @@ const MILLISECONDS_PER_SECOND = 1_000;
 
 export function requireTelegramPositiveBigint(value: string, field: string): string {
   if (!/^[1-9]\d*$/u.test(value) || BigInt(value) > POSTGRES_BIGINT_MAX) {
-    throw new Error(
-      `AGENT_TELEGRAM_MESSAGE_INVALID: Telegram передал некорректное поле ${field}`,
-    );
+    throw new Error(`AGENT_TELEGRAM_MESSAGE_INVALID: Telegram передал некорректное поле ${field}`);
   }
   return value;
 }
@@ -102,10 +100,7 @@ export function telegramSenderDisplayName(message: TelegramMessage): string | nu
   return name || null;
 }
 
-export async function lockTelegramGroupJournal(
-  client: PoolClient,
-  groupId: string,
-): Promise<void> {
+export async function lockTelegramGroupJournal(client: PoolClient, groupId: string): Promise<void> {
   // Group compatibility writers share the application-conversation lock with snapshots/catch-up.
   const conversation = await client.query<{ id: string }>(
     "SELECT id FROM application_conversations WHERE telegram_group_id = $1",

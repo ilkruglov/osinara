@@ -52,7 +52,11 @@ export function createGroceryClient(dependencies: GroceryClientDependencies) {
     } catch (error) {
       throw unavailable(error instanceof Error ? error.name : "UnknownError");
     }
-    if (response.status === 429) throw new AppError("AGENT_GROCERY_RATE_LIMITED", "ВкусВилл временно ограничил число запросов. Попробуйте позже");
+    if (response.status === 429)
+      throw new AppError(
+        "AGENT_GROCERY_RATE_LIMITED",
+        "ВкусВилл временно ограничил число запросов. Попробуйте позже",
+      );
     if (!response.ok) throw unavailable(`status_${response.status}`);
 
     let envelope: unknown;
@@ -68,7 +72,7 @@ export function createGroceryClient(dependencies: GroceryClientDependencies) {
     if (message?.error) throw unavailable("jsonrpc_error");
     if (message?.result?.isError === true) throw unavailable("tool_error");
     const content = message?.result?.content;
-    const first = Array.isArray(content) ? content[0] as { text?: unknown } : null;
+    const first = Array.isArray(content) ? (content[0] as { text?: unknown }) : null;
     if (typeof first?.text !== "string") throw unavailable("content_missing");
     let payload;
     try {
@@ -78,7 +82,10 @@ export function createGroceryClient(dependencies: GroceryClientDependencies) {
     }
     if (payload?.ok === false) {
       if (payload.code === "rate_limited" || payload.error?.http_status === 429) {
-        throw new AppError("AGENT_GROCERY_RATE_LIMITED", "ВкусВилл временно ограничил число запросов. Попробуйте позже");
+        throw new AppError(
+          "AGENT_GROCERY_RATE_LIMITED",
+          "ВкусВилл временно ограничил число запросов. Попробуйте позже",
+        );
       }
       throw unavailable("catalog_rejected");
     }

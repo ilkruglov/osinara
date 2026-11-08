@@ -3,28 +3,36 @@ import type { SessionCommandInbox } from "#execution/session-command-inbox.js";
 import type { SessionStateCursor } from "#execution/session-state-cursor.js";
 /** One authorization-callback read surfaced during a parked wait. */
 export interface AuthorizationCallbackInstruction {
-    readonly kind: "authorization";
-    /** True when the authorization hook closed; no further callbacks can arrive. */
-    readonly closed: boolean;
-    readonly payloads: readonly DeliverPayload[];
+  readonly kind: "authorization";
+  /** True when the authorization hook closed; no further callbacks can arrive. */
+  readonly closed: boolean;
+  readonly payloads: readonly DeliverPayload[];
 }
 /** What the parked driver should do with the next session activity. */
-export type NextTurnInstruction = {
-    readonly kind: "clear";
-} | {
-    readonly kind: "compact";
-} | {
-    readonly kind: "expired";
-} | {
-    readonly kind: "reset";
-} | {
-    readonly kind: "closed";
-} | {
-    readonly kind: "cancel-turn";
-} | AuthorizationCallbackInstruction | {
-    readonly kind: "turn";
-    readonly delivery: DeliverHookPayload;
-};
+export type NextTurnInstruction =
+  | {
+      readonly kind: "clear";
+    }
+  | {
+      readonly kind: "compact";
+    }
+  | {
+      readonly kind: "expired";
+    }
+  | {
+      readonly kind: "reset";
+    }
+  | {
+      readonly kind: "closed";
+    }
+  | {
+      readonly kind: "cancel-turn";
+    }
+  | AuthorizationCallbackInstruction
+  | {
+      readonly kind: "turn";
+      readonly delivery: DeliverHookPayload;
+    };
 /**
  * Awaits the next delivery that requires driver action while the session
  * is parked. Deliveries fully routed to a descendant leave the parent with
@@ -42,13 +50,13 @@ export type NextTurnInstruction = {
  * caller-owned `stateCursor`, so returns carry only the instruction kind.
  */
 export declare function nextTurnDelivery(input: {
-    readonly awaitAuthorizationCallbacks?: boolean;
-    readonly bufferedDeliveries: DeliverHookPayload[];
-    readonly bufferedSessionControls: Array<"clear" | "compact" | "expired" | "reset">;
-    readonly cancelledTaskIds?: Set<string>;
-    readonly commandInbox: SessionCommandInbox;
-    readonly deferDeliveries?: boolean;
-    readonly driverWritable: WritableStream<Uint8Array>;
-    readonly seenTaskDeliveries?: Set<string>;
-    readonly stateCursor: SessionStateCursor;
+  readonly awaitAuthorizationCallbacks?: boolean;
+  readonly bufferedDeliveries: DeliverHookPayload[];
+  readonly bufferedSessionControls: Array<"clear" | "compact" | "expired" | "reset">;
+  readonly cancelledTaskIds?: Set<string>;
+  readonly commandInbox: SessionCommandInbox;
+  readonly deferDeliveries?: boolean;
+  readonly driverWritable: WritableStream<Uint8Array>;
+  readonly seenTaskDeliveries?: Set<string>;
+  readonly stateCursor: SessionStateCursor;
 }): Promise<NextTurnInstruction>;

@@ -1,8 +1,5 @@
 import { parseWithNitroRolldownAst } from "#internal/bundler/nitro-rolldown.js";
-import {
-  findProperty,
-  walkNode,
-} from "#internal/workflow-bundle/dynamic-tool-ast-references.js";
+import { findProperty, walkNode } from "#internal/workflow-bundle/dynamic-tool-ast-references.js";
 let transformCounter = 0;
 async function transformDynamicRemoteAgentCredentials(t, n) {
   if (
@@ -52,9 +49,7 @@ function applyTransform(e, t) {
     r = [],
     i = [];
   for (let e of t) {
-    let t = [e.authPropertySource, e.headersPropertySource].filter(
-        (e) => e !== void 0,
-      ),
+    let t = [e.authPropertySource, e.headersPropertySource].filter((e) => e !== void 0),
       a = `eve:dynamic-remote-agent//${e.hoistedName}`;
     (r.push(`function ${e.hoistedName}() {\n  return { ${t.join(`, `)} };\n}`),
       i.push(`${e.hoistedName}.stepId = ${JSON.stringify(a)};`),
@@ -79,8 +74,6 @@ function applyTransform(e, t) {
   };
 }
 function sliceNode(e, t) {
-  return t?.start === void 0 || t.end === void 0
-    ? void 0
-    : e.slice(t.start, t.end);
+  return t?.start === void 0 || t.end === void 0 ? void 0 : e.slice(t.start, t.end);
 }
 export { transformDynamicRemoteAgentCredentials };

@@ -61,18 +61,19 @@ export async function handleTelegramSessionFailure(
   if (isHookConflictFailure(data)) return;
   const continuationToken = requiredTelegramContinuationToken(channel);
   const scheduledRunId = scheduledRunIdFromContinuationToken(continuationToken);
-  const notifyScheduledFailure = scheduledRunId === null
-    ? true
-    : await scheduleRepository.failRunByIdentityForNotification(
-        scheduledRunId,
-        data.sessionId,
-        data.code,
-        new Date(),
-      );
-  const result = await repository.recordSessionFailedByContinuationToken(
+  const notifyScheduledFailure =
+    scheduledRunId === null
+      ? true
+      : await scheduleRepository.failRunByIdentityForNotification(
+          scheduledRunId,
+          data.sessionId,
+          data.code,
+          new Date(),
+        );
+  const result = (await repository.recordSessionFailedByContinuationToken(
     continuationToken,
     data.sessionId,
-  ) as SessionEventResult;
+  )) as SessionEventResult;
   if (result === "stale") return;
   if (!notifyScheduledFailure) return;
   if (!shouldNotifyTelegramFailure(channel)) return;

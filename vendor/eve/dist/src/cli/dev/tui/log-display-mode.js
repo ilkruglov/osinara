@@ -5,13 +5,6 @@ function parseLogDisplayMode(t) {
 }
 function nextLogDisplayMode(e) {
   let n = LOG_DISPLAY_MODE_CYCLE.indexOf(e);
-  return (
-    LOG_DISPLAY_MODE_CYCLE[(n + 1) % LOG_DISPLAY_MODE_CYCLE.length] ?? `none`
-  );
+  return LOG_DISPLAY_MODE_CYCLE[(n + 1) % LOG_DISPLAY_MODE_CYCLE.length] ?? `none`;
 }
-export {
-  LOG_DISPLAY_MODES,
-  LOG_DISPLAY_MODE_CYCLE,
-  nextLogDisplayMode,
-  parseLogDisplayMode,
-};
+export { LOG_DISPLAY_MODES, LOG_DISPLAY_MODE_CYCLE, nextLogDisplayMode, parseLogDisplayMode };

@@ -2,8 +2,8 @@ export type PackageManagerKind = "bun" | "npm" | "pnpm" | "yarn";
 /** How a project's package manager was identified, most authoritative first. */
 export type PackageManagerSource = "package-manager-field" | "lockfile" | "default";
 export interface DetectedPackageManager {
-    kind: PackageManagerKind;
-    source: PackageManagerSource;
+  kind: PackageManagerKind;
+  source: PackageManagerSource;
 }
 /**
  * Resolves a project's package manager from gathered facts: an explicit
@@ -11,8 +11,8 @@ export interface DetectedPackageManager {
  * then pnpm.
  */
 export declare function resolvePackageManager(input: {
-    packageManagerField?: string;
-    lockfiles: readonly string[];
+  packageManagerField?: string;
+  lockfiles: readonly string[];
 }): DetectedPackageManager;
 /**
  * Identifies the package manager that launched the current process from an
@@ -21,7 +21,9 @@ export declare function resolvePackageManager(input: {
  * `"pnpm/10.4.0 npm/? node/v24.0.0 darwin arm64"` → pnpm. A binary executed
  * directly carries no user agent and yields undefined.
  */
-export declare function packageManagerFromUserAgent(userAgent: string | undefined): PackageManagerKind | undefined;
+export declare function packageManagerFromUserAgent(
+  userAgent: string | undefined,
+): PackageManagerKind | undefined;
 /** Reads {@link packageManagerFromUserAgent} from the process environment. */
 export declare function detectInvokingPackageManager(): PackageManagerKind | undefined;
 /** Reads package-manager facts from `projectRoot`, then walks ancestors. */

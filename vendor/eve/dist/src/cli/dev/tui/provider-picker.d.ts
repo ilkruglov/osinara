@@ -4,61 +4,83 @@ import type { ProviderConnection, ProviderPickerChoice } from "#setup/flows/prov
 import type { GatewayKeyValidation } from "#setup/validate-gateway-key.js";
 import { type LineState } from "./line-editor.js";
 /** The provider key row is either inert, editable, checking, or rejected. */
-export type ProviderPickerPhase = {
-    kind: "inactive";
-} | {
-    kind: "editing";
-    editor: LineState;
-} | {
-    kind: "validating";
-    editor: LineState;
-    key: string;
-} | {
-    kind: "invalid";
-    editor: LineState;
-    message: string;
-};
+export type ProviderPickerPhase =
+  | {
+      kind: "inactive";
+    }
+  | {
+      kind: "editing";
+      editor: LineState;
+    }
+  | {
+      kind: "validating";
+      editor: LineState;
+      key: string;
+    }
+  | {
+      kind: "invalid";
+      editor: LineState;
+      message: string;
+    };
 /** One provider picker interaction: ordinary select state plus its key field. */
 export interface ProviderPickerState {
-    select: SelectState;
-    phase: ProviderPickerPhase;
+  select: SelectState;
+  phase: ProviderPickerPhase;
 }
 /** Semantic input after terminal-key and line-editor decoding. */
-export type ProviderPickerEvent = {
-    type: "move";
-    direction: "up" | "down";
-} | {
-    type: "edit";
-    editor: LineState;
-} | {
-    type: "cancel";
-} | {
-    type: "submit";
-} | {
-    type: "validated";
-    validation: GatewayKeyValidation;
-};
+export type ProviderPickerEvent =
+  | {
+      type: "move";
+      direction: "up" | "down";
+    }
+  | {
+      type: "edit";
+      editor: LineState;
+    }
+  | {
+      type: "cancel";
+    }
+  | {
+      type: "submit";
+    }
+  | {
+      type: "validated";
+      validation: GatewayKeyValidation;
+    };
 /** One state transition; abort controllers remain in the terminal renderer. */
-export type ProviderPickerTransition = {
-    kind: "ignore";
-    state: ProviderPickerState;
-} | {
-    kind: "render";
-    state: ProviderPickerState;
-} | {
-    kind: "clear";
-    state: ProviderPickerState;
-} | {
-    kind: "cancel";
-} | {
-    kind: "validate";
-    state: ProviderPickerState;
-    key: string;
-} | {
-    kind: "settle";
-    result: ProviderPickerChoice;
-};
+export type ProviderPickerTransition =
+  | {
+      kind: "ignore";
+      state: ProviderPickerState;
+    }
+  | {
+      kind: "render";
+      state: ProviderPickerState;
+    }
+  | {
+      kind: "clear";
+      state: ProviderPickerState;
+    }
+  | {
+      kind: "cancel";
+    }
+  | {
+      kind: "validate";
+      state: ProviderPickerState;
+      key: string;
+    }
+  | {
+      kind: "settle";
+      result: ProviderPickerChoice;
+    };
 /** Creates the select and blank inline key field for one provider menu. */
-export declare function initialProviderPickerState(options: readonly PromptOption<ProviderConnection>[], initialValue: ProviderConnection): ProviderPickerState;
+export declare function initialProviderPickerState(
+  options: readonly PromptOption<ProviderConnection>[],
+  initialValue: ProviderConnection,
+): ProviderPickerState;
 /** Applies one provider-menu event without creating terminal resources. */
-export declare function transitionProviderPicker(state: ProviderPickerState, event: ProviderPickerEvent, options: readonly PromptOption<ProviderConnection>[]): ProviderPickerTransition;
+export declare function transitionProviderPicker(
+  state: ProviderPickerState,
+  event: ProviderPickerEvent,
+  options: readonly PromptOption<ProviderConnection>[],
+): ProviderPickerTransition;

@@ -24,8 +24,15 @@ function wholeSetting(
   if (raw === undefined || raw === "") return undefined;
   const bounds = SETTING_BOUNDS[name];
   const value = Number(raw);
-  if (!/^\d+$/u.test(raw) || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
-    throw new Error(`AGENT_RUNTIME_TUNING_INVALID: ${name} должно быть целым от ${bounds.min} до ${bounds.max}`);
+  if (
+    !/^\d+$/u.test(raw) ||
+    !Number.isSafeInteger(value) ||
+    value < bounds.min ||
+    value > bounds.max
+  ) {
+    throw new Error(
+      `AGENT_RUNTIME_TUNING_INVALID: ${name} должно быть целым от ${bounds.min} до ${bounds.max}`,
+    );
   }
   return value;
 }
@@ -35,6 +42,7 @@ export function workflowPostgresSettings(
 ): { maxPoolSize: number | undefined; queueConcurrency: number } {
   return {
     maxPoolSize: wholeSetting("WORKFLOW_POSTGRES_MAX_POOL_SIZE", env),
-    queueConcurrency: wholeSetting("WORKFLOW_POSTGRES_WORKER_CONCURRENCY", env) ?? DEFAULT_QUEUE_CONCURRENCY,
+    queueConcurrency:
+      wholeSetting("WORKFLOW_POSTGRES_WORKER_CONCURRENCY", env) ?? DEFAULT_QUEUE_CONCURRENCY,
   };
 }

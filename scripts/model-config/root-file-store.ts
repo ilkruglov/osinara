@@ -8,13 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { constants } from "node:fs";
-import {
-  lstat,
-  open,
-  realpath,
-  rename,
-  rm,
-} from "node:fs/promises";
+import { lstat, open, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 
 import type { ModelConfigFileStore, ModelConfigPaths, StagedFile } from "./contracts.js";
@@ -66,7 +60,11 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
     }
   }
 
-  private async assertSecureAuxiliaryFile(path: string, mode: number, errorCode: string): Promise<void> {
+  private async assertSecureAuxiliaryFile(
+    path: string,
+    mode: number,
+    errorCode: string,
+  ): Promise<void> {
     const metadata = await lstat(path);
     if (
       !metadata.isFile() ||
@@ -74,7 +72,7 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
       metadata.uid !== this.security.uid ||
       metadata.gid !== this.security.gid ||
       exactMode(metadata.mode) !== mode ||
-      await realpath(path) !== path
+      (await realpath(path)) !== path
     ) {
       throw modelConfigError(
         errorCode,
@@ -101,7 +99,7 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
       metadata.uid !== this.security.uid ||
       metadata.gid !== this.security.gid ||
       (exactMode(metadata.mode) & GROUP_OR_WORLD_WRITE_MASK) !== 0 ||
-      await realpath(directoryPath) !== directoryPath
+      (await realpath(directoryPath)) !== directoryPath
     ) {
       throw modelConfigError(
         "OSINARA_MODEL_CONFIG_DIRECTORY_SECURITY_INVALID",
@@ -134,10 +132,7 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
       LOCK_MODE,
       "OSINARA_MODEL_CONFIG_LOCK_UNTRUSTED",
     );
-    const existing = await open(
-      this.paths.lockPath,
-      constants.O_RDWR | constants.O_NOFOLLOW,
-    );
+    const existing = await open(this.paths.lockPath, constants.O_RDWR | constants.O_NOFOLLOW);
     const contents = await existing.readFile("ascii");
     if (!PID_PATTERN.test(contents)) {
       await existing.close();
@@ -153,17 +148,27 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
     return new Promise<ReturnType<typeof spawn>>((resolvePromise, rejectPromise) => {
       const child = spawn(
         FLOCK_PATH,
-        ["--exclusive", "--nonblock", "--no-fork", LOCK_FILE_DESCRIPTOR_PATH, SHELL_PATH, "-c", LOCK_CHILD_SOURCE],
+        [
+          "--exclusive",
+          "--nonblock",
+          "--no-fork",
+          LOCK_FILE_DESCRIPTOR_PATH,
+          SHELL_PATH,
+          "-c",
+          LOCK_CHILD_SOURCE,
+        ],
         { stdio: ["pipe", "pipe", "ignore", handle.fd] },
       );
       let settled = false;
       child.once("error", () => {
         if (settled) return;
         settled = true;
-        rejectPromise(modelConfigError(
-          "OSINARA_MODEL_CONFIG_LOCK_FAILED",
-          `Не удалось запустить ${FLOCK_PATH}; установите util-linux и повторите операцию`,
-        ));
+        rejectPromise(
+          modelConfigError(
+            "OSINARA_MODEL_CONFIG_LOCK_FAILED",
+            `Не удалось запустить ${FLOCK_PATH}; установите util-linux и повторите операцию`,
+          ),
+        );
       });
       child.stdout?.once("data", (message: Buffer) => {
         if (settled || message.toString("ascii") !== "locked\n") return;
@@ -173,15 +178,17 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
       child.once("exit", (code) => {
         if (settled) return;
         settled = true;
-        rejectPromise(code === 1
-          ? modelConfigError(
-              "OSINARA_MODEL_CONFIG_LOCKED",
-              "Другая операция изменения конфигурации уже выполняется",
-            )
-          : modelConfigError(
-              "OSINARA_MODEL_CONFIG_LOCK_FAILED",
-              `Процесс ${FLOCK_PATH} завершился с кодом ${String(code)} до получения lock`,
-            ));
+        rejectPromise(
+          code === 1
+            ? modelConfigError(
+                "OSINARA_MODEL_CONFIG_LOCKED",
+                "Другая операция изменения конфигурации уже выполняется",
+              )
+            : modelConfigError(
+                "OSINARA_MODEL_CONFIG_LOCK_FAILED",
+                `Процесс ${FLOCK_PATH} завершился с кодом ${String(code)} до получения lock`,
+              ),
+        );
       });
     });
   }
@@ -227,7 +234,7 @@ export class RootModelConfigFileStore implements ModelConfigFileStore {
       metadata.uid !== this.security.uid ||
       metadata.gid !== this.security.gid ||
       exactMode(metadata.mode) !== mode ||
-      await realpath(path) !== path
+      (await realpath(path)) !== path
     ) {
       throw modelConfigError(
         "OSINARA_MODEL_CONFIG_FILE_SECURITY_INVALID",

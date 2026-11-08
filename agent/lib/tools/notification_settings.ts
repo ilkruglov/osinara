@@ -29,14 +29,19 @@ const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const TOP_LEVEL_FIELDS = ["action", "quietEnd", "quietStart", "timezone"] as const;
 
 const nullableTimeSchema = z.union([z.string(), z.null()]).optional();
-const notificationSettingsSchema = z.object({
-  action: z.enum(TOOL_ACTIONS).describe("Обязательный action: get или set."),
-  quietEnd: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
-  quietStart: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
-  timezone: z.string().optional().describe("Обязательный IANA timezone только для action=set."),
-}).strict();
+const notificationSettingsSchema = z
+  .object({
+    action: z.enum(TOOL_ACTIONS).describe("Обязательный action: get или set."),
+    quietEnd: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
+    quietStart: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
+    timezone: z.string().optional().describe("Обязательный IANA timezone только для action=set."),
+  })
+  .strict();
 
-function requiredNullableTime(input: Record<string, unknown>, key: "quietEnd" | "quietStart"): string | null {
+function requiredNullableTime(
+  input: Record<string, unknown>,
+  key: "quietEnd" | "quietStart",
+): string | null {
   const value = input[key];
   if (value === null) return null;
   if (typeof value !== "string" || !TIME_PATTERN.test(value)) {
@@ -49,7 +54,12 @@ function requiredNullableTime(input: Record<string, unknown>, key: "quietEnd" | 
 }
 
 function requireSetInput(input: Record<string, unknown>) {
-  requireOnlyFields(input, ["action", "quietEnd", "quietStart", "timezone"], "action=set", INPUT_ERROR_CODE);
+  requireOnlyFields(
+    input,
+    ["action", "quietEnd", "quietStart", "timezone"],
+    "action=set",
+    INPUT_ERROR_CODE,
+  );
   const quietStart = requiredNullableTime(input, "quietStart");
   const quietEnd = requiredNullableTime(input, "quietEnd");
   const bothDisabled = quietStart === null && quietEnd === null;
@@ -63,7 +73,9 @@ function requireSetInput(input: Record<string, unknown>) {
   return {
     quietEnd,
     quietStart,
-    timezone: requiredString(input, "timezone", INPUT_ERROR_CODE, "Europe/Moscow", { maxLength: 100 }),
+    timezone: requiredString(input, "timezone", INPUT_ERROR_CODE, "Europe/Moscow", {
+      maxLength: 100,
+    }),
   };
 }
 
@@ -79,7 +91,7 @@ function requireNotificationSettingsInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Получить или настроить личный IANA timezone и тихие часы для напоминаний. Get: {\"action\":\"get\"}. Set: {\"action\":\"set\",\"timezone\":\"Europe/Moscow\",\"quietStart\":\"22:00\",\"quietEnd\":\"08:00\"}; quietStart и quietEnd разные значения ЧЧ:ММ, для отключения тихих часов оба null. Не угадывай timezone и часы: если данных нет, спроси пользователя.",
+  'Получить или настроить личный IANA timezone и тихие часы для напоминаний. Get: {"action":"get"}. Set: {"action":"set","timezone":"Europe/Moscow","quietStart":"22:00","quietEnd":"08:00"}; quietStart и quietEnd разные значения ЧЧ:ММ, для отключения тихих часов оба null. Не угадывай timezone и часы: если данных нет, спроси пользователя.',
 ].join(" ");
 
 export default defineTool({

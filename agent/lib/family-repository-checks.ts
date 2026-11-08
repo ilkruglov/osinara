@@ -47,7 +47,11 @@ export async function requireTimezone(client: PoolClient, timezone: string): Pro
  * Whether the user is still the family owner, holding a share lock on that membership until the
  * transaction ends: a parked approval or a slow write cannot outlive a role revocation.
  */
-export async function lockCurrentOwner(client: PoolClient, familyId: string, userId: string): Promise<boolean> {
+export async function lockCurrentOwner(
+  client: PoolClient,
+  familyId: string,
+  userId: string,
+): Promise<boolean> {
   const owner = await client.query(
     `SELECT 1 FROM family_memberships
       WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
@@ -58,8 +62,12 @@ export async function lockCurrentOwner(client: PoolClient, familyId: string, use
 }
 
 /** `lockCurrentOwner` that refuses with `AGENT_OWNER_REQUIRED`. */
-export async function requireLockedOwner(client: PoolClient, familyId: string, userId: string): Promise<void> {
-  if (!await lockCurrentOwner(client, familyId, userId)) {
+export async function requireLockedOwner(
+  client: PoolClient,
+  familyId: string,
+  userId: string,
+): Promise<void> {
+  if (!(await lockCurrentOwner(client, familyId, userId))) {
     throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
   }
 }

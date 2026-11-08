@@ -40,9 +40,13 @@ export async function authorizeTelegramWhisper(
   const identity = await telegram.findIdentity(telegramUserId);
   // Group policy and identity are separate records: a policy changed while the author was looked
   // up (owner-only switched on, the type changed) closes the whisper, as for an ordinary message.
-  if (!sameTelegramGroupPolicy(group, await telegram.findGroup(message.chat.id, chatType))) return null;
-  if (group.messageMode === "owner_only" &&
-    (identity?.familyId !== group.familyId || identity.role !== "owner")) return null;
+  if (!sameTelegramGroupPolicy(group, await telegram.findGroup(message.chat.id, chatType)))
+    return null;
+  if (
+    group.messageMode === "owner_only" &&
+    (identity?.familyId !== group.familyId || identity.role !== "owner")
+  )
+    return null;
   const decision = evaluateConversationAccess({
     actorKind: "telegram_user",
     chat: { id: message.chat.id, type: chatType },

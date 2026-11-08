@@ -46,14 +46,12 @@ async function fixture() {
   };
 }
 
-function canonicalInput(
-  fixtureData: Awaited<ReturnType<typeof fixture>>,
-  topicId: number | null,
-) {
+function canonicalInput(fixtureData: Awaited<ReturnType<typeof fixture>>, topicId: number | null) {
   return {
-    baseContinuationToken: topicId === null
-      ? `osinara:group:${fixtureData.groupId}:main`
-      : `osinara:group:${fixtureData.groupId}:topic:${topicId}`,
+    baseContinuationToken:
+      topicId === null
+        ? `osinara:group:${fixtureData.groupId}:main`
+        : `osinara:group:${fixtureData.groupId}:topic:${topicId}`,
     familyId: fixtureData.familyId,
     groupId: fixtureData.groupId,
     kind: "canonical" as const,
@@ -82,11 +80,13 @@ describeWithDatabase("canonical group session repository", () => {
 
     expect(second.id).toBe(first.id);
     expect(topic.id).not.toBe(first.id);
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE group_id = $1 AND kind = 'canonical' AND retired_at IS NULL`,
-      [f.groupId],
-    )).resolves.toMatchObject({ rowCount: 2 });
+        [f.groupId],
+      ),
+    ).resolves.toMatchObject({ rowCount: 2 });
   });
 
   it("promotes a parked canonical and lets an unrelated turn create its replacement", async () => {
@@ -152,17 +152,22 @@ describeWithDatabase("canonical group session repository", () => {
     expect(recovered.generation).toBe(3);
     expect(concurrent.generation).toBe(3);
     // Either caller can acquire the transaction lock first; exactly one creates the generation.
-    expect([recovered.rotated, concurrent.rotated].sort((a, b) => Number(a) - Number(b))).toEqual([false, true]);
+    expect([recovered.rotated, concurrent.rotated].sort((a, b) => Number(a) - Number(b))).toEqual([
+      false,
+      true,
+    ]);
     expect(concurrent.id).toBe(recovered.id);
     expect(recovered.sandboxSessionId).toBe(staleTask.sandboxSessionId);
     expect(recovered.continuationToken).toBe(
       `${canonicalInput(f, null).baseContinuationToken}:osinara:3`,
     );
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1 AND kind = 'task' AND task_state = 'running' AND retired_at IS NULL`,
-      [staleTask.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [staleTask.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("promotes an OAuth authorization park without inventing a request identity", async () => {
@@ -176,13 +181,15 @@ describeWithDatabase("canonical group session repository", () => {
       requesterUserId: null,
     });
 
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1 AND kind = 'task' AND task_state = 'pending'
           AND pending_request_id IS NULL AND requester_user_id IS NULL
           AND requester_telegram_user_id IS NULL`,
-      [canonical.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [canonical.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("preserves persisted requester identity when a later park has null metadata", async () => {
@@ -203,28 +210,30 @@ describeWithDatabase("canonical group session repository", () => {
       requesterUserId: null,
     });
 
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1 AND pending_request_id = 'request-before-oauth'
           AND requester_user_id = $2 AND requester_telegram_user_id = 'canonical-owner'`,
-      [canonical.id, f.userId],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [canonical.id, f.userId],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it.each(["completed", "failed", "continuation"] as const)(
     "rolls back %s terminal state and route deletion when retirement audit fails",
     async (terminalPath) => {
-    const f = await fixture();
-    const canonical = await sessionRepository.prepareTurn(canonicalInput(f, null));
-    await sessionRepository.bindEveSession(canonical.id, "wrun_atomic_terminal");
-    await sessionRepository.parkSession({
-      applicationSessionId: canonical.id,
-      pendingRequestId: "request-atomic",
-      requesterTelegramUserId: "canonical-owner",
-      requesterUserId: f.userId,
-    });
-    await sessionRepository.registerRouteAlias(canonical.id, "-100-canonical::atomic");
-    await database().query(`
+      const f = await fixture();
+      const canonical = await sessionRepository.prepareTurn(canonicalInput(f, null));
+      await sessionRepository.bindEveSession(canonical.id, "wrun_atomic_terminal");
+      await sessionRepository.parkSession({
+        applicationSessionId: canonical.id,
+        pendingRequestId: "request-atomic",
+        requesterTelegramUserId: "canonical-owner",
+        requesterUserId: f.userId,
+      });
+      await sessionRepository.registerRouteAlias(canonical.id, "-100-canonical::atomic");
+      await database().query(`
       CREATE OR REPLACE FUNCTION reject_atomic_retirement_audit() RETURNS trigger
       LANGUAGE plpgsql AS $$
       BEGIN
@@ -239,29 +248,32 @@ describeWithDatabase("canonical group session repository", () => {
       FOR EACH ROW EXECUTE FUNCTION reject_atomic_retirement_audit();
     `);
 
-    try {
-      const terminal = terminalPath === "completed"
-        ? sessionRepository.recordTurnCompleted(canonical.id, "wrun_atomic_terminal", false)
-        : terminalPath === "failed"
-        ? sessionRepository.recordTurnFailed(canonical.id, "wrun_atomic_terminal")
-        : sessionRepository.recordSessionFailedByContinuationToken(
-          canonical.continuationToken,
-          "wrun_atomic_terminal",
-        );
-      await expect(terminal).rejects.toThrow("forced retirement audit failure");
-      await expect(database().query(
-        `SELECT 1 FROM conversation_sessions
+      try {
+        const terminal =
+          terminalPath === "completed"
+            ? sessionRepository.recordTurnCompleted(canonical.id, "wrun_atomic_terminal", false)
+            : terminalPath === "failed"
+              ? sessionRepository.recordTurnFailed(canonical.id, "wrun_atomic_terminal")
+              : sessionRepository.recordSessionFailedByContinuationToken(
+                  canonical.continuationToken,
+                  "wrun_atomic_terminal",
+                );
+        await expect(terminal).rejects.toThrow("forced retirement audit failure");
+        await expect(
+          database().query(
+            `SELECT 1 FROM conversation_sessions
           WHERE id = $1 AND retired_at IS NULL AND task_state = 'pending'
             AND pending_operation = true`,
-        [canonical.id],
-      )).resolves.toMatchObject({ rowCount: 1 });
-      await expect(sessionRepository.hasRoute("-100-canonical::atomic")).resolves.toBe(true);
-    } finally {
-      await database().query(`
+            [canonical.id],
+          ),
+        ).resolves.toMatchObject({ rowCount: 1 });
+        await expect(sessionRepository.hasRoute("-100-canonical::atomic")).resolves.toBe(true);
+      } finally {
+        await database().query(`
         DROP TRIGGER reject_atomic_retirement_audit ON audit_events;
         DROP FUNCTION reject_atomic_retirement_audit();
       `);
-    }
+      }
     },
   );
 
@@ -285,13 +297,15 @@ describeWithDatabase("canonical group session repository", () => {
       await sessionRepository.recordTurnCompleted(canonical.id, "wrun_terminal_task", false);
     }
 
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1 AND retired_at IS NOT NULL
           AND delete_after = retired_at + interval '1 day'
           AND task_state = $2`,
-      [canonical.id, failed ? "failed" : "completed"],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [canonical.id, failed ? "failed" : "completed"],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("retires abandoned running tasks in the bounded lifecycle sweep", async () => {
@@ -310,12 +324,14 @@ describeWithDatabase("canonical group session repository", () => {
       [canonical.id],
     );
 
-    await expect(sessionRepository.retireAbandonedTasks(
-      new Date("2026-08-03T12:00:00.000Z"),
-    )).resolves.toBe(1);
-    await expect(database().query(
-      "SELECT 1 FROM conversation_sessions WHERE id = $1 AND retired_at IS NOT NULL AND task_state = 'failed'",
-      [canonical.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      sessionRepository.retireAbandonedTasks(new Date("2026-08-03T12:00:00.000Z")),
+    ).resolves.toBe(1);
+    await expect(
+      database().query(
+        "SELECT 1 FROM conversation_sessions WHERE id = $1 AND retired_at IS NOT NULL AND task_state = 'failed'",
+        [canonical.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 });

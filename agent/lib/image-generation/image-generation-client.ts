@@ -48,7 +48,10 @@ export interface GeneratedImage {
   revisedPrompt?: string;
 }
 
-function productionClient(editing = false): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
+function productionClient(editing = false): {
+  assertConfigured(): void;
+  generate(input: ImageGenerationRequest): Promise<GeneratedImage>;
+} {
   if (editing) {
     const clients = resolveImageProviders(process.env).filter((client) => client.supportsEditing);
     if (clients.length === 0) throw editingUnavailable();

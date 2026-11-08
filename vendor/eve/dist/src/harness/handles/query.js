@@ -6,9 +6,7 @@ function readAgentHandles(t) {
   return Array.isArray(r) ? r : [];
 }
 function findRunningAgentHandle(e, t) {
-  return readAgentHandles(e).find(
-    (e) => e.phase === `running` && e.operation.callId === t.callId,
-  );
+  return readAgentHandles(e).find((e) => e.phase === `running` && e.operation.callId === t.callId);
 }
 function isResultBoundToRunningHandle(e, t) {
   return (

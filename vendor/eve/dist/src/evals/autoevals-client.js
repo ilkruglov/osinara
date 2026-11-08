@@ -86,9 +86,6 @@ function convertTools(t) {
   return n;
 }
 function convertToolChoice(e) {
-  if (e !== void 0)
-    return typeof e == `string`
-      ? e
-      : { type: `tool`, toolName: e.function.name };
+  if (e !== void 0) return typeof e == `string` ? e : { type: `tool`, toolName: e.function.name };
 }
 export { createAutoevalsClient };

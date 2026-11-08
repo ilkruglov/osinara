@@ -7,9 +7,7 @@ async function readDevSessionEvents(n, r) {
   } catch {
     return [];
   }
-  let { createWorld: a } = await import(
-      `#compiled/@workflow/world-local/index.js`
-    ),
+  let { createWorld: a } = await import(`#compiled/@workflow/world-local/index.js`),
     o = await import(`#internal/workflow/runtime.js`),
     s = a({ dataDir: i });
   o.setWorld(s);
@@ -44,12 +42,7 @@ async function drainRunStream(e, t, n) {
   let r = ``,
     i = new TextDecoder();
   try {
-    if (
-      !(await e.listStreams(t, n)).some(
-        (e) => e === `user` || e.endsWith(`_user`),
-      )
-    )
-      return ``;
+    if (!(await e.listStreams(t, n)).some((e) => e === `user` || e.endsWith(`_user`))) return ``;
     let a = e.getRun(n).getReadable({ startIndex: 0 }).getReader();
     for (;;) {
       let e = await Promise.race([
@@ -63,10 +56,7 @@ async function drainRunStream(e, t, n) {
         break;
       }
       if (e.done) break;
-      r +=
-        typeof e.value == `string`
-          ? e.value
-          : i.decode(e.value, { stream: !0 });
+      r += typeof e.value == `string` ? e.value : i.decode(e.value, { stream: !0 });
     }
   } catch {
     return ``;
@@ -93,8 +83,7 @@ function parseSessionEvent(e) {
       if (typeof t != `object` || !t) return;
       let { type: n, data: r, meta: i } = t;
       if (typeof n != `string`) return;
-      let a =
-          typeof i == `object` && i && typeof i.at == `string` ? i.at : void 0,
+      let a = typeof i == `object` && i && typeof i.at == `string` ? i.at : void 0,
         o = { type: n };
       return (a !== void 0 && (o.at = a), r !== void 0 && (o.data = r), o);
     } catch {

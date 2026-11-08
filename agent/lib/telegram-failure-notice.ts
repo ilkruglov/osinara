@@ -39,8 +39,16 @@ export async function sendTelegramFailureNotice(
   const whisper = readTelegramWhisperMarker(update.message.raw);
   if (whisper) {
     await writeWhisperPlaceholder(
-      { chatId: update.message.chat.id, placeholderMessageId: whisper.placeholderMessageId, receiverUserId: whisper.receiverUserId },
-      { content: { format: "plain", text: failureNoticeText(failure) }, from: ["open", "progress"], to: "failed" },
+      {
+        chatId: update.message.chat.id,
+        placeholderMessageId: whisper.placeholderMessageId,
+        receiverUserId: whisper.receiverUserId,
+      },
+      {
+        content: { format: "plain", text: failureNoticeText(failure) },
+        from: ["open", "progress"],
+        to: "failed",
+      },
       whisperDependencies,
     );
     return;
@@ -48,15 +56,24 @@ export async function sendTelegramFailureNotice(
   if (update.message.chat.type !== "private") return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
-    throw new AppError("AGENT_TELEGRAM_CONFIG_MISSING", "Не задан токен Telegram для уведомления о сбое");
+    throw new AppError(
+      "AGENT_TELEGRAM_CONFIG_MISSING",
+      "Не задан токен Telegram для уведомления о сбое",
+    );
   }
   await sendTelegramMessage({
     body: {
-      reply_parameters: { allow_sending_without_reply: true, message_id: Number(update.message.messageId) },
+      reply_parameters: {
+        allow_sending_without_reply: true,
+        message_id: Number(update.message.messageId),
+      },
       text: failureNoticeText(failure),
     },
     chatId: update.message.chat.id,
     credentials: { botToken },
-    fetch: withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS),
+    fetch: withRequestTimeout(
+      (request, init) => fetch(request, init),
+      TELEGRAM_API_REQUEST_TIMEOUT_MS,
+    ),
   });
 }

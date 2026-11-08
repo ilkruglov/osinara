@@ -40,7 +40,8 @@ export function createYandexTaxiPointGuard(maxTurns = MAX_TRACKED_TURNS) {
         return new ModelFacingError({
           category: "input",
           code: EDITED_POINT,
-          correction: "Точку не правь и не собирай сама: вызови places или suggest заново и передай point из их ответа целиком, без изменений.",
+          correction:
+            "Точку не правь и не собирай сама: вызови places или suggest заново и передай point из их ответа целиком, без изменений.",
           reason,
           retryable: true,
           sideEffectStatus: "not_started",
@@ -49,7 +50,8 @@ export function createYandexTaxiPointGuard(maxTurns = MAX_TRACKED_TURNS) {
       return new ModelFacingError({
         category: "input",
         code: "AGENT_YANDEX_TAXI_POINT_REF_REPEATED",
-        correction: "Больше не вызывай estimate и order в этом ходе: скажи человеку, что адрес не удалось подтвердить в Яндекс Go, и попроси назвать его заново.",
+        correction:
+          "Больше не вызывай estimate и order в этом ходе: скажи человеку, что адрес не удалось подтвердить в Яндекс Go, и попроси назвать его заново.",
         reason: `${reason}. Это уже вторая изменённая точка в этом ходе`,
         retryable: false,
         sideEffectStatus: "not_started",

@@ -13,11 +13,16 @@ describe("Google account identity client", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("returns a verified stable account identity", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      email: "owner@example.com",
-      email_verified: true,
-      sub: "google-subject-123",
-    }), { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          email: "owner@example.com",
+          email_verified: true,
+          sub: "google-subject-123",
+        }),
+        { status: 200 },
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getGoogleAccountIdentity("access-secret")).resolves.toEqual({
@@ -31,11 +36,19 @@ describe("Google account identity client", () => {
   });
 
   it("rejects an unverified email", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      email: "owner@example.com",
-      email_verified: false,
-      sub: "google-subject-123",
-    }), { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            email: "owner@example.com",
+            email_verified: false,
+            sub: "google-subject-123",
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
 
     await expect(getGoogleAccountIdentity("access-secret")).rejects.toThrowError(
       /AGENT_GOOGLE_IDENTITY_RESPONSE_INVALID/,

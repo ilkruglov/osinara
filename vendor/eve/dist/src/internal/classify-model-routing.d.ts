@@ -21,4 +21,7 @@ import type { JsonObject } from "#shared/json.js";
  * An unknown id still classifies as gateway-routed, which is the correct routing
  * answer. Model-existence is the catalog's concern, not this function's.
  */
-export declare function classifyModelRouting(model: string | LanguageModel, providerOptions?: Record<string, JsonObject>): ModelRouting;
+export declare function classifyModelRouting(
+  model: string | LanguageModel,
+  providerOptions?: Record<string, JsonObject>,
+): ModelRouting;

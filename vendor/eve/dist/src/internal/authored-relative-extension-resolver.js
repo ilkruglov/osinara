@@ -25,8 +25,7 @@ function createAuthoredRelativeExtensionResolverPlugin(n) {
           n.extensions,
           i,
         );
-        if (s !== void 0)
-          return { id: isNodeModulesPath(s) ? toRealModulePath(s) : s };
+        if (s !== void 0) return { id: isNodeModulesPath(s) ? toRealModulePath(s) : s };
       },
     },
   };

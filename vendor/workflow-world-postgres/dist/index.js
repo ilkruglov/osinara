@@ -1,9 +1,9 @@
+import { getQueueTopicPrefix, resolveQueueNamespace, SPEC_VERSION_CURRENT } from "@workflow/world";
 import {
-  getQueueTopicPrefix,
-  resolveQueueNamespace,
-  SPEC_VERSION_CURRENT,
-} from "@workflow/world";
-import { releaseDeadWorkerLocks, requeueInFlightRuns, startStuckRunRecovery } from "./osinara-stuck-run-recovery.js";
+  releaseDeadWorkerLocks,
+  requeueInFlightRuns,
+  startStuckRunRecovery,
+} from "./osinara-stuck-run-recovery.js";
 import { Pool } from "pg";
 import { createClient } from "./drizzle/index.js";
 import { traceWorkflowPool } from "./osinara-workflow-pool-trace.js";
@@ -40,8 +40,7 @@ export function createWorld(
     connectionString: getDefaultConnectionString(),
     jobPrefix: process.env.WORKFLOW_POSTGRES_JOB_PREFIX,
     queueConcurrency: workflowPostgresSettings().queueConcurrency,
-    applicationManagedShutdown:
-      process.env.WORKFLOW_POSTGRES_APPLICATION_MANAGED_SHUTDOWN === "1",
+    applicationManagedShutdown: process.env.WORKFLOW_POSTGRES_APPLICATION_MANAGED_SHUTDOWN === "1",
   },
 ) {
   const maxPoolSize = config.maxPoolSize ?? getDefaultMaxPoolSize();
@@ -79,19 +78,13 @@ export function createWorld(
       await requeueInFlightRuns({
         enqueue: queue.queue,
         pool,
-        queuePrefix: getQueueTopicPrefix(
-          "workflow",
-          resolveQueueNamespace(config.namespace),
-        ),
+        queuePrefix: getQueueTopicPrefix("workflow", resolveQueueNamespace(config.namespace)),
       });
       // A run whose retry job was lost waits for this scan instead of the next restart.
       stopStuckRunRecovery ??= startStuckRunRecovery({
         enqueue: queue.queue,
         pool,
-        queuePrefix: getQueueTopicPrefix(
-          "workflow",
-          resolveQueueNamespace(config.namespace),
-        ),
+        queuePrefix: getQueueTopicPrefix("workflow", resolveQueueNamespace(config.namespace)),
       });
     },
     async close() {

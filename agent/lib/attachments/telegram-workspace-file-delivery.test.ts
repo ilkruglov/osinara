@@ -15,7 +15,7 @@ const pacer = vi.hoisted(() => ({
   waitForPause: vi.fn(async () => undefined),
 }));
 vi.mock("eve/channels/telegram", async (importOriginal) => ({
-  ...await importOriginal<typeof import("eve/channels/telegram")>(),
+  ...(await importOriginal<typeof import("eve/channels/telegram")>()),
   telegramSendPacer: pacer,
 }));
 
@@ -31,13 +31,28 @@ afterEach(() => {
 describe("deliverWorkspaceFile", () => {
   it("uploads a file once more after Telegram's pause", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error_code: 429, ok: false, parameters: { retry_after: 2 } }), { status: 429 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error_code: 429, ok: false, parameters: { retry_after: 2 } }),
+          { status: 429 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 }),
+      );
 
-    const result = await deliverWorkspaceFile({
-      bytes: Buffer.from("file bytes"), chatId: "101", fileName: "notes.txt", mediaType: "text/plain", presentation: "document",
-    }, fetchMock);
+    const result = await deliverWorkspaceFile(
+      {
+        bytes: Buffer.from("file bytes"),
+        chatId: "101",
+        fileName: "notes.txt",
+        mediaType: "text/plain",
+        presentation: "document",
+      },
+      fetchMock,
+    );
 
     expect(result).toEqual({ telegramMessageId: "77" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -50,20 +65,25 @@ describe("deliverWorkspaceFile", () => {
     ["document", "sendDocument", "document"],
   ] as const)("uploads a %s through Telegram %s", async (presentation, method, field) => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
-    const fetchMock = vi.fn().mockResolvedValue(new Response(
-      JSON.stringify({ ok: true, result: { message_id: 77 } }),
-      { headers: { "content-type": "application/json" }, status: 200 },
-    ));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }),
+    );
 
-    const result = await deliverWorkspaceFile({
-      bytes: Buffer.from("file bytes"),
-      caption: "**Запрошенный файл**",
-      chatId: "101",
-      fileName: "image.png",
-      mediaType: "image/png",
-      messageThreadId: 12,
-      presentation,
-    }, fetchMock);
+    const result = await deliverWorkspaceFile(
+      {
+        bytes: Buffer.from("file bytes"),
+        caption: "**Запрошенный файл**",
+        chatId: "101",
+        fileName: "image.png",
+        mediaType: "image/png",
+        messageThreadId: 12,
+        presentation,
+      },
+      fetchMock,
+    );
 
     expect(result).toEqual({ telegramMessageId: "77" });
     const [url, request] = fetchMock.mock.calls[0]!;
@@ -80,45 +100,61 @@ describe("deliverWorkspaceFile", () => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
     const fetchMock = vi.fn();
 
-    await expect(deliverWorkspaceFile({
-      bytes: Buffer.from("document"),
-      chatId: "101",
-      fileName: "notes.txt",
-      mediaType: "text/plain",
-      presentation: "photo",
-    }, fetchMock)).rejects.toThrowError(/AGENT_TELEGRAM_PHOTO_TYPE_INVALID/);
+    await expect(
+      deliverWorkspaceFile(
+        {
+          bytes: Buffer.from("document"),
+          chatId: "101",
+          fileName: "notes.txt",
+          mediaType: "text/plain",
+          presentation: "photo",
+        },
+        fetchMock,
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_PHOTO_TYPE_INVALID/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("marks a network failure as ambiguous", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "123:secret-token";
 
-    await expect(deliverWorkspaceFile({
-      bytes: Buffer.from("document"),
-      chatId: "101",
-      fileName: "notes.txt",
-      mediaType: "text/plain",
-      presentation: "document",
-    }, vi.fn().mockRejectedValue(new Error("socket closed"))))
-      .rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/);
+    await expect(
+      deliverWorkspaceFile(
+        {
+          bytes: Buffer.from("document"),
+          chatId: "101",
+          fileName: "notes.txt",
+          mediaType: "text/plain",
+          presentation: "document",
+        },
+        vi.fn().mockRejectedValue(new Error("socket closed")),
+      ),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/);
   });
 
   it.each([
     ["unparseable", new Response("not-json", { status: 200 })],
-    ["missing receipt", new Response(JSON.stringify({ ok: true, result: {} }), {
-      headers: { "content-type": "application/json" },
-      status: 200,
-    })],
+    [
+      "missing receipt",
+      new Response(JSON.stringify({ ok: true, result: {} }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }),
+    ],
   ])("marks a %s success response as ambiguous", async (_case, response) => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
 
-    await expect(deliverWorkspaceFile({
-      bytes: Buffer.from("document"),
-      chatId: "101",
-      fileName: "notes.txt",
-      mediaType: "text/plain",
-      presentation: "document",
-    }, vi.fn().mockResolvedValue(response)))
-      .rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      deliverWorkspaceFile(
+        {
+          bytes: Buffer.from("document"),
+          chatId: "101",
+          fileName: "notes.txt",
+          mediaType: "text/plain",
+          presentation: "document",
+        },
+        vi.fn().mockResolvedValue(response),
+      ),
+    ).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
   });
 });

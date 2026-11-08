@@ -61,8 +61,7 @@ const AGENT_BROWSER_IDLE_TIMEOUT_MS = 10 * 60 * 1_000;
 const PROXY_URL = "http://sandbox-egress-proxy:3128";
 const BASE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const GOOGLE_WORKSPACE_BINARY = "/opt/osinara/gws";
-const RUSSIAN_TRUSTED_ROOT_CA_PATH =
-  "/usr/local/share/ca-certificates/russian-trusted-root-ca.crt";
+const RUSSIAN_TRUSTED_ROOT_CA_PATH = "/usr/local/share/ca-certificates/russian-trusted-root-ca.crt";
 const SANDBOX_CPU_NANOSECONDS = 1_000_000_000;
 const SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
 // The pids cgroup counts threads, not processes: one agent-browser Chromium is about 200 tasks,
@@ -90,19 +89,15 @@ function workspaceMounts(
   mounts: readonly SandboxRunnerMount[],
 ): Docker.MountSettings[] {
   return mounts.map((mount) =>
-    volumeMount(runtime.workspaceVolume, `/workspace/${mount.mountPoint}`, mount.workspaceId)
+    volumeMount(runtime.workspaceVolume, `/workspace/${mount.mountPoint}`, mount.workspaceId),
   );
 }
 
-export function resolveTrustedToolMount(
-  mounts: readonly SandboxRunnerMount[],
-): SandboxRunnerMount {
+export function resolveTrustedToolMount(mounts: readonly SandboxRunnerMount[]): SandboxRunnerMount {
   // Private sessions prefer personal state; family sessions have only their family mount.
   const primary = mounts.find((mount) => mount.mountPoint === "personal") ?? mounts[0];
   if (!primary || primary.mountPoint === "group") {
-    throw new Error(
-      "AGENT_SANDBOX_RUNNER_TOOL_SCOPE_INVALID: Trusted tool environment is missing",
-    );
+    throw new Error("AGENT_SANDBOX_RUNNER_TOOL_SCOPE_INVALID: Trusted tool environment is missing");
   }
   return primary;
 }
@@ -115,7 +110,10 @@ function toolsMount(
   return volumeMount(runtime.toolsVolume, `/tools/${mount.mountPoint}`, mount.workspaceId);
 }
 
-function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessApiKey?: string): string[] {
+function trustedEnvironment(
+  mounts: readonly SandboxRunnerMount[],
+  browserlessApiKey?: string,
+): string[] {
   const primary = resolveTrustedToolMount(mounts);
   const root = `/tools/${primary.mountPoint}`;
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
@@ -192,7 +190,13 @@ export function buildBrowserContainerOptions(
     toolsWorkspaceId: string;
   },
 ): Docker.ContainerCreateOptions {
-  const mounts = [volumeMount(runtime.toolsVolume, BROWSER_STATE_TARGET, browserStateSubpath(input.toolsWorkspaceId))];
+  const mounts = [
+    volumeMount(
+      runtime.toolsVolume,
+      BROWSER_STATE_TARGET,
+      browserStateSubpath(input.toolsWorkspaceId),
+    ),
+  ];
   return {
     AttachStderr: false,
     AttachStdin: false,
@@ -244,11 +248,7 @@ export function buildBrowserContainerOptions(
 }
 
 function isolatedEnvironment(): string[] {
-  return [
-    "HOME=/tmp/home",
-    `PATH=${BASE_PATH}`,
-    "LANG=C.UTF-8",
-  ];
+  return ["HOME=/tmp/home", `PATH=${BASE_PATH}`, "LANG=C.UTF-8"];
 }
 
 export function buildSandboxContainerOptions(
@@ -270,7 +270,9 @@ export function buildSandboxContainerOptions(
     // that PATH is the model's to write (Codex review and live smoke, 5 October 2026).
     Cmd: ["/usr/bin/sleep", "infinity"],
     Entrypoint: [""],
-    Env: trusted ? trustedEnvironment(request.mounts, runtime.browserlessApiKey) : isolatedEnvironment(),
+    Env: trusted
+      ? trustedEnvironment(request.mounts, runtime.browserlessApiKey)
+      : isolatedEnvironment(),
     HostConfig: {
       AutoRemove: false,
       CapDrop: ["ALL"],
@@ -307,7 +309,7 @@ export function buildSandboxContainerOptions(
     Tty: false,
     // The main writable workspace: /workspace itself lies on the read-only root, so commands
     // that create files in the current directory (git clone, a report) would fail there.
-    WorkingDir: `/workspace/${trusted ? resolveTrustedToolMount(request.mounts).mountPoint : request.mounts[0]?.mountPoint ?? "group"}`,
+    WorkingDir: `/workspace/${trusted ? resolveTrustedToolMount(request.mounts).mountPoint : (request.mounts[0]?.mountPoint ?? "group")}`,
   };
 }
 

@@ -43,13 +43,9 @@ var EveAcpAdapter = class {
   }
   async newSession(t) {
     if (t.mcpServers.length > 0)
-      throw unsupported(
-        `Client-provided MCP servers are not supported by eve ACP mode.`,
-      );
+      throw unsupported(`Client-provided MCP servers are not supported by eve ACP mode.`);
     if ((t.additionalDirectories?.length ?? 0) > 0)
-      throw unsupported(
-        `Additional workspace directories are not supported by eve ACP mode.`,
-      );
+      throw unsupported(`Additional workspace directories are not supported by eve ACP mode.`);
     if (this.#n !== void 0) {
       let e = await normalizedRealpath(t.cwd, `session/new.cwd`),
         n = await normalizedRealpath(this.#n, `the eve application root`);
@@ -65,10 +61,7 @@ var EveAcpAdapter = class {
   async prompt(e, t, n) {
     let i = this.#s(e.sessionId);
     if (i.active !== void 0)
-      throw new RequestError(
-        -32001,
-        `ACP session ${e.sessionId} already has an active prompt.`,
-      );
+      throw new RequestError(-32001, `ACP session ${e.sessionId} already has an active prompt.`);
     let a = promptContent(e);
     i.tools.clear();
     let o = Promise.withResolvers(),
@@ -83,12 +76,9 @@ var EveAcpAdapter = class {
     let onProtocolCancel = () => {
       ((s.protocolCancelled = !0), this.#o(i).catch(() => void 0));
     };
-    n.aborted
-      ? onProtocolCancel()
-      : n.addEventListener(`abort`, onProtocolCancel, { once: !0 });
+    n.aborted ? onProtocolCancel() : n.addEventListener(`abort`, onProtocolCancel, { once: !0 });
     try {
-      if (s.protocolCancelled)
-        throw RequestError.requestCancelled({ sessionId: e.sessionId });
+      if (s.protocolCancelled) throw RequestError.requestCancelled({ sessionId: e.sessionId });
       let o = { message: a };
       for (;;) {
         let a;
@@ -115,12 +105,10 @@ var EveAcpAdapter = class {
                 `Connection authorization cannot be completed through eve ACP mode.`,
               )),
             n.type === `turn.cancelled` && (l = !0),
-            (n.type === `turn.failed` || n.type === `session.failed`) &&
-              (u = n),
+            (n.type === `turn.failed` || n.type === `session.failed`) && (u = n),
             await this.#c(e.sessionId, i, n, t));
         }
-        if (s.protocolCancelled)
-          throw RequestError.requestCancelled({ sessionId: e.sessionId });
+        if (s.protocolCancelled) throw RequestError.requestCancelled({ sessionId: e.sessionId });
         if (l || s.cancelRequested) return { stopReason: `cancelled` };
         if (u !== void 0) throw eveFailure(u);
         if (d !== void 0) throw d;
@@ -129,13 +117,11 @@ var EveAcpAdapter = class {
         try {
           f = await Promise.all(c.map((r) => this.#l(e.sessionId, i, r, t, n)));
         } catch (t) {
-          if (s.protocolCancelled)
-            throw RequestError.requestCancelled({ sessionId: e.sessionId });
+          if (s.protocolCancelled) throw RequestError.requestCancelled({ sessionId: e.sessionId });
           if (s.cancelRequested) return { stopReason: `cancelled` };
           throw t;
         }
-        if (s.protocolCancelled)
-          throw RequestError.requestCancelled({ sessionId: e.sessionId });
+        if (s.protocolCancelled) throw RequestError.requestCancelled({ sessionId: e.sessionId });
         if (s.cancelRequested) return { stopReason: `cancelled` };
         o = { inputResponses: f };
       }
@@ -150,9 +136,7 @@ var EveAcpAdapter = class {
   }
   async cancel(e) {
     let t = this.#i.get(e);
-    t === void 0 ||
-      t.active === void 0 ||
-      ((t.active.cancelRequested = !0), await this.#o(t));
+    t === void 0 || t.active === void 0 || ((t.active.cancelRequested = !0), await this.#o(t));
   }
   async closeSession(e) {
     let t = this.#s(e);
@@ -177,9 +161,7 @@ var EveAcpAdapter = class {
     try {
       await e.client?.reset();
     } catch (e) {
-      throw t === void 0
-        ? e
-        : AggregateError([t, e], `Could not cancel or reset the eve session`);
+      throw t === void 0 ? e : AggregateError([t, e], `Could not cancel or reset the eve session`);
     }
     if (t !== void 0) throw t;
   }
@@ -193,10 +175,7 @@ var EveAcpAdapter = class {
   #s(e) {
     let t = this.#i.get(e);
     if (t === void 0)
-      throw RequestError.invalidParams(
-        { sessionId: e },
-        `Unknown or closed ACP session`,
-      );
+      throw RequestError.invalidParams({ sessionId: e }, `Unknown or closed ACP session`);
     return t;
   }
   async #c(e, t, n, r) {
@@ -224,8 +203,7 @@ var EveAcpAdapter = class {
         return;
       case `action.result`: {
         let t = n.data.result,
-          i =
-            n.data.status !== `completed` || t.isError ? `failed` : `completed`;
+          i = n.data.status !== `completed` || t.isError ? `failed` : `completed`;
         await notifyUpdate(r, e, {
           sessionUpdate: `tool_call_update`,
           toolCallId: t.callId,
@@ -262,12 +240,9 @@ var EveAcpAdapter = class {
           },
           { cancellationSignal: c },
         );
-      if (u.outcome.outcome === `cancelled`)
-        return (this.#u(t), { requestId: n.requestId });
-      if (u.outcome.optionId === o)
-        return { requestId: n.requestId, optionId: `approve` };
-      if (u.outcome.optionId === s)
-        return { requestId: n.requestId, optionId: `deny` };
+      if (u.outcome.outcome === `cancelled`) return (this.#u(t), { requestId: n.requestId });
+      if (u.outcome.optionId === o) return { requestId: n.requestId, optionId: `approve` };
+      if (u.outcome.optionId === s) return { requestId: n.requestId, optionId: `deny` };
       throw RequestError.invalidParams(
         { optionId: u.outcome.optionId },
         `Unknown ACP permission option`,
@@ -301,10 +276,7 @@ var EveAcpAdapter = class {
       );
     if (n.display === `select`) {
       if (!n.options?.some((e) => e.id === d))
-        throw RequestError.invalidParams(
-          { answer: d },
-          `Unknown eve question option`,
-        );
+        throw RequestError.invalidParams({ answer: d }, `Unknown eve question option`);
       return { requestId: n.requestId, optionId: d };
     }
     return { requestId: n.requestId, text: d };
@@ -318,18 +290,13 @@ async function normalizedRealpath(e, n) {
   try {
     return await realpath(e);
   } catch (t) {
-    throw RequestError.invalidParams(
-      { path: e },
-      `Could not resolve ${n}: ${errorMessage(t)}`,
-    );
+    throw RequestError.invalidParams({ path: e }, `Could not resolve ${n}: ${errorMessage(t)}`);
   }
 }
 function promptContent(e) {
   let t = e.prompt.map((e) => {
     if (e.type !== `text`)
-      throw unsupported(
-        `ACP prompt content type ${JSON.stringify(e.type)} is not supported.`,
-      );
+      throw unsupported(`ACP prompt content type ${JSON.stringify(e.type)} is not supported.`);
     return { type: `text`, text: e.text };
   });
   if (t.every((e) => e.text.length === 0))
@@ -340,12 +307,7 @@ function promptContent(e) {
   return t;
 }
 function toolCallForAction(e) {
-  let t =
-    e.kind === `tool-call`
-      ? e.toolName
-      : e.kind === `load-skill`
-        ? `Load skill`
-        : e.name;
+  let t = e.kind === `tool-call` ? e.toolName : e.kind === `load-skill` ? `Load skill` : e.name;
   return {
     toolCallId: e.callId,
     title: t,
@@ -367,9 +329,7 @@ function elicitationProperty(e) {
     };
   if (e.display === `text` && e.allowFreeform !== !1)
     return { type: `string`, title: e.prompt, minLength: 1 };
-  throw unsupported(
-    `This eve question shape cannot be represented by ACP form elicitation.`,
-  );
+  throw unsupported(`This eve question shape cannot be represented by ACP form elicitation.`);
 }
 async function notifyUpdate(e, t, n) {
   await e.notify(methods.client.session.update, { sessionId: t, update: n });

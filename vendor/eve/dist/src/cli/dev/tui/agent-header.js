@@ -6,10 +6,7 @@ const AGENT_HEADER_TIPS = [
   `Type /help to see every command.`,
 ];
 function pickAgentHeaderTip(e = Math.random) {
-  let t = Math.min(
-    AGENT_HEADER_TIPS.length - 1,
-    Math.floor(e() * AGENT_HEADER_TIPS.length),
-  );
+  let t = Math.min(AGENT_HEADER_TIPS.length - 1, Math.floor(e() * AGENT_HEADER_TIPS.length));
   return AGENT_HEADER_TIPS[t];
 }
 function buildAgentHeader(e) {
@@ -19,16 +16,12 @@ function buildAgentHeader(e) {
     c = o.bold(`eve`);
   if (
     (s.push(` ${c} ${o.dim(truncate(i, Math.max(8, a - 8)))}`),
-    r &&
-      (r.diagnostics.discoveryErrors > 0 ||
-        r.diagnostics.discoveryWarnings > 0))
+    r && (r.diagnostics.discoveryErrors > 0 || r.diagnostics.discoveryWarnings > 0))
   ) {
     let e = [];
     (r.diagnostics.discoveryErrors > 0 &&
       e.push(
-        o.red(
-          `${r.diagnostics.discoveryErrors} error${plural(r.diagnostics.discoveryErrors)}`,
-        ),
+        o.red(`${r.diagnostics.discoveryErrors} error${plural(r.diagnostics.discoveryErrors)}`),
       ),
       r.diagnostics.discoveryWarnings > 0 &&
         e.push(
@@ -38,17 +31,12 @@ function buildAgentHeader(e) {
         ),
       s.push(` ${o.dim(n.glyph.warning)} ${e.join(o.dim(` · `))}`));
   }
-  return (
-    e.tip !== void 0 && s.push(` ${renderTip(e.tip, Math.max(8, a - 2), n)}`),
-    s
-  );
+  return (e.tip !== void 0 && s.push(` ${renderTip(e.tip, Math.max(8, a - 2), n)}`), s);
 }
 function renderTip(n, r, i) {
   return truncate(n, r)
     .split(/(\/[a-z:-]+)/u)
-    .map((t) =>
-      isPromptControlCommand(t) ? i.colors.blue(t) : i.colors.dim(t),
-    )
+    .map((t) => (isPromptControlCommand(t) ? i.colors.blue(t) : i.colors.dim(t)))
     .join(``);
 }
 function plural(e) {

@@ -10,16 +10,12 @@ var MessageResponse = class {
   #i = !1;
   #a = Promise.withResolvers();
   constructor(e) {
-    ((this.#e = e.cancelTurn),
-      (this.sessionId = e.sessionId),
-      (this.#r = e.createStream));
+    ((this.#e = e.cancelTurn), (this.sessionId = e.sessionId), (this.#r = e.createStream));
   }
   cancel() {
     if (this.#i) return Promise.resolve({ status: `no_active_turn` });
     if (this.#t !== void 0) return this.#t;
-    let e = this.#a.promise.then((e) =>
-      e === void 0 ? { status: `no_active_turn` } : this.#e(e),
-    );
+    let e = this.#a.promise.then((e) => (e === void 0 ? { status: `no_active_turn` } : this.#e(e)));
     return (
       (this.#t = e),
       e.catch(() => {
@@ -50,8 +46,7 @@ var MessageResponse = class {
       for await (let t of this.#r())
         (t.type === `turn.started`
           ? this.#a.resolve(t.data.turnId)
-          : isCurrentTurnBoundaryEvent(t) &&
-            ((this.#i = !0), this.#a.resolve(void 0)),
+          : isCurrentTurnBoundaryEvent(t) && ((this.#i = !0), this.#a.resolve(void 0)),
           yield t);
     } finally {
       this.#a.resolve(void 0);

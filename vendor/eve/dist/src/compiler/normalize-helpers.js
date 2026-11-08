@@ -5,9 +5,7 @@ import {
 import { join } from "node:path";
 import { toErrorMessage } from "#shared/errors.js";
 import { loadAuthoredModuleNamespace } from "#internal/authored-module-loader.js";
-const SANDBOX_PARENT_DEFINITION_MARKER = Symbol.for(
-  `eve.sandbox-parent-definition`,
-);
+const SANDBOX_PARENT_DEFINITION_MARKER = Symbol.for(`eve.sandbox-parent-definition`);
 async function loadModuleBackedDefinition(t) {
   let n = getAuthoredModuleExport(
     await loadAuthoredModuleNamespace(join(t.agentRoot, t.source.logicalPath), {

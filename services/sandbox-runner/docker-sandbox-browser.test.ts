@@ -24,7 +24,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { migrateBrowserState, sandboxBrowserContainerName } from "./docker-sandbox-browser.js";
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
 import { sandboxContainerName } from "./docker-sandbox-lifecycle.js";
-import { buildBrowserContainerOptions, SANDBOX_CONTAINER_POLICY_VERSION } from "./docker-sandbox-options.js";
+import {
+  buildBrowserContainerOptions,
+  SANDBOX_CONTAINER_POLICY_VERSION,
+} from "./docker-sandbox-options.js";
 
 const SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PERSONAL = "11111111-1111-4111-8111-111111111111";
@@ -70,7 +73,9 @@ function dockerWith(sessionMounts: unknown[], companion?: { labels: Record<strin
       Id: "session",
       State: { Running: true, StartedAt: "2026-10-05T00:00:00Z" },
     })),
-    remove: vi.fn(async () => { removed.push("session"); }),
+    remove: vi.fn(async () => {
+      removed.push("session");
+    }),
   });
   if (companion) {
     containers.set(sandboxBrowserContainerName(SESSION_ID), {
@@ -80,7 +85,9 @@ function dockerWith(sessionMounts: unknown[], companion?: { labels: Record<strin
         Id: "old-browser",
         State: { Running: true, StartedAt: "2026-10-05T00:00:00Z" },
       })),
-      remove: vi.fn(async () => { removed.push("old-browser"); }),
+      remove: vi.fn(async () => {
+        removed.push("old-browser");
+      }),
       top: vi.fn(async () => ({ Processes: [] })),
     });
   }
@@ -90,15 +97,26 @@ function dockerWith(sessionMounts: unknown[], companion?: { labels: Record<strin
       created.push(entry);
       const container = {
         exec,
-        inspect: vi.fn(async () => ({ Config: { Labels: options.Labels }, Id: options.name, State: { Running: entry.started, StartedAt: "2026-10-05T00:00:01Z" } })),
-        remove: vi.fn(async () => { removed.push(options.name!); }),
-        start: vi.fn(async () => { entry.started = true; }),
+        inspect: vi.fn(async () => ({
+          Config: { Labels: options.Labels },
+          Id: options.name,
+          State: { Running: entry.started, StartedAt: "2026-10-05T00:00:01Z" },
+        })),
+        remove: vi.fn(async () => {
+          removed.push(options.name!);
+        }),
+        start: vi.fn(async () => {
+          entry.started = true;
+        }),
         top: vi.fn(async () => ({ Processes: [] })),
       };
       containers.set(options.name!, container);
       return container;
     }),
-    getContainer: vi.fn((name: string) => containers.get(name) ?? { inspect: vi.fn(async () => Promise.reject(missing)) }),
+    getContainer: vi.fn(
+      (name: string) =>
+        containers.get(name) ?? { inspect: vi.fn(async () => Promise.reject(missing)) },
+    ),
     listContainers: vi.fn(async () => []),
     modem: {
       demuxStream: vi.fn((stream: Readable, stdout: NodeJS.WritableStream) => {
@@ -120,17 +138,23 @@ describe("buildBrowserContainerOptions", () => {
     expect(options.HostConfig?.Mounts).toEqual([
       expect.objectContaining(volume("/browser", runtime.toolsVolume, `browser/${PERSONAL}`)),
     ]);
-    expect(options.Env).toEqual(expect.arrayContaining([
-      // lavka.yandex.ru answered 403 to headless Chrome that announced itself (navigator.webdriver,
-      // HeadlessChrome in the UA) while the same page from curl on the same egress was 200.
-      "AGENT_BROWSER_ARGS=--disable-blink-features=AutomationControlled",
-      "AGENT_BROWSER_SESSION=osinara",
-      "AGENT_BROWSER_RESTORE=osinara",
-      "HOME=/browser/home",
-    ]));
+    expect(options.Env).toEqual(
+      expect.arrayContaining([
+        // lavka.yandex.ru answered 403 to headless Chrome that announced itself (navigator.webdriver,
+        // HeadlessChrome in the UA) while the same page from curl on the same egress was 200.
+        "AGENT_BROWSER_ARGS=--disable-blink-features=AutomationControlled",
+        "AGENT_BROWSER_SESSION=osinara",
+        "AGENT_BROWSER_RESTORE=osinara",
+        "HOME=/browser/home",
+      ]),
+    );
     expect(options.Env?.some((entry) => entry.startsWith("BROWSERLESS_API_KEY="))).toBe(false);
     expect(options.Env?.some((entry) => entry.includes("/tools/"))).toBe(false);
-    expect(options.HostConfig).toMatchObject({ CapDrop: ["ALL"], NetworkMode: runtime.egressNetwork, Privileged: false });
+    expect(options.HostConfig).toMatchObject({
+      CapDrop: ["ALL"],
+      NetworkMode: runtime.egressNetwork,
+      Privileged: false,
+    });
     expect(options.Labels).toMatchObject({
       "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
       "dev.osinara.sandbox.parent-id": "session",
@@ -142,13 +166,14 @@ describe("buildBrowserContainerOptions", () => {
 
 describe("migrateBrowserState", () => {
   const sessionsOf = (root: string) => join(root, PERSONAL, "home/.agent-browser/sessions");
-  const browserOf = (root: string) => join(root, "browser", PERSONAL, "home/.agent-browser/sessions");
+  const browserOf = (root: string) =>
+    join(root, "browser", PERSONAL, "home/.agent-browser/sessions");
 
   it("moves the restore file, deletes the other logged-in files and candidates, keeps the reader's, once", async () => {
     const root = await toolsRoot();
     const sessions = sessionsOf(root);
     await mkdir(join(sessions, ".tmp"), { recursive: true });
-    await writeFile(join(sessions, "osinara-osinara.json"), "{\"cookies\":[]}");
+    await writeFile(join(sessions, "osinara-osinara.json"), '{"cookies":[]}');
     await writeFile(join(sessions, "osinara-osinara.json.previous"), "old");
     await writeFile(join(sessions, ".tmp", "osinara-osinara-candidate-1.json"), "autosave");
     await writeFile(join(sessions, "osinara-reader.json"), "{}");
@@ -200,7 +225,11 @@ describe("browser target of the engine", () => {
   it("runs a browser command in a companion created from the session's container", async () => {
     const root = await toolsRoot();
     const { created, docker, exec } = dockerWith(trustedMounts);
-    const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: { toolsRoot: root, workspaceRoot: root },
+      runtime,
+    });
 
     await engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" });
     await engine.runProcess(SESSION_ID, { command: "agent-browser get title", target: "browser" });
@@ -211,28 +240,50 @@ describe("browser target of the engine", () => {
     expect(created[0]!.options.HostConfig?.Mounts).toEqual([
       expect.objectContaining(volume("/browser", runtime.toolsVolume, `browser/${PERSONAL}`)),
     ]);
-    expect(created[0]!.options.Labels).toMatchObject({ "dev.osinara.sandbox.parent-id": "session" });
+    expect(created[0]!.options.Labels).toMatchObject({
+      "dev.osinara.sandbox.parent-id": "session",
+    });
     expect(exec).toHaveBeenCalledTimes(2);
     expect(await readdir(join(root, "browser", PERSONAL))).toContain("home");
   });
 
   it("has no browser beside a restricted session", async () => {
     const root = await toolsRoot();
-    const { created, docker } = dockerWith([volume("/workspace/group", runtime.workspaceVolume, PERSONAL)]);
-    const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
+    const { created, docker } = dockerWith([
+      volume("/workspace/group", runtime.workspaceVolume, PERSONAL),
+    ]);
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: { toolsRoot: root, workspaceRoot: root },
+      runtime,
+    });
 
-    await expect(engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" }))
-      .rejects.toThrow("AGENT_SANDBOX_RUNNER_BROWSER_UNAVAILABLE");
+    await expect(
+      engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" }),
+    ).rejects.toThrow("AGENT_SANDBOX_RUNNER_BROWSER_UNAVAILABLE");
     expect(created).toHaveLength(0);
   });
 
   it.each([
-    ["an older policy", { "dev.osinara.sandbox.parent-id": "session", "dev.osinara.sandbox.policy-version": "15" }],
-    ["an earlier container of the session", { "dev.osinara.sandbox.parent-id": "replaced", "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION }],
+    [
+      "an older policy",
+      { "dev.osinara.sandbox.parent-id": "session", "dev.osinara.sandbox.policy-version": "15" },
+    ],
+    [
+      "an earlier container of the session",
+      {
+        "dev.osinara.sandbox.parent-id": "replaced",
+        "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
+      },
+    ],
   ])("replaces a companion of %s and removes it with the session", async (_label, labels) => {
     const root = await toolsRoot();
     const { created, docker, removed } = dockerWith(trustedMounts, { labels });
-    const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: { toolsRoot: root, workspaceRoot: root },
+      runtime,
+    });
 
     await engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" });
     expect(removed).toEqual(["old-browser"]);
@@ -250,9 +301,14 @@ describe("capacity with a companion", () => {
       volume("/workspace/personal", runtime.workspaceVolume, PERSONAL),
       volume("/tools/personal", runtime.toolsVolume, PERSONAL),
     ]);
-    (docker as unknown as { listContainers: () => Promise<unknown[]> }).listContainers = async () => [
-      { Id: "session", Labels: { "dev.osinara.sandbox.session-id": SESSION_ID }, State: "running" },
-    ];
+    (docker as unknown as { listContainers: () => Promise<unknown[]> }).listContainers =
+      async () => [
+        {
+          Id: "session",
+          Labels: { "dev.osinara.sandbox.session-id": SESSION_ID },
+          State: "running",
+        },
+      ];
     const engine = createDockerSandboxEngine({
       docker,
       limits: { maxRunningContainers: 1 },
@@ -260,8 +316,9 @@ describe("capacity with a companion", () => {
       runtime,
     });
 
-    await expect(engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" }))
-      .rejects.toThrow("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    await expect(
+      engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" }),
+    ).rejects.toThrow("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
     expect(created[0]?.started).toBe(false);
   });
 });
@@ -282,17 +339,25 @@ describe("session creation and the logged-in state", () => {
       getContainer: vi.fn(() => ({ inspect: vi.fn(async () => Promise.reject(missing)) })),
       listContainers: vi.fn(async () => []),
     } as unknown as Docker;
-    const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: { toolsRoot: root, workspaceRoot: root },
+      runtime,
+    });
 
-    await expect(engine.createSession({
-      access: "trusted",
-      eveSessionId: "wrun_1",
-      mounts: [{ mountPoint: "personal", workspaceId: PERSONAL }],
-      sandboxSessionId: SESSION_ID,
-      seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      seedFiles: [],
-    })).rejects.toThrow("stop here");
+    await expect(
+      engine.createSession({
+        access: "trusted",
+        eveSessionId: "wrun_1",
+        mounts: [{ mountPoint: "personal", workspaceId: PERSONAL }],
+        sandboxSessionId: SESSION_ID,
+        seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        seedFiles: [],
+      }),
+    ).rejects.toThrow("stop here");
     expect(leftForBash).toEqual([]);
-    expect(await readdir(join(root, "browser", PERSONAL, "home/.agent-browser/sessions"))).toEqual(["osinara-osinara.json"]);
+    expect(await readdir(join(root, "browser", PERSONAL, "home/.agent-browser/sessions"))).toEqual([
+      "osinara-osinara.json",
+    ]);
   });
 });

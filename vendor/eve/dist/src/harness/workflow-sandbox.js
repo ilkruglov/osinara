@@ -19,9 +19,7 @@ async function applyWorkflowTool(e) {
   let t = createWorkflowHostTools(e.harnessTools, Object.keys(e.tools));
   if (Object.keys(t).length === 0) return { hostTools: t, modelTools: e.tools };
   let n = await createWorkflowSandboxTool({
-      bridgeRequestLimit: resolveWorkflowSandboxBridgeRequestLimit(
-        e.maxSubagents,
-      ),
+      bridgeRequestLimit: resolveWorkflowSandboxBridgeRequestLimit(e.maxSubagents),
       continuationSecurity: e.continuationSecurity,
       hostTools: t,
       lifecycle: e.lifecycle,
@@ -56,8 +54,7 @@ function createWorkflowHostTools(e, t) {
   let n = {};
   for (let r of t) {
     let t = e.get(r);
-    t?.runtimeAction !== void 0 &&
-      (n[r] = createWorkflowRuntimeActionHostTool(t));
+    t?.runtimeAction !== void 0 && (n[r] = createWorkflowRuntimeActionHostTool(t));
   }
   return n;
 }
@@ -78,8 +75,4 @@ function createWorkflowRuntimeActionHostTool(e) {
     },
   };
 }
-export {
-  applyWorkflowTool,
-  buildWorkflowHostTools,
-  resolveWorkflowSandboxBridgeRequestLimit,
-};
+export { applyWorkflowTool, buildWorkflowHostTools, resolveWorkflowSandboxBridgeRequestLimit };

@@ -7,7 +7,7 @@ export type DevelopmentRebuildKind = "structural" | "unchanged" | "runtime";
  * the previous generation; the next rebuild retries activation.
  */
 export declare class PostCommitDevelopmentRebuildError extends Error {
-    constructor(cause: unknown);
+  constructor(cause: unknown);
 }
 /**
  * Raised when an authored reload changes which process owns the Workflow
@@ -15,18 +15,16 @@ export declare class PostCommitDevelopmentRebuildError extends Error {
  * existing server must keep serving until the user restarts it.
  */
 export declare class DevelopmentWorkflowWorldChangeRequiresRestartError extends Error {
-    constructor();
+  constructor();
 }
 export interface DevelopmentRebuildResult {
-    readonly host: PreparedDevelopmentApplicationHost;
-    readonly kind: DevelopmentRebuildKind;
+  readonly host: PreparedDevelopmentApplicationHost;
+  readonly kind: DevelopmentRebuildKind;
 }
 export interface DevelopmentAuthoredRebuildCoordinator {
-    rebuild(input: {
-        readonly changedPaths: readonly string[];
-    }): Promise<DevelopmentRebuildResult>;
+  rebuild(input: { readonly changedPaths: readonly string[] }): Promise<DevelopmentRebuildResult>;
 }
 export declare function createDevelopmentAuthoredRebuildCoordinator(input: {
-    readonly devServer: DrainedNitroDevServer;
-    readonly initialHost: PreparedDevelopmentApplicationHost;
+  readonly devServer: DrainedNitroDevServer;
+  readonly initialHost: PreparedDevelopmentApplicationHost;
 }): Promise<DevelopmentAuthoredRebuildCoordinator>;

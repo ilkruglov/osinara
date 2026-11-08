@@ -72,8 +72,10 @@ function scored(memoryRef: string, retention: number): ScoredMemoryRetrievalResu
 describe("automatic memory block admission", () => {
   it("keeps faded records out of the automatic block but not out of explicit search", async () => {
     const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
-    const { memoryContextExposureRepository } = await import("./memory-context-exposure-repository.js");
-    const { retrieveMemoryTurnContext, retrieveRelevantMemories } = await import("./memory-retrieval.js");
+    const { memoryContextExposureRepository } =
+      await import("./memory-context-exposure-repository.js");
+    const { retrieveMemoryTurnContext, retrieveRelevantMemories } =
+      await import("./memory-retrieval.js");
     vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
       conflicts: [],
       relatedClaimIds: [],
@@ -81,8 +83,9 @@ describe("automatic memory block admission", () => {
     });
 
     const turn = await retrieveMemoryTurnContext(auth, "марафон", []);
-    expect(turn.memories.map((memory) => ("memoryRef" in memory ? memory.memoryRef : null)))
-      .toEqual(["mem_fresh"]);
+    expect(
+      turn.memories.map((memory) => ("memoryRef" in memory ? memory.memoryRef : null)),
+    ).toEqual(["mem_fresh"]);
 
     const explicit = await retrieveRelevantMemories(auth, "марафон", {
       applicationSessionId: "session-1",
@@ -100,8 +103,14 @@ describe("automatic memory block admission", () => {
   it("fills the block from below an excluded top and caps it at the turn limit", async () => {
     const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
     const { retrieveMemoryTurnContext } = await import("./memory-retrieval.js");
-    const shownBefore = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT }, (_, index) => `mem_seen${index}`);
-    const fresh = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT + 2 }, (_, index) => `mem_fresh${index}`);
+    const shownBefore = Array.from(
+      { length: MEMORY_TURN_RETRIEVAL_LIMIT },
+      (_, index) => `mem_seen${index}`,
+    );
+    const fresh = Array.from(
+      { length: MEMORY_TURN_RETRIEVAL_LIMIT + 2 },
+      (_, index) => `mem_fresh${index}`,
+    );
     vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
       conflicts: [],
       relatedClaimIds: [],
@@ -112,35 +121,56 @@ describe("automatic memory block admission", () => {
       excludeMemoryRefs: new Set(shownBefore),
     });
 
-    const refs = context.memories.flatMap((memory) => "memoryRef" in memory ? [memory.memoryRef] : []);
+    const refs = context.memories.flatMap((memory) =>
+      "memoryRef" in memory ? [memory.memoryRef] : [],
+    );
     expect(refs).toEqual(fresh.slice(0, MEMORY_TURN_RETRIEVAL_LIMIT));
     // The repository must be asked for more than the block holds, or the filters starve it.
-    const requested = vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[3];
+    const requested = vi
+      .mocked(memoryRetrievalRepository.searchWithConflictClosure)
+      .mock.calls.at(-1)?.[3];
     expect(requested).toBeGreaterThan(MEMORY_TURN_RETRIEVAL_LIMIT);
   });
 
   it("passes the event date window of an explicit search to the repository", async () => {
     const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
     const { retrieveRelevantMemories } = await import("./memory-retrieval.js");
-    vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({ conflicts: [], relatedClaimIds: [], results: [] });
+    vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
+      conflicts: [],
+      relatedClaimIds: [],
+      results: [],
+    });
 
-    await retrieveRelevantMemories(auth, "поездка", undefined, { occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
+    await retrieveRelevantMemories(auth, "поездка", undefined, {
+      occurredAfter: "2026-08-01",
+      occurredBefore: "2026-08-31",
+    });
 
-    expect(vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[4])
-      .toEqual({ occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
+    expect(
+      vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[4],
+    ).toEqual({ occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
   });
 
   it("traces every candidate in rank order with its scores and outcome, without record text", async () => {
     const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
     const { retrieveMemoryTurnContext } = await import("./memory-retrieval.js");
-    const fresh = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT + 1 }, (_, index) => `mem_fresh${index}`);
+    const fresh = Array.from(
+      { length: MEMORY_TURN_RETRIEVAL_LIMIT + 1 },
+      (_, index) => `mem_fresh${index}`,
+    );
     vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
       conflicts: [],
       relatedClaimIds: [],
-      results: [scored("mem_seen", 1), scored("mem_faded", 0.1), ...fresh.map((ref) => scored(ref, 1))],
+      results: [
+        scored("mem_seen", 1),
+        scored("mem_faded", 0.1),
+        ...fresh.map((ref) => scored(ref, 1)),
+      ],
     });
 
-    const context = await retrieveMemoryTurnContext(auth, "что нового", [], { excludeMemoryRefs: new Set(["mem_seen"]) });
+    const context = await retrieveMemoryTurnContext(auth, "что нового", [], {
+      excludeMemoryRefs: new Set(["mem_seen"]),
+    });
 
     expect(context.trace?.map((entry) => [entry.ref, entry.outcome])).toEqual([
       ["mem_seen", "recently_shown"],
@@ -149,8 +179,14 @@ describe("automatic memory block admission", () => {
       [fresh.at(-1), "over_limit"],
     ]);
     expect(context.trace?.[0]).toEqual({
-      kind: "episode", lexical: false, morphology: false, outcome: "recently_shown", ref: "mem_seen",
-      retention: 1, score: 0.02, semantic: 0.9,
+      kind: "episode",
+      lexical: false,
+      morphology: false,
+      outcome: "recently_shown",
+      ref: "mem_seen",
+      retention: 1,
+      score: 0.02,
+      semantic: 0.9,
     });
     expect(JSON.stringify(context.trace)).not.toContain("Запись");
   });

@@ -230,8 +230,11 @@ describe("createApprovalTimeoutResolver", () => {
     // The lease expires on its own; the remaining leased claims must still be processed.
     expect(resolved).toBe(1);
     expect(values.repository.completeTimeout).toHaveBeenCalledTimes(1);
-    expect(reported.mock.calls.some(([line]) =>
-      String(line).includes("AGENT_APPROVAL_TIMEOUT_LEASE_RELEASE_FAILED"))).toBe(true);
+    expect(
+      reported.mock.calls.some(([line]) =>
+        String(line).includes("AGENT_APPROVAL_TIMEOUT_LEASE_RELEASE_FAILED"),
+      ),
+    ).toBe(true);
     reported.mockRestore();
   });
 

@@ -56,10 +56,12 @@ describe("compiled Eve dynamic tool surface", () => {
   });
 
   it("rejects absent and unterminated capabilities regions", () => {
-    expect(() => validateCompiledDynamicToolSurface("no capabilities"))
-      .toThrow("AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID");
-    expect(() => validateCompiledDynamicToolSurface(CAPABILITIES_REGION_FIXTURE))
-      .toThrow("AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID");
+    expect(() => validateCompiledDynamicToolSurface("no capabilities")).toThrow(
+      "AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID",
+    );
+    expect(() => validateCompiledDynamicToolSurface(CAPABILITIES_REGION_FIXTURE)).toThrow(
+      "AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID",
+    );
   });
 });
 

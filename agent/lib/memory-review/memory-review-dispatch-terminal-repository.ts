@@ -41,8 +41,11 @@ async function terminalizeStaleInteractiveBatches(client: PoolClient, now: Date)
       ORDER BY started_at, id
       FOR UPDATE SKIP LOCKED
       LIMIT $3`,
-    [now, MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
-      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE],
+    [
+      now,
+      MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE,
+    ],
   );
   for (const batch of stale.rows) {
     const outcome = await resolveAbandonedReviewBatch(client, {
@@ -55,12 +58,14 @@ async function terminalizeStaleInteractiveBatches(client: PoolClient, now: Date)
       notifyOwner: true,
       now,
     });
-    console.error(JSON.stringify({
-      batchId: batch.id,
-      code: TURN_NEVER_STARTED,
-      laneId: batch.lane_id,
-      outcome,
-    }));
+    console.error(
+      JSON.stringify({
+        batchId: batch.id,
+        code: TURN_NEVER_STARTED,
+        laneId: batch.lane_id,
+        outcome,
+      }),
+    );
   }
 }
 
@@ -131,14 +136,14 @@ export const memoryReviewDispatchTerminalRepository = {
                 updated_at = now(), lease_token = NULL, lease_expires_at = NULL
           WHERE id = $1 AND status = 'leased' AND lease_token = $2
           RETURNING status::text, recovery_attempts`,
-        [batch.batchId, batch.leaseToken, diagnosticCode,
-          MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS],
+        [batch.batchId, batch.leaseToken, diagnosticCode, MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS],
       );
       const transition = result.rows[0];
-      if (!transition) throw new AppError(
-        "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
-        "Не удалось сохранить ошибку проверки памяти",
-      );
+      if (!transition)
+        throw new AppError(
+          "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
+          "Не удалось сохранить ошибку проверки памяти",
+        );
       if (transition.status === "pending") {
         // The only retry happens before Eve handoff and is explicit in both batch state and audit.
         await client.query(
@@ -176,10 +181,11 @@ export const memoryReviewDispatchTerminalRepository = {
              AND (application_session_id IS NULL OR application_session_id = $4)`,
         [batch.batchId, batch.leaseToken, diagnosticCode, applicationSessionId],
       );
-      if (result.rowCount !== 1) throw new AppError(
-        "AGENT_MEMORY_REVIEW_AMBIGUOUS_STATE_INVALID",
-        "Не удалось сохранить неоднозначный результат проверки памяти",
-      );
+      if (result.rowCount !== 1)
+        throw new AppError(
+          "AGENT_MEMORY_REVIEW_AMBIGUOUS_STATE_INVALID",
+          "Не удалось сохранить неоднозначный результат проверки памяти",
+        );
       await client.query(
         `UPDATE conversation_sessions
             SET pending_operation = false, task_state = 'failed', retired_at = now(),
@@ -286,7 +292,11 @@ export const memoryReviewDispatchTerminalRepository = {
       // A failed chat session leaves its review batch behind. The previous `ambiguous` ending
       // blocked the lane at that place forever, and mid-chain it also collided with the next
       // prepared turn on `(lane_id, predecessor_sequence)`. Provenance decides here as everywhere.
-      const result = await client.query<{ batch_id: string; eve_turn_id: string | null; lane_id: string }>(
+      const result = await client.query<{
+        batch_id: string;
+        eve_turn_id: string | null;
+        lane_id: string;
+      }>(
         `SELECT id AS batch_id, lane_id, eve_turn_id FROM memory_review_batches
           WHERE application_session_id = $2 AND eve_session_id = $1
             AND batch_kind = 'interactive' AND status = 'running' FOR UPDATE`,

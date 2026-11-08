@@ -1,8 +1,4 @@
-import {
-  ROOT_CONTEXT,
-  SpanStatusCode,
-  trace,
-} from "#compiled/@opentelemetry/api/index.js";
+import { ROOT_CONTEXT, SpanStatusCode, trace } from "#compiled/@opentelemetry/api/index.js";
 import { actionIdempotencyKey } from "#harness/instrumentation/lifecycle.js";
 import { contentAttribute } from "#tracing/agent-otel-content.js";
 function createAgentToolInstrumentation(e) {
@@ -12,11 +8,7 @@ function createAgentToolInstrumentation(e) {
       let n = actionIdempotencyKey(t.scope.sessionId, t.scope.turnId, t.callId),
         i = e.resolveFallback(t),
         a = i === void 0 ? void 0 : reserve(t, n, i),
-        o = await e.actionContextFor(
-          t.scope.sessionId,
-          t.scope.turnId,
-          t.callId,
-        );
+        o = await e.actionContextFor(t.scope.sessionId, t.scope.turnId, t.callId);
       if (a === void 0) {
         if (o === void 0) return;
         a = reserve(t, n, o);
@@ -41,11 +33,7 @@ function createAgentToolInstrumentation(e) {
     async actionStarted(n) {
       let r = t.get(n.idempotencyKey);
       if (r === void 0 || r.span !== void 0 || r.finished === !0) return;
-      let i = await e.actionContextFor(
-        n.scope.sessionId,
-        n.scope.turnId,
-        n.callId,
-      );
+      let i = await e.actionContextFor(n.scope.sessionId, n.scope.turnId, n.callId);
       i !== void 0 && (startSpan(r, i.context), finishIfReady(r));
     },
     contextFor: (e, t) => n.get(e)?.get(t)?.context,
@@ -53,8 +41,7 @@ function createAgentToolInstrumentation(e) {
       let r = n.get(e);
       if (r !== void 0) {
         for (let e of r.values())
-          e.finished !== !0 &&
-            (e.span === void 0 && startSpan(e, e.fallbackParent), finish(e, t));
+          e.finished !== !0 && (e.span === void 0 && startSpan(e, e.fallbackParent), finish(e, t));
         n.delete(e);
       }
     },
@@ -85,11 +72,7 @@ function createAgentToolInstrumentation(e) {
         spanId: a,
         startTimeMs: Date.now(),
       };
-    return (
-      getAttemptStates(n.scope.attemptId).set(n.idempotencyKey, o),
-      t.set(r, o),
-      o
-    );
+    return (getAttemptStates(n.scope.attemptId).set(n.idempotencyKey, o), t.set(r, o), o);
   }
   function startSpan(t, n) {
     if (
@@ -139,8 +122,7 @@ function contextFromSpanContext(t) {
 }
 function recordError(e, n) {
   n instanceof Error
-    ? (e.recordException(n),
-      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    ? (e.recordException(n), e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
     : e.setStatus({ code: SpanStatusCode.ERROR });
 }
 export { createAgentToolInstrumentation };

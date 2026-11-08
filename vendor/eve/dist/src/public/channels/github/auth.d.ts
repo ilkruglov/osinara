@@ -24,44 +24,46 @@ export type GitHubInstallationToken = string | (() => string | Promise<string>);
 export type GitHubBotName = string | (() => string | Promise<string>);
 /** Credentials used by the native GitHub channel. */
 export interface GitHubChannelCredentials {
-    readonly appId?: GitHubAppId;
-    readonly privateKey?: GitHubPrivateKey;
-    readonly webhookSecret?: GitHubWebhookSecret;
-    /**
-     * The GitHub App's slug (its `@mention` handle, without the `[bot]`
-     * suffix), supplied directly or resolved lazily. Used as the channel's
-     * `botName` when the config does not set one, so integrations that broker
-     * credentials can make mention dispatch work with no explicit
-     * configuration.
-     */
-    readonly appSlug?: GitHubBotName;
-    /**
-     * Pre-resolved GitHub installation access token. When supplied, eve uses
-     * it directly for authenticated GitHub API calls and skips the native
-     * `appId`/`privateKey` JWT exchange; `installationId` is not required.
-     * Integrations such as Connect derive the token out-of-band and set this
-     * field.
-     */
-    readonly installationToken?: GitHubInstallationToken;
-    /**
-     * Custom inbound webhook verifier. When supplied, eve skips the
-     * `GITHUB_WEBHOOK_SECRET` fallback and delegates verification to this
-     * function. Integrations such as Connect authenticate webhooks
-     * out-of-band and set this field.
-     */
-    readonly webhookVerifier?: GitHubWebhookVerifier;
+  readonly appId?: GitHubAppId;
+  readonly privateKey?: GitHubPrivateKey;
+  readonly webhookSecret?: GitHubWebhookSecret;
+  /**
+   * The GitHub App's slug (its `@mention` handle, without the `[bot]`
+   * suffix), supplied directly or resolved lazily. Used as the channel's
+   * `botName` when the config does not set one, so integrations that broker
+   * credentials can make mention dispatch work with no explicit
+   * configuration.
+   */
+  readonly appSlug?: GitHubBotName;
+  /**
+   * Pre-resolved GitHub installation access token. When supplied, eve uses
+   * it directly for authenticated GitHub API calls and skips the native
+   * `appId`/`privateKey` JWT exchange; `installationId` is not required.
+   * Integrations such as Connect derive the token out-of-band and set this
+   * field.
+   */
+  readonly installationToken?: GitHubInstallationToken;
+  /**
+   * Custom inbound webhook verifier. When supplied, eve skips the
+   * `GITHUB_WEBHOOK_SECRET` fallback and delegates verification to this
+   * function. Integrations such as Connect authenticate webhooks
+   * out-of-band and set this field.
+   */
+  readonly webhookVerifier?: GitHubWebhookVerifier;
 }
 /** Options needed by GitHub App auth helpers. */
 export interface GitHubAuthApiOptions {
-    readonly apiBaseUrl?: string;
-    readonly fetch?: typeof fetch;
+  readonly apiBaseUrl?: string;
+  readonly fetch?: typeof fetch;
 }
 /** Resolves a GitHub App id, falling back to `GITHUB_APP_ID`. */
 export declare function resolveGitHubAppId(appId?: GitHubAppId): Promise<string>;
 /** Resolves and normalizes a GitHub App private key. */
 export declare function resolveGitHubPrivateKey(privateKey?: GitHubPrivateKey): Promise<string>;
 /** Resolves a GitHub webhook secret, falling back to `GITHUB_WEBHOOK_SECRET`. */
-export declare function resolveGitHubWebhookSecret(webhookSecret?: GitHubWebhookSecret): Promise<string>;
+export declare function resolveGitHubWebhookSecret(
+  webhookSecret?: GitHubWebhookSecret,
+): Promise<string>;
 /** The channel's lazily resolved bot name, shared by dispatch and defaults. */
 export type GitHubBotNameResolver = () => Promise<string | undefined>;
 /**
@@ -71,42 +73,42 @@ export type GitHubBotNameResolver = () => Promise<string | undefined>;
  * event, so one failed delivery cannot pin the channel to a missing name.
  */
 export declare function createGitHubBotNameResolver(input: {
-    readonly botName?: GitHubBotName;
-    readonly credentials?: GitHubChannelCredentials;
+  readonly botName?: GitHubBotName;
+  readonly credentials?: GitHubChannelCredentials;
 }): GitHubBotNameResolver;
 /** Converts hosted-platform escaped newlines back into PEM newlines. */
 export declare function normalizeGitHubPrivateKey(privateKey: string): string;
 /** Creates a short-lived RS256 GitHub App JWT. */
 export declare function createGitHubAppJwt(input: {
-    readonly appId?: GitHubAppId;
-    readonly now?: Date;
-    readonly privateKey?: GitHubPrivateKey;
+  readonly appId?: GitHubAppId;
+  readonly now?: Date;
+  readonly privateKey?: GitHubPrivateKey;
 }): Promise<string>;
 /**
  * Resolves an installation access token by minting and caching a GitHub App
  * installation token in process memory.
  */
 export declare function resolveGitHubInstallationToken(input: {
-    readonly api?: GitHubAuthApiOptions;
-    readonly credentials?: GitHubChannelCredentials;
-    readonly installationId: number | undefined;
+  readonly api?: GitHubAuthApiOptions;
+  readonly credentials?: GitHubChannelCredentials;
+  readonly installationId: number | undefined;
 }): Promise<string>;
 /**
  * Exchanges a GitHub App JWT for an installation access token, cached until
  * shortly before GitHub's reported expiry.
  */
 export declare function createGitHubInstallationToken(input: {
-    readonly api?: GitHubAuthApiOptions;
-    readonly appId?: GitHubAppId;
-    readonly installationId: number;
-    readonly privateKey?: GitHubPrivateKey;
+  readonly api?: GitHubAuthApiOptions;
+  readonly appId?: GitHubAppId;
+  readonly installationId: number;
+  readonly privateKey?: GitHubPrivateKey;
 }): Promise<string>;
 /** Clears the in-memory GitHub installation token cache. Intended for tests. */
 export declare function clearGitHubInstallationTokenCache(): void;
 /** Seeds the in-memory installation token cache. Intended for tests. */
 export declare function seedGitHubInstallationTokenForTests(input: {
-    readonly apiBaseUrl?: string;
-    readonly appId?: string;
-    readonly installationId: number;
-    readonly token: string;
+  readonly apiBaseUrl?: string;
+  readonly appId?: string;
+  readonly installationId: number;
+  readonly token: string;
 }): void;

@@ -8,9 +8,7 @@ function resolveMicrosandboxMetadataPath(e) {
 }
 async function readTemplateMetadata(e) {
   let t = await readJsonFile(e);
-  return t?.version !== 2 ||
-    typeof t.optionsHash != `string` ||
-    typeof t.snapshotName != `string`
+  return t?.version !== 2 || typeof t.optionsHash != `string` || typeof t.snapshotName != `string`
     ? null
     : { optionsHash: t.optionsHash, snapshotName: t.snapshotName, version: 2 };
 }
@@ -30,8 +28,7 @@ function readSessionMetadataRecord(e) {
         networkPolicy: e.networkPolicy,
         optionsHash: e.optionsHash,
         sandboxName: e.sandboxName,
-        stateSnapshotName:
-          typeof e.stateSnapshotName == `string` ? e.stateSnapshotName : void 0,
+        stateSnapshotName: typeof e.stateSnapshotName == `string` ? e.stateSnapshotName : void 0,
         version: 2,
       };
 }

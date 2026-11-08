@@ -1,6 +1,6 @@
 interface GitMetadata {
-    readonly branch?: string;
-    readonly sha?: string;
+  readonly branch?: string;
+  readonly sha?: string;
 }
 /**
  * Resolves local git metadata for the eval run context.

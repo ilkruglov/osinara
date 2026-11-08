@@ -12,9 +12,9 @@ import type { CollectedOtel, RuntimeContextResolver } from "#tracing/otel-declar
  * see every event, they just have no spans to hang them on.
  */
 export declare function installInstrumentationRuntime(input: {
-    readonly collected: CollectedOtel;
-    readonly frameworkVersion: string;
-    readonly providers: readonly InstrumentationProviderDefinition[];
-    readonly runtimeContextResolvers?: readonly RuntimeContextResolver[];
-    readonly serviceName: string;
+  readonly collected: CollectedOtel;
+  readonly frameworkVersion: string;
+  readonly providers: readonly InstrumentationProviderDefinition[];
+  readonly runtimeContextResolvers?: readonly RuntimeContextResolver[];
+  readonly serviceName: string;
 }): InstrumentationRuntime;

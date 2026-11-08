@@ -9,12 +9,19 @@ import { timed } from "../lib/turn-timing.js";
 
 export default defineDynamic({
   events: {
-    "turn.started": (_event, ctx) => isMemoryReviewSession(ctx)
-      ? {}
-      : timed("skills_external", () => resolveExternalTurnSkills(ctx.session.auth, {
-        provenance: { eveSessionId: ctx.session.id, eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data.turnId },
-        scheduledRun: isScheduledSession(ctx),
-        subagent: ctx.channel.kind === "subagent",
-      })),
+    "turn.started": (_event, ctx) =>
+      isMemoryReviewSession(ctx)
+        ? {}
+        : timed("skills_external", () =>
+            resolveExternalTurnSkills(ctx.session.auth, {
+              provenance: {
+                eveSessionId: ctx.session.id,
+                eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data
+                  .turnId,
+              },
+              scheduledRun: isScheduledSession(ctx),
+              subagent: ctx.channel.kind === "subagent",
+            }),
+          ),
   },
 });

@@ -1,7 +1,4 @@
-import {
-  TASK_TOOL_NAMES,
-  TASK_UPDATE_TOOL_NAME,
-} from "#runtime/framework-tools/tasks.js";
+import { TASK_TOOL_NAMES, TASK_UPDATE_TOOL_NAME } from "#runtime/framework-tools/tasks.js";
 import { resolveSubagentDepth } from "#harness/subagent-depth.js";
 import { AGENT_TOOL_NAME } from "#runtime/framework-tools/agent.js";
 import { ROOT_RUNTIME_AGENT_NODE_ID } from "#runtime/graph.js";
@@ -14,28 +11,15 @@ function getAdvertisedTools(e) {
   return `modelTools` in e
     ? getAdvertisedModelTools(e)
     : isToolDefinitionList(e.tools)
-      ? filterUnavailableDelegationToolDefinitions(
-          e.tools,
-          e.session,
-          e.delegatedCaller,
-        )
-      : filterUnavailableDelegationToolMap(
-          e.tools,
-          e.session,
-          e.delegatedCaller,
-        );
+      ? filterUnavailableDelegationToolDefinitions(e.tools, e.session, e.delegatedCaller)
+      : filterUnavailableDelegationToolMap(e.tools, e.session, e.delegatedCaller);
 }
 async function getAdvertisedModelTools(e) {
-  let t = filterUnavailableDelegationToolMap(
-    e.tools,
-    e.session,
-    e.delegatedCaller,
-  );
+  let t = filterUnavailableDelegationToolMap(e.tools, e.session, e.delegatedCaller);
   if (e.workflow === void 0)
     return { harnessTools: t, modelTools: e.modelTools, session: e.session };
   let n = filterWorkflowHostToolsForRootSession(t, e.session);
-  if (n.size === 0)
-    return { harnessTools: t, modelTools: e.modelTools, session: e.session };
+  if (n.size === 0) return { harnessTools: t, modelTools: e.modelTools, session: e.session };
   let r = ensureWorkflowContinuationSecurity(e.session),
     { modelTools: i } = await applyWorkflowTool({
       continuationSecurity: getWorkflowContinuationSecurity(r),

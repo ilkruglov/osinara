@@ -1,22 +1,9 @@
-import {
-  expectFunction,
-  expectObjectRecord,
-} from "#internal/authored-module.js";
+import { expectFunction, expectObjectRecord } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
-import {
-  isToolSchema,
-  toInputSchema,
-  toOutputSchema,
-} from "#shared/tool-schema.js";
+import { isToolSchema, toInputSchema, toOutputSchema } from "#shared/tool-schema.js";
 import { normalizeApproval } from "#internal/authored-definition/approval.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
-import {
-  registerDefinitionSource,
-  stampDefinitionKey,
-} from "#public/tool-result-narrowing.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+import { registerDefinitionSource, stampDefinitionKey } from "#public/tool-result-narrowing.js";
 async function resolveToolDefinition(i, o, s) {
   try {
     let n = expectObjectRecord(
@@ -33,16 +20,9 @@ async function resolveToolDefinition(i, o, s) {
     (stampDefinitionKey(n, c),
       registerDefinitionSource(c, a),
       registerDefinitionSource(`tool:${n.description}`, a));
-    let l = expectFunction(
-        n.execute,
-        describe(i, `to provide an execute function`),
-      ),
-      u = isToolSchema(n.inputSchema)
-        ? n.inputSchema
-        : toInputSchema(i.inputSchema),
-      d = isToolSchema(n.outputSchema)
-        ? n.outputSchema
-        : toOutputSchema(i.outputSchema);
+    let l = expectFunction(n.execute, describe(i, `to provide an execute function`)),
+      u = isToolSchema(n.inputSchema) ? n.inputSchema : toInputSchema(i.inputSchema),
+      d = isToolSchema(n.outputSchema) ? n.outputSchema : toOutputSchema(i.outputSchema);
     return {
       description: i.description,
       execute: l,

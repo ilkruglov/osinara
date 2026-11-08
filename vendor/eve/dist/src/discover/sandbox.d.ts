@@ -11,9 +11,9 @@ export declare const DISCOVER_SANDBOX_FOLDER_EMPTY = "discover/sandbox-folder-em
  * Result of discovering the authored sandbox from a single agent root.
  */
 interface DiscoverSandboxSourceResult {
-    diagnostics: DiscoverDiagnostic[];
-    sandbox: SandboxSourceRef | null;
-    sandboxWorkspace: SandboxWorkspaceFolderSourceRef | null;
+  diagnostics: DiscoverDiagnostic[];
+  sandbox: SandboxSourceRef | null;
+  sandboxWorkspace: SandboxWorkspaceFolderSourceRef | null;
 }
 /**
  * Discovers the single authored sandbox.
@@ -24,8 +24,8 @@ interface DiscoverSandboxSourceResult {
  * shorthand for agents that don't need a workspace.
  */
 export declare function discoverSandboxSource(input: {
-    rootEntries: readonly ProjectSourceEntry[];
-    rootPath: string;
-    source: ProjectSource;
+  rootEntries: readonly ProjectSourceEntry[];
+  rootPath: string;
+  source: ProjectSource;
 }): Promise<DiscoverSandboxSourceResult>;
 export {};

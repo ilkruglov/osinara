@@ -22,10 +22,7 @@ function validateAuthorizationSpec(e, t = `auth`) {
     return `The "${t}.completeAuthorization" field must be a function when provided.`;
   if (r && n.principalType !== `user`)
     return `Interactive authorization (startAuthorization + completeAuthorization) is restricted to "principalType": "user" in v1. App-level credentials must use a getToken-only definition.`;
-  if (
-    n.displayName !== void 0 &&
-    (typeof n.displayName != `string` || n.displayName.length === 0)
-  )
+  if (n.displayName !== void 0 && (typeof n.displayName != `string` || n.displayName.length === 0))
     return `The "${t}.displayName" field must be a non-empty string when provided.`;
 }
 function normalizeAuthorizationSpec(e, t, n = `auth`) {

@@ -14,7 +14,13 @@ import { createAuthoredTurnSkillResolver } from "./authored-skill-resolver.js";
 function auth(attributes: Record<string, unknown>): SessionAuth {
   return {
     current: {
-      attributes: { familyId: "family-1", telegramActorId: "101", telegramActorKind: "telegram_user", telegramUserId: "101", ...attributes },
+      attributes: {
+        familyId: "family-1",
+        telegramActorId: "101",
+        telegramActorKind: "telegram_user",
+        telegramUserId: "101",
+        ...attributes,
+      },
       authenticator: "telegram",
       principalId: "user-1",
       principalType: "user",
@@ -23,13 +29,38 @@ function auth(attributes: Record<string, unknown>): SessionAuth {
   };
 }
 
-const PRIVATE_OWNER = auth({ memoryScopes: ["personal", "family"], role: "owner", telegramChatType: "private" });
-const PRIVATE_MEMBER = auth({ memoryScopes: ["personal", "family"], role: "member", telegramChatType: "private" });
-const FAMILY = auth({ groupId: "group-1", groupType: "family_private", memoryScopes: ["family"], role: "member", telegramChatType: "supergroup" });
-const EXTERNAL = auth({ groupId: "group-2", groupType: "external", memoryScopes: ["group"], role: "external", telegramChatType: "supergroup" });
+const PRIVATE_OWNER = auth({
+  memoryScopes: ["personal", "family"],
+  role: "owner",
+  telegramChatType: "private",
+});
+const PRIVATE_MEMBER = auth({
+  memoryScopes: ["personal", "family"],
+  role: "member",
+  telegramChatType: "private",
+});
+const FAMILY = auth({
+  groupId: "group-1",
+  groupType: "family_private",
+  memoryScopes: ["family"],
+  role: "member",
+  telegramChatType: "supergroup",
+});
+const EXTERNAL = auth({
+  groupId: "group-2",
+  groupType: "external",
+  memoryScopes: ["group"],
+  role: "external",
+  telegramChatType: "supergroup",
+});
 
 const PACKAGES = [
-  { description: "Открытка", files: { "references/flux-card.md": "x" }, markdown: "## Шаги", name: "birthday-card" },
+  {
+    description: "Открытка",
+    files: { "references/flux-card.md": "x" },
+    markdown: "## Шаги",
+    name: "birthday-card",
+  },
   { description: "Сводка", files: {}, markdown: "## Шаги", name: "club-digest" },
 ];
 
@@ -44,7 +75,9 @@ describe("authored skill resolver", () => {
     expect(activePackages).toHaveBeenCalledWith("family-1");
     expect(Object.keys(privateSkills)).toEqual(["birthday-card", "club-digest"]);
     expect(privateSkills["birthday-card"]).toMatchObject({
-      description: "Открытка", files: { "references/flux-card.md": "x" }, markdown: "## Шаги",
+      description: "Открытка",
+      files: { "references/flux-card.md": "x" },
+      markdown: "## Шаги",
     });
     expect(privateSkills["club-digest"]).not.toHaveProperty("files");
     expect(Object.keys(familySkills)).toEqual(["birthday-card", "club-digest"]);
@@ -53,7 +86,10 @@ describe("authored skill resolver", () => {
   it("pins the exact resolved package versions before exposing their descriptors", async () => {
     const packages = PACKAGES.map((pkg) => ({ ...pkg, version: 4 }));
     const capturePackages = vi.fn().mockResolvedValue(undefined);
-    const resolve = createAuthoredTurnSkillResolver({ activePackages: vi.fn().mockResolvedValue(packages), capturePackages });
+    const resolve = createAuthoredTurnSkillResolver({
+      activePackages: vi.fn().mockResolvedValue(packages),
+      capturePackages,
+    });
     const provenance = { eveSessionId: "session", eveTurnId: "turn" };
     await resolve(PRIVATE_OWNER, { provenance });
     expect(capturePackages).toHaveBeenCalledWith("family-1", provenance, packages);

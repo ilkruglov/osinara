@@ -11,18 +11,20 @@ import { type RuntimeIpAllowList } from "#runtime/governance/network/ip-allow-li
  * is a fully-constructed {@link SessionAuthContext}; on failure no detail is
  * returned so routes do not leak which credential check failed.
  */
-export type VerifyResult = {
-    readonly ok: true;
-    readonly sessionAuth: SessionAuthContext;
-} | {
-    readonly ok: false;
-};
+export type VerifyResult =
+  | {
+      readonly ok: true;
+      readonly sessionAuth: SessionAuthContext;
+    }
+  | {
+      readonly ok: false;
+    };
 /**
  * Credentials accepted by {@link verifyHttpBasic}.
  */
 export interface HttpBasicCredentials {
-    readonly username: string;
-    readonly password: string;
+  readonly username: string;
+  readonly password: string;
 }
 /**
  * Verifies an HTTP Basic credential against the supplied username and
@@ -32,31 +34,34 @@ export interface HttpBasicCredentials {
  * values are normalized to Unicode NFC before comparison, matching the
  * `charset="UTF-8"` challenge advertised by {@link httpBasic}.
  */
-export declare function verifyHttpBasic(authorizationHeader: string | null, credentials: HttpBasicCredentials): VerifyResult;
+export declare function verifyHttpBasic(
+  authorizationHeader: string | null,
+  credentials: HttpBasicCredentials,
+): VerifyResult;
 /**
  * Configuration for {@link verifyJwtHmac}. Optional fields have defaults so
  * adapters can omit unused matchers. `secret` is read by the adapter from its
  * secret store (e.g. `process.env`) and passed in directly.
  */
 export interface VerifyJwtHmacConfig {
-    readonly algorithm: "HS256" | "HS384" | "HS512";
-    readonly audiences: readonly string[];
-    readonly issuer: string;
-    readonly secret: string;
-    /**
-     * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
-     */
-    readonly clockSkewSeconds?: number;
-    /**
-     * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
-     * When supplied, the token is rejected unless one matches.
-     */
-    readonly subjects?: readonly string[];
-    /**
-     * Per-claim membership matcher: each named claim must contain at least one
-     * of the listed values, or the token is rejected.
-     */
-    readonly claims?: Readonly<Record<string, readonly string[]>>;
+  readonly algorithm: "HS256" | "HS384" | "HS512";
+  readonly audiences: readonly string[];
+  readonly issuer: string;
+  readonly secret: string;
+  /**
+   * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
+   */
+  readonly clockSkewSeconds?: number;
+  /**
+   * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
+   * When supplied, the token is rejected unless one matches.
+   */
+  readonly subjects?: readonly string[];
+  /**
+   * Per-claim membership matcher: each named claim must contain at least one
+   * of the listed values, or the token is rejected.
+   */
+  readonly claims?: Readonly<Record<string, readonly string[]>>;
 }
 /**
  * Verifies a bearer JWT signed with an HMAC secret. Pass the token without
@@ -64,32 +69,35 @@ export interface VerifyJwtHmacConfig {
  * `{ ok: true, sessionAuth }` on success or `{ ok: false }` when verification
  * fails or the token's claims don't match the supplied matchers.
  */
-export declare function verifyJwtHmac(token: string | null, config: VerifyJwtHmacConfig): Promise<VerifyResult>;
+export declare function verifyJwtHmac(
+  token: string | null,
+  config: VerifyJwtHmacConfig,
+): Promise<VerifyResult>;
 /**
  * Configuration for {@link verifyJwtEcdsa}.
  */
 export interface VerifyJwtEcdsaConfig {
-    readonly algorithm: "ES256" | "ES384" | "ES512";
-    readonly audiences: readonly string[];
-    readonly issuer: string;
-    /**
-     * PEM-encoded ECDSA public key (`-----BEGIN PUBLIC KEY-----` ...).
-     */
-    readonly publicKey: string;
-    /**
-     * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
-     */
-    readonly clockSkewSeconds?: number;
-    /**
-     * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
-     * When supplied, the token is rejected unless one matches.
-     */
-    readonly subjects?: readonly string[];
-    /**
-     * Per-claim membership matcher: each named claim must contain at least one
-     * of the listed values, or the token is rejected.
-     */
-    readonly claims?: Readonly<Record<string, readonly string[]>>;
+  readonly algorithm: "ES256" | "ES384" | "ES512";
+  readonly audiences: readonly string[];
+  readonly issuer: string;
+  /**
+   * PEM-encoded ECDSA public key (`-----BEGIN PUBLIC KEY-----` ...).
+   */
+  readonly publicKey: string;
+  /**
+   * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
+   */
+  readonly clockSkewSeconds?: number;
+  /**
+   * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
+   * When supplied, the token is rejected unless one matches.
+   */
+  readonly subjects?: readonly string[];
+  /**
+   * Per-claim membership matcher: each named claim must contain at least one
+   * of the listed values, or the token is rejected.
+   */
+  readonly claims?: Readonly<Record<string, readonly string[]>>;
 }
 /**
  * Verifies a bearer JWT signed with an ECDSA private key against the supplied
@@ -98,33 +106,36 @@ export interface VerifyJwtEcdsaConfig {
  * or `{ ok: false }` when verification fails or the token's claims do not
  * match the configured `subjects`/`claims`.
  */
-export declare function verifyJwtEcdsa(token: string | null, config: VerifyJwtEcdsaConfig): Promise<VerifyResult>;
+export declare function verifyJwtEcdsa(
+  token: string | null,
+  config: VerifyJwtEcdsaConfig,
+): Promise<VerifyResult>;
 /**
  * Configuration for {@link verifyOidc}.
  */
 export interface VerifyOidcConfig {
-    readonly audiences: readonly string[];
-    readonly issuer: string;
-    /**
-     * OIDC discovery URL. Defaults to
-     * `${issuer}/.well-known/openid-configuration` (any trailing slash on
-     * `issuer` is stripped first).
-     */
-    readonly discoveryUrl?: string;
-    /**
-     * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
-     */
-    readonly clockSkewSeconds?: number;
-    /**
-     * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
-     * When supplied, the token is rejected unless one matches.
-     */
-    readonly subjects?: readonly string[];
-    /**
-     * Per-claim membership matcher: each named claim must contain at least one
-     * of the listed values, or the token is rejected.
-     */
-    readonly claims?: Readonly<Record<string, readonly string[]>>;
+  readonly audiences: readonly string[];
+  readonly issuer: string;
+  /**
+   * OIDC discovery URL. Defaults to
+   * `${issuer}/.well-known/openid-configuration` (any trailing slash on
+   * `issuer` is stripped first).
+   */
+  readonly discoveryUrl?: string;
+  /**
+   * Tolerance in seconds for the `exp` and `nbf` claims. Defaults to 30.
+   */
+  readonly clockSkewSeconds?: number;
+  /**
+   * AWS IAM-style `*`-wildcard patterns matched against the token `sub`.
+   * When supplied, the token is rejected unless one matches.
+   */
+  readonly subjects?: readonly string[];
+  /**
+   * Per-claim membership matcher: each named claim must contain at least one
+   * of the listed values, or the token is rejected.
+   */
+  readonly claims?: Readonly<Record<string, readonly string[]>>;
 }
 /**
  * Verifies a bearer OIDC token against an issuer's discovery URL. Pass the
@@ -134,7 +145,10 @@ export interface VerifyOidcConfig {
  * {@link verifyVercelOidc}, this never grants the Vercel current-project
  * bypass. Returns `{ ok: false }` on failed verification or matchers.
  */
-export declare function verifyOidc(token: string | null, config: VerifyOidcConfig): Promise<VerifyResult>;
+export declare function verifyOidc(
+  token: string | null,
+  config: VerifyOidcConfig,
+): Promise<VerifyResult>;
 /**
  * Extracts the bearer token from an `Authorization: Bearer <token>` header.
  * Returns `null` if the header is missing, the scheme isn't `Bearer`, or the
@@ -163,32 +177,32 @@ export declare function isIpAllowed(ip: string | null, allowList: IpAllowList): 
  * `[{ scheme: "Basic", parameters: { realm: "agent" } }, { scheme: "Bearer" }]`
  */
 export interface UnauthorizedChallenge {
-    readonly scheme: "Basic" | "Bearer";
-    readonly parameters?: Readonly<Record<string, string>>;
+  readonly scheme: "Basic" | "Bearer";
+  readonly parameters?: Readonly<Record<string, string>>;
 }
 /**
  * Options accepted by {@link createUnauthorizedResponse}.
  */
 export interface UnauthorizedResponseOptions {
-    /**
-     * HTTP status code. Defaults to `401`. Use `403` for "authenticated but
-     * not allowed" outcomes.
-     */
-    readonly status?: 401 | 403;
-    /**
-     * Machine-readable error code returned in the JSON body. Defaults to
-     * `"unauthorized"` (401) or `"forbidden"` (403).
-     */
-    readonly code?: string;
-    /**
-     * Human-readable error message returned in the JSON body. Defaults to a
-     * generic prompt.
-     */
-    readonly message?: string;
-    /**
-     * Optional `www-authenticate` challenge entries.
-     */
-    readonly challenges?: readonly UnauthorizedChallenge[];
+  /**
+   * HTTP status code. Defaults to `401`. Use `403` for "authenticated but
+   * not allowed" outcomes.
+   */
+  readonly status?: 401 | 403;
+  /**
+   * Machine-readable error code returned in the JSON body. Defaults to
+   * `"unauthorized"` (401) or `"forbidden"` (403).
+   */
+  readonly code?: string;
+  /**
+   * Human-readable error message returned in the JSON body. Defaults to a
+   * generic prompt.
+   */
+  readonly message?: string;
+  /**
+   * Optional `www-authenticate` challenge entries.
+   */
+  readonly challenges?: readonly UnauthorizedChallenge[];
 }
 /**
  * Builds a JSON failure response shaped like the framework's other auth
@@ -208,8 +222,8 @@ export type AuthErrorOptions = Omit<UnauthorizedResponseOptions, "status">;
  * propagate through the normal channel failure path.
  */
 export declare class UnauthenticatedError extends Error {
-    readonly response: Response;
-    constructor(opts?: AuthErrorOptions);
+  readonly response: Response;
+  constructor(opts?: AuthErrorOptions);
 }
 /**
  * Error thrown by auth callbacks to reject a route with a structured 403
@@ -217,8 +231,8 @@ export declare class UnauthenticatedError extends Error {
  * propagate through the normal channel failure path.
  */
 export declare class ForbiddenError extends Error {
-    readonly response: Response;
-    constructor(opts?: AuthErrorOptions);
+  readonly response: Response;
+  constructor(opts?: AuthErrorOptions);
 }
 /**
  * Route auth callback. Returned value semantics inside {@link routeAuth}:
@@ -231,29 +245,34 @@ export declare class ForbiddenError extends Error {
  * {@link UnauthenticatedError} or {@link ForbiddenError}. To accept anonymous
  * traffic, include {@link none} as the final entry.
  */
-export type AuthFn<TEvent = Request> = (event: TEvent) => SessionAuthContext | null | undefined | Promise<SessionAuthContext | null | undefined>;
+export type AuthFn<TEvent = Request> = (
+  event: TEvent,
+) => SessionAuthContext | null | undefined | Promise<SessionAuthContext | null | undefined>;
 /**
  * OAuth protected-resource metadata attached to an inbound auth policy.
  * `issuer` is shorthand for a single authorization server.
  */
 export type OAuthResourceOptions = {
-    readonly metadataPath?: string;
-    readonly resource?: string;
-    readonly scopes?: readonly string[];
-} & ({
-    readonly authorizationServers?: never;
-    readonly issuer: string;
-} | {
-    readonly authorizationServers: readonly string[];
-    readonly issuer?: never;
-});
+  readonly metadataPath?: string;
+  readonly resource?: string;
+  readonly scopes?: readonly string[];
+} & (
+  | {
+      readonly authorizationServers?: never;
+      readonly issuer: string;
+    }
+  | {
+      readonly authorizationServers: readonly string[];
+      readonly issuer?: never;
+    }
+);
 declare const OAUTH_RESOURCE_SYMBOL: unique symbol;
 /**
  * An ordinary route authenticator decorated with OAuth protected-resource
  * discovery metadata.
  */
 export type OAuthResourceAuth = AuthFn<Request> & {
-    readonly [OAUTH_RESOURCE_SYMBOL]: OAuthResourceOptions;
+  readonly [OAUTH_RESOURCE_SYMBOL]: OAuthResourceOptions;
 };
 /**
  * Adds OAuth protected-resource metadata to an existing inbound auth policy.
@@ -262,9 +281,14 @@ export type OAuthResourceAuth = AuthFn<Request> & {
  * walk and can be used by any channel. A protocol-aware channel such as
  * `mcpChannel` may additionally publish the metadata and discovery challenge.
  */
-export declare function oauthResource(auth: AuthFn<Request> | readonly AuthFn<Request>[], options: OAuthResourceOptions): OAuthResourceAuth;
+export declare function oauthResource(
+  auth: AuthFn<Request> | readonly AuthFn<Request>[],
+  options: OAuthResourceOptions,
+): OAuthResourceAuth;
 /** @internal Reads OAuth resource metadata without widening `AuthFn`. */
-export declare function readOAuthResourceOptions(auth: AuthFn<Request> | readonly AuthFn<Request>[]): OAuthResourceOptions | undefined;
+export declare function readOAuthResourceOptions(
+  auth: AuthFn<Request> | readonly AuthFn<Request>[],
+): OAuthResourceOptions | undefined;
 /**
  * Attaches declared `www-authenticate` challenges to an {@link AuthFn}
  * without changing its call signature or behavior. {@link routeAuth} reads
@@ -283,7 +307,10 @@ export declare function readOAuthResourceOptions(auth: AuthFn<Request> | readonl
  * );
  * ```
  */
-export declare function withAuthChallenges<TEvent>(fn: AuthFn<TEvent>, challenges: readonly UnauthorizedChallenge[]): AuthFn<TEvent>;
+export declare function withAuthChallenges<TEvent>(
+  fn: AuthFn<TEvent>,
+  challenges: readonly UnauthorizedChallenge[],
+): AuthFn<TEvent>;
 /**
  * Walks an `AuthFn` (or array) in order against `request`. The first entry
  * returning a {@link SessionAuthContext} wins; entries returning `null` or
@@ -297,7 +324,10 @@ export declare function withAuthChallenges<TEvent>(fn: AuthFn<TEvent>, challenge
  * a custom `defineChannel` route handler) should call `routeAuth` rather than
  * re-implement the walk.
  */
-export declare function routeAuth(request: Request, auth: AuthFn<Request> | readonly AuthFn<Request>[]): Promise<SessionAuthContext | Response>;
+export declare function routeAuth(
+  request: Request,
+  auth: AuthFn<Request> | readonly AuthFn<Request>[],
+): Promise<SessionAuthContext | Response>;
 /**
  * Returns an {@link AuthFn} for scaffolded apps that makes unfinished
  * production auth fail as an intentional 401 rather than an internal route
@@ -346,23 +376,23 @@ export declare function localDev(): AuthFn<Request>;
  * Options for {@link verifyVercelOidc} and {@link vercelOidc}.
  */
 export interface VerifyVercelOidcOptions {
-    /**
-     * Explicit current-project binding for the verified token. When omitted,
-     * the verifier reads `VERCEL_PROJECT_ID` and `VERCEL_TARGET_ENV` /
-     * `VERCEL_ENV` from the runtime environment.
-     */
-    readonly currentVercelProject?: {
-        readonly environment?: string;
-        readonly projectId: string;
-    };
-    /**
-     * Optional `sub` patterns granting callers access on top of the always-on
-     * current-project bypass. Patterns use AWS IAM-style `*` wildcards and may
-     * target tokens minted by other Vercel projects (e.g.
-     * `"owner:acme:project:partner-agent:environment:*"`). The current project
-     * is always accepted regardless of this list.
-     */
-    readonly subjects?: readonly string[];
+  /**
+   * Explicit current-project binding for the verified token. When omitted,
+   * the verifier reads `VERCEL_PROJECT_ID` and `VERCEL_TARGET_ENV` /
+   * `VERCEL_ENV` from the runtime environment.
+   */
+  readonly currentVercelProject?: {
+    readonly environment?: string;
+    readonly projectId: string;
+  };
+  /**
+   * Optional `sub` patterns granting callers access on top of the always-on
+   * current-project bypass. Patterns use AWS IAM-style `*` wildcards and may
+   * target tokens minted by other Vercel projects (e.g.
+   * `"owner:acme:project:partner-agent:environment:*"`). The current project
+   * is always accepted regardless of this list.
+   */
+  readonly subjects?: readonly string[];
 }
 /**
  * Verifies a bearer JWT minted by Vercel OIDC.
@@ -389,7 +419,10 @@ export interface VerifyVercelOidcOptions {
  * production, preview, and development. They are tagged `"runtime"` when the
  * token's `environment` matches the current deployment, otherwise `"service"`.
  */
-export declare function verifyVercelOidc(token: string | null, opts?: VerifyVercelOidcOptions): Promise<VerifyResult>;
+export declare function verifyVercelOidc(
+  token: string | null,
+  opts?: VerifyVercelOidcOptions,
+): Promise<VerifyResult>;
 /**
  * Allowed values for {@link VercelSubjectInput.environment}. Use `"*"`
  * to match any of `production`, `preview`, and `development` for the
@@ -406,27 +439,27 @@ export type VercelSubjectEnvironment = "production" | "preview" | "development" 
  * composes a `sub` matcher, so its inputs are slugs.
  */
 export interface VercelSubjectInput {
-    /**
-     * Vercel team slug (a.k.a. "owner"; e.g. `"acme"`) as embedded in the
-     * `sub` claim, **not** the stable team ID `team_...` (`VERCEL_TEAM_ID`).
-     *
-     * Must not contain `*` or `:` so authors cannot widen the matcher to
-     * "any team with a project of this name". Hand-write the subject string
-     * when cross-team federation is intentional.
-     */
-    readonly teamSlug: string;
-    /**
-     * Vercel project name (e.g. `"acme_website"`) as embedded in the `sub`
-     * claim, **not** the stable project ID `prj_...` (`VERCEL_PROJECT_ID`).
-     * Same constraints as {@link teamSlug}.
-     */
-    readonly projectName: string;
-    /**
-     * Vercel deployment environment, or `"*"` to match any environment for
-     * the named project. Defaults to `"production"` so an unspecified
-     * environment cannot silently accept preview/development tokens.
-     */
-    readonly environment?: VercelSubjectEnvironment;
+  /**
+   * Vercel team slug (a.k.a. "owner"; e.g. `"acme"`) as embedded in the
+   * `sub` claim, **not** the stable team ID `team_...` (`VERCEL_TEAM_ID`).
+   *
+   * Must not contain `*` or `:` so authors cannot widen the matcher to
+   * "any team with a project of this name". Hand-write the subject string
+   * when cross-team federation is intentional.
+   */
+  readonly teamSlug: string;
+  /**
+   * Vercel project name (e.g. `"acme_website"`) as embedded in the `sub`
+   * claim, **not** the stable project ID `prj_...` (`VERCEL_PROJECT_ID`).
+   * Same constraints as {@link teamSlug}.
+   */
+  readonly projectName: string;
+  /**
+   * Vercel deployment environment, or `"*"` to match any environment for
+   * the named project. Defaults to `"production"` so an unspecified
+   * environment cannot silently accept preview/development tokens.
+   */
+  readonly environment?: VercelSubjectEnvironment;
 }
 /**
  * Builds a Vercel OIDC `sub` matcher pattern from a typed input.
@@ -463,12 +496,12 @@ export declare function vercelOidc(opts?: VerifyVercelOidcOptions): AuthFn<Reque
  * Options accepted by {@link httpBasic}.
  */
 export interface HttpBasicAuthOptions {
-    /**
-     * Optional `realm` parameter advertised on the `WWW-Authenticate: Basic`
-     * challenge (e.g. browsers show it in the native login prompt). Defaults
-     * to `"eve"`.
-     */
-    readonly realm?: string;
+  /**
+   * Optional `realm` parameter advertised on the `WWW-Authenticate: Basic`
+   * challenge (e.g. browsers show it in the native login prompt). Defaults
+   * to `"eve"`.
+   */
+  readonly realm?: string;
 }
 /**
  * Returns an {@link AuthFn} that verifies HTTP Basic credentials via
@@ -477,7 +510,10 @@ export interface HttpBasicAuthOptions {
  * (with `realm` first, when given, then `charset="UTF-8"`) instead of the
  * `Bearer` fallback.
  */
-export declare function httpBasic(credentials: HttpBasicCredentials, options?: HttpBasicAuthOptions): AuthFn<Request>;
+export declare function httpBasic(
+  credentials: HttpBasicCredentials,
+  options?: HttpBasicAuthOptions,
+): AuthFn<Request>;
 /**
  * Returns an {@link AuthFn} that verifies an HMAC-signed bearer JWT via
  * {@link verifyJwtHmac}. Declares a `Bearer` {@link withAuthChallenges}

@@ -56,7 +56,6 @@ async function createDevelopmentSourceSnapshotPlan(e) {
     existsSync(s) && o.copyFiles.add(s),
       await addAuthoredSourceRoots(o, e.authoredSourceRoots ?? []);
     o.localRootsToProcess.length > 0;
-
   ) {
     let e = o.localRootsToProcess.shift();
     if (e === void 0) continue;
@@ -116,10 +115,7 @@ function toDevelopmentSourceSnapshotPath(e) {
 function resolveDevelopmentSourceRoot(e) {
   let t = resolve(e);
   for (;;) {
-    if (
-      SOURCE_ROOT_MARKER_NAMES.some((e) => existsSync(join(t, e))) ||
-      isWorkspaceManifestRoot(t)
-    )
+    if (SOURCE_ROOT_MARKER_NAMES.some((e) => existsSync(join(t, e))) || isWorkspaceManifestRoot(t))
       return t;
     let n = dirname(t);
     if (n === t) return resolve(e);
@@ -130,10 +126,7 @@ async function addAuthoredSourceRoots(e, t) {
   for (let n of t) {
     let t = resolve(n);
     isAuthoredSourcePath$1(t, e.sourceRoot) &&
-      enqueueLocalRoot(
-        e,
-        (await resolveNearestPackageRoot(t, e.sourceRoot)) ?? t,
-      );
+      enqueueLocalRoot(e, (await resolveNearestPackageRoot(t, e.sourceRoot)) ?? t);
   }
 }
 async function addTsConfigDependenciesForRoot(e, t) {
@@ -149,9 +142,7 @@ async function addTsConfigDependenciesForRoot(e, t) {
     }
 }
 async function addDependencyMountsForRoot(e, t) {
-  let n = await readPackageDependencyNames(
-    resolveDependencyDeclarationRoot(t, e.sourceRoot),
-  );
+  let n = await readPackageDependencyNames(resolveDependencyDeclarationRoot(t, e.sourceRoot));
   for (let r of n)
     for (let n of listAncestorNodeModulesRoots(t, e.sourceRoot))
       await addDependencyMount(e, joinNodeModulesPackagePath(n, r));
@@ -159,7 +150,7 @@ async function addDependencyMountsForRoot(e, t) {
 function resolveDependencyDeclarationRoot(e, t) {
   let n = resolve(e),
     a = resolve(t);
-  for (; isPathInsideOrEqual(n, a); ) {
+  for (; isPathInsideOrEqual(n, a);) {
     if (existsSync(join(n, `package.json`))) return n;
     let e = dirname(n);
     if (e === n) break;
@@ -171,7 +162,7 @@ function listAncestorNodeModulesRoots(e, t) {
   let n = resolve(t),
     i = new Set(),
     a = resolve(e);
-  for (; isPathInsideOrEqual(a, n); ) {
+  for (; isPathInsideOrEqual(a, n);) {
     i.add(a);
     let e = dirname(a);
     if (e === a) break;
@@ -262,16 +253,10 @@ async function readPackageDependencyNames(e) {
   return [...r].sort((e, t) => e.localeCompare(t));
 }
 function createWatchPaths(e) {
-  let t = new Set([
-    join(e.appRoot, `package.json`),
-    ...e.copyFiles,
-    ...e.tsconfigPaths,
-  ]);
+  let t = new Set([join(e.appRoot, `package.json`), ...e.copyFiles, ...e.tsconfigPaths]);
   for (let n of e.localRoots) n !== e.appRoot && t.add(n);
   for (let n of e.dependencyMounts)
-    n.sourceKind === `workspace` &&
-      n.sourcePath !== e.appRoot &&
-      t.add(n.sourcePath);
+    n.sourceKind === `workspace` && n.sourcePath !== e.appRoot && t.add(n.sourcePath);
   if (e.sourceRoot !== e.appRoot)
     for (let n of WORKSPACE_METADATA_FILE_NAMES) {
       let r = join(e.sourceRoot, n);

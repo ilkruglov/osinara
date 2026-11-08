@@ -67,9 +67,7 @@ async function readUsableEveDevServerRegistry(e) {
     let t = normalizeDevServerRegistry(
       JSON.parse(await readFile(resolveEveDevServerRegistryPath(e), `utf8`)),
     );
-    return t === void 0 ||
-      t.appRoot !== e ||
-      !(await isEveServerHealthy(t.origin))
+    return t === void 0 || t.appRoot !== e || !(await isEveServerHealthy(t.origin))
       ? void 0
       : t.origin;
   } catch (e) {
@@ -96,7 +94,7 @@ async function acquireEveDevServerLock(e) {
   let t = resolveEveCacheDirectory(e),
     i = resolveEveDevServerLockPath(e),
     o = Date.now() + DEV_SERVER_REGISTRY_TIMEOUT_MS;
-  for (await mkdir(t, { recursive: !0 }); ; )
+  for (await mkdir(t, { recursive: !0 }); ;)
     try {
       let e = await open(i, `wx`);
       return (
@@ -108,8 +106,7 @@ async function acquireEveDevServerLock(e) {
       );
     } catch (t) {
       if (!isNodeErrorWithCode(t, `EEXIST`)) throw t;
-      if ((await readUsableEveDevServerRegistry(e)) !== void 0)
-        return async () => {};
+      if ((await readUsableEveDevServerRegistry(e)) !== void 0) return async () => {};
       if ((await removeStaleEveDevServerLock(i), Date.now() > o))
         throw Error(
           `Timed out after ${DEV_SERVER_REGISTRY_TIMEOUT_MS}ms waiting for another SvelteKit process to start eve.`,
@@ -136,9 +133,7 @@ function startServerProcess(e) {
           ));
       }, DEFAULT_SERVER_READY_TIMEOUT_MS),
       cleanup = () => {
-        (clearTimeout(a),
-          i.off(`error`, handleError),
-          i.off(`exit`, handleEarlyExit));
+        (clearTimeout(a), i.off(`error`, handleError), i.off(`exit`, handleEarlyExit));
       },
       handleError = (e) => {
         (cleanup(), r(e));
@@ -155,10 +150,7 @@ function startServerProcess(e) {
       handleOutput = (e) => {
         if (o) return;
         let r = LOCAL_SERVER_URL_PATTERN.exec(e.toString(`utf8`));
-        r !== null &&
-          ((o = !0),
-          cleanup(),
-          n({ origin: normalizeOrigin(r[0]), process: i }));
+        r !== null && ((o = !0), cleanup(), n({ origin: normalizeOrigin(r[0]), process: i }));
       };
     (i.once(`error`, handleError),
       i.once(`exit`, handleEarlyExit),
@@ -174,9 +166,7 @@ function installProcessShutdown(e) {
   let t = e.process;
   if (t === void 0) return e;
   let close = () => {
-    (process.off(`beforeExit`, close),
-      process.off(`exit`, close),
-      t.killed || t.kill());
+    (process.off(`beforeExit`, close), process.off(`exit`, close), t.killed || t.kill());
   };
   return (process.once(`beforeExit`, close), process.once(`exit`, close), e);
 }
@@ -185,12 +175,7 @@ function startEveDevServer(e) {
     args: [createEveBinaryPath(), `dev`, `--no-ui`, `--port`, `0`],
     command: process.execPath,
     cwd: e,
-  }).then(
-    (e) => (
-      (process.env[EVE_BASE_URL_ENV] = e.origin),
-      installProcessShutdown(e)
-    ),
-  );
+  }).then((e) => ((process.env[EVE_BASE_URL_ENV] = e.origin), installProcessShutdown(e)));
 }
 async function resolveSharedEveDevServer(e) {
   let t = await readUsableEveDevServerRegistry(e);
@@ -198,16 +183,11 @@ async function resolveSharedEveDevServer(e) {
   let n = await acquireEveDevServerLock(e);
   try {
     let t = await readUsableEveDevServerRegistry(e);
-    if (t !== void 0)
-      return ((process.env[EVE_BASE_URL_ENV] = t), { origin: t });
+    if (t !== void 0) return ((process.env[EVE_BASE_URL_ENV] = t), { origin: t });
     let n = await startEveDevServer(e);
     return (await writeEveDevServerRegistry(e, n), n);
   } finally {
     await n();
   }
 }
-export {
-  EVE_BASE_URL_ENV,
-  normalizeDevServerRegistry,
-  resolveSharedEveDevServer,
-};
+export { EVE_BASE_URL_ENV, normalizeDevServerRegistry, resolveSharedEveDevServer };

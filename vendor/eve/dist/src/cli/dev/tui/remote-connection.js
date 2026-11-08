@@ -1,9 +1,6 @@
 import { appendRemoteAuthMutationSummary } from "./remote-auth-result.js";
 import { remoteHost } from "./target.js";
-import {
-  classifyRemoteError,
-  probeRemoteInfo,
-} from "./remote-connection-probe.js";
+import { classifyRemoteError, probeRemoteInfo } from "./remote-connection-probe.js";
 import { toErrorMessage } from "#shared/errors.js";
 function challengeFor(e) {
   switch (e.state) {
@@ -53,8 +50,7 @@ function createRemoteConnectionController(i) {
             : (publishTarget(r.target),
               i.credentials.authorize({
                 target: r.target,
-                resolveToken: async () =>
-                  (await i.resolveOidcToken?.(r.target.deployment)) ?? ``,
+                resolveToken: async () => (await i.resolveOidcToken?.(r.target.deployment)) ?? ``,
               }));
         } catch {}
     };
@@ -98,22 +94,14 @@ function createRemoteConnectionController(i) {
             completedMutations: u.completedMutations,
           };
         if (u.kind === `cancelled`)
-          return (
-            update(c),
-            { kind: `cancelled`, completedMutations: u.completedMutations }
-          );
+          return (update(c), { kind: `cancelled`, completedMutations: u.completedMutations });
         if (u.kind === `failed`)
           return (
-            update(
-              c.state === `ready` ? c : { state: `auth-failed`, challenge: l },
-            ),
+            update(c.state === `ready` ? c : { state: `auth-failed`, challenge: l }),
             { kind: `failed`, message: u.message }
           );
         if (s.signal.aborted)
-          return (
-            update(c),
-            { kind: `cancelled`, completedMutations: u.completedMutations }
-          );
+          return (update(c), { kind: `cancelled`, completedMutations: u.completedMutations });
         let d = restoreActiveCredentials,
           f;
         try {
@@ -122,30 +110,17 @@ function createRemoteConnectionController(i) {
             resolveToken: u.resolveToken,
           });
         } catch (t) {
-          let n = appendRemoteAuthMutationSummary(
-            toErrorMessage(t),
-            u.completedMutations,
-          );
-          return (
-            update({ state: `auth-failed`, challenge: l }),
-            { kind: `failed`, message: n }
-          );
+          let n = appendRemoteAuthMutationSummary(toErrorMessage(t), u.completedMutations);
+          return (update({ state: `auth-failed`, challenge: l }), { kind: `failed`, message: n });
         }
         let p = await probeRemoteInfo({
           client: i.client,
           phase: `authentication-verification`,
         });
         if (!isCurrent(s.generation))
-          return (
-            f(),
-            { kind: `cancelled`, completedMutations: u.completedMutations }
-          );
+          return (f(), { kind: `cancelled`, completedMutations: u.completedMutations });
         if (s.signal.aborted)
-          return (
-            f(),
-            update(c),
-            { kind: `cancelled`, completedMutations: u.completedMutations }
-          );
+          return (f(), update(c), { kind: `cancelled`, completedMutations: u.completedMutations });
         if (p.state === `ready`)
           return (
             publishTarget(u.target),
@@ -167,22 +142,12 @@ function createRemoteConnectionController(i) {
         }
         let m = {
           ...p.failure,
-          message: appendRemoteAuthMutationSummary(
-            p.failure.message,
-            u.completedMutations,
-          ),
+          message: appendRemoteAuthMutationSummary(p.failure.message, u.completedMutations),
         };
-        return (
-          update({ state: `unavailable`, failure: m }),
-          { kind: `unavailable`, failure: m }
-        );
+        return (update({ state: `unavailable`, failure: m }), { kind: `unavailable`, failure: m });
       },
       reportFailure(e) {
-        return (
-          s?.abort(),
-          (c += 1),
-          update(classifyRemoteError(e, `connection-check`))
-        );
+        return (s?.abort(), (c += 1), update(classifyRemoteError(e, `connection-check`)));
       },
       dispose() {
         ((l = !0),

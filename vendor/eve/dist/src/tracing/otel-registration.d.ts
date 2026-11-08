@@ -10,12 +10,12 @@ import type { OtelPipeline } from "#tracing/otel-declaration.js";
  * propagator, then verifies both through the global APIs.
  */
 export declare function registerOtelPipeline(input: {
-    readonly pipeline: OtelPipeline;
-    readonly serviceName: string;
+  readonly pipeline: OtelPipeline;
+  readonly serviceName: string;
 }): RegisteredOtelPipeline;
 /** Lifecycle retained from the tracer provider that owns every destination. */
 export interface RegisteredOtelPipeline {
-    readonly forceFlush: () => Promise<void>;
-    readonly idGenerator: AgentSpanIdGenerator;
-    readonly shutdown: () => Promise<void>;
+  readonly forceFlush: () => Promise<void>;
+  readonly idGenerator: AgentSpanIdGenerator;
+  readonly shutdown: () => Promise<void>;
 }

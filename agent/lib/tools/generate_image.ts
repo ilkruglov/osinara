@@ -42,14 +42,23 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/workspace-repository.js";
 import type { WorkspaceFileRecord } from "../workspaces/workspace-file-record.js";
-import { readWorkspaceImage, type WorkspaceImageLocation } from "../workspaces/workspace-image-source.js";
+import {
+  readWorkspaceImage,
+  type WorkspaceImageLocation,
+} from "../workspaces/workspace-image-source.js";
 import { imageSourcesSchema } from "../image-generation/image-source-schema.js";
-import { IMAGE_SERIES_RULE, imageKeepSchema } from "../image-generation/image-generation-tool-presentation.js";
+import {
+  IMAGE_SERIES_RULE,
+  imageKeepSchema,
+} from "../image-generation/image-generation-tool-presentation.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
 interface GenerateImageDependencies {
-  readImage(auth: WorkspaceAuthorization, input: WorkspaceImageLocation): Promise<{ bytes: Uint8Array; mediaType: string }>;
+  readImage(
+    auth: WorkspaceAuthorization,
+    input: WorkspaceImageLocation,
+  ): Promise<{ bytes: Uint8Array; mediaType: string }>;
   series: ImagePromptSeries;
   client: {
     assertConfigured(): void;
@@ -80,13 +89,16 @@ interface GenerateImageDependencies {
       operationKey: string,
     ): Promise<WorkspaceFileRecord | null>;
     workspaceId(auth: WorkspaceAuthorization, scope: WorkspaceScope): Promise<string>;
-    writeBinary(auth: WorkspaceAuthorization, input: {
-      bytes: Uint8Array;
-      mediaType: string;
-      operationKey: string;
-      path: string;
-      scope: WorkspaceScope;
-    }): Promise<WorkspaceFileRecord>;
+    writeBinary(
+      auth: WorkspaceAuthorization,
+      input: {
+        bytes: Uint8Array;
+        mediaType: string;
+        operationKey: string;
+        path: string;
+        scope: WorkspaceScope;
+      },
+    ): Promise<WorkspaceFileRecord>;
   };
 }
 
@@ -95,25 +107,37 @@ const IMAGE_SIZES = ["1024x1024", "1536x1024", "1024x1536", "auto"] as const;
 const IMAGE_QUALITIES = ["low", "medium", "high", "auto"] as const;
 const IMAGE_BACKGROUNDS = ["transparent", "opaque", "auto"] as const;
 
-const inputSchema = z.object({
-  images: imageSourcesSchema(),
-  background: z.enum(IMAGE_BACKGROUNDS).describe("transparent, opaque или auto"),
-  // A declaration, not generation input: neither sent to the provider nor part of the hash. It
-  // tells the series check which repeats the user asked for; everything else that echoes an
-  // earlier prompt of the series is refused before the billable call.
-  keep: imageKeepSchema(),
-  prompt: z.string().min(1).max(IMAGE_PROMPT_MAX_LENGTH)
-    .describe("Полная визуальная спецификация изображения без служебных инструкций"),
-  quality: z.enum(IMAGE_QUALITIES).describe("low, medium, high или auto"),
-  size: z.enum(IMAGE_SIZES).describe("1024x1024, 1536x1024, 1024x1536 или auto"),
-}).strict();
+const inputSchema = z
+  .object({
+    images: imageSourcesSchema(),
+    background: z.enum(IMAGE_BACKGROUNDS).describe("transparent, opaque или auto"),
+    // A declaration, not generation input: neither sent to the provider nor part of the hash. It
+    // tells the series check which repeats the user asked for; everything else that echoes an
+    // earlier prompt of the series is refused before the billable call.
+    keep: imageKeepSchema(),
+    prompt: z
+      .string()
+      .min(1)
+      .max(IMAGE_PROMPT_MAX_LENGTH)
+      .describe("Полная визуальная спецификация изображения без служебных инструкций"),
+    quality: z.enum(IMAGE_QUALITIES).describe("low, medium, high или auto"),
+    size: z.enum(IMAGE_SIZES).describe("1024x1024, 1536x1024, 1024x1536 или auto"),
+  })
+  .strict();
 
 type GenerateImageInput = z.infer<typeof inputSchema>;
 
 function parseInput(input: unknown): GenerateImageInput {
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success || parsed.data.images?.some((source) =>
-    [source.path, source.attachmentId, source.telegramMessageId].filter((value) => value !== undefined).length !== 1)) {
+  if (
+    !parsed.success ||
+    parsed.data.images?.some(
+      (source) =>
+        [source.path, source.attachmentId, source.telegramMessageId].filter(
+          (value) => value !== undefined,
+        ).length !== 1,
+    )
+  ) {
     throw new AppError(
       "AGENT_IMAGE_GENERATION_INPUT_INVALID",
       "Не удалось проверить параметры изображения. Уточните описание и формат",
@@ -138,22 +162,40 @@ function outputFilePath(stem: string, mediaType: ImageMediaType): string {
   return `${stem}.${OUTPUT_EXTENSIONS[mediaType]}`;
 }
 
-function inputHash(input: GenerateImageInput, scope: WorkspaceScope, references: ImageGenerationRequest["referenceImages"]): string {
-  return createHash("sha256").update(JSON.stringify({
-    background: input.background,
-    prompt: input.prompt,
-    quality: input.quality,
-    scope,
-    size: input.size,
-    ...(references === undefined ? {} : {
-      images: input.images,
-      referenceHashes: references.map(({ bytes }) => createHash("sha256").update(bytes).digest("hex")),
-    }),
-  }), "utf8").digest("hex");
+function inputHash(
+  input: GenerateImageInput,
+  scope: WorkspaceScope,
+  references: ImageGenerationRequest["referenceImages"],
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        background: input.background,
+        prompt: input.prompt,
+        quality: input.quality,
+        scope,
+        size: input.size,
+        ...(references === undefined
+          ? {}
+          : {
+              images: input.images,
+              referenceHashes: references.map(({ bytes }) =>
+                createHash("sha256").update(bytes).digest("hex"),
+              ),
+            }),
+      }),
+      "utf8",
+    )
+    .digest("hex");
 }
 
 /** The series lives with the application session; a context without one falls back to the Eve session. */
-function seriesKeyOf(ctx: { session: { auth: { current: { attributes: Readonly<Record<string, unknown>> } | null }; id: string } }): string {
+function seriesKeyOf(ctx: {
+  session: {
+    auth: { current: { attributes: Readonly<Record<string, unknown>> } | null };
+    id: string;
+  };
+}): string {
   const id = ctx.session.auth.current?.attributes.applicationSessionId;
   return typeof id === "string" ? id : ctx.session.id;
 }
@@ -179,17 +221,17 @@ function assertOutputMatches(
     file.scope === scope &&
     file.mediaType in OUTPUT_EXTENSIONS &&
     file.path === outputFilePath(expectedPath, file.mediaType as ImageMediaType)
-  ) return;
+  )
+    return;
   throw new AppError(
     "AGENT_IMAGE_GENERATION_REPLAY_MISMATCH",
     "Сохранённое изображение не совпадает с исходным запросом. Создайте новый запрос",
   );
 }
 
-function terminalReservationError(reservation: Extract<
-  ImageGenerationReservation,
-  { state: "ambiguous" | "failed" }
->): AppError {
+function terminalReservationError(
+  reservation: Extract<ImageGenerationReservation, { state: "ambiguous" | "failed" }>,
+): AppError {
   if (reservation.state === "ambiguous") {
     return new AppError(
       "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
@@ -199,9 +241,14 @@ function terminalReservationError(reservation: Extract<
   // A refusal of the series check is an input correction, replayed or not: nothing was started.
   if (reservation.errorCode === "AGENT_IMAGE_PROMPT_REPEATS_SERIES") {
     return new ModelFacingError({
-      category: "input", code: reservation.errorCode, field: "prompt", retryable: true, sideEffectStatus: "not_started",
+      category: "input",
+      code: reservation.errorCode,
+      field: "prompt",
+      retryable: true,
+      sideEffectStatus: "not_started",
       reason: "Этот вызов уже отклонён: prompt повторял прошлые картинки серии",
-      correction: "Напиши вариант заново по текущей просьбе без элементов прошлых картинок; то, что пользователь просил сохранить, перечисли в keep. Повтори вызов один раз с новым prompt.",
+      correction:
+        "Напиши вариант заново по текущей просьбе без элементов прошлых картинок; то, что пользователь просил сохранить, перечисли в keep. Повтори вызов один раз с новым prompt.",
     });
   }
   return new AppError(
@@ -215,24 +262,28 @@ async function settleProviderFailure(
   operationKey: string,
   error: unknown,
 ): Promise<never> {
-  const definitive = isAppError(error) && [
-    "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
-    "AGENT_IMAGE_GENERATION_REJECTED",
-    "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE",
-    "AGENT_IMAGE_EDITING_UNAVAILABLE",
-    "AGENT_IMAGE_EDITING_INPUT_INVALID",
-  ].includes(error.code);
+  const definitive =
+    isAppError(error) &&
+    [
+      "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+      "AGENT_IMAGE_GENERATION_REJECTED",
+      "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE",
+      "AGENT_IMAGE_EDITING_UNAVAILABLE",
+      "AGENT_IMAGE_EDITING_INPUT_INVALID",
+    ].includes(error.code);
   const errorCode = isAppError(error) ? error.code : "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN";
   try {
     if (definitive) await dependencies.operations.markFailed(operationKey, errorCode);
     else await dependencies.operations.markAmbiguous(operationKey, errorCode);
   } catch (ledgerError) {
-    console.error(JSON.stringify({
-      code: "AGENT_IMAGE_GENERATION_LEDGER_SETTLEMENT_FAILED",
-      error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
-      operationKey,
-      providerErrorCode: errorCode,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_IMAGE_GENERATION_LEDGER_SETTLEMENT_FAILED",
+        error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+        operationKey,
+        providerErrorCode: errorCode,
+      }),
+    );
   }
   if (isAppError(error)) throw error;
   throw new AppError(
@@ -260,7 +311,9 @@ async function recoverStartedOperation(
   return replay;
 }
 
-export function createGenerateImageTool(dependencies: GenerateImageDependencies): AnyToolDefinition {
+export function createGenerateImageTool(
+  dependencies: GenerateImageDependencies,
+): AnyToolDefinition {
   return defineTool({
     description: [
       "Когда использовать: создать raster-изображение или отредактировать существующее по просьбе пользователя и сохранить результат новым файлом в workspace.",
@@ -324,21 +377,36 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
           const previous = dependencies.series.previous(seriesKey);
           const repeated = repeatedPromptElements(input.prompt, previous, input.keep ?? []);
           const refused = repeated.length >= IMAGE_SERIES_REPEAT_LIMIT;
-          console.info(JSON.stringify({
-            code: "AGENT_IMAGE_PROMPT_SERIES_CHECK", kept: input.keep?.length ?? 0, previous: previous.length, refused, repeated: repeated.length,
-          }));
+          console.info(
+            JSON.stringify({
+              code: "AGENT_IMAGE_PROMPT_SERIES_CHECK",
+              kept: input.keep?.length ?? 0,
+              previous: previous.length,
+              refused,
+              repeated: repeated.length,
+            }),
+          );
           if (refused) {
-            await dependencies.operations.markFailed(ctx.callId, "AGENT_IMAGE_PROMPT_REPEATS_SERIES");
+            await dependencies.operations.markFailed(
+              ctx.callId,
+              "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+            );
             throw new ModelFacingError({
-              category: "input", code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES", field: "prompt", retryable: true, sideEffectStatus: "not_started",
+              category: "input",
+              code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+              field: "prompt",
+              retryable: true,
+              sideEffectStatus: "not_started",
               reason: `Prompt повторяет прошлые картинки этой серии: ${repeated.slice(0, 8).join(", ")}`,
-              correction: "Напиши вариант заново по текущей просьбе без этих элементов; то, что пользователь просил сохранить из прошлых картинок, перечисли в keep. Повтори вызов один раз с новым prompt.",
+              correction:
+                "Напиши вариант заново по текущей просьбе без этих элементов; то, что пользователь просил сохранить из прошлых картинок, перечисли в keep. Повтори вызов один раз с новым prompt.",
             });
           }
         }
         let generatedImage: Awaited<ReturnType<GenerateImageDependencies["client"]["generate"]>>;
         try {
-          generatedImage = await dependencies.client.generate({ ...request,
+          generatedImage = await dependencies.client.generate({
+            ...request,
             ...(referenceImages === undefined ? {} : { referenceImages }),
             // The accepted job is kept next to the operation so an unknown outcome can be checked
             // against the provider; a ledger hiccup must not fail a job that is already running.
@@ -346,11 +414,13 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
               try {
                 await dependencies.operations.recordProviderJob(ctx.callId, job);
               } catch (error) {
-                console.error(JSON.stringify({
-                  code: "AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED",
-                  error: error instanceof Error ? error.message : String(error),
-                  operationKey: ctx.callId,
-                }));
+                console.error(
+                  JSON.stringify({
+                    code: "AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED",
+                    error: error instanceof Error ? error.message : String(error),
+                    operationKey: ctx.callId,
+                  }),
+                );
               }
             },
           });
@@ -366,22 +436,26 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
             scope,
           });
         } catch (error) {
-          console.error(JSON.stringify({
-            code: "AGENT_IMAGE_GENERATION_PERSISTENCE_FAILED",
-            error: error instanceof Error ? error.message : String(error),
-            operationKey: ctx.callId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_IMAGE_GENERATION_PERSISTENCE_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+              operationKey: ctx.callId,
+            }),
+          );
           try {
             await dependencies.operations.markAmbiguous(
               ctx.callId,
               "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
             );
           } catch (ledgerError) {
-            console.error(JSON.stringify({
-              code: "AGENT_IMAGE_GENERATION_LEDGER_SETTLEMENT_FAILED",
-              error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
-              operationKey: ctx.callId,
-            }));
+            console.error(
+              JSON.stringify({
+                code: "AGENT_IMAGE_GENERATION_LEDGER_SETTLEMENT_FAILED",
+                error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+                operationKey: ctx.callId,
+              }),
+            );
           }
           throw new AppError(
             "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
@@ -392,11 +466,13 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
           await dependencies.operations.complete(ctx.callId, file);
         } catch (error) {
           // The workspace operation is durable, so retaining `started` lets exact-call replay recover it.
-          console.error(JSON.stringify({
-            code: "AGENT_IMAGE_GENERATION_LEDGER_COMPLETION_FAILED",
-            error: error instanceof Error ? error.message : String(error),
-            operationKey: ctx.callId,
-          }));
+          console.error(
+            JSON.stringify({
+              code: "AGENT_IMAGE_GENERATION_LEDGER_COMPLETION_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+              operationKey: ctx.callId,
+            }),
+          );
           throw new AppError(
             "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
             "Изображение создано и сохранено, но завершение операции не подтверждено. Не повторяйте запрос сразу",

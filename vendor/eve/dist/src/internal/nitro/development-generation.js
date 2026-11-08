@@ -75,14 +75,11 @@ function requestDevelopmentGenerationPrune(e) {
 }
 function startDevelopmentGenerationPruning(e, t) {
   t.running = (async () => {
-    for (; t.requested; )
-      ((t.requested = !1),
-        await pruneDevelopmentRuntimeArtifactsSnapshots({ appRoot: e }));
+    for (; t.requested;)
+      ((t.requested = !1), await pruneDevelopmentRuntimeArtifactsSnapshots({ appRoot: e }));
   })()
     .catch((e) => {
-      console.warn(
-        `[eve:dev] failed to prune runtime generations: ${String(e)}`,
-      );
+      console.warn(`[eve:dev] failed to prune runtime generations: ${String(e)}`);
     })
     .finally(() => {
       ((t.running = void 0),

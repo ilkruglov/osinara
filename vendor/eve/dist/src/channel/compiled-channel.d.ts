@@ -8,20 +8,29 @@ import type { Session } from "#channel/session.js";
 import type { SessionAuthContext, TurnPolicy } from "#channel/types.js";
 export declare const CHANNEL_SENTINEL: "eve:channel";
 /** Structural identity shared by public authored channels and compiled channels. */
-export interface ChannelReference<TReceiveTarget = Record<string, unknown>> extends TypedReceiveTarget<TReceiveTarget> {
-    readonly __kind: typeof CHANNEL_SENTINEL;
+export interface ChannelReference<
+  TReceiveTarget = Record<string, unknown>,
+> extends TypedReceiveTarget<TReceiveTarget> {
+  readonly __kind: typeof CHANNEL_SENTINEL;
 }
-export interface CompiledChannel<TState = undefined, TReceiveTarget = Record<string, unknown>, TMetadata extends Record<string, unknown> = Record<string, unknown>> extends ChannelReference<TReceiveTarget> {
-    readonly routes: readonly RouteDefinition<TState>[];
-    readonly adapter: ChannelAdapter<any>;
-    readonly cors?: NormalizedChannelCorsOptions;
-    readonly __metadata?: TMetadata;
-    readonly receive?: (input: {
-        readonly message: string | UserContent;
-        readonly target: Readonly<TReceiveTarget>;
-        readonly auth: SessionAuthContext | null;
-    }, ctx: ChannelReceiveContext<TState>) => Promise<Session>;
-    readonly turnPolicy?: TurnPolicy;
+export interface CompiledChannel<
+  TState = undefined,
+  TReceiveTarget = Record<string, unknown>,
+  TMetadata extends Record<string, unknown> = Record<string, unknown>,
+> extends ChannelReference<TReceiveTarget> {
+  readonly routes: readonly RouteDefinition<TState>[];
+  readonly adapter: ChannelAdapter<any>;
+  readonly cors?: NormalizedChannelCorsOptions;
+  readonly __metadata?: TMetadata;
+  readonly receive?: (
+    input: {
+      readonly message: string | UserContent;
+      readonly target: Readonly<TReceiveTarget>;
+      readonly auth: SessionAuthContext | null;
+    },
+    ctx: ChannelReceiveContext<TState>,
+  ) => Promise<Session>;
+  readonly turnPolicy?: TurnPolicy;
 }
 export declare function isCompiledChannel(value: unknown): value is CompiledChannel;
 export declare function getChannelInstrumentationKind(value: unknown): string | undefined;

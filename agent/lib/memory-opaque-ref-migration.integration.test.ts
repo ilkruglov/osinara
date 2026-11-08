@@ -12,9 +12,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_memory_opaque_ref_migration";
 
 describeWithDatabase("049 opaque memory reference migration", () => {
@@ -33,10 +32,7 @@ describeWithDatabase("049 opaque memory reference migration", () => {
           ('00000000-0000-4000-8000-000000000002');
       `);
 
-      await client.query(await readFile(
-        resolve("migrations/049_opaque_memory_refs.sql"),
-        "utf8",
-      ));
+      await client.query(await readFile(resolve("migrations/049_opaque_memory_refs.sql"), "utf8"));
 
       const refs = await client.query<{ memory_item_id: string; memory_ref: string }>(`
         SELECT memory_item_id::text, memory_ref
@@ -54,18 +50,20 @@ describeWithDatabase("049 opaque memory reference migration", () => {
       await client.query(
         "DELETE FROM memory_items WHERE id = '00000000-0000-4000-8000-000000000001'",
       );
-      await expect(client.query(
-        "SELECT memory_ref FROM memory_item_refs ORDER BY memory_ref",
-      )).resolves.toMatchObject({ rows: [{ memory_ref: stableRef }] });
+      await expect(
+        client.query("SELECT memory_ref FROM memory_item_refs ORDER BY memory_ref"),
+      ).resolves.toMatchObject({ rows: [{ memory_ref: stableRef }] });
 
       // The invariant also covers every future insert, including writers outside the repository.
       await client.query(
         "INSERT INTO memory_items VALUES ('00000000-0000-4000-8000-000000000003')",
       );
-      await expect(client.query<{ memory_ref: string }>(
-        `SELECT memory_ref FROM memory_item_refs
+      await expect(
+        client.query<{ memory_ref: string }>(
+          `SELECT memory_ref FROM memory_item_refs
          WHERE memory_item_id = '00000000-0000-4000-8000-000000000003'`,
-      )).resolves.toMatchObject({
+        ),
+      ).resolves.toMatchObject({
         rows: [{ memory_ref: expect.stringMatching(/^mem_[0-9a-f]{32}$/u) }],
       });
     } finally {

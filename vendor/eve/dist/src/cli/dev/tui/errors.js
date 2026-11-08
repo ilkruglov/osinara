@@ -10,18 +10,14 @@ function isInterruptedError(e) {
   return e instanceof InterruptedError;
 }
 function isAbortLikeError(e) {
-  return e instanceof Error
-    ? e.name === `AbortError` || /\babort(?:ed)?\b/iu.test(e.message)
-    : !1;
+  return e instanceof Error ? e.name === `AbortError` || /\babort(?:ed)?\b/iu.test(e.message) : !1;
 }
 function failureKey(e) {
   return `${e.data.code}:${e.data.message}`;
 }
 function formatFailureMessage(e) {
   let { code: t, message: n } = e.data;
-  return !t || n === t || n.startsWith(`${t}:`) || n.startsWith(`${t} `)
-    ? n
-    : `${t}: ${n}`;
+  return !t || n === t || n.startsWith(`${t}:`) || n.startsWith(`${t} `) ? n : `${t}: ${n}`;
 }
 function failureDetails(e) {
   let t = e.data.details;
@@ -29,11 +25,8 @@ function failureDetails(e) {
   let n = t,
     r = {};
   return (
-    typeof n.semanticErrorId == `string` &&
-      (r.semanticErrorId = n.semanticErrorId),
-    typeof n.hint == `string` &&
-      n.hint.trim().length > 0 &&
-      (r.hint = n.hint.trim()),
+    typeof n.semanticErrorId == `string` && (r.semanticErrorId = n.semanticErrorId),
+    typeof n.hint == `string` && n.hint.trim().length > 0 && (r.hint = n.hint.trim()),
     typeof n.detail == `string` && (r.detail = n.detail),
     r
   );

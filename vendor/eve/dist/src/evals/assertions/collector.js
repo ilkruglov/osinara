@@ -46,10 +46,7 @@ var AssertionCollector = class {
       metadata: e.outcome.metadata,
       failed: !1,
     };
-    return (
-      this.#e.push(t),
-      computePassed(t.severity, t.threshold, t.score, t.failed)
-    );
+    return (this.#e.push(t), computePassed(t.severity, t.threshold, t.score, t.failed));
   }
   async recordRequirement(e) {
     let t = {
@@ -73,9 +70,7 @@ var AssertionCollector = class {
     for (let n of this.#e) {
       if (n.kind === `deferred` && n.spec !== void 0) {
         let t = await n.spec.evaluate(n.selectSubject?.(e) ?? e);
-        ((n.score = t.score),
-          (n.message = t.message),
-          (n.metadata = t.metadata));
+        ((n.score = t.score), (n.message = t.message), (n.metadata = t.metadata));
       }
       t.push({
         name: n.name,

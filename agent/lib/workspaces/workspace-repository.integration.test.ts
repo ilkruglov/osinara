@@ -43,14 +43,15 @@ async function fixture() {
      VALUES ('workspace-owner', 'Владелец'), ('workspace-member', 'Участник')
      RETURNING id, telegram_user_id`,
   );
-  const id = (telegramId: string) => users.rows.find((row) => row.telegram_user_id === telegramId)!.id;
+  const id = (telegramId: string) =>
+    users.rows.find((row) => row.telegram_user_id === telegramId)!.id;
   await database().query(
     `INSERT INTO family_memberships (family_id, user_id, role)
      VALUES ($1, $2, 'owner'), ($1, $3, 'member')`,
     [family.rows[0]!.id, id("workspace-owner"), id("workspace-member")],
   );
   const groups = await database().query<{ id: string; type: string }>(
-     `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
+    `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
       VALUES ($1, '-100-family-workspace', 'Семья', 'family_private', 'addressed_only'),
             ($1, '-100-external-workspace', 'Проект', 'external', 'addressed_only')
       RETURNING id, type`,
@@ -95,7 +96,12 @@ describeWithDatabase("workspace repository", () => {
     const ownerPersonal = ownerMounts.find((mount) => mount.mountPoint === "personal")!;
     const memberMounts = await repository.mounts(member);
     const memberPersonal = memberMounts.find((mount) => mount.mountPoint === "personal")!;
-    await writeWorkspaceFile(root, ownerPersonal.workspaceId, "notes/private.txt", Buffer.from("секрет владельца"));
+    await writeWorkspaceFile(
+      root,
+      ownerPersonal.workspaceId,
+      "notes/private.txt",
+      Buffer.from("секрет владельца"),
+    );
     await expect(listWorkspaceStoredFiles(root, memberPersonal.workspaceId)).resolves.toEqual([]);
 
     const ownerFamily = ownerMounts.find((mount) => mount.mountPoint === "family")!;
@@ -106,8 +112,9 @@ describeWithDatabase("workspace repository", () => {
       Buffer.from("общий файл"),
     );
     const memberFamily = memberMounts.find((mount) => mount.mountPoint === "family")!;
-    await expect(readWorkspaceFile(root, memberFamily.workspaceId, "shared/visible.txt"))
-      .resolves.toEqual(Buffer.from("общий файл"));
+    await expect(
+      readWorkspaceFile(root, memberFamily.workspaceId, "shared/visible.txt"),
+    ).resolves.toEqual(Buffer.from("общий файл"));
   });
 
   it("revokes delegated trusted roots when family membership is removed", async () => {
@@ -125,10 +132,10 @@ describeWithDatabase("workspace repository", () => {
     };
 
     await expect(repository.trustedRoots(member)).resolves.toHaveLength(2);
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [f.familyId, f.memberId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      f.familyId,
+      f.memberId,
+    ]);
 
     await expect(repository.trustedRoots(member)).rejects.toThrowError(
       /AGENT_WORKSPACE_ACCESS_REVOKED/u,
@@ -186,11 +193,7 @@ describeWithDatabase("workspace repository", () => {
       path: familyPath,
       scope: "family",
     });
-    const familyInboxRead = await binaries.readTelegramInboxAttachment(
-      familyAuth,
-      "family",
-      "10",
-    );
+    const familyInboxRead = await binaries.readTelegramInboxAttachment(familyAuth, "family", "10");
     expect(familyInboxRead.bytes).toEqual(bytes);
     expect(familyInboxRead.file.path).toBe(familyPath);
   });
@@ -259,7 +262,12 @@ describeWithDatabase("workspace repository", () => {
       userId: null,
     };
     const groupMount = (await repository.mounts(external))[0]!;
-    await writeWorkspaceFile(root, groupMount.workspaceId, "project/data.txt", Buffer.from("данные проекта"));
+    await writeWorkspaceFile(
+      root,
+      groupMount.workspaceId,
+      "project/data.txt",
+      Buffer.from("данные проекта"),
+    );
     await repository.deleteFile(external, "group", "project/data.txt", "delete-group");
     await expect(listWorkspaceStoredFiles(root, groupMount.workspaceId)).resolves.toEqual([]);
   });
@@ -310,10 +318,9 @@ describeWithDatabase("workspace repository", () => {
       if (scenario === "deleted") {
         await database().query("DELETE FROM telegram_groups WHERE id = $1", [f.externalGroupId]);
       } else {
-        await database().query(
-          "UPDATE telegram_groups SET type = 'family_private' WHERE id = $1",
-          [f.externalGroupId],
-        );
+        await database().query("UPDATE telegram_groups SET type = 'family_private' WHERE id = $1", [
+          f.externalGroupId,
+        ]);
       }
 
       await expect(repository.externalGroupRoot(external)).rejects.toThrowError(
@@ -336,7 +343,12 @@ describeWithDatabase("workspace repository", () => {
       userId: f.ownerId,
     };
     const groupMount = (await repository.mounts(external))[0]!;
-    await writeWorkspaceFile(root, groupMount.workspaceId, "project/private.txt", Buffer.from("удаляемые данные"));
+    await writeWorkspaceFile(
+      root,
+      groupMount.workspaceId,
+      "project/private.txt",
+      Buffer.from("удаляемые данные"),
+    );
     const workspace = await database().query<{ id: string }>(
       "SELECT id FROM workspaces WHERE group_id = $1",
       [f.externalGroupId],
@@ -349,8 +361,9 @@ describeWithDatabase("workspace repository", () => {
     await expect(access(workspaceDirectory(root, workspace.rows[0]!.id))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    await expect(database().query("SELECT * FROM workspace_deletion_jobs"))
-      .resolves.toMatchObject({ rowCount: 0 });
+    await expect(database().query("SELECT * FROM workspace_deletion_jobs")).resolves.toMatchObject({
+      rowCount: 0,
+    });
   });
 
   it("uses shell-created files directly without a database synchronization step", async () => {
@@ -377,22 +390,26 @@ describeWithDatabase("workspace repository", () => {
       expect.objectContaining({ path: "shell/executable" }),
       expect.objectContaining({ path: "shell/notes.txt" }),
     ]);
-    await expect(readWorkspaceFile(root, personal.workspaceId, "shell/notes.txt"))
-      .resolves.toEqual(Buffer.from("индексируемая заметка"));
-    await expect(readWorkspaceFile(root, personal.workspaceId, "shell/executable"))
-      .resolves.toEqual(Buffer.from("#!/bin/sh\nprintf ready\n"));
+    await expect(readWorkspaceFile(root, personal.workspaceId, "shell/notes.txt")).resolves.toEqual(
+      Buffer.from("индексируемая заметка"),
+    );
+    await expect(
+      readWorkspaceFile(root, personal.workspaceId, "shell/executable"),
+    ).resolves.toEqual(Buffer.from("#!/bin/sh\nprintf ready\n"));
 
     const deliveries = createWorkspaceFileDeliveryRepository(
       createWorkspaceBinaryRepository(root, repository),
     );
-    await expect(deliveries.begin(owner, {
-      chatId: "101",
-      operationKey: "shell-file-delivery",
-      path: "shell/notes.txt",
-      presentation: "document",
-      scope: "personal",
-      turnId: null,
-    })).resolves.toMatchObject({
+    await expect(
+      deliveries.begin(owner, {
+        chatId: "101",
+        operationKey: "shell-file-delivery",
+        path: "shell/notes.txt",
+        presentation: "document",
+        scope: "personal",
+        turnId: null,
+      }),
+    ).resolves.toMatchObject({
       file: { path: "shell/notes.txt" },
       status: "reserved",
     });

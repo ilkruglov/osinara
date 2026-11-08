@@ -24,7 +24,9 @@ const MAX_SESSIONS = 500;
 const MAX_FINGERPRINTS_PER_SESSION = 50;
 
 export function sandboxCommandFingerprint(command: string, workingDirectory?: string): string {
-  return createHash("sha256").update(`${workingDirectory ?? ""}\n${command}`).digest("hex");
+  return createHash("sha256")
+    .update(`${workingDirectory ?? ""}\n${command}`)
+    .digest("hex");
 }
 
 export interface SandboxRepeatGuard {

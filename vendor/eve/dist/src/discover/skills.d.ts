@@ -13,21 +13,21 @@ export declare const DISCOVER_SKILL_MARKDOWN_MISSING = "discover/skill-markdown-
  * Input for discovering authored skills.
  */
 interface DiscoverSkillsInput {
-    agentRoot: string;
-    /**
-     * Optional {@link ProjectSource} used for all filesystem reads. Defaults to
-     * a disk-backed source so disk callers keep their current behaviour.
-     */
-    source?: ProjectSource;
-    skillsDirectoryPath?: string;
-    skillsLogicalPath?: string;
+  agentRoot: string;
+  /**
+   * Optional {@link ProjectSource} used for all filesystem reads. Defaults to
+   * a disk-backed source so disk callers keep their current behaviour.
+   */
+  source?: ProjectSource;
+  skillsDirectoryPath?: string;
+  skillsLogicalPath?: string;
 }
 /**
  * Result of discovering authored skills.
  */
 interface DiscoverSkillsResult {
-    diagnostics: DiscoverDiagnostic[];
-    skills: SkillSourceRef[];
+  diagnostics: DiscoverDiagnostic[];
+  skills: SkillSourceRef[];
 }
 /**
  * Discovers authored skills from either flat

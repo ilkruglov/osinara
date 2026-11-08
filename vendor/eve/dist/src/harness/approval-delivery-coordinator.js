@@ -27,17 +27,12 @@ const UNAUTHENTICATED_APPROVAL_FEEDBACK = `Authentication is required to respond
 function shouldPrepareApprovalPolicyTools(e) {
   let t = getPendingInputBatches(e.session.state),
     n = [
-      ...(e.stepInput?.attributedInputResponses ?? []).map(
-        ({ response: e }) => e,
-      ),
+      ...(e.stepInput?.attributedInputResponses ?? []).map(({ response: e }) => e),
       ...(e.stepInput?.inputResponses ?? []),
     ];
   if (
     t.some((e) =>
-      e.requests.some(
-        (e) =>
-          isApprovalRequest(e) && n.some((t) => t.requestId === e.requestId),
-      ),
+      e.requests.some((e) => isApprovalRequest(e) && n.some((t) => t.requestId === e.requestId)),
     )
   )
     return !1;
@@ -46,10 +41,7 @@ function shouldPrepareApprovalPolicyTools(e) {
     (e) =>
       e.expiresAt > r &&
       (e.status === `pending` ||
-        (e.authorizationChallenges?.some(
-          (e) => getAuthorizationResult(e.name) !== void 0,
-        ) ??
-          !1)),
+        (e.authorizationChallenges?.some((e) => getAuthorizationResult(e.name) !== void 0) ?? !1)),
   );
 }
 async function coordinateApprovalDelivery(i) {
@@ -66,8 +58,7 @@ async function coordinateApprovalDelivery(i) {
     g = new Set(f.settlements.map((e) => e.requestId)),
     _ = hasResponseForRequest(i.stepInput, g),
     v = _ ? removeConsumedResponses(i.stepInput, g) : i.stepInput;
-  if (_ && h.length === 0 && !hasMeaningfulInput(v))
-    return deliveryResult(d, v, `park`);
+  if (_ && h.length === 0 && !hasMeaningfulInput(v)) return deliveryResult(d, v, `park`);
   if (p.length === 0) return deliveryResult(d, v);
   let y = v,
     b = new Set(p.flatMap((e) => e.responseAuthRequiredRequestIds ?? [])),
@@ -101,10 +92,7 @@ async function coordinateApprovalDelivery(i) {
     if (s === void 0 || !isApprovalRequest(s)) continue;
     if (!b.has(o.requestId)) {
       let r = contextStorage.getStore(),
-        s =
-          i === void 0
-            ? (r?.get(AuthKey) ?? r?.get(SessionKey)?.auth.current ?? null)
-            : i;
+        s = i === void 0 ? (r?.get(AuthKey) ?? r?.get(SessionKey)?.auth.current ?? null) : i;
       if (s !== null && (o.optionId === `approve` || o.optionId === `cancel`)) {
         let e = settleDirectApprovalResponse({
           actor: s,
@@ -150,18 +138,9 @@ async function coordinateApprovalDelivery(i) {
     ((d = { ...d, state: l.state }), (E ||= l.changed));
   }
   let k = removeConsumedResponses(y, T);
-  if (T.size > 0)
-    return deliveryResult(
-      d,
-      k,
-      E ? `continue-coordination` : `continue`,
-      [],
-      w,
-    );
+  if (T.size > 0) return deliveryResult(d, k, E ? `continue-coordination` : `continue`, [], w);
   if (E) return deliveryResult(d, k, `continue`, [], w);
-  let A = new Set(
-    getPendingAuthorization(d.state)?.challenges.map((e) => e.name) ?? [],
-  );
+  let A = new Set(getPendingAuthorization(d.state)?.challenges.map((e) => e.name) ?? []);
   for (let e of D) {
     if (e.status === `authorization-required`) {
       let t = e.authorizationChallenges ?? [];
@@ -171,11 +150,7 @@ async function coordinateApprovalDelivery(i) {
       }
     }
     let t = S.get(e.requestId);
-    if (
-      t === void 0 ||
-      getActiveApprovalCandidate(d.state, e.candidateId) === void 0
-    )
-      continue;
+    if (t === void 0 || getActiveApprovalCandidate(d.state, e.candidateId) === void 0) continue;
     let n = await authorizeCandidate({
       candidateId: e.candidateId,
       now: a,
@@ -185,9 +160,7 @@ async function coordinateApprovalDelivery(i) {
       tools: i.tools,
     });
     ((d = n.session), (E ||= n.didCommit), C.push(...n.challenges));
-    let r = getApprovalAuditState(d.state).settlements.find(
-      (t) => t.requestId === e.requestId,
-    );
+    let r = getApprovalAuditState(d.state).settlements.find((t) => t.requestId === e.requestId);
     r !== void 0 && h.push(r);
   }
   let j = appendSettledResponses(k, h);
@@ -195,12 +168,7 @@ async function coordinateApprovalDelivery(i) {
     ? deliveryResult(d, j, `continue`)
     : E
       ? deliveryResult(d, j, `continue-coordination`)
-      : deliveryResult(
-          d,
-          j,
-          C.length > 0 ? `authorization-required` : `continue`,
-          C,
-        );
+      : deliveryResult(d, j, C.length > 0 ? `authorization-required` : `continue`, C);
 }
 async function authorizeCandidate(e) {
   let t = {
@@ -318,9 +286,8 @@ function failCandidate(e) {
 }
 function hasResponseForRequest(e, t) {
   return (
-    e?.attributedInputResponses?.some(({ response: e }) =>
-      t.has(e.requestId),
-    ) === !0 || e?.inputResponses?.some((e) => t.has(e.requestId)) === !0
+    e?.attributedInputResponses?.some(({ response: e }) => t.has(e.requestId)) === !0 ||
+    e?.inputResponses?.some((e) => t.has(e.requestId)) === !0
   );
 }
 function hasMeaningfulInput(e) {
@@ -347,9 +314,7 @@ function appendSettledResponses(e, t) {
 }
 function removeConsumedResponses(e, t) {
   if (e === void 0) return;
-  let n = (e.attributedInputResponses ?? []).filter(
-      ({ response: e }) => !t.has(e.requestId),
-    ),
+  let n = (e.attributedInputResponses ?? []).filter(({ response: e }) => !t.has(e.requestId)),
     r = [
       ...(e.inputResponses ?? []).filter((e) => !t.has(e.requestId)),
       ...n.map(({ response: e }) => e),
@@ -360,12 +325,7 @@ function deliveryResult(e, t, n = `continue`, r = [], i = []) {
   return { challenges: r, feedback: i, kind: n, session: e, stepInput: t };
 }
 function approvalCandidateIdPrefix(e, t) {
-  let n = [
-    t.authenticator,
-    t.issuer ?? ``,
-    t.principalType,
-    t.principalId,
-  ].join(`:`);
+  let n = [t.authenticator, t.issuer ?? ``, t.principalType, t.principalId].join(`:`);
   return `${encodeCandidateIdPart(e)}.${encodeCandidateIdPart(n)}`;
 }
 function encodeCandidateIdPart(e) {
@@ -377,10 +337,7 @@ async function withAuthorizerTimeout(e) {
     return await Promise.race([
       Promise.resolve(e),
       new Promise((e, n) => {
-        t = setTimeout(
-          () => n(Error(`Approval response authorizer timed out.`)),
-          1e4,
-        );
+        t = setTimeout(() => n(Error(`Approval response authorizer timed out.`)), 1e4);
       }),
     ]);
   } finally {

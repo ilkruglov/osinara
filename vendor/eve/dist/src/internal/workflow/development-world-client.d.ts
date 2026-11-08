@@ -6,7 +6,7 @@ import type { World } from "#compiled/@workflow/world/index.js";
  * retry budget.
  */
 export declare class MissingDevelopmentGenerationError extends Error {
-    constructor(generationId: string, cause?: unknown);
+  constructor(generationId: string, cause?: unknown);
 }
 /**
  * Worker-side Workflow World: an interface-faithful shim whose every method

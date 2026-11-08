@@ -12,8 +12,7 @@ async function runSetCommand(e, r, i, a = defaultDependencies) {
     return;
   }
   let o = {
-    model:
-      i.model === void 0 ? { kind: `keep` } : { kind: `set`, value: i.model },
+    model: i.model === void 0 ? { kind: `keep` } : { kind: `set`, value: i.model },
     reasoning:
       i.reasoning === void 0
         ? { kind: `keep` }
@@ -30,10 +29,7 @@ async function runSetCommand(e, r, i, a = defaultDependencies) {
     }
     e.log(formatApplyModelSettingsOutcome(n));
   } catch (t) {
-    fail(
-      e,
-      `Couldn't update model settings: ${t instanceof Error ? t.message : String(t)}`,
-    );
+    fail(e, `Couldn't update model settings: ${t instanceof Error ? t.message : String(t)}`);
   }
 }
 export { runSetCommand };

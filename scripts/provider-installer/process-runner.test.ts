@@ -21,11 +21,13 @@ describe("runHostCommand", () => {
 
     await expect(failure).rejects.toSatisfy((error: unknown) => {
       const message = error instanceof Error ? error.message : "";
-      return message.includes("service unhealthy")
-        && message.includes("[СКРЫТО]")
-        && !message.includes("super-secret-value")
-        && !message.includes("bearer-secret")
-        && message.length < 3_000;
+      return (
+        message.includes("service unhealthy") &&
+        message.includes("[СКРЫТО]") &&
+        !message.includes("super-secret-value") &&
+        !message.includes("bearer-secret") &&
+        message.length < 3_000
+      );
     });
   });
 });

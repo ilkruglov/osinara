@@ -7,6 +7,6 @@
  * collects the generated service.
  */
 export declare function copyHostMiddlewareFunctions(input: {
-    readonly hostOutputDirectory: string;
-    readonly serviceOutputDirectory: string;
+  readonly hostOutputDirectory: string;
+  readonly serviceOutputDirectory: string;
 }): Promise<void>;

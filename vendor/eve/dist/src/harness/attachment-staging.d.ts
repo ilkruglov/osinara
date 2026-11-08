@@ -14,12 +14,18 @@ export declare const ATTACHMENTS_ROOT = "/workspace/attachments";
  * Remote HTTP URLs pass through for provider-side fetches; existing
  * `eve-sandbox:` refs pass through so staging is idempotent.
  */
-export declare function stageAttachmentsForAdapter(content: string | UserContent, sandbox: SandboxSession, adapterCtx: ChannelAdapterContext): Promise<string | UserContent>;
+export declare function stageAttachmentsForAdapter(
+  content: string | UserContent,
+  sandbox: SandboxSession,
+  adapterCtx: ChannelAdapterContext,
+): Promise<string | UserContent>;
 /**
  * Context-bound variant of {@link stageAttachmentsForAdapter}. Returns
  * the input unchanged when there is no active sandbox or no file parts.
  */
-export declare function stageAttachmentsToSandbox(message: string | UserContent): Promise<string | UserContent>;
+export declare function stageAttachmentsToSandbox(
+  message: string | UserContent,
+): Promise<string | UserContent>;
 /**
  * Hydrates `eve-sandbox:` file refs for a single model call.
  *
@@ -27,4 +33,6 @@ export declare function stageAttachmentsToSandbox(message: string | UserContent)
  * become text references to their sandbox path. The returned messages must
  * not be written back to session history, which stays ref-only across steps.
  */
-export declare function hydrateSandboxAttachments(messages: readonly ModelMessage[]): Promise<ModelMessage[]>;
+export declare function hydrateSandboxAttachments(
+  messages: readonly ModelMessage[],
+): Promise<ModelMessage[]>;

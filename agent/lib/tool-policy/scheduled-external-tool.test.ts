@@ -50,11 +50,13 @@ describe("scheduled external tool", () => {
   it("authorizes before executing the underlying tool", async () => {
     authorizeAgentScheduleExecution.mockResolvedValue(undefined);
     const execute = vi.fn().mockResolvedValue({ ok: true });
-    const tool = scheduledExternalTool(defineTool({
-      description: "test",
-      execute,
-      inputSchema: z.object({}).strict(),
-    }) as never);
+    const tool = scheduledExternalTool(
+      defineTool({
+        description: "test",
+        execute,
+        inputSchema: z.object({}).strict(),
+      }) as never,
+    );
 
     await expect(tool.execute({}, context())).resolves.toEqual({ ok: true });
     expect(authorizeAgentScheduleExecution).toHaveBeenCalledWith({
@@ -67,7 +69,8 @@ describe("scheduled external tool", () => {
       scope: "group",
       telegramChatId: "-1001",
     });
-    expect(authorizeAgentScheduleExecution.mock.invocationCallOrder[0])
-      .toBeLessThan(execute.mock.invocationCallOrder[0]!);
+    expect(authorizeAgentScheduleExecution.mock.invocationCallOrder[0]).toBeLessThan(
+      execute.mock.invocationCallOrder[0]!,
+    );
   });
 });

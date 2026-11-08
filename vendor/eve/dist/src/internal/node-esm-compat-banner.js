@@ -59,16 +59,10 @@ function createNodeEsmCompatBannerPlugin(e = {}) {
     },
   };
 }
-function createPrependedLineSourceMap({
-  insertedLineCount: e,
-  source: t,
-  sourceContent: n,
-}) {
+function createPrependedLineSourceMap({ insertedLineCount: e, source: t, sourceContent: n }) {
   let r = n.split(`
 `).length,
-    i = Array.from({ length: r }, (e, t) =>
-      encodeVlqFields(t === 0 ? [0, 0, 0, 0] : [0, 0, 1, 0]),
-    );
+    i = Array.from({ length: r }, (e, t) => encodeVlqFields(t === 0 ? [0, 0, 0, 0] : [0, 0, 1, 0]));
   return {
     version: 3,
     sources: [t],
@@ -87,9 +81,7 @@ function encodeVlqInteger(e) {
     let e = t & 31;
     ((t >>>= 5),
       t > 0 && (e |= 32),
-      (n += `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`[
-        e
-      ]));
+      (n += `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`[e]));
   } while (t > 0);
   return n;
 }

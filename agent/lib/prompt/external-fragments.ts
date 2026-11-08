@@ -31,8 +31,7 @@ export function externalPurposeSection(
   const pictures = options.pictures && capabilities.has("generate_image");
   const purposes = [
     ALWAYS_AVAILABLE_PURPOSE,
-    ...CAPABILITY_PURPOSES
-      .filter(([capability]) => capabilities.has(capability))
+    ...CAPABILITY_PURPOSES.filter(([capability]) => capabilities.has(capability))
       .filter(([capability]) => capability !== "fetch_telegram_avatars" || pictures)
       .map(([, purpose]) => purpose),
   ];

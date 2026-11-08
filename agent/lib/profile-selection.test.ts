@@ -14,17 +14,16 @@ import {
   PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS,
   PROFILE_CONTEXT_MAX_SUBJECTS,
 } from "./memory-config.js";
-import {
-  selectProfileClaims,
-  type ProfileClaimCandidate,
-} from "./profile-selection.js";
+import { selectProfileClaims, type ProfileClaimCandidate } from "./profile-selection.js";
 
 const NOW = new Date("2026-08-08T12:00:00.000Z");
 
-function candidate(input: Partial<ProfileClaimCandidate> & {
-  memoryRef: string;
-  subjectRef: string;
-}): ProfileClaimCandidate {
+function candidate(
+  input: Partial<ProfileClaimCandidate> & {
+    memoryRef: string;
+    subjectRef: string;
+  },
+): ProfileClaimCandidate {
   return {
     attribute: null,
     claimStatus: "active",
@@ -55,11 +54,13 @@ describe("R3 profile selection", () => {
       "current_author",
       "retrieval_related",
     ] as const;
-    const candidates = priorities.map((priority, index) => candidate({
-      memoryRef: `mem_${String(index).padStart(32, "0")}`,
-      priority,
-      subjectRef: `subj_${String(index).padStart(32, "0")}`,
-    }));
+    const candidates = priorities.map((priority, index) =>
+      candidate({
+        memoryRef: `mem_${String(index).padStart(32, "0")}`,
+        priority,
+        subjectRef: `subj_${String(index).padStart(32, "0")}`,
+      }),
+    );
 
     const selected = selectProfileClaims(candidates, NOW);
 
@@ -76,12 +77,13 @@ describe("R3 profile selection", () => {
     const oversized = "я".repeat(PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS + 1);
     const candidates = Array.from(
       { length: PROFILE_CONTEXT_MAX_CLAIMS_PER_SUBJECT + 5 },
-      (_, index) => candidate({
-        content: index === 0 ? oversized : `Устойчивая запись ${index} ${"я".repeat(300)}`,
-        memoryRef: `mem_${String(index).padStart(32, "0")}`,
-        priority: "current_author",
-        subjectRef: "subj_00000000000000000000000000000001",
-      }),
+      (_, index) =>
+        candidate({
+          content: index === 0 ? oversized : `Устойчивая запись ${index} ${"я".repeat(300)}`,
+          memoryRef: `mem_${String(index).padStart(32, "0")}`,
+          priority: "current_author",
+          subjectRef: "subj_00000000000000000000000000000001",
+        }),
     );
     candidates.push(
       candidate({
@@ -106,11 +108,13 @@ describe("R3 profile selection", () => {
 
     expect(claims.length).toBeLessThanOrEqual(PROFILE_CONTEXT_MAX_CLAIMS_PER_SUBJECT);
     expect(selected.totalCharacters).toBeLessThanOrEqual(PROFILE_CONTEXT_MAX_CHARACTERS);
-    expect(selected.subjects[0]!.totalCharacters)
-      .toBeLessThanOrEqual(PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS);
+    expect(selected.subjects[0]!.totalCharacters).toBeLessThanOrEqual(
+      PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS,
+    );
     expect(claims.some((claim) => claim.content === oversized)).toBe(false);
-    expect(claims.every((claim) => claim.sensitivity === "normal" && claim.kind !== "episode"))
-      .toBe(true);
+    expect(
+      claims.every((claim) => claim.sensitivity === "normal" && claim.kind !== "episode"),
+    ).toBe(true);
   });
 
   it("marks a subject dormant after 60 days and reactivates it on a verified message", () => {
@@ -146,26 +150,71 @@ describe("R3 profile selection", () => {
       }),
     ];
 
-    expect(selectProfileClaims(candidates, NOW))
-      .toEqual(selectProfileClaims([...candidates].reverse(), NOW));
+    expect(selectProfileClaims(candidates, NOW)).toEqual(
+      selectProfileClaims([...candidates].reverse(), NOW),
+    );
   });
 
   it("puts the communication-style slot before every other slot", () => {
-    const selection = selectProfileClaims([
-      candidate({ attribute: "работа", content: "Логист", kind: "profile", memoryRef: "mem_1", subjectRef: "subj_1" }),
-      candidate({ attribute: "общение с Мией", content: "Просил шутки не только про логиста", kind: "profile", memoryRef: "mem_2", subjectRef: "subj_1" }),
-      candidate({ attribute: "город", content: "Тула", kind: "profile", memoryRef: "mem_3", subjectRef: "subj_1" }),
-    ], NOW);
+    const selection = selectProfileClaims(
+      [
+        candidate({
+          attribute: "работа",
+          content: "Логист",
+          kind: "profile",
+          memoryRef: "mem_1",
+          subjectRef: "subj_1",
+        }),
+        candidate({
+          attribute: "общение с Мией",
+          content: "Просил шутки не только про логиста",
+          kind: "profile",
+          memoryRef: "mem_2",
+          subjectRef: "subj_1",
+        }),
+        candidate({
+          attribute: "город",
+          content: "Тула",
+          kind: "profile",
+          memoryRef: "mem_3",
+          subjectRef: "subj_1",
+        }),
+      ],
+      NOW,
+    );
 
-    expect(selection.subjects[0]!.claims.map((claim) => claim.memoryRef)).toEqual(["mem_2", "mem_3", "mem_1"]);
+    expect(selection.subjects[0]!.claims.map((claim) => claim.memoryRef)).toEqual([
+      "mem_2",
+      "mem_3",
+      "mem_1",
+    ]);
   });
 
   it("puts attribute slots first and renders the slot name", () => {
-    const selection = selectProfileClaims([
-      candidate({ content: "Любит кофе", kind: "preference", memoryRef: "mem_2", subjectRef: "subj_1" }),
-      candidate({ attribute: "работа", content: "Логист", kind: "profile", memoryRef: "mem_1", subjectRef: "subj_1" }),
-      candidate({ content: "Родился в Туле", kind: "profile", memoryRef: "mem_3", subjectRef: "subj_1" }),
-    ], NOW);
+    const selection = selectProfileClaims(
+      [
+        candidate({
+          content: "Любит кофе",
+          kind: "preference",
+          memoryRef: "mem_2",
+          subjectRef: "subj_1",
+        }),
+        candidate({
+          attribute: "работа",
+          content: "Логист",
+          kind: "profile",
+          memoryRef: "mem_1",
+          subjectRef: "subj_1",
+        }),
+        candidate({
+          content: "Родился в Туле",
+          kind: "profile",
+          memoryRef: "mem_3",
+          subjectRef: "subj_1",
+        }),
+      ],
+      NOW,
+    );
 
     const claims = selection.subjects[0]!.claims;
     expect(claims.map((claim) => claim.memoryRef)).toEqual(["mem_1", "mem_3", "mem_2"]);

@@ -111,7 +111,11 @@ export function genericApprovalFacts(input: Record<string, unknown>): string[] {
 
 function requireArgv(input: Record<string, unknown>): string[] {
   const argv = input.argv;
-  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((item) => typeof item === "string")) {
+  if (
+    !Array.isArray(argv) ||
+    argv.length === 0 ||
+    !argv.every((item) => typeof item === "string")
+  ) {
     throw new AppError(
       "AGENT_APPROVAL_INPUT_INVALID",
       "Не удалось показать параметры команды Google Workspace",
@@ -133,9 +137,8 @@ function flagFacts(argv: readonly string[]): string[] {
     if (!item.startsWith("--") || item === "--params" || item.startsWith("--params=")) continue;
     const value = argv[index + 1];
     // A value-arity flag whose value is missing must not be reported as an enabled switch.
-    const readable = value === undefined || value.startsWith("--")
-      ? "указан"
-      : readableScalar(value);
+    const readable =
+      value === undefined || value.startsWith("--") ? "указан" : readableScalar(value);
     if (readable !== null) facts.push(`${flatten(item.slice(2))}: ${readable}`);
   }
   return facts;
@@ -192,10 +195,7 @@ export function googleWorkspaceFacts(input: Record<string, unknown>): string[] {
  * prompt must not keep promising that the action "будет выполнено". Only an exact known sentence is
  * removed, so a prompt composed by an older release is left untouched instead of being truncated.
  */
-export function stripApprovalConsequence(
-  prompt: string,
-  consequences: Iterable<string>,
-): string {
+export function stripApprovalConsequence(prompt: string, consequences: Iterable<string>): string {
   for (const consequence of consequences) {
     for (const suffix of [`\n\n${consequence}`, `\n\nЧто произойдёт: ${consequence}`]) {
       // Вторая форма — окно расписания прошлого релиза: такие промпты могут висеть pending

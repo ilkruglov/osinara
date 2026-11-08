@@ -42,11 +42,12 @@ export function createTelegramAttachmentMaterializer(
     auth: WorkspaceAuthorization,
     attachmentId: string,
   ): Promise<StoredTelegramAttachment> => {
-    const scope = auth.groupType === "family_private"
-      ? "family"
-      : auth.groupType === "external"
-        ? "group"
-        : null;
+    const scope =
+      auth.groupType === "family_private"
+        ? "family"
+        : auth.groupType === "external"
+          ? "group"
+          : null;
     if (scope === null) {
       throw new AppError(
         "AGENT_TELEGRAM_ATTACHMENT_SCOPE_FORBIDDEN",

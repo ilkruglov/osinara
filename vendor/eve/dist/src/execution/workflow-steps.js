@@ -1,7 +1,4 @@
-import {
-  callAdapterEventHandler,
-  defaultDeliverResult,
-} from "#channel/adapter.js";
+import { callAdapterEventHandler, defaultDeliverResult } from "#channel/adapter.js";
 import {
   AuthKey,
   CapabilitiesKey,
@@ -19,10 +16,7 @@ import {
   stampMessageStreamEvent,
 } from "#protocol/message.js";
 import { contextStorage } from "#context/container.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 import {
   emitTurnPreamble,
   getHarnessEmissionState,
@@ -32,27 +26,18 @@ import {
 import { createWorkflowRuntime } from "#execution/workflow-runtime.js";
 import { resolveWorkflowCallbackBaseUrl } from "#execution/workflow-callback-url.js";
 import { deserializeContext, serializeContext } from "#context/serialize.js";
-import {
-  createDurableSessionState,
-  readDurableSession,
-} from "#execution/durable-session-store.js";
+import { createDurableSessionState, readDurableSession } from "#execution/durable-session-store.js";
 import {
   dispatchDynamicSubagentEvent,
   refreshDynamicSessionSubagentsForRuntimeRevision,
 } from "#context/dynamic-subagent-lifecycle.js";
-import {
-  hydrateDurableSession,
-  refreshSessionFromTurnAgent,
-} from "#execution/session.js";
+import { hydrateDurableSession, refreshSessionFromTurnAgent } from "#execution/session.js";
 import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
 import {
   TASK_UPDATE_SESSION_INSTRUCTION,
   isTaskOwnedSerializedContext,
 } from "#execution/tasks/child/instructions.js";
-import {
-  TASK_UPDATE_TOOL_NAME,
-  isTaskToolAvailable,
-} from "#runtime/framework-tools/tasks.js";
+import { TASK_UPDATE_TOOL_NAME, isTaskToolAvailable } from "#runtime/framework-tools/tasks.js";
 import { coalesceTurnInputs } from "#harness/messages.js";
 import { buildAdapterContext } from "#channel/adapter-context.js";
 import { runStep } from "#context/run-step.js";
@@ -70,21 +55,14 @@ import { dispatchStreamEventHooks } from "#context/hook-lifecycle.js";
 import { reconcileSessionContinuationToken } from "#execution/reconcile-session-continuation-token.js";
 import { activeTurnId } from "#harness/active-turn-id.js";
 import { hasPendingInputBatch } from "#harness/input-requests.js";
-import {
-  getTurnUsageState,
-  takeSessionUsageDelta,
-  toUsage,
-} from "#harness/turn-tag-state.js";
+import { getTurnUsageState, takeSessionUsageDelta, toUsage } from "#harness/turn-tag-state.js";
 import {
   CallbackBaseUrlKey,
   PendingAuthorizationResultKey,
   clearPendingAuthorization,
   getPendingAuthorization,
 } from "#harness/authorization.js";
-import {
-  isTurnCancellation,
-  throwIfTurnAborted,
-} from "#harness/turn-cancellation.js";
+import { isTurnCancellation, throwIfTurnAborted } from "#harness/turn-cancellation.js";
 import { preserveSerializedSessionDynamicModelSelection } from "#context/serialized-dynamic-model-selection.js";
 import { getRuntimeActionRequestKey } from "#runtime/actions/keys.js";
 import {
@@ -111,10 +89,7 @@ import { matchAuthorizationCallbacks } from "#execution/authorization-callback-m
 import { readTurnSleepDurationMs } from "#harness/turn-sleep.js";
 import { forwardTaskEventToSessionCallback } from "#execution/task-event-callback.js";
 import { resolveEffectiveOutputSchema } from "#execution/effective-output-schema.js";
-import {
-  buildRuntimeIdentity,
-  createExecutionNodeStep,
-} from "#execution/node-step.js";
+import { buildRuntimeIdentity, createExecutionNodeStep } from "#execution/node-step.js";
 import { appendTaskAgentAnnouncement } from "#execution/tasks/parent/agent-views.js";
 import { prepareWorkflowPreambleTrace } from "#execution/workflow-trace-context.js";
 import { recordSubagentUsageSpans } from "#execution/subagent-usage-span.js";
@@ -136,27 +111,19 @@ async function turnStep(a) {
       isTaskOwnedSerializedContext(o.serializedContext) &&
       isTaskToolAvailable({
         disabledFrameworkTools: u.resolvedAgent.disabledFrameworkTools ?? [],
-        hasAuthoredTool: f.turnAgent.tools.some(
-          (e) => e.name === TASK_UPDATE_TOOL_NAME,
-        ),
+        hasAuthoredTool: f.turnAgent.tools.some((e) => e.name === TASK_UPDATE_TOOL_NAME),
         tasksEnabled: d,
         toolName: TASK_UPDATE_TOOL_NAME,
       });
   try {
-    let { getWorkflowMetadata: e } = await import(
-        `#compiled/@workflow/core/index.js`
-      ),
+    let { getWorkflowMetadata: e } = await import(`#compiled/@workflow/core/index.js`),
       t = e();
-    typeof t.url == `string` &&
-      c.set(CallbackBaseUrlKey, resolveWorkflowCallbackBaseUrl(t.url));
+    typeof t.url == `string` && c.set(CallbackBaseUrlKey, resolveWorkflowCallbackBaseUrl(t.url));
   } catch {}
   let m = getPendingAuthorization(s.state),
     h;
   if (m && o.input?.kind === `deliver`) {
-    let { matches: e, remainingPayloads: t } = matchAuthorizationCallbacks(
-      m,
-      o.input.payloads,
-    );
+    let { matches: e, remainingPayloads: t } = matchAuthorizationCallbacks(m, o.input.payloads);
     if (((o = { ...o, input: { ...o.input, payloads: t } }), e.length > 0)) {
       let n = e.map((e) => e.result);
       (c.set(PendingAuthorizationResultKey, n),
@@ -171,9 +138,7 @@ async function turnStep(a) {
         t.length === 0 && (o = { ...o, input: void 0 }));
     }
   }
-  o.input?.kind === `deliver` &&
-    o.input.auth !== void 0 &&
-    c.set(AuthKey, o.input.auth ?? null);
+  o.input?.kind === `deliver` && o.input.auth !== void 0 && c.set(AuthKey, o.input.auth ?? null);
   let g = hydrateDurableSession({
       compactionOverrides: { thresholdPercent: f.thresholdPercent },
       durable: s,
@@ -227,8 +192,7 @@ async function turnStep(a) {
         c.set(RuntimeActionSettlementTimesKey, o.input.acceptedAtMsByCallId),
       (b = { runtimeActionResults: o.input.results }));
   if (
-    (o.input?.kind === `deliver` &&
-      setChannelContext(c, { ...l, state: { ...y.state } }),
+    (o.input?.kind === `deliver` && setChannelContext(c, { ...l, state: { ...y.state } }),
     o.input?.kind === `deliver` && b === void 0)
   ) {
     (await contextStorage.run(c, () =>
@@ -255,9 +219,7 @@ async function turnStep(a) {
     S = u.resolvedAgent.dynamicInstructionsResolvers ?? [],
     C = u.resolvedAgent.dynamicSkillResolvers ?? [],
     w = u.subagentRegistry.dynamicResolvers ?? [],
-    T =
-      d ||
-      u.resolvedAgent.config?.experimental?.subagentPersistentSessions === !0,
+    T = d || u.resolvedAgent.config?.experimental?.subagentPersistentSessions === !0,
     E = u.resolvedAgent.dynamicToolResolvers ?? [],
     D = { ...u.graph.root, turnAgent: f.turnAgent },
     O = buildRuntimeIdentity(D);
@@ -266,9 +228,7 @@ async function turnStep(a) {
     let e = process.env.VERCEL_DEPLOYMENT_ID?.trim(),
       t = e
         ? `deployment:${e}`
-        : await resolveRuntimeCompiledArtifactsVersionedCacheKey(
-            u.compiledArtifactsSource,
-          );
+        : await resolveRuntimeCompiledArtifactsVersionedCacheKey(u.compiledArtifactsSource);
     runtimeRevision = t;
     if (!v.sessionStarted)
       (c.set(SessionDynamicSkillRuntimeRevisionKey, t),
@@ -388,9 +348,7 @@ async function turnStep(a) {
             t = setHarnessEmissionState(t, e);
           }
           for (let { authorization: t, result: n } of h) {
-            let r = m?.challenges.find(
-              (e) => e.attemptId === n.attemptId,
-            )?.candidateId;
+            let r = m?.challenges.find((e) => e.attemptId === n.attemptId)?.candidateId;
             await handleEvent(
               createAuthorizationCompletedEvent({
                 attemptId: n.attemptId,
@@ -410,9 +368,7 @@ async function turnStep(a) {
           let r = refreshSessionFromTurnAgent({
               compactionOverrides: { thresholdPercent: f.thresholdPercent },
               session: e,
-              systemPromptAdditions: p
-                ? [TASK_UPDATE_SESSION_INSTRUCTION]
-                : void 0,
+              systemPromptAdditions: p ? [TASK_UPDATE_SESSION_INSTRUCTION] : void 0,
               turnAgent: f.turnAgent,
             }),
             i = d ? await appendTaskAgentAnnouncement(r) : r;
@@ -438,10 +394,7 @@ async function turnStep(a) {
       action: `cancelled`,
       serializedContext: preserveSerializedInstrumentationState(
         preserveSerializedAgentTraceState(
-          preserveSerializedSessionDynamicModelSelection(
-            o.serializedContext,
-            t,
-          ),
+          preserveSerializedSessionDynamicModelSelection(o.serializedContext, t),
           t,
         ),
         t,
@@ -480,9 +433,7 @@ async function turnStep(a) {
     if (e !== void 0 && isWorkflowRuntimeActionInterrupt(e.interrupt))
       return {
         action: `dispatch-workflow-runtime-actions`,
-        pendingRuntimeActionKeys: getRuntimeActionKeysFromWorkflowInterrupt(
-          e.interrupt,
-        ),
+        pendingRuntimeActionKeys: getRuntimeActionKeysFromWorkflowInterrupt(e.interrupt),
         ...I,
         serializedContext: N,
         sessionState: P,
@@ -513,10 +464,7 @@ async function turnStep(a) {
       tasksEnabled: d,
     };
   }
-  return (
-    k.releaseLock(),
-    { action: `continue`, ...I, serializedContext: N, sessionState: P }
-  );
+  return (k.releaseLock(), { action: `continue`, ...I, serializedContext: N, sessionState: P });
 }
 function derivePendingState(e) {
   let t = getPendingRuntimeActionBatch(e.state),
@@ -533,9 +481,7 @@ function derivePendingState(e) {
     ? r
     : {
         ...r,
-        pendingRuntimeActionKeys: t.actions.map((e) =>
-          getRuntimeActionRequestKey(e),
-        ),
+        pendingRuntimeActionKeys: t.actions.map((e) => getRuntimeActionRequestKey(e)),
       };
 }
 export { turnStep };

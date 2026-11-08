@@ -21,39 +21,41 @@ import type {
   ReasoningSelection,
 } from "./provider-catalog-types.js";
 
-const reasoningEffortSchema = z.enum([
-  "max",
-  "xhigh",
-  "high",
-  "medium",
-  "low",
-  "minimal",
-  "none",
-]);
+const reasoningEffortSchema = z.enum(["max", "xhigh", "high", "medium", "low", "minimal", "none"]);
 const reasoningOptionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("toggle") }).passthrough(),
   z.object({ type: z.literal("effort"), values: z.array(reasoningEffortSchema) }).passthrough(),
   z.object({ type: z.literal("budget_tokens"), max: z.number().positive() }).passthrough(),
 ]);
-const modelCandidateSchema = z.object({
-  id: z.string().trim().min(1).optional(),
-  limit: z.object({
-    context: z.number().optional(),
-    output: z.number().optional(),
-  }).passthrough().optional(),
-  modalities: z.object({
-    input: z.array(z.string().trim().min(1)),
-    output: z.array(z.string().trim().min(1)),
-  }).passthrough().optional(),
-  name: z.string().trim().min(1).optional(),
-  reasoning_options: z.array(reasoningOptionSchema).optional(),
-  tool_call: z.boolean().optional(),
-}).passthrough();
-const providerMetadataSchema = z.object({
-  id: z.string().trim().min(1),
-  models: z.record(z.string(), modelCandidateSchema),
-  name: z.string().trim().min(1),
-}).passthrough();
+const modelCandidateSchema = z
+  .object({
+    id: z.string().trim().min(1).optional(),
+    limit: z
+      .object({
+        context: z.number().optional(),
+        output: z.number().optional(),
+      })
+      .passthrough()
+      .optional(),
+    modalities: z
+      .object({
+        input: z.array(z.string().trim().min(1)),
+        output: z.array(z.string().trim().min(1)),
+      })
+      .passthrough()
+      .optional(),
+    name: z.string().trim().min(1).optional(),
+    reasoning_options: z.array(reasoningOptionSchema).optional(),
+    tool_call: z.boolean().optional(),
+  })
+  .passthrough();
+const providerMetadataSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    models: z.record(z.string(), modelCandidateSchema),
+    name: z.string().trim().min(1),
+  })
+  .passthrough();
 const metadataCatalogSchema = z.record(z.string(), z.unknown());
 
 type ModelCandidate = z.infer<typeof modelCandidateSchema>;
@@ -118,8 +120,8 @@ function normalizeCompleteModel(
 ): ProviderCatalogModel | null {
   const context = model.limit?.context;
   const output = model.limit?.output;
-  const hasPositiveLimits = Number.isInteger(context) && context! > 0
-    && Number.isInteger(output) && output! > 0;
+  const hasPositiveLimits =
+    Number.isInteger(context) && context! > 0 && Number.isInteger(output) && output! > 0;
   if (!hasPositiveLimits || !model.name || model.tool_call !== true) return null;
   if (!model.modalities?.input.includes("text")) return null;
 

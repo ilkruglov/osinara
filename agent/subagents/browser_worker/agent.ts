@@ -20,15 +20,26 @@
  */
 import { defineAgent } from "eve";
 
-import { AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS, AGENT_COMPACTION_THRESHOLD, BROWSER_WORKER_MAX_INPUT_TOKENS_PER_SESSION } from "../../config.js";
+import {
+  AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS,
+  AGENT_COMPACTION_THRESHOLD,
+  BROWSER_WORKER_MAX_INPUT_TOKENS_PER_SESSION,
+} from "../../config.js";
 import { browserWorkerModel } from "../../lib/model-registry.js";
 import { modelProviderConfig } from "../../lib/model-provider-config.js";
 
-const workerContextWindowTokens = Math.min(modelProviderConfig.agent.models.primary.contextWindowTokens, AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS);
+const workerContextWindowTokens = Math.min(
+  modelProviderConfig.agent.models.primary.contextWindowTokens,
+  AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS,
+);
 
 export default defineAgent({
-  compaction: { modelContextWindowTokens: workerContextWindowTokens, thresholdPercent: AGENT_COMPACTION_THRESHOLD },
-  description: "Делает многошаговую задачу на сайте в браузере семьи: запись, бронь, форма, личный кабинет, поиск на сайте. Сообщение должно быть самодостаточным: сайт или адрес входа, что именно выбрать, какие поля анкеты можно подставлять, что спросить у человека. Возвращает done с цитатой со страницы, blocked с причиной, needs_input с вопросом или awaiting_confirmation с epoch и номером кнопки.",
+  compaction: {
+    modelContextWindowTokens: workerContextWindowTokens,
+    thresholdPercent: AGENT_COMPACTION_THRESHOLD,
+  },
+  description:
+    "Делает многошаговую задачу на сайте в браузере семьи: запись, бронь, форма, личный кабинет, поиск на сайте. Сообщение должно быть самодостаточным: сайт или адрес входа, что именно выбрать, какие поля анкеты можно подставлять, что спросить у человека. Возвращает done с цитатой со страницы, blocked с причиной, needs_input с вопросом или awaiting_confirmation с epoch и номером кнопки.",
   limits: { maxInputTokensPerSession: BROWSER_WORKER_MAX_INPUT_TOKENS_PER_SESSION },
   model: browserWorkerModel,
   modelContextWindowTokens: workerContextWindowTokens,

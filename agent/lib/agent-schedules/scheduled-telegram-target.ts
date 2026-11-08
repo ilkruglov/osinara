@@ -9,8 +9,7 @@
 import { AppError } from "../app-error.js";
 import type { ScheduledDeliveryMetadata } from "./scheduled-session.js";
 
-export const SCHEDULED_TELEGRAM_TARGET_MISMATCH_CODE =
-  "AGENT_SCHEDULE_DELIVERY_TARGET_MISMATCH";
+export const SCHEDULED_TELEGRAM_TARGET_MISMATCH_CODE = "AGENT_SCHEDULE_DELIVERY_TARGET_MISMATCH";
 
 interface ActiveTelegramTarget {
   chatId: string;
@@ -27,11 +26,12 @@ export function scheduledTelegramTargetMatches(
   scheduled: ScheduledTelegramTarget,
 ): boolean {
   // Eve exposes an active topic as a number, while PostgreSQL-backed auth carries its exact string.
-  const activeMessageThreadId = active.messageThreadId === undefined
-    ? null
-    : String(active.messageThreadId);
-  return active.chatId === scheduled.telegramChatId &&
-    activeMessageThreadId === scheduled.messageThreadId;
+  const activeMessageThreadId =
+    active.messageThreadId === undefined ? null : String(active.messageThreadId);
+  return (
+    active.chatId === scheduled.telegramChatId &&
+    activeMessageThreadId === scheduled.messageThreadId
+  );
 }
 
 export function requireScheduledTelegramTarget(

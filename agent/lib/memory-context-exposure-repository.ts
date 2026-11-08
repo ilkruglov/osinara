@@ -23,7 +23,10 @@ export const memoryContextExposureRepository = {
     return result.rows[0]?.completed_turns ?? 0;
   },
 
-  async recentlyShownMemoryRefs(applicationSessionId: string, sessionTurn: number): Promise<Set<string>> {
+  async recentlyShownMemoryRefs(
+    applicationSessionId: string,
+    sessionTurn: number,
+  ): Promise<Set<string>> {
     const result = await database().query<{ memory_ref: string }>(
       `SELECT memory_ref FROM memory_context_exposures
         WHERE application_session_id = $1 AND session_turn > $2`,
@@ -33,7 +36,10 @@ export const memoryContextExposureRepository = {
   },
 
   /** Refs shown to the model in exactly this turn (automatic block or explicit search). */
-  async shownMemoryRefsForTurn(applicationSessionId: string, sessionTurn: number): Promise<Set<string>> {
+  async shownMemoryRefsForTurn(
+    applicationSessionId: string,
+    sessionTurn: number,
+  ): Promise<Set<string>> {
     const result = await database().query<{ memory_ref: string }>(
       `SELECT memory_ref FROM memory_context_exposures
         WHERE application_session_id = $1 AND session_turn = $2`,
@@ -42,7 +48,11 @@ export const memoryContextExposureRepository = {
     return new Set(result.rows.map((row) => row.memory_ref));
   },
 
-  async authorCardShownRecently(applicationSessionId: string, telegramUserId: string, sessionTurn: number): Promise<boolean> {
+  async authorCardShownRecently(
+    applicationSessionId: string,
+    telegramUserId: string,
+    sessionTurn: number,
+  ): Promise<boolean> {
     const result = await database().query(
       `SELECT 1 FROM profile_author_exposures
         WHERE application_session_id = $1 AND telegram_user_id = $2 AND session_turn > $3`,

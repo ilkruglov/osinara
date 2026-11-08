@@ -12,21 +12,11 @@ import {
 import { describeTaskAgent } from "#execution/tasks/parent/agent-identity.js";
 function describeTaskDispatch(e) {
   let t = describeTaskAgent(e),
-    n =
-      e.agentId === void 0
-        ? void 0
-        : findTaskAgentAddress(e.session, e.agentId);
-  return n === void 0
-    ? t
-    : { ...t, mode: n.address.kind === `agent/remote` ? `remote` : `local` };
+    n = e.agentId === void 0 ? void 0 : findTaskAgentAddress(e.session, e.agentId);
+  return n === void 0 ? t : { ...t, mode: n.address.kind === `agent/remote` ? `remote` : `local` };
 }
 async function checkTaskContinuationAvailability(r) {
-  let i = await findActiveTaskForAgent(
-    r.session,
-    r.agentId,
-    r.parentTurnId,
-    r.parentStepIndex,
-  );
+  let i = await findActiveTaskForAgent(r.session, r.agentId, r.parentTurnId, r.parentStepIndex);
   return i === void 0
     ? void 0
     : createAgentErrorResult({
@@ -48,9 +38,10 @@ async function persistContinuationTaskInParentSession(e) {
 async function settleTaskDispatchError(e) {
   return (
     (e.persisted !== void 0 && e.outcome.deliveryAmbiguous === !0) ||
-      (await (
-        e.persisted === void 0 ? rejectDelegatedDispatch : failDelegatedDispatch
-      )({ error: e.outcome.result.output, task: e.delegated })),
+      (await (e.persisted === void 0 ? rejectDelegatedDispatch : failDelegatedDispatch)({
+        error: e.outcome.result.output,
+        task: e.delegated,
+      })),
     e.persisted === void 0
       ? e.outcome.result
       : {

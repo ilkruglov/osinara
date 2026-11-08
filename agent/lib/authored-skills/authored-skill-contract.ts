@@ -42,22 +42,40 @@ export const AUTHORED_SKILL_REQUIRED_SECTIONS = Object.freeze([
 
 /** Framework tools a skill may name besides the application catalog of its mode. */
 export const EVE_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "agent", "ask_question", "bash", "glob", "grep", "load_skill", "read_file", "todo",
-  "web_fetch", "web_search", "write_file",
+  "agent",
+  "ask_question",
+  "bash",
+  "glob",
+  "grep",
+  "load_skill",
+  "read_file",
+  "todo",
+  "web_fetch",
+  "web_search",
+  "write_file",
 ]);
 
 // Every built-in package name: an authored skill of the same name would override it in trusted
 // chats and lose to it in external groups, i.e. mean two things under one name. The knowledge
 // skills come from their catalog so a new analyst is reserved without touching this list.
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
-  "agent-browser", "authored", "behavior-preferences", "docx", "imagegen", "pdf",
-  "skill-authoring", "telegram-widgets", "xlsx", ...KNOWLEDGE_SKILL_NAMES,
+  "agent-browser",
+  "authored",
+  "behavior-preferences",
+  "docx",
+  "imagegen",
+  "pdf",
+  "skill-authoring",
+  "telegram-widgets",
+  "xlsx",
+  ...KNOWLEDGE_SKILL_NAMES,
 ]);
 const RESERVED_PREFIXES = ["authored-", "gws-"] as const;
 
 const UNTRUSTED_BLOCK_PATTERN =
   /<\/?(?:untrusted[a-z_]*|retrieved_long_term_memory|existing_memory|preceding_context|memory_review_source_selection)\b/iu;
-const SECRET_PATTERN = /\b(?:sk-[A-Za-z0-9_-]{8,}|cfat_[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{16,})/u;
+const SECRET_PATTERN =
+  /\b(?:sk-[A-Za-z0-9_-]{8,}|cfat_[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{16,})/u;
 const REFERENCE_MENTION_PATTERN = /references\/[a-z0-9][a-z0-9-]{0,39}\.md/gu;
 const STEP_TOOL_PATTERN = /`([a-z]+(?:_[a-z0-9]+)+|agent|bash|glob|grep|todo)`/gu;
 
@@ -87,7 +105,11 @@ function sectionBody(markdown: string, heading: string): string | null {
  * What every interactive external turn gets without a grant: the application core
  * (`buildModeToolSurface`) and `load_skill`, whose wrapper checks the skill's own grant when it runs.
  */
-const EXTERNAL_GROUP_CORE_TOOL_NAMES = ["load_skill", "manage_behavior_preference", "read_profile_view"] as const;
+const EXTERNAL_GROUP_CORE_TOOL_NAMES = [
+  "load_skill",
+  "manage_behavior_preference",
+  "read_profile_view",
+] as const;
 
 export interface ExternalGroupSurfaceOptions {
   /** `IMAGE_GENERATION_AVAILABLE`: a stored drawing grant surfaces nothing without a provider. */
@@ -100,10 +122,14 @@ export interface ExternalGroupSurfaceOptions {
  * and a drawing grant with `send_workspace_image` only while a provider is configured. The action
  * itself is still checked when the tool runs.
  */
-function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>, options: ExternalGroupSurfaceOptions): Set<string> {
+function externalGroupSurfaceToolNames(
+  allowed: ReadonlySet<string>,
+  options: ExternalGroupSurfaceOptions,
+): Set<string> {
   const names = new Set<string>([...allowed, ...EXTERNAL_GROUP_CORE_TOOL_NAMES]);
   if ([...allowed].some((name) => name.startsWith("manage_memory."))) names.add("manage_memory");
-  if ([...allowed].some((name) => name.startsWith("manage_memory_thread."))) names.add("manage_memory_thread");
+  if ([...allowed].some((name) => name.startsWith("manage_memory_thread.")))
+    names.add("manage_memory_thread");
   if (allowed.has("generate_image")) {
     if (options.imageGenerationAvailable) names.add("send_workspace_image");
     else names.delete("generate_image");
@@ -118,8 +144,10 @@ export function externalGroupMissingTools(
   options: ExternalGroupSurfaceOptions,
 ): string[] {
   const surface = externalGroupSurfaceToolNames(allowed, options);
-  return stepToolNames(markdown).filter((name) =>
-    !surface.has(name) && !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name)
+  return stepToolNames(markdown).filter(
+    (name) =>
+      !surface.has(name) &&
+      !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name),
   );
 }
 
@@ -174,15 +202,21 @@ function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<s
   for (const heading of AUTHORED_SKILL_REQUIRED_SECTIONS) {
     if (sectionBody(draft.markdown, heading) === null) problems.push(`нет раздела «${heading}»`);
   }
-  const unknown = stepToolNames(draft.markdown)
-    .filter((name) => !knownToolNames.has(name) && !EVE_BUILTIN_TOOL_NAMES.has(name));
+  const unknown = stepToolNames(draft.markdown).filter(
+    (name) => !knownToolNames.has(name) && !EVE_BUILTIN_TOOL_NAMES.has(name),
+  );
   if (unknown.length > 0) {
     problems.push(`в шагах названы инструменты, которых нет в этом режиме: ${unknown.join(", ")}`);
   }
   // An image skill without a prompt template makes the model translate a Russian paragraph into a
   // Flux prompt on every run; the template belongs in a reference file.
-  if (stepToolNames(draft.markdown).includes("generate_image") && Object.keys(draft.files).length === 0) {
-    problems.push("навык с generate_image должен нести references/<имя>.md с английским шаблоном промпта");
+  if (
+    stepToolNames(draft.markdown).includes("generate_image") &&
+    Object.keys(draft.files).length === 0
+  ) {
+    problems.push(
+      "навык с generate_image должен нести references/<имя>.md с английским шаблоном промпта",
+    );
   }
   const mentioned = new Set(draft.markdown.match(REFERENCE_MENTION_PATTERN) ?? []);
   for (const path of mentioned) {
@@ -211,9 +245,12 @@ function rubricWarnings(draft: AuthoredSkillDraft): string[] {
   }
   const steps = sectionBody(draft.markdown, "## Шаги") ?? "";
   const stepLines = steps.split("\n").filter((line) => /^\s*(?:\d+[.)]|[-*])\s+/u.test(line));
-  if (stepLines.length < 2) warnings.push("в «Шагах» меньше двух пунктов: навык не описывает порядок действий");
+  if (stepLines.length < 2)
+    warnings.push("в «Шагах» меньше двух пунктов: навык не описывает порядок действий");
   if (!/[,;]|\bили\b/iu.test(draft.description)) {
-    warnings.push("description без косвенных формулировок: перечисли через запятую, по каким ещё просьбам навык нужен");
+    warnings.push(
+      "description без косвенных формулировок: перечисли через запятую, по каким ещё просьбам навык нужен",
+    );
   }
   if (draft.markdown.split("\n").length > SKILL_MAX_LINES) {
     warnings.push(`markdown длиннее ${SKILL_MAX_LINES} строк: объёмное вынеси в references/`);
@@ -261,25 +298,42 @@ export function assertAuthoredSkillDraft(
     );
   }
   if (draft.changeNote.trim().length === 0) {
-    throw new AppError("AGENT_SKILL_CHANGE_NOTE_MISSING", "Опиши в changeNote, что изменилось и зачем");
+    throw new AppError(
+      "AGENT_SKILL_CHANGE_NOTE_MISSING",
+      "Опиши в changeNote, что изменилось и зачем",
+    );
   }
   const sizes = sizeProblems(draft);
   if (sizes.length > 0) {
-    throw new AppError("AGENT_SKILL_CONTENT_TOO_LARGE", `Навык не проходит по размеру: ${sizes.join("; ")}`);
+    throw new AppError(
+      "AGENT_SKILL_CONTENT_TOO_LARGE",
+      `Навык не проходит по размеру: ${sizes.join("; ")}`,
+    );
   }
   const rubric = rubricChecklist(draft, options.knownToolNames);
   if (rubric.blocking.length > 0) {
-    throw new AppError("AGENT_SKILL_RUBRIC_FAILED", `Навык не проходит рубрику: ${rubric.blocking.join("; ")}`);
+    throw new AppError(
+      "AGENT_SKILL_RUBRIC_FAILED",
+      `Навык не проходит рубрику: ${rubric.blocking.join("; ")}`,
+    );
   }
   return rubric.warnings;
 }
 
 /** Rubric for stored content re-read against the current tool catalog (rollback). */
 export function assertStoredSkillContent(
-  content: { description: string; files: Readonly<Record<string, string>>; markdown: string; name: string },
+  content: {
+    description: string;
+    files: Readonly<Record<string, string>>;
+    markdown: string;
+    name: string;
+  },
   knownToolNames: ReadonlySet<string>,
 ): string[] {
-  const rubric = rubricChecklist({ ...content, changeNote: "-", trialSummary: "-" }, knownToolNames);
+  const rubric = rubricChecklist(
+    { ...content, changeNote: "-", trialSummary: "-" },
+    knownToolNames,
+  );
   if (rubric.blocking.length > 0) {
     throw new AppError(
       "AGENT_SKILL_RUBRIC_FAILED",

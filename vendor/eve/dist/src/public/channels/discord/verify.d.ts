@@ -19,10 +19,10 @@ export type DiscordPublicKey = string | (() => string | Promise<string>);
 export type DiscordWebhookVerifier = (request: Request, body: string) => unknown | Promise<unknown>;
 /** Options for {@link verifyDiscordRequest}. */
 export interface DiscordVerifyOptions {
-    readonly publicKey: DiscordPublicKey | undefined;
-    readonly webhookVerifier?: DiscordWebhookVerifier;
-    /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
-    readonly maxSkewSeconds?: number;
+  readonly publicKey: DiscordPublicKey | undefined;
+  readonly webhookVerifier?: DiscordWebhookVerifier;
+  /** Max allowed clock skew, in seconds. Defaults to 5 minutes. */
+  readonly maxSkewSeconds?: number;
 }
 /** Resolves a Discord public key, falling back to `DISCORD_PUBLIC_KEY`. */
 export declare function resolveDiscordPublicKey(publicKey?: DiscordPublicKey): Promise<string>;
@@ -32,15 +32,18 @@ export declare function resolveDiscordPublicKey(publicKey?: DiscordPublicKey): P
  * Throws when no public key/verifier is configured, required signature
  * headers are missing, timestamp checks fail, or the signature check fails.
  */
-export declare function verifyDiscordRequest(request: Request, options: DiscordVerifyOptions): Promise<string>;
+export declare function verifyDiscordRequest(
+  request: Request,
+  options: DiscordVerifyOptions,
+): Promise<string>;
 /**
  * Verifies one Discord Ed25519 interaction signature over `timestamp + body`.
  * `publicKey` and `signature` are hex-encoded. Returns false (never throws) on
  * malformed input or a length/signature mismatch.
  */
 export declare function verifyDiscordSignature(input: {
-    readonly body: string;
-    readonly publicKey: string;
-    readonly signature: string;
-    readonly timestamp: string;
+  readonly body: string;
+  readonly publicKey: string;
+  readonly signature: string;
+  readonly timestamp: string;
 }): boolean;

@@ -121,8 +121,6 @@ function sameBatch(e, t) {
   );
 }
 function toChildInputResponse(e, t) {
-  return t.childRequestId === void 0
-    ? e
-    : { ...e, requestId: t.childRequestId };
+  return t.childRequestId === void 0 ? e : { ...e, requestId: t.childRequestId };
 }
 export { emitProxiedInputRequest, routeDeliverPayload };

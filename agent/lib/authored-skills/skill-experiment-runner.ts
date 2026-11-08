@@ -16,18 +16,44 @@ export async function runSkillExperiment(caller: FamilyCaller, id: string, signa
   const monitor = setInterval(() => {
     if (polling) return;
     polling = true;
-    void repo.isRunning(caller, id).then((running) => { if (!running) cancelled.abort(); }, () => cancelled.abort()).finally(() => { polling = false; });
+    void repo
+      .isRunning(caller, id)
+      .then(
+        (running) => {
+          if (!running) cancelled.abort();
+        },
+        () => cancelled.abort(),
+      )
+      .finally(() => {
+        polling = false;
+      });
   }, 1000);
   try {
     for (const run of batch.runs) {
-      if (combined.aborted || !await repo.reserveRun(caller, id, run.id)) break;
+      if (combined.aborted || !(await repo.reserveRun(caller, id, run.id))) break;
       const testCase = batch.experiment.protocol.cases.find((c) => c.id === run.case_id)!;
-      const skill = run.variant === "baseline" ? batch.experiment.baseline : batch.candidates.find((c) => c.id === run.variant)!.draft;
-      const result = await runSkillLab({ runId: run.id, skill, testCase, maxCalls: batch.experiment.protocol.maxCallsPerRun, model: modelProviderConfig.agent,
-        toolContracts: batch.experiment.tool_contracts, environment: batch.experiment.protocol.environment },
-        AbortSignal.any([combined, AbortSignal.timeout(LAB_RUN_TIMEOUT_MS)]), { deadlineAt });
+      const skill =
+        run.variant === "baseline"
+          ? batch.experiment.baseline
+          : batch.candidates.find((c) => c.id === run.variant)!.draft;
+      const result = await runSkillLab(
+        {
+          runId: run.id,
+          skill,
+          testCase,
+          maxCalls: batch.experiment.protocol.maxCallsPerRun,
+          model: modelProviderConfig.agent,
+          toolContracts: batch.experiment.tool_contracts,
+          environment: batch.experiment.protocol.environment,
+        },
+        AbortSignal.any([combined, AbortSignal.timeout(LAB_RUN_TIMEOUT_MS)]),
+        { deadlineAt },
+      );
       await repo.completeRun(id, run.id, result);
     }
-  } finally { clearInterval(monitor); await repo.finish(id); }
+  } finally {
+    clearInterval(monitor);
+    await repo.finish(id);
+  }
   return repo.status(caller, id);
 }

@@ -3,52 +3,30 @@ import { requestTurnSleep } from "#harness/turn-sleep.js";
 const TASK_CANCEL_TOOL_NAME = `task_cancel`,
   TASK_SLEEP_TOOL_NAME = `task_sleep`,
   TASK_UPDATE_TOOL_NAME = `task_update`,
-  TASK_TOOL_NAMES = new Set([
-    TASK_CANCEL_TOOL_NAME,
-    TASK_SLEEP_TOOL_NAME,
-    TASK_UPDATE_TOOL_NAME,
-  ]),
-  TASK_CONTROL_TOOL_NAMES = new Set([
-    TASK_CANCEL_TOOL_NAME,
-    TASK_UPDATE_TOOL_NAME,
-  ]),
+  TASK_TOOL_NAMES = new Set([TASK_CANCEL_TOOL_NAME, TASK_SLEEP_TOOL_NAME, TASK_UPDATE_TOOL_NAME]),
+  TASK_CONTROL_TOOL_NAMES = new Set([TASK_CANCEL_TOOL_NAME, TASK_UPDATE_TOOL_NAME]),
   TASK_IDS_SCHEMA = z
     .array(z.string().min(1))
     .min(1)
     .describe(`Task ids from earlier subagent task receipts.`),
   TASK_CANCEL_INPUT_SCHEMA = z.strictObject({ taskIds: TASK_IDS_SCHEMA }),
   TASK_UPDATE_INPUT_SCHEMA = z.strictObject({
-    message: z
-      .string()
-      .min(1)
-      .describe(`Brief description of what this task is currently doing.`),
+    message: z.string().min(1).describe(`Brief description of what this task is currently doing.`),
   }),
   MAX_SLEEP_SECONDS = Math.floor((2 ** 53 - 1) / 1e3),
   TASK_SLEEP_INPUT_SCHEMA = z.strictObject({
-    seconds: z
-      .number()
-      .positive()
-      .max(MAX_SLEEP_SECONDS)
-      .describe(`How long to wait, in seconds.`),
+    seconds: z.number().positive().max(MAX_SLEEP_SECONDS).describe(`How long to wait, in seconds.`),
   }),
   TASK_VIEW_SCHEMA = z.object({
     inputRequests: z.array(z.unknown()).optional(),
-    lastOutput: z
-      .object({ data: z.unknown(), type: z.enum([`result`, `error`]) })
-      .optional(),
+    lastOutput: z.object({ data: z.unknown(), type: z.enum([`result`, `error`]) }).optional(),
     metadata: z.object({
       agentId: z.string(),
       kind: z.literal(`subagent`),
       mode: z.enum([`local`, `remote`]),
       name: z.string(),
     }),
-    status: z.enum([
-      `working`,
-      `input_required`,
-      `completed`,
-      `failed`,
-      `cancelled`,
-    ]),
+    status: z.enum([`working`, `input_required`, `completed`, `failed`, `cancelled`]),
     taskId: z.string(),
   }),
   TASK_VIEWS_OUTPUT_SCHEMA = z.object({ tasks: z.array(TASK_VIEW_SCHEMA) }),
@@ -86,11 +64,7 @@ function createTaskToolHarnessDefinitions() {
   ];
 }
 function isTaskToolAvailable(e) {
-  return (
-    e.tasksEnabled &&
-    !e.disabledFrameworkTools.includes(e.toolName) &&
-    !e.hasAuthoredTool
-  );
+  return e.tasksEnabled && !e.disabledFrameworkTools.includes(e.toolName) && !e.hasAuthoredTool;
 }
 function createResolvedTaskToolStub(e) {
   return {

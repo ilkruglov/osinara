@@ -18,8 +18,7 @@ import { callTelegramApi } from "eve/channels/telegram";
 export type TelegramWhisperContent = { readonly format: "plain" | "rich"; readonly text: string };
 
 export type TelegramWhisperSendResult =
-  | { ok: true; placeholderMessageId: number }
-  | { body: unknown; ok: false; status: number };
+  { ok: true; placeholderMessageId: number } | { body: unknown; ok: false; status: number };
 
 export type TelegramWhisperEditResult = { ok: true } | { body: unknown; ok: false; status: number };
 
@@ -34,7 +33,9 @@ function chatIdValue(chatId: string): number | string {
 }
 
 function contentBody(content: TelegramWhisperContent): Record<string, unknown> {
-  return content.format === "rich" ? { rich_message: { markdown: content.text } } : { text: content.text };
+  return content.format === "rich"
+    ? { rich_message: { markdown: content.text } }
+    : { text: content.text };
 }
 
 function apiOptions(options: ApiOptions) {
@@ -45,17 +46,20 @@ function apiOptions(options: ApiOptions) {
 }
 
 function sentEphemeralId(body: unknown): number | null {
-  const id = (body as { result?: { ephemeral_message_id?: unknown } } | null)?.result?.ephemeral_message_id;
+  const id = (body as { result?: { ephemeral_message_id?: unknown } } | null)?.result
+    ?.ephemeral_message_id;
   return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-export async function sendTelegramWhisperReply(input: ApiOptions & {
-  chatId: string;
-  ephemeralMessageId: number;
-  messageThreadId: number | null;
-  receiverUserId: string;
-  text: string;
-}): Promise<TelegramWhisperSendResult> {
+export async function sendTelegramWhisperReply(
+  input: ApiOptions & {
+    chatId: string;
+    ephemeralMessageId: number;
+    messageThreadId: number | null;
+    receiverUserId: string;
+    text: string;
+  },
+): Promise<TelegramWhisperSendResult> {
   const response = await callTelegramApi({
     body: {
       chat_id: chatIdValue(input.chatId),
@@ -68,16 +72,19 @@ export async function sendTelegramWhisperReply(input: ApiOptions & {
     ...apiOptions(input),
   });
   const placeholderMessageId = response.ok ? sentEphemeralId(response.body) : null;
-  if (placeholderMessageId === null) return { body: response.body, ok: false, status: response.status };
+  if (placeholderMessageId === null)
+    return { body: response.body, ok: false, status: response.status };
   return { ok: true, placeholderMessageId };
 }
 
-export async function editTelegramWhisperMessage(input: ApiOptions & {
-  chatId: string;
-  content: TelegramWhisperContent;
-  placeholderMessageId: number;
-  receiverUserId: string;
-}): Promise<TelegramWhisperEditResult> {
+export async function editTelegramWhisperMessage(
+  input: ApiOptions & {
+    chatId: string;
+    content: TelegramWhisperContent;
+    placeholderMessageId: number;
+    receiverUserId: string;
+  },
+): Promise<TelegramWhisperEditResult> {
   const response = await callTelegramApi({
     body: {
       chat_id: chatIdValue(input.chatId),
@@ -90,15 +97,18 @@ export async function editTelegramWhisperMessage(input: ApiOptions & {
   });
   if (response.ok) return { ok: true };
   const description = (response.body as { description?: unknown } | null)?.description;
-  if (typeof description === "string" && /message is not modified/iu.test(description)) return { ok: true };
+  if (typeof description === "string" && /message is not modified/iu.test(description))
+    return { ok: true };
   return { body: response.body, ok: false, status: response.status };
 }
 
-export async function deleteTelegramWhisperMessage(input: ApiOptions & {
-  chatId: string;
-  placeholderMessageId: number;
-  receiverUserId: string;
-}): Promise<TelegramWhisperEditResult> {
+export async function deleteTelegramWhisperMessage(
+  input: ApiOptions & {
+    chatId: string;
+    placeholderMessageId: number;
+    receiverUserId: string;
+  },
+): Promise<TelegramWhisperEditResult> {
   const response = await callTelegramApi({
     body: {
       chat_id: chatIdValue(input.chatId),

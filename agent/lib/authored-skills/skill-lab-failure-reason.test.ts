@@ -16,18 +16,30 @@ const base = { aborted: false, calls: 2, diagnostic: "", failureText: "", maxCal
 describe("labFailureReason", () => {
   it("names an exhausted call budget", () => {
     expect(labFailureReason({ ...base, calls: 4 })).toBe("call_limit");
-    expect(labFailureReason({ ...base, failureText: '[{"type":"turn.failed","error":"Error: AGENT_SKILL_LAB_CALL_LIMIT"}]' })).toBe("call_limit");
+    expect(
+      labFailureReason({
+        ...base,
+        failureText: '[{"type":"turn.failed","error":"Error: AGENT_SKILL_LAB_CALL_LIMIT"}]',
+      }),
+    ).toBe("call_limit");
   });
 
   it("keeps deadline, cancellation and runner codes apart", () => {
-    expect(labFailureReason({ ...base, failureText: "Error: AGENT_SKILL_LAB_DEADLINE at reserveCall" })).toBe("deadline");
+    expect(
+      labFailureReason({ ...base, failureText: "Error: AGENT_SKILL_LAB_DEADLINE at reserveCall" }),
+    ).toBe("deadline");
     expect(labFailureReason({ ...base, aborted: true, calls: 4 })).toBe("cancelled_or_timed_out");
-    expect(labFailureReason({ ...base, diagnostic: "AGENT_SKILL_LAB_START_TIMEOUT" })).toBe("AGENT_SKILL_LAB_START_TIMEOUT");
+    expect(labFailureReason({ ...base, diagnostic: "AGENT_SKILL_LAB_START_TIMEOUT" })).toBe(
+      "AGENT_SKILL_LAB_START_TIMEOUT",
+    );
   });
 
   it("surfaces a model or tool code without the text around it", () => {
-    const text = '[{"type":"turn.failed","error":"AGENT_MODEL_REQUEST_REJECTED: провайдер ответил 400, текст меню: сырники"}]';
+    const text =
+      '[{"type":"turn.failed","error":"AGENT_MODEL_REQUEST_REJECTED: провайдер ответил 400, текст меню: сырники"}]';
     expect(labFailureReason({ ...base, failureText: text })).toBe("AGENT_MODEL_REQUEST_REJECTED");
-    expect(labFailureReason({ ...base, failureText: "TypeError: cannot read properties" })).toBe("runtime_failed");
+    expect(labFailureReason({ ...base, failureText: "TypeError: cannot read properties" })).toBe(
+      "runtime_failed",
+    );
   });
 });

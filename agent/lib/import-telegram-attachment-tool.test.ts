@@ -40,9 +40,14 @@ describe("import_telegram_attachment result", () => {
   it("returns an absolute external group path ready for guarded read_file", async () => {
     dependencies.authorization.mockReturnValue({ groupType: "external" });
 
-    await expect(importTelegramAttachment.execute({
-      attachmentId: ATTACHMENT_ID,
-    }, context)).resolves.toMatchObject({
+    await expect(
+      importTelegramAttachment.execute(
+        {
+          attachmentId: ATTACHMENT_ID,
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({
       path: "/workspace/group/inbox/42/notes.md",
       scope: "group",
     });
@@ -57,9 +62,14 @@ describe("import_telegram_attachment result", () => {
       telegramMessageId: "42",
     });
 
-    await expect(importTelegramAttachment.execute({
-      attachmentId: ATTACHMENT_ID,
-    }, context)).resolves.toMatchObject({
+    await expect(
+      importTelegramAttachment.execute(
+        {
+          attachmentId: ATTACHMENT_ID,
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({
       path: "inbox/groups/group-1/42/notes.md",
       scope: "family",
     });

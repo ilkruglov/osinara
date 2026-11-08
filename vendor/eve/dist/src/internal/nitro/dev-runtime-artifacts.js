@@ -23,10 +23,7 @@ function resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(e) {
   return join(e, `.eve`, DEV_RUNTIME_ARTIFACTS_DIRECTORY, `snapshots`);
 }
 function isDevelopmentRuntimeArtifactsSnapshotRoot(e, t) {
-  return (
-    dirname(resolve(t)) ===
-    resolve(resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(e))
-  );
+  return dirname(resolve(t)) === resolve(resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(e));
 }
 async function stageDevelopmentRuntimeArtifactsSnapshot(n) {
   let r = join(
@@ -44,30 +41,18 @@ async function stageDevelopmentRuntimeArtifactsSnapshot(n) {
         manifest: n.manifest,
         runtimeAppRoot: a.runtimeAppRoot,
       }),
-      await cp(
-        n.paths.compileDirectoryPath,
-        join(a.runtimeAppRoot, `.eve`, `compile`),
-        { recursive: !0 },
-      ),
+      await cp(n.paths.compileDirectoryPath, join(a.runtimeAppRoot, `.eve`, `compile`), {
+        recursive: !0,
+      }),
       await rewriteSnapshotCompiledManifest({
         appRoot: n.project.appRoot,
-        manifestPath: join(
-          a.runtimeAppRoot,
-          `.eve`,
-          `compile`,
-          `compiled-agent-manifest.json`,
-        ),
+        manifestPath: join(a.runtimeAppRoot, `.eve`, `compile`, `compiled-agent-manifest.json`),
         runtimeAppRoot: a.runtimeAppRoot,
         snapshotSourceRoot: a.snapshotSourceRoot,
         sourceRoot: a.sourceRoot,
       }),
       await validateSnapshotCompiledManifestRoots({
-        manifestPath: join(
-          a.runtimeAppRoot,
-          `.eve`,
-          `compile`,
-          `compiled-agent-manifest.json`,
-        ),
+        manifestPath: join(a.runtimeAppRoot, `.eve`, `compile`, `compiled-agent-manifest.json`),
         runtimeAppRoot: a.runtimeAppRoot,
       }),
       await writeFile(
@@ -89,9 +74,7 @@ async function mountExtensionExternalDependencies(e) {
   let t = [e.manifest, ...(e.manifest.subagents ?? []).map((e) => e.agent)]
     .flatMap((e) => e.extensionMounts ?? [])
     .filter((e) => (e.externalDependencies ?? []).length > 0);
-  for (let [r, o] of Object.entries(
-    resolveExtensionExternalDependencyPaths(t),
-  )) {
+  for (let [r, o] of Object.entries(resolveExtensionExternalDependencyPaths(t))) {
     let t = findPackageRoot(o, r),
       c = join(e.runtimeAppRoot, `node_modules`, ...r.split(`/`));
     (await mkdir(dirname(c), { recursive: !0 }),
@@ -109,9 +92,7 @@ function findPackageRoot(e, t) {
       } catch {}
     let r = dirname(n);
     if (r === n)
-      throw Error(
-        `Cannot locate package root for extension external dependency "${t}".`,
-      );
+      throw Error(`Cannot locate package root for extension external dependency "${t}".`);
     n = r;
   }
 }
@@ -120,17 +101,11 @@ async function activateDevelopmentRuntimeArtifactsSnapshot(e) {
 }
 async function activateDevelopmentRuntimeArtifactsSnapshotTransaction(e) {
   let t = await readMaterializedAuthoredModuleIndex(e.snapshot.runtimeAppRoot);
-  if (
-    t === void 0 ||
-    !existsSync(join(e.snapshot.runtimeAppRoot, `.eve`, `compile`, t.moduleMap))
-  )
+  if (t === void 0 || !existsSync(join(e.snapshot.runtimeAppRoot, `.eve`, `compile`, t.moduleMap)))
     throw Error(
       `Cannot activate development runtime generation "${e.snapshot.snapshotRoot}" before its authored modules are materialized.`,
     );
-  let n = join(
-      e.snapshot.snapshotRoot,
-      DEVELOPMENT_RUNTIME_ARTIFACTS_ACTIVATED_MARKER,
-    ),
+  let n = join(e.snapshot.snapshotRoot, DEVELOPMENT_RUNTIME_ARTIFACTS_ACTIVATED_MARKER),
     r = resolveDevelopmentRuntimeArtifactsPointerPath(e.appRoot),
     i = readDevelopmentRuntimeArtifactsPointer(r),
     a = await readOptionalFile(r);
@@ -140,9 +115,7 @@ async function activateDevelopmentRuntimeArtifactsSnapshotTransaction(e) {
       i?.version === 2 &&
         i.snapshotRoot !== e.snapshot.snapshotRoot &&
         isDevelopmentRuntimeArtifactsSnapshotRoot(e.appRoot, i.snapshotRoot) &&
-        (await recordRetiredDevelopmentRuntimeArtifactsSnapshot(
-          i.snapshotRoot,
-        ).catch((e) => {
+        (await recordRetiredDevelopmentRuntimeArtifactsSnapshot(i.snapshotRoot).catch((e) => {
           console.warn(
             `[eve:dev] failed to record retired runtime generation "${i.snapshotRoot}": ${String(e)}`,
           );
@@ -177,9 +150,7 @@ function readDevelopmentRuntimeArtifactsSnapshotRoot(e) {
   if (t !== void 0) return t.version === 1 ? t.appRoot : t.runtimeAppRoot;
 }
 function readActiveDevelopmentRuntimeArtifactsSnapshot(e) {
-  let t = readDevelopmentRuntimeArtifactsPointer(
-    resolveDevelopmentRuntimeArtifactsPointerPath(e),
-  );
+  let t = readDevelopmentRuntimeArtifactsPointer(resolveDevelopmentRuntimeArtifactsPointerPath(e));
   if (!(t === void 0 || t.version === 1))
     return { runtimeAppRoot: t.runtimeAppRoot, snapshotRoot: t.snapshotRoot };
 }
@@ -201,9 +172,7 @@ async function pruneDevelopmentRuntimeArtifactsSnapshots(e) {
     now: e.now,
     protectAll: t?.version === 1,
     retainCount: e.retainCount,
-    snapshotsDirectory: resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(
-      e.appRoot,
-    ),
+    snapshotsDirectory: resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(e.appRoot),
   });
 }
 function collectExtensionMountSourceRoots(e) {
@@ -217,12 +186,9 @@ function readDevelopmentRuntimeArtifactsPointer(e) {
   if (!(e === void 0 || !existsSync(e)))
     try {
       let t = JSON.parse(readFileSync(e, `utf8`));
-      return t.kind !== `eve-dev-runtime-artifacts-pointer` ||
-        typeof t.version != `number`
+      return t.kind !== `eve-dev-runtime-artifacts-pointer` || typeof t.version != `number`
         ? void 0
-        : t.version === 1 &&
-            typeof t.appRoot == `string` &&
-            t.appRoot.length > 0
+        : t.version === 1 && typeof t.appRoot == `string` && t.appRoot.length > 0
           ? {
               appRoot: t.appRoot,
               kind: `eve-dev-runtime-artifacts-pointer`,
@@ -258,8 +224,7 @@ async function rewriteSnapshotCompiledManifest(e) {
   await writeFile(e.manifestPath, `${JSON.stringify(n, null, 2)}\n`);
 }
 function rewriteManifestRoots(e) {
-  if (Array.isArray(e.value))
-    return e.value.map((t) => rewriteManifestRoots({ ...e, value: t }));
+  if (Array.isArray(e.value)) return e.value.map((t) => rewriteManifestRoots({ ...e, value: t }));
   if (e.value === null || typeof e.value != `object`) return e.value;
   let t = {};
   for (let [n, r] of Object.entries(e.value)) {
@@ -312,10 +277,7 @@ async function writeDevelopmentRuntimeArtifactsPointer(e) {
       snapshotRoot: e.snapshot.snapshotRoot,
       version: 2,
     };
-  await writeDevelopmentRuntimeArtifactsPointerSource(
-    t,
-    `${JSON.stringify(n, null, 2)}\n`,
-  );
+  await writeDevelopmentRuntimeArtifactsPointerSource(t, `${JSON.stringify(n, null, 2)}\n`);
 }
 async function writeDevelopmentRuntimeArtifactsPointerSource(t, r) {
   let a = `${t}.${randomUUID()}.tmp`;
@@ -338,34 +300,23 @@ async function rollbackFailedActivation(e) {
   let t = await restoreDevelopmentRuntimeArtifactsActivation(e);
   return t === void 0
     ? e.cause
-    : AggregateError(
-        [e.cause, t],
-        `Development runtime activation and rollback failed.`,
-        { cause: e.cause },
-      );
+    : AggregateError([e.cause, t], `Development runtime activation and rollback failed.`, {
+        cause: e.cause,
+      });
 }
 async function restoreDevelopmentRuntimeArtifactsActivation(e) {
   let t = (
     await Promise.allSettled([
       e.previousPointerSource === void 0
         ? rm(e.pointerPath, { force: !0 })
-        : writeDevelopmentRuntimeArtifactsPointerSource(
-            e.pointerPath,
-            e.previousPointerSource,
-          ),
+        : writeDevelopmentRuntimeArtifactsPointerSource(e.pointerPath, e.previousPointerSource),
       rm(e.markerPath, { force: !0 }),
     ])
   ).flatMap((e) => (e.status === `rejected` ? [e.reason] : []));
-  if (t.length !== 0)
-    return AggregateError(
-      t,
-      `Failed to restore development runtime activation.`,
-    );
+  if (t.length !== 0) return AggregateError(t, `Failed to restore development runtime activation.`);
 }
 async function validateSnapshotCompiledManifestRoots(e) {
-  let t = collectManifestRootPaths(
-    JSON.parse(await readFile(e.manifestPath, `utf8`)),
-  );
+  let t = collectManifestRootPaths(JSON.parse(await readFile(e.manifestPath, `utf8`)));
   for (let n of t)
     if (!isPathInsideOrEqual(n, e.runtimeAppRoot))
       throw Error(

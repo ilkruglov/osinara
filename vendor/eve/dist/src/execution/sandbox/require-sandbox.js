@@ -9,8 +9,7 @@ async function requireSandboxSession(r) {
       `This tool requires sandbox access on the runtime context. Ensure the step is running inside a managed runtime context with sandbox support.`,
     );
   let a = await i.get();
-  if (a === null)
-    throw Error(`The sandbox is not available in the current runtime context.`);
+  if (a === null) throw Error(`The sandbox is not available in the current runtime context.`);
   return r === void 0 ? a : bindSandboxAbortSignal(a, r);
 }
 async function resolveAbsoluteFilePath(e, t) {

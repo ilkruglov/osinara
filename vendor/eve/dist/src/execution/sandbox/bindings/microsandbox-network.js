@@ -9,9 +9,7 @@ function applyMicrosandboxNetwork(e, t) {
           let t = e.enabled(!0);
           if (
             (n.policy !== null &&
-              (t = t.policyJson(
-                serializeMicrosandboxNetworkPolicyJson(n.policy),
-              )),
+              (t = t.policyJson(serializeMicrosandboxNetworkPolicyJson(n.policy))),
             n.transformHeaderRules.length === 0)
           )
             return t;
@@ -66,8 +64,7 @@ function createMicrosandboxNetworkPlan(e) {
       policy: { defaultEgress: `allow`, defaultIngress: `deny`, rules: [] },
       transformHeaderRules: [],
     };
-  if (e === `deny-all`)
-    return { disabled: !0, policy: null, transformHeaderRules: [] };
+  if (e === `deny-all`) return { disabled: !0, policy: null, transformHeaderRules: [] };
   let t = [],
     n = [],
     r = normalizeAllowEntries(e.allow),
@@ -143,8 +140,7 @@ function createTransformBrokerEnvironment(e) {
     t.length > 0 &&
       ((n.GIT_CONFIG_COUNT = String(t.length)),
       t.forEach((e, t) => {
-        ((n[`GIT_CONFIG_KEY_${t}`] = e.key),
-          (n[`GIT_CONFIG_VALUE_${t}`] = e.value));
+        ((n[`GIT_CONFIG_KEY_${t}`] = e.key), (n[`GIT_CONFIG_VALUE_${t}`] = e.value));
       })),
     n
   );
@@ -186,8 +182,7 @@ function serializeMicrosandboxNetworkDestination(e) {
 function createPlaceholderHeaders(e, t) {
   let n = {};
   for (let [r, i] of Object.entries(t))
-    n[r] =
-      `__EVE_MSB_SECRET_${createStableHash(`${e}:${r}:${i}`).slice(0, 24)}__`;
+    n[r] = `__EVE_MSB_SECRET_${createStableHash(`${e}:${r}:${i}`).slice(0, 24)}__`;
   return n;
 }
 function createSecretEnvName(e, t, n) {

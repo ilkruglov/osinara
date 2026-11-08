@@ -6,6 +6,11 @@ import type { InstrumentationParentLineage } from "#harness/instrumentation/life
  * {@link SessionParent}, the subagent name onto the adapter state — so both
  * are read here rather than either being duplicated onto the other.
  */
-export declare function resolveParentLineage(parent: SessionParent | undefined, adapter: {
-    readonly state?: unknown;
-} | undefined): InstrumentationParentLineage | undefined;
+export declare function resolveParentLineage(
+  parent: SessionParent | undefined,
+  adapter:
+    | {
+        readonly state?: unknown;
+      }
+    | undefined,
+): InstrumentationParentLineage | undefined;

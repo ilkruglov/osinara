@@ -22,10 +22,12 @@ function isExternalBotCaller(
   role: unknown,
   chatType: unknown,
 ): boolean {
-  return caller.principalType === "service" &&
+  return (
+    caller.principalType === "service" &&
     caller.principalId.startsWith("telegram-bot:") &&
     role === "external" &&
-    GROUP_CHAT_TYPES.includes(String(chatType));
+    GROUP_CHAT_TYPES.includes(String(chatType))
+  );
 }
 
 export function requireWorkspaceAuthorization(
@@ -50,10 +52,8 @@ export function requireWorkspaceAuthorization(
   return {
     familyId: attributes.familyId,
     groupId: typeof attributes.groupId === "string" ? attributes.groupId : null,
-    groupType: ["external", "family_private"].includes(
-      String(attributes.groupType),
-    )
-      ? attributes.groupType as WorkspaceAuthorization["groupType"]
+    groupType: ["external", "family_private"].includes(String(attributes.groupType))
+      ? (attributes.groupType as WorkspaceAuthorization["groupType"])
       : null,
     role: role as WorkspaceAuthorization["role"],
     telegramChatType: chatType as WorkspaceAuthorization["telegramChatType"],
@@ -61,9 +61,10 @@ export function requireWorkspaceAuthorization(
   };
 }
 
-export function requireTelegramDeliveryTarget(
-  ctx: Pick<SessionContext, "session">,
-): { chatId: string; messageThreadId?: number } {
+export function requireTelegramDeliveryTarget(ctx: Pick<SessionContext, "session">): {
+  chatId: string;
+  messageThreadId?: number;
+} {
   const caller = resolveSessionCaller(ctx) ?? ctx.session.auth.current;
   const chatId = caller?.attributes.telegramChatId;
   const rawThreadId = caller?.attributes.telegramMessageThreadId;

@@ -13,10 +13,18 @@
  */
 import type { OwnerHealthDigestSections } from "./owner-health-digest.js";
 
-const DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "Europe/Moscow" });
+const DATE = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  timeZone: "Europe/Moscow",
+});
 
 const escape = (text: string): string =>
-  text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;").replace(/"/gu, "&quot;");
+  text
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
 
 function failureWord(count: number): string {
   const tens = count % 100;
@@ -27,10 +35,14 @@ function failureWord(count: number): string {
   return "сбоев";
 }
 
-export function ownerHealthDigestWidget(sections: OwnerHealthDigestSections, now: Date): { caption: string; html: string } {
+export function ownerHealthDigestWidget(
+  sections: OwnerHealthDigestSections,
+  now: Date,
+): { caption: string; html: string } {
   const failed = sections.failures.length;
   const verdict = failed === 0 ? "сбоев нет" : `${failed} ${failureWord(failed)}`;
-  const rows = (lines: readonly string[], kind: string) => lines.map((line) => `<li class="${kind}">${escape(line)}</li>`).join("");
+  const rows = (lines: readonly string[], kind: string) =>
+    lines.map((line) => `<li class="${kind}">${escape(line)}</li>`).join("");
   const html = `<style>
 .w{font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:10px 12px}
 .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}

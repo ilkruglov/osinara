@@ -64,7 +64,10 @@ function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
     throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
   }
   if (scope === "personal" && !auth.userId) {
-    throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить владельца личной памяти");
+    throw new AppError(
+      "AGENT_MEMORY_CONTEXT_INVALID",
+      "Не удалось определить владельца личной памяти",
+    );
   }
   if (scope === "group" && !auth.groupId) {
     throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить группу памяти");
@@ -201,8 +204,15 @@ async function hasImmediateUndoProvenance(
          WHERE later.family_id = $1 AND later.memory_item_id = $2
            AND later.mutation_kind <> 'create'
        )`,
-    [auth.familyId, memoryItemId, auth.userId, auth.telegramUserId,
-      provenance.sessionId, provenance.turnId, auth.groupId],
+    [
+      auth.familyId,
+      memoryItemId,
+      auth.userId,
+      auth.telegramUserId,
+      provenance.sessionId,
+      provenance.turnId,
+      auth.groupId,
+    ],
   );
   return Boolean(result.rowCount);
 }
@@ -237,13 +247,19 @@ export const memoryRepository = {
       reason: "remember_reinforces",
     });
     if (result.reinforced.length === 0) {
-      throw new AppError("AGENT_MEMORY_REF_INVALID", "Запись не найдена в разрешённой области памяти");
+      throw new AppError(
+        "AGENT_MEMORY_REF_INVALID",
+        "Запись не найдена в разрешённой области памяти",
+      );
     }
     const client = await database().connect();
     try {
       const memory = await selectAuthorizedMemory(client, auth, input.memoryRef, "ref");
       if (!memory) {
-        throw new AppError("AGENT_MEMORY_REF_INVALID", "Запись не найдена в разрешённой области памяти");
+        throw new AppError(
+          "AGENT_MEMORY_REF_INVALID",
+          "Запись не найдена в разрешённой области памяти",
+        );
       }
       return rowToReferencedMemory(memory);
     } finally {
@@ -296,10 +312,9 @@ export const memoryRepository = {
       );
       // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
       // воркер впустую. При восстановлении оно создаётся заново.
-      await client.query(
-        "DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1",
-        [memory.id],
-      );
+      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [
+        memory.id,
+      ]);
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {
@@ -323,9 +338,11 @@ export const memoryRepository = {
       await client.query("BEGIN");
       const replay = await existingOperation(client, auth, input.operationKey, "delete", inputHash);
       if (replay) {
-        const sameProvenance = replay.actor_user_id === auth.userId &&
+        const sameProvenance =
+          replay.actor_user_id === auth.userId &&
           replay.actor_telegram_user_id === auth.telegramUserId &&
-          replay.eve_session_id === input.sessionId && replay.eve_turn_id === input.turnId;
+          replay.eve_session_id === input.sessionId &&
+          replay.eve_turn_id === input.turnId;
         if (!sameProvenance) {
           throw new AppError(
             "AGENT_MEMORY_REPLAY_MISMATCH",
@@ -341,7 +358,7 @@ export const memoryRepository = {
         throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
       }
       await requireMutationAccess(client, auth, memory);
-      if (!await hasImmediateUndoProvenance(client, auth, memory.id, input)) {
+      if (!(await hasImmediateUndoProvenance(client, auth, memory.id, input))) {
         throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
       }
 
@@ -351,8 +368,16 @@ export const memoryRepository = {
            (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
             actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
          VALUES ($1, $2, 'delete', $3, $4, $5, $6, $7, $8)`,
-        [auth.familyId, input.operationKey, inputHash, memory.id, auth.userId,
-          auth.telegramUserId, input.sessionId, input.turnId],
+        [
+          auth.familyId,
+          input.operationKey,
+          inputHash,
+          memory.id,
+          auth.userId,
+          auth.telegramUserId,
+          input.sessionId,
+          input.turnId,
+        ],
       );
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
@@ -372,10 +397,9 @@ export const memoryRepository = {
       );
       // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
       // воркер впустую. При восстановлении оно создаётся заново.
-      await client.query(
-        "DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1",
-        [memory.id],
-      );
+      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [
+        memory.id,
+      ]);
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {
@@ -403,7 +427,13 @@ export const memoryRepository = {
       await client.query("BEGIN");
       const replay = await existingOperation(client, auth, input.operationKey, "update", inputHash);
       if (replay?.memory_item_id) {
-        const source = await selectAuthorizedMemory(client, auth, replay.memory_item_id, "id", true);
+        const source = await selectAuthorizedMemory(
+          client,
+          auth,
+          replay.memory_item_id,
+          "id",
+          true,
+        );
         const replayed = source?.superseded_by
           ? await selectAuthorizedMemory(client, auth, source.superseded_by, "id", true)
           : null;
@@ -434,11 +464,12 @@ export const memoryRepository = {
       const primarySource = explicitPrepared.sources[0]!;
       const prepared = {
         ...explicitPrepared,
-        evidenceKind: (memory.subject_participant_id !== null &&
-          memory.subject_participant_id !== primarySource.authorParticipantId) ||
+        evidenceKind:
+          (memory.subject_participant_id !== null &&
+            memory.subject_participant_id !== primarySource.authorParticipantId) ||
           (memory.subject_user_id !== null && memory.subject_user_id !== primarySource.authorUserId)
-          ? "reported" as const
-          : "firsthand" as const,
+            ? ("reported" as const)
+            : ("firsthand" as const),
         subjectConversationId: memory.subject_conversation_id,
         subjectLabel: memory.subject_label,
         subjectParticipantId: memory.subject_participant_id,
@@ -470,10 +501,20 @@ export const memoryRepository = {
          FROM memory_items WHERE id = $1 AND claim_status = 'active'
          RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                    confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
-        [memory.id, auth.userId, memory.scope === "group" ? auth.telegramUserId : null,
-          input.kind ?? null, input.content, input.sensitivity ?? null, input.operationKey,
-           normalizeMemoryClaimContent(input.content), primarySource.sourceMessageId,
-           primarySource.messageThreadId, prepared.conversationId, MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE],
+        [
+          memory.id,
+          auth.userId,
+          memory.scope === "group" ? auth.telegramUserId : null,
+          input.kind ?? null,
+          input.content,
+          input.sensitivity ?? null,
+          input.operationKey,
+          normalizeMemoryClaimContent(input.content),
+          primarySource.sourceMessageId,
+          primarySource.messageThreadId,
+          prepared.conversationId,
+          MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
+        ],
       );
       const row = result.rows[0];
       if (!row) {

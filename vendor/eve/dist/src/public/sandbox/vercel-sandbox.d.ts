@@ -2,9 +2,12 @@ import type * as Vercel from "#compiled/@vercel/sandbox/index.js";
 type VercelCreateOptions = NonNullable<Parameters<typeof Vercel.Sandbox.create>[0]>;
 type VercelUpdateOptions = Parameters<Vercel.Sandbox["update"]>[0];
 type VercelSandboxInternalCreateOptions = {
-    readonly [key: `__${string}`]: unknown;
+  readonly [key: `__${string}`]: unknown;
 };
-type VercelSandboxAuthorCreateOptions<T> = T extends unknown ? Omit<T, "mounts" | "name" | "onResume" | "persistent" | "runtime" | "signal"> & VercelSandboxInternalCreateOptions : never;
+type VercelSandboxAuthorCreateOptions<T> = T extends unknown
+  ? Omit<T, "mounts" | "name" | "onResume" | "persistent" | "runtime" | "signal"> &
+      VercelSandboxInternalCreateOptions
+  : never;
 /**
  * Options accepted by `vercel(opts)`. Forwarded to Vercel
  * Sandbox creation for every fresh sandbox the framework creates
@@ -43,21 +46,23 @@ export type VercelSandboxMount = Vercel.SandboxMounts[string];
 export type VercelSandboxMounts = Vercel.SandboxMounts;
 /** Options resolved when eve creates a fresh live session sandbox. */
 export interface VercelSandboxSessionCreateOptions {
-    readonly mounts?: VercelSandboxMounts;
+  readonly mounts?: VercelSandboxMounts;
 }
 /** Context available while resolving fresh live-session creation options. */
 export interface VercelSandboxSessionCreateContext {
-    readonly session: {
-        readonly id: string;
-    };
+  readonly session: {
+    readonly id: string;
+  };
 }
 /** Options accepted by `vercel(opts)`. */
 export type VercelSandboxOptions = VercelSandboxCreateOptions & {
-    /**
-     * Resolves options that apply only to fresh live sessions. It is not called
-     * while prewarming templates or resuming an existing sandbox.
-     */
-    readonly sessionCreateOptions?: (context: VercelSandboxSessionCreateContext) => Promise<VercelSandboxSessionCreateOptions> | VercelSandboxSessionCreateOptions;
+  /**
+   * Resolves options that apply only to fresh live sessions. It is not called
+   * while prewarming templates or resuming an existing sandbox.
+   */
+  readonly sessionCreateOptions?: (
+    context: VercelSandboxSessionCreateContext,
+  ) => Promise<VercelSandboxSessionCreateOptions> | VercelSandboxSessionCreateOptions;
 };
 /**
  * Options accepted by the Vercel backend's `bootstrap({ use })` hook.

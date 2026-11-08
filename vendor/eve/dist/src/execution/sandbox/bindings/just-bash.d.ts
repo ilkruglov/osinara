@@ -11,7 +11,7 @@ export declare const JUST_BASH_BACKEND_NAME = "just-bash";
  * `eve/sandbox`.
  */
 export interface CreateJustBashSandboxBackendInput {
-    readonly createOptions?: JustBashSandboxCreateOptions;
+  readonly createOptions?: JustBashSandboxCreateOptions;
 }
 /**
  * Creates the just-bash sandbox backend.
@@ -20,14 +20,16 @@ export interface CreateJustBashSandboxBackendInput {
  * on every `create` call so the backend stays stateless and matches
  * the framework's per-call dispatch contract.
  */
-export declare function createJustBashSandboxBackend(input?: CreateJustBashSandboxBackendInput): SandboxBackend;
+export declare function createJustBashSandboxBackend(
+  input?: CreateJustBashSandboxBackendInput,
+): SandboxBackend;
 /**
  * Removes stale just-bash sandbox template directories for one
  * application's cache.
  */
 export declare function pruneJustBashSandboxTemplates(input: {
-    readonly appRoot: string;
-    readonly now?: number;
-    readonly recentWindowMs?: number;
-    readonly retainCount?: number;
+  readonly appRoot: string;
+  readonly now?: number;
+  readonly recentWindowMs?: number;
+  readonly retainCount?: number;
 }): Promise<void>;

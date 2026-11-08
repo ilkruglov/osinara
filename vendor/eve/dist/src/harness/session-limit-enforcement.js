@@ -1,9 +1,5 @@
 import { createInputRequestedEvent } from "#protocol/message.js";
-import {
-  emitFailedStep,
-  emitTurnEpilogue,
-  setHarnessEmissionState,
-} from "#harness/emission.js";
+import { emitFailedStep, emitTurnEpilogue, setHarnessEmissionState } from "#harness/emission.js";
 import { appendPendingInputBatch } from "#harness/input-requests.js";
 import {
   bumpSessionRuntimeTokenLimits,
@@ -13,13 +9,10 @@ import {
 import { createSessionLimitContinuationRequest } from "#harness/session-limit-continuation.js";
 import { SessionLimitDeclinedError } from "#harness/turn-cancellation.js";
 async function applySessionLimitContinuation(e) {
-  if (e.limitContinuation === void 0)
-    return { result: null, session: e.session };
+  if (e.limitContinuation === void 0) return { result: null, session: e.session };
   if (e.limitContinuation.granted)
     return { result: null, session: bumpSessionRuntimeTokenLimits(e.session) };
-  if (
-    !(e.config.mode === `conversation` || e.session.continuationToken !== ``)
-  ) {
+  if (!(e.config.mode === `conversation` || e.session.continuationToken !== ``)) {
     let t = getSessionTokenLimitViolation(e.session);
     return {
       result:
@@ -37,8 +30,7 @@ async function enforceSessionTokenLimit(e) {
   let { emit: n } = e;
   return t.limit > 0 &&
     n !== void 0 &&
-    (e.config.mode === `conversation` ||
-      e.config.capabilities?.requestInput === !0)
+    (e.config.mode === `conversation` || e.config.capabilities?.requestInput === !0)
     ? parkOnSessionTokenLimit({ ...e, emit: n, violation: t })
     : failSessionTokenLimit({ ...e, violation: t });
 }
@@ -63,8 +55,7 @@ async function parkOnSessionTokenLimit(t) {
         turnId: o.turnId,
       }),
     ),
-    t.config.mode === `conversation` &&
-      (o = await emitTurnEpilogue(t.emit, o, t.config.mode)),
+    t.config.mode === `conversation` && (o = await emitTurnEpilogue(t.emit, o, t.config.mode)),
     { next: null, session: setHarnessEmissionState(s, o) }
   );
 }

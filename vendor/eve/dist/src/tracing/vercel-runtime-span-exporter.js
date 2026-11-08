@@ -14,8 +14,7 @@ function vercelRuntimeSpanExporter() {
       try {
         let i = JsonTraceSerializer.serializeRequest([...e]);
         if (i === void 0) throw Error(`Failed to serialize spans.`);
-        (n.reportSpans(JSON.parse(new TextDecoder().decode(i))),
-          t({ code: 0 }));
+        (n.reportSpans(JSON.parse(new TextDecoder().decode(i))), t({ code: 0 }));
       } catch (e) {
         t({ code: 1, error: e instanceof Error ? e : Error(String(e)) });
       }
@@ -51,8 +50,7 @@ function isSampled(e) {
   if (typeof t != `function`) return !1;
   let r = Reflect.apply(t, e, []);
   return (
-    typeof r.traceFlags == `number` &&
-    (r.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
+    typeof r.traceFlags == `number` && (r.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
   );
 }
 export { vercelRuntimeSpanExporter, vercelRuntimeSpanProcessor };

@@ -23,9 +23,7 @@ function dockerOptionsForHash(e) {
   };
 }
 function sortStringRecord(e) {
-  return Object.fromEntries(
-    Object.entries(e).sort(([e], [t]) => e.localeCompare(t)),
-  );
+  return Object.fromEntries(Object.entries(e).sort(([e], [t]) => e.localeCompare(t)));
 }
 export {
   DEFAULT_DOCKER_SANDBOX_IMAGE,

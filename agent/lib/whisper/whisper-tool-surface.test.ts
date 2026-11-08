@@ -9,7 +9,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { WHISPER_DENIED_FRAMEWORK_TOOLS, WHISPER_TOOL_NAMES, whisperToolSurface } from "./whisper-tool-surface.js";
+import {
+  WHISPER_DENIED_FRAMEWORK_TOOLS,
+  WHISPER_TOOL_NAMES,
+  whisperToolSurface,
+} from "./whisper-tool-surface.js";
 
 const tool = { description: "x", execute: async () => "ok", inputSchema: {} } as never;
 
@@ -32,8 +36,16 @@ describe("whisperToolSurface", () => {
       write_file: tool,
     });
 
-    expect(Object.keys(surface).filter((name) => !WHISPER_DENIED_FRAMEWORK_TOOLS.includes(name as never)).sort()).toEqual([
-      "get_current_time", "list_group_history", "read_file", "search_memories", "web_search",
+    expect(
+      Object.keys(surface)
+        .filter((name) => !WHISPER_DENIED_FRAMEWORK_TOOLS.includes(name as never))
+        .sort(),
+    ).toEqual([
+      "get_current_time",
+      "list_group_history",
+      "read_file",
+      "search_memories",
+      "web_search",
     ]);
   });
 
@@ -43,7 +55,9 @@ describe("whisperToolSurface", () => {
     for (const name of ["agent", "ask_question", "bash", "todo", "write_file"]) {
       expect(surface[name], name).toBeDefined();
       expect(surface[name]).not.toBe(tool);
-      await expect(surface[name]!.execute({}, {} as never)).rejects.toMatchObject({ code: "AGENT_TELEGRAM_WHISPER_TOOL_FORBIDDEN" });
+      await expect(surface[name]!.execute({}, {} as never)).rejects.toMatchObject({
+        code: "AGENT_TELEGRAM_WHISPER_TOOL_FORBIDDEN",
+      });
     }
   });
 

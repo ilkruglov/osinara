@@ -43,22 +43,14 @@ function telegramResponse(result: unknown): Response {
 }
 
 function requestBody(fetchMock: ReturnType<typeof vi.spyOn>, index = 0) {
-  return JSON.parse(String(fetchMock.mock.calls[index]![1]?.body)) as Record<
-    string,
-    unknown
-  >;
+  return JSON.parse(String(fetchMock.mock.calls[index]![1]?.body)) as Record<string, unknown>;
 }
 
 describe("Telegram rich drafts", () => {
   it("starts a native RichBlockThinking draft in a private chat", async () => {
-    const telegramFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(telegramResponse(true));
+    const telegramFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(telegramResponse(true));
 
-    await startTelegramRichThinkingDraft(
-      telegramTarget({ messageThreadId: 42 }),
-      "turn_1",
-    );
+    await startTelegramRichThinkingDraft(telegramTarget({ messageThreadId: 42 }), "turn_1");
 
     expect(String(telegramFetch.mock.calls[0]![0])).toBe(
       "https://api.telegram.org/bottelegram-bot-secret/sendRichMessageDraft",
@@ -75,18 +67,10 @@ describe("Telegram rich drafts", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async () => telegramResponse(true));
 
-    await startTelegramRichThinkingDraft(
-      telegramTarget({ messageThreadId: 41 }),
-      "turn_1",
-    );
-    await startTelegramRichThinkingDraft(
-      telegramTarget({ messageThreadId: 42 }),
-      "turn_1",
-    );
+    await startTelegramRichThinkingDraft(telegramTarget({ messageThreadId: 41 }), "turn_1");
+    await startTelegramRichThinkingDraft(telegramTarget({ messageThreadId: 42 }), "turn_1");
 
-    expect(requestBody(telegramFetch, 0).draft_id).not.toBe(
-      requestBody(telegramFetch, 1).draft_id,
-    );
+    expect(requestBody(telegramFetch, 0).draft_id).not.toBe(requestBody(telegramFetch, 1).draft_id);
   });
 
   it("keeps repeated updates stable within the same Eve turn", async () => {
@@ -97,9 +81,7 @@ describe("Telegram rich drafts", () => {
     await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
     await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
 
-    expect(requestBody(telegramFetch, 0).draft_id).toBe(
-      requestBody(telegramFetch, 1).draft_id,
-    );
+    expect(requestBody(telegramFetch, 0).draft_id).toBe(requestBody(telegramFetch, 1).draft_id);
   });
 
   it("does not resume a pre-approval draft after HITL starts the next Eve turn", async () => {
@@ -110,15 +92,11 @@ describe("Telegram rich drafts", () => {
     await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
     await startTelegramRichThinkingDraft(telegramTarget(), "turn_25");
 
-    expect(requestBody(telegramFetch, 0).draft_id).not.toBe(
-      requestBody(telegramFetch, 1).draft_id,
-    );
+    expect(requestBody(telegramFetch, 0).draft_id).not.toBe(requestBody(telegramFetch, 1).draft_id);
   });
 
   it("does not create rich drafts outside private chats", async () => {
-    const telegramFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(telegramResponse(true));
+    const telegramFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(telegramResponse(true));
 
     await startTelegramRichThinkingDraft(
       telegramTarget({ chatId: "-100123", chatType: "supergroup" }),
@@ -129,33 +107,27 @@ describe("Telegram rich drafts", () => {
   });
 
   it("rejects a private draft without an Eve turn identity before delivery", async () => {
-    const telegramFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(telegramResponse(true));
+    const telegramFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(telegramResponse(true));
 
-    await expect(
-      startTelegramRichThinkingDraft(telegramTarget(), ""),
-    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_RICH_TURN_ID_INVALID" });
+    await expect(startTelegramRichThinkingDraft(telegramTarget(), "")).rejects.toMatchObject({
+      code: "AGENT_TELEGRAM_RICH_TURN_ID_INVALID",
+    });
 
     expect(telegramFetch).not.toHaveBeenCalled();
   });
 
   it("does not retry a rejected thinking draft", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const telegramFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ description: "Too Many Requests", ok: false }),
-          { headers: { "content-type": "application/json" }, status: 429 },
-        ),
-      );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const telegramFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ description: "Too Many Requests", ok: false }), {
+        headers: { "content-type": "application/json" },
+        status: 429,
+      }),
+    );
 
-    await expect(
-      startTelegramRichThinkingDraft(telegramTarget(), "turn_1"),
-    ).rejects.toThrow("AGENT_TELEGRAM_RICH_DRAFT_DELIVERY_FAILED");
+    await expect(startTelegramRichThinkingDraft(telegramTarget(), "turn_1")).rejects.toThrow(
+      "AGENT_TELEGRAM_RICH_DRAFT_DELIVERY_FAILED",
+    );
 
     expect(telegramFetch).toHaveBeenCalledTimes(1);
     expect(errorLog).toHaveBeenCalledOnce();
@@ -217,48 +189,32 @@ describe("postTelegramRichMessage", () => {
     expect(requestBody(telegramFetch, 0)).toMatchObject({
       reply_parameters: { allow_sending_without_reply: true, message_id: 55 },
     });
-    expect(requestBody(telegramFetch, 1)).not.toHaveProperty(
-      "reply_parameters",
-    );
+    expect(requestBody(telegramFetch, 1)).not.toHaveProperty("reply_parameters");
   });
 
   it("does not retry an ambiguously failed final delivery", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const timeout = new DOMException("The operation timed out", "TimeoutError");
-    const telegramFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockRejectedValue(timeout);
+    const telegramFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(timeout);
 
-    await expect(
-      postTelegramRichMessage("Ответ", telegramTarget()),
-    ).rejects.toBe(timeout);
+    await expect(postTelegramRichMessage("Ответ", telegramTarget())).rejects.toBe(timeout);
 
-    expect(timeout.message).toContain(
-      "AGENT_TELEGRAM_RICH_MESSAGE_DELIVERY_AMBIGUOUS",
-    );
+    expect(timeout.message).toContain("AGENT_TELEGRAM_RICH_MESSAGE_DELIVERY_AMBIGUOUS");
     expect(telegramFetch).toHaveBeenCalledTimes(1);
     expect(errorLog).toHaveBeenCalledOnce();
   });
 
   it("logs an ambiguous success envelope without exposing message content", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      telegramResponse({ unexpected: true }),
-    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(telegramResponse({ unexpected: true }));
 
-    await expect(
-      postTelegramRichMessage("Чувствительный ответ", telegramTarget()),
-    ).rejects.toThrow("AGENT_TELEGRAM_RICH_MESSAGE_DELIVERY_AMBIGUOUS");
+    await expect(postTelegramRichMessage("Чувствительный ответ", telegramTarget())).rejects.toThrow(
+      "AGENT_TELEGRAM_RICH_MESSAGE_DELIVERY_AMBIGUOUS",
+    );
 
     expect(errorLog).toHaveBeenCalledWith(
       expect.stringContaining("AGENT_TELEGRAM_RICH_MESSAGE_DELIVERY_AMBIGUOUS"),
     );
-    expect(errorLog).not.toHaveBeenCalledWith(
-      expect.stringContaining("Чувствительный ответ"),
-    );
+    expect(errorLog).not.toHaveBeenCalledWith(expect.stringContaining("Чувствительный ответ"));
   });
 });

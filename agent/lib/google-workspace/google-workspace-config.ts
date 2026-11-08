@@ -74,7 +74,8 @@ export function requireGoogleOAuthEnvironment(): GoogleOAuthEnvironment {
 
   // Public callbacks require HTTPS, with a narrow localhost exception for integration tests.
   const publicBaseUrl = new URL(parsed.data.PUBLIC_BASE_URL);
-  const localHttp = publicBaseUrl.protocol === "http:" &&
+  const localHttp =
+    publicBaseUrl.protocol === "http:" &&
     ["127.0.0.1", "localhost"].includes(publicBaseUrl.hostname);
   if (publicBaseUrl.protocol !== "https:" && !localHttp) {
     throw new AppError(

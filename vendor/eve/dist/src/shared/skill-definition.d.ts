@@ -8,11 +8,11 @@ export type SkillFileContent = string | Uint8Array;
  * resolvers.
  */
 export interface SkillPackageDefinition {
-    readonly description: string;
-    readonly license?: string;
-    readonly markdown: string;
-    readonly metadata?: Record<string, string>;
-    readonly files?: Readonly<Record<string, SkillFileContent>>;
+  readonly description: string;
+  readonly license?: string;
+  readonly markdown: string;
+  readonly metadata?: Record<string, string>;
+  readonly files?: Readonly<Record<string, SkillFileContent>>;
 }
 /**
  * Skill package with an explicit name. Used by compiled skill entries
@@ -20,5 +20,5 @@ export interface SkillPackageDefinition {
  * (where the name is qualified from the resolver slug + entry key).
  */
 export interface NamedSkillDefinition extends SkillPackageDefinition {
-    readonly name: string;
+  readonly name: string;
 }

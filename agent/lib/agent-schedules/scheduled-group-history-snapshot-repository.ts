@@ -61,11 +61,14 @@ function snapshotResult(row: SnapshotRecordRow): ScheduledGroupHistorySnapshotRe
   };
 }
 
-async function existingSnapshot(client: Pick<PoolClient, "query">, input: {
-  groupId: string;
-  runId: string;
-  scheduleId: string;
-}): Promise<ScheduledGroupHistorySnapshotResult | null> {
+async function existingSnapshot(
+  client: Pick<PoolClient, "query">,
+  input: {
+    groupId: string;
+    runId: string;
+    scheduleId: string;
+  },
+): Promise<ScheduledGroupHistorySnapshotResult | null> {
   const result = await client.query<SnapshotRecordRow>(
     `SELECT entry_count, chunk_count, window_start, window_end
        FROM agent_schedule_history_snapshots
@@ -76,7 +79,11 @@ async function existingSnapshot(client: Pick<PoolClient, "query">, input: {
 }
 
 export const scheduledGroupHistorySnapshotRepository = {
-  async prepare(input: { groupId: string; runId: string; scheduleId: string }): Promise<ScheduledGroupHistorySnapshotResult> {
+  async prepare(input: {
+    groupId: string;
+    runId: string;
+    scheduleId: string;
+  }): Promise<ScheduledGroupHistorySnapshotResult> {
     if (
       !UUID_PATTERN.test(input.groupId) ||
       !UUID_PATTERN.test(input.runId) ||

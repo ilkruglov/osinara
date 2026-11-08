@@ -22,55 +22,90 @@ describe("session rotation policy", () => {
   });
 
   it("rotates after inactivity or before the Eve workflow journal becomes replay-unsafe", () => {
-    expect(sessionNeedsRotation({
-      completedTurns: 1,
-      lastActivityAt: new Date("2026-06-12T11:59:59.999Z"),
-      now: NOW,
-      pendingOperation: false,
-      rotationRequestedAt: null,
-    })).toBe(true);
-    expect(sessionNeedsRotation({
-      completedTurns: 49,
-      lastActivityAt: NOW,
-      now: NOW,
-      pendingOperation: false,
-      rotationRequestedAt: null,
-    })).toBe(false);
-    expect(sessionNeedsRotation({
-      completedTurns: 50,
-      lastActivityAt: NOW,
-      now: NOW,
-      pendingOperation: false,
-      rotationRequestedAt: null,
-    })).toBe(true);
+    expect(
+      sessionNeedsRotation({
+        completedTurns: 1,
+        lastActivityAt: new Date("2026-06-12T11:59:59.999Z"),
+        now: NOW,
+        pendingOperation: false,
+        rotationRequestedAt: null,
+      }),
+    ).toBe(true);
+    expect(
+      sessionNeedsRotation({
+        completedTurns: 49,
+        lastActivityAt: NOW,
+        now: NOW,
+        pendingOperation: false,
+        rotationRequestedAt: null,
+      }),
+    ).toBe(false);
+    expect(
+      sessionNeedsRotation({
+        completedTurns: 50,
+        lastActivityAt: NOW,
+        now: NOW,
+        pendingOperation: false,
+        rotationRequestedAt: null,
+      }),
+    ).toBe(true);
   });
 
   it("defers every rotation reason while a HITL or OAuth operation is pending", () => {
-    expect(sessionNeedsRotation({
-      completedTurns: 50,
-      lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
-      now: NOW,
-      pendingOperation: true,
-      rotationRequestedAt: NOW,
-    })).toBe(false);
+    expect(
+      sessionNeedsRotation({
+        completedTurns: 50,
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        now: NOW,
+        pendingOperation: true,
+        rotationRequestedAt: NOW,
+      }),
+    ).toBe(false);
   });
 
   it("honours an explicit new-context request before automatic thresholds", () => {
-    expect(sessionNeedsRotation({
-      completedTurns: 2,
-      lastActivityAt: NOW,
-      now: NOW,
-      pendingOperation: false,
-      rotationRequestedAt: NOW,
-    })).toBe(true);
+    expect(
+      sessionNeedsRotation({
+        completedTurns: 2,
+        lastActivityAt: NOW,
+        now: NOW,
+        pendingOperation: false,
+        rotationRequestedAt: NOW,
+      }),
+    ).toBe(true);
   });
 
   it("names the reason: a request beats staleness, staleness beats the turn limit", () => {
-    const base = { lastActivityAt: NOW, now: NOW, pendingOperation: false, rotationRequestedAt: null };
+    const base = {
+      lastActivityAt: NOW,
+      now: NOW,
+      pendingOperation: false,
+      rotationRequestedAt: null,
+    };
     expect(sessionRotationReason({ ...base, completedTurns: 3 })).toBeNull();
     expect(sessionRotationReason({ ...base, completedTurns: 50 })).toBe("turns");
-    expect(sessionRotationReason({ ...base, completedTurns: 50, lastActivityAt: new Date("2026-06-01T00:00:00.000Z") })).toBe("inactivity");
-    expect(sessionRotationReason({ ...base, completedTurns: 50, lastActivityAt: new Date("2026-06-01T00:00:00.000Z"), rotationRequestedAt: NOW })).toBe("requested");
-    expect(sessionRotationReason({ ...base, completedTurns: 50, pendingOperation: true, rotationRequestedAt: NOW })).toBeNull();
+    expect(
+      sessionRotationReason({
+        ...base,
+        completedTurns: 50,
+        lastActivityAt: new Date("2026-06-01T00:00:00.000Z"),
+      }),
+    ).toBe("inactivity");
+    expect(
+      sessionRotationReason({
+        ...base,
+        completedTurns: 50,
+        lastActivityAt: new Date("2026-06-01T00:00:00.000Z"),
+        rotationRequestedAt: NOW,
+      }),
+    ).toBe("requested");
+    expect(
+      sessionRotationReason({
+        ...base,
+        completedTurns: 50,
+        pendingOperation: true,
+        rotationRequestedAt: NOW,
+      }),
+    ).toBeNull();
   });
 });

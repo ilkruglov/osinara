@@ -56,10 +56,9 @@ const SESSION_TASKS_STATE_KEY = `eve.tasks`,
   }),
   sessionTaskIndexSchema = z
     .strictObject({ tasks: z.array(sessionTaskIndexEntrySchema) })
-    .refine(
-      (e) => new Set(e.tasks.map((e) => e.taskId)).size === e.tasks.length,
-      { message: `Task ids must be unique.` },
-    )
+    .refine((e) => new Set(e.tasks.map((e) => e.taskId)).size === e.tasks.length, {
+      message: `Task ids must be unique.`,
+    })
     .refine(
       (e) =>
         e.tasks.every(
@@ -81,18 +80,14 @@ function getSessionTaskIndex(e) {
   return r.data.tasks;
 }
 function cacheTerminalTaskView(e, n) {
-  if (!isValidTerminalView(n))
-    throw Error(`Cannot cache invalid terminal task "${n.taskId}".`);
+  if (!isValidTerminalView(n)) throw Error(`Cannot cache invalid terminal task "${n.taskId}".`);
   let r = getSessionTaskIndex(e),
     i = r.findIndex((e) => e.taskId === n.taskId);
   if (i < 0) return e;
   if (!sameTaskMetadata(r[i].metadata, n.metadata))
     throw Error(`Task view metadata does not match index entry "${n.taskId}".`);
   let a = [...r];
-  return (
-    (a[i] = { ...a[i], terminalView: n }),
-    { ...e, [SESSION_TASKS_STATE_KEY]: { tasks: a } }
-  );
+  return ((a[i] = { ...a[i], terminalView: n }), { ...e, [SESSION_TASKS_STATE_KEY]: { tasks: a } });
 }
 function isValidTerminalView(e) {
   if (e.inputRequests !== void 0) return !1;
@@ -108,21 +103,13 @@ function isValidTerminalView(e) {
   }
 }
 function sameTaskMetadata(e, t) {
-  return (
-    e.agentId === t.agentId &&
-    e.kind === t.kind &&
-    e.mode === t.mode &&
-    e.name === t.name
-  );
+  return e.agentId === t.agentId && e.kind === t.kind && e.mode === t.mode && e.name === t.name;
 }
 function findSessionTaskEntry(e, t) {
   return getSessionTaskIndex(e).find((e) => e.taskId === t);
 }
 function recordSessionTask(e, n) {
-  let r = [
-    ...getSessionTaskIndex(e.state).filter((e) => e.taskId !== n.taskId),
-    n,
-  ];
+  let r = [...getSessionTaskIndex(e.state).filter((e) => e.taskId !== n.taskId), n];
   return {
     ...e,
     state: { ...e.state, [SESSION_TASKS_STATE_KEY]: { tasks: r } },

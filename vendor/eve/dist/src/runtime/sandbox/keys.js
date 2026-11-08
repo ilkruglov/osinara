@@ -15,10 +15,7 @@ async function createRuntimeSandboxKeys(e) {
   };
 }
 async function createRuntimeSandboxTemplateKey(e) {
-  return buildRuntimeSandboxTemplateKey(
-    e,
-    await deriveRuntimeSandboxKeyParts(e),
-  );
+  return buildRuntimeSandboxTemplateKey(e, await deriveRuntimeSandboxKeyParts(e));
 }
 async function deriveRuntimeSandboxKeyParts(e) {
   let t = await loadCompileMetadataForKeys(e.compiledArtifactsSource);
@@ -42,9 +39,7 @@ function buildRuntimeSandboxTemplateKey(e, t) {
   let n = createStableHash(
     `${resolvePackageVersionForTemplateKey(t.metadata)}:7:${t.versionHash}`,
   ).slice(0, 20);
-  return sanitizeRuntimeSandboxKey(
-    `eve-sbx-tpl-${e.backendName}-${t.scope}-${n}`,
-  );
+  return sanitizeRuntimeSandboxKey(`eve-sbx-tpl-${e.backendName}-${t.scope}-${n}`);
 }
 function buildRuntimeSandboxSessionKey(e, t) {
   let n = createStableHash(`7:${t.versionHash ?? `none`}`).slice(0, 12),
@@ -66,20 +61,16 @@ async function loadCompileMetadataForKeys(e) {
 async function resolveRuntimeSandboxScope(e) {
   if (e.backendName === `vercel`) {
     let e = resolveVercelProjectIdFromEnvironment();
-    if (e !== void 0)
-      return createStableHash(`vercel-project:${e}`).slice(0, 16);
+    if (e !== void 0) return createStableHash(`vercel-project:${e}`).slice(0, 16);
   }
   let n = getRuntimeCompiledArtifactsSandboxAppRoot(e.compiledArtifactsSource);
   return n === void 0
-    ? createStableHash(
-        getRuntimeCompiledArtifactsCacheKey(e.compiledArtifactsSource),
-      ).slice(0, 16)
+    ? createStableHash(getRuntimeCompiledArtifactsCacheKey(e.compiledArtifactsSource)).slice(0, 16)
     : createStableHash(await realpath(n)).slice(0, 16);
 }
 function resolveRuntimeSandboxVersionHash(e) {
   let t =
-    e.templatePlan.contentHash ??
-    resolveSourceGraphHash(e.metadata, e.compiledArtifactsSource);
+    e.templatePlan.contentHash ?? resolveSourceGraphHash(e.metadata, e.compiledArtifactsSource);
   return e.templatePlan.kind === `bootstrap`
     ? createStableHash(
         `bootstrap:${e.templatePlan.revalidationKey ?? ``}:${e.templatePlan.sourceHash}:${t}:${e.nodeId}:${e.sourceId}`,

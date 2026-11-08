@@ -18,7 +18,11 @@ import { AppError } from "../app-error.js";
 
 export type YandexTaxiPaymentType = "card" | "cash" | "yandex_card";
 
-export interface YandexTaxiPayment { id: string; label: string; type: YandexTaxiPaymentType; }
+export interface YandexTaxiPayment {
+  id: string;
+  label: string;
+  type: YandexTaxiPaymentType;
+}
 
 export interface YandexTaxiPaymentMethods {
   cards: Array<{ id: string; last4: string; system: string }>;
@@ -31,20 +35,37 @@ export interface YandexTaxiPaymentMethods {
 const CASH: YandexTaxiPayment = { id: "cash", label: "наличные", type: "cash" };
 
 function cardPayment(card: YandexTaxiPaymentMethods["cards"][number]): YandexTaxiPayment {
-  const label = ["карта", card.system, card.last4 ? `••${card.last4}` : ""].filter(Boolean).join(" ");
+  const label = ["карта", card.system, card.last4 ? `••${card.last4}` : ""]
+    .filter(Boolean)
+    .join(" ");
   return { id: card.id, label, type: "card" };
 }
 
-const yandexCardPayment = (id: string): YandexTaxiPayment => ({ id, label: "Яндекс Карта", type: "yandex_card" });
+const yandexCardPayment = (id: string): YandexTaxiPayment => ({
+  id,
+  label: "Яндекс Карта",
+  type: "yandex_card",
+});
 
 export function yandexTaxiPaymentOptions(methods: YandexTaxiPaymentMethods): YandexTaxiPayment[] {
-  return [CASH, ...methods.cards.map(cardPayment), ...methods.yandexCards.map((card) => yandexCardPayment(card.id))];
+  return [
+    CASH,
+    ...methods.cards.map(cardPayment),
+    ...methods.yandexCards.map((card) => yandexCardPayment(card.id)),
+  ];
 }
 
 const missing = (detail: string): AppError =>
-  new AppError("AGENT_YANDEX_TAXI_PAYMENT_MISSING", `${detail}. Спросите человека, как платить: наличные, карта или Яндекс Карта (paymentOptions из estimate)`);
+  new AppError(
+    "AGENT_YANDEX_TAXI_PAYMENT_MISSING",
+    `${detail}. Спросите человека, как платить: наличные, карта или Яндекс Карта (paymentOptions из estimate)`,
+  );
 
-function find(methods: YandexTaxiPaymentMethods, type: string, id: string): YandexTaxiPayment | null {
+function find(
+  methods: YandexTaxiPaymentMethods,
+  type: string,
+  id: string,
+): YandexTaxiPayment | null {
   if (type === "cash") return CASH;
   if (type === "card") {
     const card = methods.cards.find((item) => item.id === id);
@@ -58,7 +79,10 @@ function find(methods: YandexTaxiPaymentMethods, type: string, id: string): Yand
   return null;
 }
 
-export function resolveYandexTaxiPayment(methods: YandexTaxiPaymentMethods, chosen?: { id?: string | undefined; type: YandexTaxiPaymentType }): YandexTaxiPayment {
+export function resolveYandexTaxiPayment(
+  methods: YandexTaxiPaymentMethods,
+  chosen?: { id?: string | undefined; type: YandexTaxiPaymentType },
+): YandexTaxiPayment {
   if (chosen) {
     const found = find(methods, chosen.type, chosen.id ?? "");
     if (!found) throw missing("Выбранного способа оплаты нет среди доступных в Яндекс Go");
@@ -67,18 +91,26 @@ export function resolveYandexTaxiPayment(methods: YandexTaxiPaymentMethods, chos
   if (!methods.last) throw missing("В Яндекс Go не выбран способ оплаты");
   const found = find(methods, methods.last.type, methods.last.id);
   if (!found && methods.unverifiedCardIds?.includes(methods.last.id)) {
-    throw missing("Карта, которой платили в Яндекс Go последний раз, ждёт подтверждения в приложении Яндекс Go и платить пока не может");
+    throw missing(
+      "Карта, которой платили в Яндекс Go последний раз, ждёт подтверждения в приложении Яндекс Go и платить пока не может",
+    );
   }
   if (!found) throw missing("Последний способ оплаты в Яндекс Go недоступен или не поддерживается");
   return found;
 }
 
-export function routeStatsPayment(payment: YandexTaxiPayment): { payment_method_id?: string; type: string } {
+export function routeStatsPayment(payment: YandexTaxiPayment): {
+  payment_method_id?: string;
+  type: string;
+} {
   if (payment.type === "cash") return { type: "cash" };
   // routestats prices a Yandex card as a card with the card's id (site module 22544 and 78488).
   return { payment_method_id: payment.id, type: "card" };
 }
 
-export function orderDraftPayment(payment: YandexTaxiPayment): { payment_method_id: string; type: string } {
+export function orderDraftPayment(payment: YandexTaxiPayment): {
+  payment_method_id: string;
+  type: string;
+} {
   return { payment_method_id: payment.id, type: payment.type };
 }

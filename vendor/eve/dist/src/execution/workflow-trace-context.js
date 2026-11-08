@@ -10,8 +10,7 @@ async function prepareWorkflowPreambleTrace(e) {
     instrumentation: getInstrumentationRuntime(),
     parentLineage: resolveParentLineage(t, e.ctx.get(ChannelKey)),
     parentTraceContext: e.ctx.get(ParentTraceContextKey),
-    rootSessionId:
-      t?.rootSessionId ?? e.session.rootSessionId ?? e.session.sessionId,
+    rootSessionId: t?.rootSessionId ?? e.session.rootSessionId ?? e.session.sessionId,
     sequence: e.emissionState.sequence,
     sessionId: e.session.sessionId,
     sessionStarted: e.emissionState.sessionStarted,

@@ -77,9 +77,7 @@ function message(input: {
     ...(input.threadId === undefined ? {} : { messageThreadId: input.threadId }),
     raw: {
       date: 1_700_000_000 + Number(input.id),
-      ...(input.isTopicMessage === undefined
-        ? {}
-        : { is_topic_message: input.isTopicMessage }),
+      ...(input.isTopicMessage === undefined ? {} : { is_topic_message: input.isTopicMessage }),
       ...(input.withPhoto ? { photo: [{ file_id: "photo-file" }] } : {}),
       ...(input.senderTag === undefined ? {} : { sender_tag: input.senderTag }),
     },
@@ -132,7 +130,10 @@ describeWithDatabase("Telegram group journal repositories", () => {
       type: "external" as const,
     };
     const group = await telegramGroupAdministrationRepository.registerGroup(registration);
-    await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", text: "данные" }));
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "1", text: "данные" }),
+    );
 
     await telegramGroupAdministrationRepository.registerGroup({
       ...registration,
@@ -157,7 +158,10 @@ describeWithDatabase("Telegram group journal repositories", () => {
       toolAllowlist: [],
       type: "family_private",
     });
-    await telegramGroupJournalRepository.record(initial.groupId, message({ id: "1", text: "семейные данные" }));
+    await telegramGroupJournalRepository.record(
+      initial.groupId,
+      message({ id: "1", text: "семейные данные" }),
+    );
 
     const replacement = await telegramGroupAdministrationRepository.registerGroup({
       familyId,
@@ -187,7 +191,10 @@ describeWithDatabase("Telegram group journal repositories", () => {
       toolAllowlist: ["remember"],
       type: "external",
     });
-    await telegramGroupJournalRepository.record(initial.groupId, message({ id: "1", text: "внешние данные" }));
+    await telegramGroupJournalRepository.record(
+      initial.groupId,
+      message({ id: "1", text: "внешние данные" }),
+    );
 
     const replacement = await telegramGroupAdministrationRepository.registerGroup({
       familyId,
@@ -200,9 +207,11 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
 
     expect(replacement.groupId).not.toBe(initial.groupId);
-    await expect(database().query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM telegram_group_messages",
-    )).resolves.toMatchObject({ rows: [{ count: "0" }] });
+    await expect(
+      database().query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM telegram_group_messages",
+      ),
+    ).resolves.toMatchObject({ rows: [{ count: "0" }] });
   });
 
   it("deduplicates messages and reads numeric order only from the same forum topic", async () => {
@@ -263,8 +272,14 @@ describeWithDatabase("Telegram group journal repositories", () => {
       toolAllowlist: [],
       type: "external",
     });
-    await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", senderTag: "Батя", text: "привет" }));
-    await telegramGroupJournalRepository.record(group.groupId, message({ id: "2", text: "без тега" }));
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "1", senderTag: "Батя", text: "привет" }),
+    );
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "2", text: "без тега" }),
+    );
 
     const entries = await telegramGroupJournalRepository.listRecent({
       anchorEntryId: null,
@@ -296,24 +311,30 @@ describeWithDatabase("Telegram group journal repositories", () => {
       message({ id: "20", text: "ответ без форумной темы", threadId: 310 }),
     );
 
-    await expect(telegramGroupJournalRepository.listRecent({
-      anchorEntryId: null,
-      beforeSequence: null,
-      groupId: group.groupId,
-      limit: 50,
-      messageThreadId: null,
-    })).resolves.toMatchObject([{
-      contentText: "ответ без форумной темы",
-      messageThreadId: null,
-      telegramMessageId: "20",
-    }]);
-    await expect(telegramGroupJournalRepository.listRecent({
-      anchorEntryId: null,
-      beforeSequence: null,
-      groupId: group.groupId,
-      limit: 50,
-      messageThreadId: "310",
-    })).resolves.toEqual([]);
+    await expect(
+      telegramGroupJournalRepository.listRecent({
+        anchorEntryId: null,
+        beforeSequence: null,
+        groupId: group.groupId,
+        limit: 50,
+        messageThreadId: null,
+      }),
+    ).resolves.toMatchObject([
+      {
+        contentText: "ответ без форумной темы",
+        messageThreadId: null,
+        telegramMessageId: "20",
+      },
+    ]);
+    await expect(
+      telegramGroupJournalRepository.listRecent({
+        anchorEntryId: null,
+        beforeSequence: null,
+        groupId: group.groupId,
+        limit: 50,
+        messageThreadId: "310",
+      }),
+    ).resolves.toEqual([]);
   });
 
   it("stores media metadata without downloading or persisting Telegram raw payloads", async () => {
@@ -361,22 +382,21 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
     const familyMessage: TelegramMessage = {
       ...message({ id: "42", text: "договор" }),
-      attachments: [{
-        fileId: "telegram-file-secret",
-        fileName: "договор.pdf",
-        fileUniqueId: "stable-file-id",
-        kind: "document",
-        mediaType: "application/pdf",
-        size: 1_024,
-      }],
+      attachments: [
+        {
+          fileId: "telegram-file-secret",
+          fileName: "договор.pdf",
+          fileUniqueId: "stable-file-id",
+          kind: "document",
+          mediaType: "application/pdf",
+          size: 1_024,
+        },
+      ],
       raw: { date: 1_700_000_042, document: { file_id: "telegram-file-secret" } },
     };
 
     await telegramGroupJournalRepository.record(group.groupId, familyMessage);
-    const reference = await telegramGroupAttachmentRepository.record(
-      group.groupId,
-      familyMessage,
-    );
+    const reference = await telegramGroupAttachmentRepository.record(group.groupId, familyMessage);
     const auth = {
       familyId,
       groupId: group.groupId,
@@ -410,12 +430,14 @@ describeWithDatabase("Telegram group journal repositories", () => {
     await expect(
       telegramGroupAttachmentRepository.list(auth, { limit: 50, messageThreadId: null }),
     ).resolves.toMatchObject({
-      items: [{
-        attachmentId: reference.attachmentId,
-        contentText: "договор",
-        fileName: "договор.pdf",
-        telegramMessageId: "42",
-      }],
+      items: [
+        {
+          attachmentId: reference.attachmentId,
+          contentText: "договор",
+          fileName: "договор.pdf",
+          telegramMessageId: "42",
+        },
+      ],
       nextCursor: null,
     });
   });
@@ -433,13 +455,15 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
     const photoMessage: TelegramMessage = {
       ...message({ id: "43", withPhoto: true }),
-      attachments: [{
-        fileId: "external-photo-secret",
-        fileUniqueId: "external-photo-unique",
-        kind: "photo",
-        mediaType: "image/jpeg",
-        size: 2_048,
-      }],
+      attachments: [
+        {
+          fileId: "external-photo-secret",
+          fileUniqueId: "external-photo-unique",
+          kind: "photo",
+          mediaType: "image/jpeg",
+          size: 2_048,
+        },
+      ],
     };
     await telegramGroupJournalRepository.record(group.groupId, photoMessage);
     const reference = await telegramGroupAttachmentRepository.record(group.groupId, photoMessage);
@@ -452,22 +476,27 @@ describeWithDatabase("Telegram group journal repositories", () => {
       userId: null,
     };
 
-    await expect(telegramGroupAttachmentRepository.find(
-      externalAuth,
-      reference.attachmentId,
-    )).resolves.toMatchObject({ messageId: "43" });
-    await expect(telegramGroupAttachmentRepository.find(
-      { ...externalAuth, groupId: "00000000-0000-4000-8000-000000000001" },
-      reference.attachmentId,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
-    await expect(telegramGroupAttachmentRepository.find(
-      { ...externalAuth, groupType: "family_private" },
-      reference.attachmentId,
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
-    await expect(telegramGroupAttachmentRepository.list(
-      { ...externalAuth, groupType: "family_private" },
-      { limit: 50, messageThreadId: null },
-    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED/);
+    await expect(
+      telegramGroupAttachmentRepository.find(externalAuth, reference.attachmentId),
+    ).resolves.toMatchObject({ messageId: "43" });
+    await expect(
+      telegramGroupAttachmentRepository.find(
+        { ...externalAuth, groupId: "00000000-0000-4000-8000-000000000001" },
+        reference.attachmentId,
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(
+      telegramGroupAttachmentRepository.find(
+        { ...externalAuth, groupType: "family_private" },
+        reference.attachmentId,
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(
+      telegramGroupAttachmentRepository.list(
+        { ...externalAuth, groupType: "family_private" },
+        { limit: 50, messageThreadId: null },
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED/);
   });
 
   it("projects an observed replied-to image attachment through durable ancestry", async () => {
@@ -502,10 +531,11 @@ describeWithDatabase("Telegram group journal repositories", () => {
       messageThreadId: null,
     });
 
-    expect(ancestry).toMatchObject([{
-      attachment: { attachmentId: reference.attachmentId, kind: "photo" },
-      telegramMessageId: "51",
-    }]);
+    expect(ancestry).toMatchObject([
+      {
+        attachment: { attachmentId: reference.attachmentId, kind: "photo" },
+        telegramMessageId: "51",
+      },
+    ]);
   });
-
 });

@@ -14,7 +14,7 @@ function runMigrationChain(e) {
     throw Error(
       `${e.label}: encountered version ${n.version}, which is newer than the supported version ${e.targetVersion}. This usually indicates the wire was written by a newer eve deployment than the one reading it.`,
     );
-  for (; n.version < e.targetVersion; ) {
+  for (; n.version < e.targetVersion;) {
     let t = e.migrations.find((e) => e.from === n.version);
     if (!t)
       throw Error(

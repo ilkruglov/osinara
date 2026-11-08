@@ -63,9 +63,7 @@ function currentSelection(e) {
   return l === void 0 ? void 0 : `${CHATGPT_MODEL_SELECTION_PREFIX}${l}`;
 }
 function ensureChatGptImport(e) {
-  let t = e.match(
-    /import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?/u,
-  );
+  let t = e.match(/import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?/u);
   if (t !== null) {
     let n = t[1]
       .split(`,`)
@@ -85,20 +83,17 @@ function ensureChatGptImport(e) {
   return `${e.slice(0, r)}${i}import { chatgpt } from "eve/models/openai";${e.slice(r)}`;
 }
 function removeChatGptImport(e) {
-  return e.replace(
-    /import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?\n?/u,
-    (e, t) => {
-      let n = t
-          .split(`,`)
-          .map((e) => e.trim())
-          .filter(Boolean),
-        r = n.filter((e) => e !== `chatgpt`);
-      return r.length === n.length
-        ? e
-        : r.length === 0
-          ? ``
-          : `import { ${r.join(`, `)} } from "eve/models/openai";\n`;
-    },
-  );
+  return e.replace(/import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?\n?/u, (e, t) => {
+    let n = t
+        .split(`,`)
+        .map((e) => e.trim())
+        .filter(Boolean),
+      r = n.filter((e) => e !== `chatgpt`);
+    return r.length === n.length
+      ? e
+      : r.length === 0
+        ? ``
+        : `import { ${r.join(`, `)} } from "eve/models/openai";\n`;
+  });
 }
 export { applyModelSelectionToSource };

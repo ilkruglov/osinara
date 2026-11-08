@@ -10,4 +10,8 @@
  * encode the `?` into the final path segment. Explicit `searchParams` win
  * over same-named embedded query params.
  */
-export declare function createClientUrl(host: string, routePath: string, searchParams?: Readonly<Record<string, string>>): string;
+export declare function createClientUrl(
+  host: string,
+  routePath: string,
+  searchParams?: Readonly<Record<string, string>>,
+): string;

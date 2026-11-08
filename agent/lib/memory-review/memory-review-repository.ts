@@ -169,8 +169,13 @@ async function sourceRows(
         AND message.sequence_id > $3::bigint AND message.sequence_id <= $4::bigint
       ORDER BY message.sequence_id
       LIMIT $5`,
-    [input.conversationId, input.messageThreadId, input.throughSequence,
-      input.upperSequence, input.limit],
+    [
+      input.conversationId,
+      input.messageThreadId,
+      input.throughSequence,
+      input.upperSequence,
+      input.limit,
+    ],
   );
   return result.rows;
 }
@@ -202,9 +207,17 @@ async function insertBatch(
              $5, $6, $7, $8, $9,
              CASE WHEN $3::memory_review_batch_kind = 'interactive' THEN now() ELSE NULL END)
      RETURNING id`,
-    [input.lane.id, input.lane.conversation_id, input.batchKind, status,
-      input.predecessorSequence, first.sequence_id, last.sequence_id, input.sources.length,
-      input.applicationSessionId],
+    [
+      input.lane.id,
+      input.lane.conversation_id,
+      input.batchKind,
+      status,
+      input.predecessorSequence,
+      first.sequence_id,
+      last.sequence_id,
+      input.sources.length,
+      input.applicationSessionId,
+    ],
   );
   const batchId = inserted.rows[0]!.id;
   await client.query(
@@ -212,8 +225,12 @@ async function insertBatch(
        (batch_id, conversation_id, timeline_entry_id, timeline_sequence)
      SELECT $1, $2, source.id, source.sequence_id
        FROM unnest($3::uuid[], $4::bigint[]) AS source(id, sequence_id)`,
-    [batchId, input.lane.conversation_id, input.sources.map((source) => source.id),
-      input.sources.map((source) => source.sequence_id)],
+    [
+      batchId,
+      input.lane.conversation_id,
+      input.sources.map((source) => source.id),
+      input.sources.map((source) => source.sequence_id),
+    ],
   );
   return {
     batchId,
@@ -274,7 +291,7 @@ export const memoryReviewRepository = {
       );
       // The lane exists while review is off as well: a topic first seen then had none, and once
       // review was on again its history was never reviewed (Codex review, 6 November 2026).
-      if (!await groupReviewEnabled(client, input.groupId)) {
+      if (!(await groupReviewEnabled(client, input.groupId))) {
         await client.query("COMMIT");
         return null;
       }
@@ -330,16 +347,22 @@ export const memoryReviewRepository = {
         [input.timelineEntryId, input.groupId],
       );
       const current = message.rows[0];
-      if (!current) throw new AppError(
-        "AGENT_MEMORY_REVIEW_SOURCE_INVALID",
-        "Текущее сообщение не подходит для проверки памяти",
-      );
-      if (!await groupReviewEnabled(client, input.groupId)) {
+      if (!current)
+        throw new AppError(
+          "AGENT_MEMORY_REVIEW_SOURCE_INVALID",
+          "Текущее сообщение не подходит для проверки памяти",
+        );
+      if (!(await groupReviewEnabled(client, input.groupId))) {
         await client.query("COMMIT");
         return null;
       }
       await lockApplicationConversation(client, current.conversation_id);
-      const lane = await laneForUpdate(client, current.conversation_id, current.message_thread_id, "0");
+      const lane = await laneForUpdate(
+        client,
+        current.conversation_id,
+        current.message_thread_id,
+        "0",
+      );
       if (await laneBlocked(client, lane)) {
         await client.query("COMMIT");
         return null;
@@ -424,10 +447,11 @@ export const memoryReviewRepository = {
           AND (eve_turn_id IS NULL OR eve_turn_id = $3)`,
       [input.batchId, input.eveSessionId, input.eveTurnId, input.applicationSessionId],
     );
-    if (result.rowCount !== 1) throw new AppError(
-      "AGENT_MEMORY_REVIEW_TURN_BINDING_INVALID",
-      "Не удалось связать проверку памяти с текущим ходом",
-    );
+    if (result.rowCount !== 1)
+      throw new AppError(
+        "AGENT_MEMORY_REVIEW_TURN_BINDING_INVALID",
+        "Не удалось связать проверку памяти с текущим ходом",
+      );
   },
 
   /**
@@ -436,10 +460,7 @@ export const memoryReviewRepository = {
    * turn start is durable, which makes it the only source terminal handling can trust. The status
    * is deliberately not filtered: a replayed terminal event must still recognize a review turn.
    */
-  async batchIdForTurn(input: {
-    eveSessionId: string;
-    eveTurnId: string;
-  }): Promise<string | null> {
+  async batchIdForTurn(input: { eveSessionId: string; eveTurnId: string }): Promise<string | null> {
     const result = await database().query<{ id: string }>(
       `SELECT id FROM memory_review_batches
         WHERE eve_session_id = $1 AND eve_turn_id = $2`,
@@ -447,5 +468,4 @@ export const memoryReviewRepository = {
     );
     return result.rows[0]?.id ?? null;
   },
-
 };

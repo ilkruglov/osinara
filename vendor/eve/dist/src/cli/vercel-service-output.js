@@ -8,14 +8,8 @@ function resolveInternalBuildDirectory(t, n) {
   if (!(r === void 0 || r.trim().length === 0)) return resolve(t, r);
 }
 function resolveInternalVercelServiceOutput(e) {
-  let r = resolveInternalBuildDirectory(
-      e,
-      EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY_ENV,
-    ),
-    i = resolveInternalBuildDirectory(
-      e,
-      EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY_ENV,
-    );
+  let r = resolveInternalBuildDirectory(e, EVE_INTERNAL_HOST_BUILD_OUTPUT_DIRECTORY_ENV),
+    i = resolveInternalBuildDirectory(e, EVE_INTERNAL_BUILD_OUTPUT_DIRECTORY_ENV);
   if (!(r === void 0 && i === void 0)) {
     if (r === void 0 || i === void 0)
       throw Error(

@@ -27,11 +27,13 @@ const completeModel: NormalizedModel = {
 
 describe("createProviderAdapters", () => {
   it("loads the exact provider catalog and excludes incomplete model metadata", async () => {
-    const fetchProviderCatalog = vi.fn().mockResolvedValue([
-      completeModel,
-      { ...completeModel, contextWindowTokens: null, id: "missing-context" },
-      { ...completeModel, id: "missing-tools", supportsTools: null },
-    ]);
+    const fetchProviderCatalog = vi
+      .fn()
+      .mockResolvedValue([
+        completeModel,
+        { ...completeModel, contextWindowTokens: null, id: "missing-context" },
+        { ...completeModel, id: "missing-tools", supportsTools: null },
+      ]);
     const fetch = vi.fn();
     const adapters = createProviderAdapters({
       catalogTimeoutMs: 10_000,
@@ -41,9 +43,7 @@ describe("createProviderAdapters", () => {
       validateModelProviderSmoke: vi.fn(),
     });
 
-    await expect(adapters.listModels("deepseek", "provider-key")).resolves.toEqual([
-      completeModel,
-    ]);
+    await expect(adapters.listModels("deepseek", "provider-key")).resolves.toEqual([completeModel]);
     expect(fetchProviderCatalog).toHaveBeenCalledWith({
       apiKey: "provider-key",
       fetch,
@@ -63,12 +63,10 @@ describe("createProviderAdapters", () => {
       validateModelProviderSmoke,
     });
 
-    await adapters.validateModel(
-      "deepseek",
-      "provider-key",
-      completeModel,
-      { effort: "high", type: "effort" },
-    );
+    await adapters.validateModel("deepseek", "provider-key", completeModel, {
+      effort: "high",
+      type: "effort",
+    });
 
     expect(validateModelProviderSmoke).toHaveBeenCalledWith({
       apiKey: "provider-key",
@@ -86,17 +84,22 @@ describe("createProviderAdapters", () => {
     const adapters = createProviderAdapters({
       catalogTimeoutMs: 10_000,
       fetch: vi.fn(),
-      fetchProviderCatalog: vi.fn().mockRejectedValue(new AppError(
-        "AGENT_PROVIDER_CATALOG_AUTH_REQUIRED",
-        "Для загрузки каталога deepseek нужен API-ключ",
-      )),
+      fetchProviderCatalog: vi
+        .fn()
+        .mockRejectedValue(
+          new AppError(
+            "AGENT_PROVIDER_CATALOG_AUTH_REQUIRED",
+            "Для загрузки каталога deepseek нужен API-ключ",
+          ),
+        ),
       smokeTimeoutMs: 30_000,
       validateModelProviderSmoke: vi.fn(),
     });
 
     await expect(adapters.listModels("deepseek", "invalid-key")).rejects.toMatchObject({
       code: "AGENT_PROVIDER_CATALOG_AUTH_REQUIRED",
-      message: "AGENT_PROVIDER_CATALOG_AUTH_REQUIRED: Для загрузки каталога deepseek нужен API-ключ",
+      message:
+        "AGENT_PROVIDER_CATALOG_AUTH_REQUIRED: Для загрузки каталога deepseek нужен API-ключ",
     });
   });
 
@@ -106,17 +109,17 @@ describe("createProviderAdapters", () => {
       fetch: vi.fn(),
       fetchProviderCatalog: vi.fn(),
       smokeTimeoutMs: 30_000,
-      validateModelProviderSmoke: vi.fn().mockRejectedValue(new Error(
-        "HTTP 401 response with internal provider details",
-      )),
+      validateModelProviderSmoke: vi
+        .fn()
+        .mockRejectedValue(new Error("HTTP 401 response with internal provider details")),
     });
 
-    await expect(adapters.validateModel(
-      "deepseek",
-      "invalid-key",
-      completeModel,
-      { effort: "high", type: "effort" },
-    )).rejects.toMatchObject({
+    await expect(
+      adapters.validateModel("deepseek", "invalid-key", completeModel, {
+        effort: "high",
+        type: "effort",
+      }),
+    ).rejects.toMatchObject({
       code: "OSINARA_INSTALL_MODEL_SMOKE_FAILED",
       message: expect.stringContaining(
         "OSINARA_INSTALL_MODEL_SMOKE_FAILED: Не удалось проверить выбранную модель",

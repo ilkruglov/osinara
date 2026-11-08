@@ -15,9 +15,11 @@ const PROFILE_VIEW_REF_PATTERN = /^view_[0-9a-f]{32}$/u;
 export default defineTool({
   description:
     "Повторно прочитать точный ordered profile selection по profileViewRef; не создаёт новую выборку.",
-  inputSchema: z.object({
-    profileViewRef: z.string().regex(PROFILE_VIEW_REF_PATTERN),
-  }).strict(),
+  inputSchema: z
+    .object({
+      profileViewRef: z.string().regex(PROFILE_VIEW_REF_PATTERN),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await profileViewRepository.read(requireMemoryAuthorization(ctx), input.profileViewRef);
   },

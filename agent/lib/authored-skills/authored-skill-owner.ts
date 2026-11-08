@@ -13,9 +13,12 @@ import { lockCurrentOwner } from "../family-repository-checks.js";
 
 export async function requireCurrentOwner(client: PoolClient, caller: FamilyCaller): Promise<void> {
   if (caller.role !== "owner") {
-    throw new AppError("AGENT_SKILL_FORBIDDEN", "Создавать и менять навыки может только владелец семьи");
+    throw new AppError(
+      "AGENT_SKILL_FORBIDDEN",
+      "Создавать и менять навыки может только владелец семьи",
+    );
   }
-  if (!await lockCurrentOwner(client, caller.familyId, caller.userId)) {
+  if (!(await lockCurrentOwner(client, caller.familyId, caller.userId))) {
     throw new AppError(
       "AGENT_SKILL_FORBIDDEN",
       "Права владельца больше не действуют. Обновите чат и повторите действие",

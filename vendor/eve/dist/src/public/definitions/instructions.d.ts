@@ -1,4 +1,7 @@
-import { type DynamicResolveContext, type DynamicSentinel } from "#shared/dynamic-tool-definition.js";
+import {
+  type DynamicResolveContext,
+  type DynamicSentinel,
+} from "#shared/dynamic-tool-definition.js";
 import type { ExactDefinition } from "#public/definitions/exact.js";
 import type { PublicInstructionsDefinition } from "#shared/instructions-definition.js";
 export type InstructionsDefinition = Readonly<PublicInstructionsDefinition>;
@@ -12,14 +15,19 @@ export type InstructionsDefinition = Readonly<PublicInstructionsDefinition>;
  * instruction lifecycle can validate that a resolver return came through
  * this helper.
  */
-export declare function defineInstructions<TInstructions extends InstructionsDefinition>(definition: ExactDefinition<TInstructions, InstructionsDefinition>): TInstructions;
+export declare function defineInstructions<TInstructions extends InstructionsDefinition>(
+  definition: ExactDefinition<TInstructions, InstructionsDefinition>,
+): TInstructions;
 export type DynamicInstructionsResult = InstructionsDefinition | null;
 export type DynamicInstructionsEvents = {
-    readonly [K in "session.started" | "turn.started"]?: (event: unknown, ctx: DynamicResolveContext) => DynamicInstructionsResult | Promise<DynamicInstructionsResult>;
+  readonly [K in "session.started" | "turn.started"]?: (
+    event: unknown,
+    ctx: DynamicResolveContext,
+  ) => DynamicInstructionsResult | Promise<DynamicInstructionsResult>;
 };
 /**
  * Defines a runtime instructions resolver for session and turn boundaries.
  */
 export declare function defineDynamic<const TEvents extends DynamicInstructionsEvents>(definition: {
-    readonly events: ExactDefinition<TEvents, DynamicInstructionsEvents>;
+  readonly events: ExactDefinition<TEvents, DynamicInstructionsEvents>;
 }): DynamicSentinel<DynamicInstructionsResult>;

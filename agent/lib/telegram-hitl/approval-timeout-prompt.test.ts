@@ -17,7 +17,12 @@ import type { TimedOutApprovalClaim } from "./approval-timeout.js";
 
 const CLAIM: TimedOutApprovalClaim = {
   applicationSessionId: "app-session-1",
-  auth: { attributes: {}, authenticator: "telegram", principalId: "user-1", principalType: "user" } as never,
+  auth: {
+    attributes: {},
+    authenticator: "telegram",
+    principalId: "user-1",
+    principalType: "user",
+  } as never,
   kind: "tool-approval",
   eveSessionId: "wrun_parked",
   id: "approval-1",

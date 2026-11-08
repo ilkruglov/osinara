@@ -22,11 +22,13 @@ const handlers = createSkillSignalHandlers({
 });
 
 function report(stage: string, error: unknown): void {
-  console.error(JSON.stringify({
-    code: "AGENT_SKILL_SIGNAL_FAILED",
-    error: error instanceof Error ? error.message : String(error),
-    stage,
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_SKILL_SIGNAL_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+      stage,
+    }),
+  );
 }
 
 export default defineHook({

@@ -75,8 +75,7 @@ function renderCodeBlock(e) {
   e.lang?.trim() && t.push(`  ${ansi.dim}${e.lang.trim()}${ansi.dimOff}`);
   let n = (e.text ?? ``).replace(/\n$/u, ``).split(`
 `);
-  for (let e of n)
-    t.push(`${ansi.dim}│${ansi.dimOff} ${ansi.cyan}${e}${ansi.cyanOff}`);
+  for (let e of n) t.push(`${ansi.dim}│${ansi.dimOff} ${ansi.cyan}${e}${ansi.cyanOff}`);
   return t;
 }
 function renderList(e, t) {
@@ -118,9 +117,7 @@ function renderInlineToken(e) {
     case `image`: {
       let t = e.text?.trim() || `image`,
         n = e.href ?? ``;
-      return n.length === 0
-        ? `[${t}]`
-        : `[${t}] (${ansi.cyan}${n}${ansi.cyanOff})`;
+      return n.length === 0 ? `[${t}]` : `[${t}] (${ansi.cyan}${n}${ansi.cyanOff})`;
     }
     case `br`:
       return `
@@ -140,13 +137,9 @@ function renderTable(e, n) {
   if (i.length === 0) return [];
   let a = i.map((t, n) => normalizeAlignment(e.align?.[n])),
     o = i.map(renderTableCell),
-    s = (e.rows ?? []).map((e) =>
-      normalizeTableRow(e, i.length).map(renderTableCell),
-    ),
+    s = (e.rows ?? []).map((e) => normalizeTableRow(e, i.length).map(renderTableCell)),
     c = [o, ...s],
-    l = a.map((e, n) =>
-      Math.max(3, ...c.map((e) => visibleLength(e[n] ?? ``))),
-    );
+    l = a.map((e, n) => Math.max(3, ...c.map((e) => visibleLength(e[n] ?? ``))));
   return (
     fitTableWidths(l, n),
     [
@@ -177,7 +170,7 @@ function fitTableWidths(e, t) {
   if (!Number.isFinite(t)) return;
   let n = Math.max(0, e.length - 1) * 2,
     r = Math.max(e.length * 3, Math.floor(t) - n);
-  for (; e.reduce((e, t) => e + t, 0) > r; ) {
+  for (; e.reduce((e, t) => e + t, 0) > r;) {
     let t = Math.max(...e),
       n = e.findIndex((e) => e === t && e > 3);
     if (n === -1) return;
@@ -186,9 +179,7 @@ function fitTableWidths(e, t) {
 }
 function formatTableRow(e, t, n) {
   return e
-    .map((e, r) =>
-      alignTableCell(fitTableCell(e, t[r] ?? 3), t[r] ?? 3, n[r] ?? `left`),
-    )
+    .map((e, r) => alignTableCell(fitTableCell(e, t[r] ?? 3), t[r] ?? 3, n[r] ?? `left`))
     .join(`  `);
 }
 function fitTableCell(n, r) {
@@ -210,7 +201,7 @@ function pushBlankRow(e) {
   e.length > 0 && e.at(-1) !== `` && e.push(``);
 }
 function trimTrailingBlankRows(e) {
-  for (; e.at(-1) === ``; ) e.pop();
+  for (; e.at(-1) === ``;) e.pop();
   return e;
 }
 export { renderMarkdown };

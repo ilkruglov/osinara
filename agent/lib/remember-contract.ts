@@ -49,138 +49,248 @@ const SERIALIZED_MEMORY_SUBJECT_PATTERN = new RegExp(
 );
 
 const memorySubjectSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("current_author").describe("Сведение относится к автору текущего сообщения"),
-  }).strict(),
-  z.object({
-    kind: z.literal("verified_ref").describe("Сведение относится к проверенному subjectRef из контекста"),
-    subjectRef: z.string().regex(MEMORY_SUBJECT_REF_PATTERN).describe("Opaque subjectRef только из текущего profile context"),
-  }).strict(),
-  z.object({
-    kind: z.literal("label").describe("Текстовая тема без проверенной identity"),
-    label: z.string().trim().min(1).max(SUBJECT_LABEL_MAX_CHARACTERS).describe("Краткая нейтральная метка темы"),
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("current_author").describe("Сведение относится к автору текущего сообщения"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z
+        .literal("verified_ref")
+        .describe("Сведение относится к проверенному subjectRef из контекста"),
+      subjectRef: z
+        .string()
+        .regex(MEMORY_SUBJECT_REF_PATTERN)
+        .describe("Opaque subjectRef только из текущего profile context"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("label").describe("Текстовая тема без проверенной identity"),
+      label: z
+        .string()
+        .trim()
+        .min(1)
+        .max(SUBJECT_LABEL_MAX_CHARACTERS)
+        .describe("Краткая нейтральная метка темы"),
+    })
+    .strict(),
   z.object({ kind: z.literal("none").describe("Запись не относится к человеку") }).strict(),
 ]);
 
 const modelFacingMemorySubjectSchema = z.union([
   memorySubjectSchema,
-  z.string()
+  z
+    .string()
     .regex(SERIALIZED_MEMORY_SUBJECT_PATTERN)
     .transform((value) => JSON.parse(value) as unknown)
     .pipe(memorySubjectSchema),
 ]);
 
 const threadRoleSchema = z.enum([
-  "goal", "constraint", "method", "decision", "episode", "outcome", "lesson", "open_loop",
+  "goal",
+  "constraint",
+  "method",
+  "decision",
+  "episode",
+  "outcome",
+  "lesson",
+  "open_loop",
 ]);
 
 const memoryThreadSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("attach").describe("Прикрепить запись к существующей нити"),
-    role: threadRoleSchema.describe("Роль новой записи внутри нити"),
-    threadRef: z.string().regex(THREAD_REF_PATTERN).describe("Opaque ref из list/search/read_memory_thread"),
-  }).strict(),
-  z.object({
-    action: z.literal("create").describe("Атомарно создать нить вместе с записью"),
-    identity: z.enum(["subject", "project"]).optional().describe("Identity только для корневой нити"),
-    parentThreadRef: z.string().regex(THREAD_REF_PATTERN).optional().describe("Родительская нить только для subthread"),
-    purpose: z.string().trim().min(1).max(THREAD_PURPOSE_MAX_CHARACTERS).describe("Устойчивое назначение нити"),
-    role: threadRoleSchema.describe("Роль первой записи внутри нити"),
-    title: z.string().trim().min(1).max(THREAD_TITLE_MAX_CHARACTERS).describe("Краткое устойчивое название нити"),
-  }).strict().refine(
-    (input) => input.parentThreadRef === undefined || input.identity === undefined,
-    { message: "Для subthread identity определяется только проверенной родительской нитью" },
-  ),
+  z
+    .object({
+      action: z.literal("attach").describe("Прикрепить запись к существующей нити"),
+      role: threadRoleSchema.describe("Роль новой записи внутри нити"),
+      threadRef: z
+        .string()
+        .regex(THREAD_REF_PATTERN)
+        .describe("Opaque ref из list/search/read_memory_thread"),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("create").describe("Атомарно создать нить вместе с записью"),
+      identity: z
+        .enum(["subject", "project"])
+        .optional()
+        .describe("Identity только для корневой нити"),
+      parentThreadRef: z
+        .string()
+        .regex(THREAD_REF_PATTERN)
+        .optional()
+        .describe("Родительская нить только для subthread"),
+      purpose: z
+        .string()
+        .trim()
+        .min(1)
+        .max(THREAD_PURPOSE_MAX_CHARACTERS)
+        .describe("Устойчивое назначение нити"),
+      role: threadRoleSchema.describe("Роль первой записи внутри нити"),
+      title: z
+        .string()
+        .trim()
+        .min(1)
+        .max(THREAD_TITLE_MAX_CHARACTERS)
+        .describe("Краткое устойчивое название нити"),
+    })
+    .strict()
+    .refine((input) => input.parentThreadRef === undefined || input.identity === undefined, {
+      message: "Для subthread identity определяется только проверенной родительской нитью",
+    }),
 ]);
 
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
-  return z.object({
-    basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
-    // Compatibility normalization and single spaces only. Not case: production slots are named
-    // with proper nouns («взгляды на Opus 5.5», «общение с Мией», the latter a reserved name in
-    // profile-selection.ts), and lowering them would split every such slot in two (Codex review,
-    // 6 October 2026). Checked after the transform: NFKC can lengthen the name, and the column
-    // CHECK is on the stored form.
-    attribute: z.string().trim().min(1)
-      .transform((value) => value.normalize("NFKC").replace(/\s+/gu, " "))
-      .pipe(z.string().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS))
-      .optional().describe(
-      "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
-    ),
-    slotUpdate: z.object({
-      action: z.enum(["add", "replace"]).describe("add сохраняет прежние детали отдельными записями; replace заменяет их полной новой версией"),
-      previousMemoryRefs: z.array(z.string().regex(MEMORY_REF_PATTERN)).min(1).max(50)
-        .describe("Прочитанные активные memoryRef того же субъекта и слота: для add достаточно прочитанных, для replace все; backend отказывает, если какая-то уже не активна или replace назвал не все"),
-    }).strict().optional(),
-    content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
-    distinct: z.boolean().optional().describe("true после AGENT_MEMORY_NEAR_DUPLICATE, если это другой факт, а не версия существующего"),
-    reinforces: z.string().regex(MEMORY_REF_PATTERN).optional().describe("После AGENT_MEMORY_NEAR_DUPLICATE: memoryRef записи с тем же смыслом; она подкрепляется, новая не создаётся"),
-    kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
-    occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})?)?$/u).refine(
-      (value) => Number.isFinite(Date.parse(value)),
-      "Дата события должна быть корректной ISO-датой",
-    ).optional().describe("Только для episode: дата или дата-время события в ISO 8601, из текста или из sentAt сообщения"),
-    scope: scope.describe("Разрешённая область памяти текущего trust zone"),
-    sensitivity: z.enum(["normal", "sensitive"]).describe("Sensitive всегда требует Eve HITL"),
-    sourceSequence: z.string().regex(TIMELINE_SEQUENCE_PATTERN).refine(
-      (value) => BigInt(value) <= POSTGRES_BIGINT_MAX,
-      "Номер сообщения выходит за допустимые границы",
-    ).optional().describe(
-      "Только для группы: номер #sequence одного сообщения из видимой дельты текущего хода; без поля источником является текущее сообщение",
-    ),
-    subject: modelFacingMemorySubjectSchema.describe("Кому или чему принадлежит утверждение"),
-    thread: memoryThreadSchema.optional().describe("Необязательное атомарное создание нити или attach"),
-  }).strict().superRefine((input, context) => {
-    if (input.slotUpdate && (!input.attribute || input.reinforces !== undefined || input.distinct === true)) {
-      context.addIssue({ code: "custom", path: ["slotUpdate"], message: "slotUpdate требует attribute и несовместим с reinforces/distinct" });
-    }
-    const create = input.thread?.action === "create" ? input.thread : null;
-    if (create?.identity === "project" && input.subject.kind !== "none") {
-      context.addIssue({
-        code: "custom",
-        message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project-thread требует subject.kind=none",
-        path: ["subject"],
-      });
-    }
-    if (input.subject.kind === "label" && input.thread !== undefined) {
-      context.addIssue({
-        code: "custom",
-        message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Текстовая метка не задаёт identity нити",
-        path: ["subject"],
-      });
-    }
-    if (input.scope === "personal" && create?.identity === "project") {
-      context.addIssue({
-        code: "custom",
-        message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи",
-        path: ["thread", "identity"],
-      });
-    }
-    if (input.occurredAt !== undefined && input.kind !== "episode") {
-      context.addIssue({
-        code: "custom",
-        message: "AGENT_MEMORY_INPUT_INVALID: occurredAt применим только к событию",
-        path: ["occurredAt"],
-      });
-    }
-    if (input.attribute !== undefined && input.kind === "episode" &&
-      input.attribute !== MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE) {
-      context.addIssue({
-        code: "custom",
-        message: `AGENT_MEMORY_INPUT_INVALID: Слот attribute для события допустим только как "${MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE}"`,
-        path: ["attribute"],
-      });
-    }
-    if (input.sourceSequence !== undefined && input.sensitivity === "sensitive") {
-      context.addIssue({
-        code: "custom",
-        message:
-          "AGENT_MEMORY_INPUT_INVALID: Чувствительное сведение можно сохранить только из текущего сообщения его автора",
-        path: ["sourceSequence"],
-      });
-    }
-  });
+  return z
+    .object({
+      basis: z
+        .enum(["agent_inferred", "user_requested"])
+        .describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
+      // Compatibility normalization and single spaces only. Not case: production slots are named
+      // with proper nouns («взгляды на Opus 5.5», «общение с Мией», the latter a reserved name in
+      // profile-selection.ts), and lowering them would split every such slot in two (Codex review,
+      // 6 October 2026). Checked after the transform: NFKC can lengthen the name, and the column
+      // CHECK is on the stored form.
+      attribute: z
+        .string()
+        .trim()
+        .min(1)
+        .transform((value) => value.normalize("NFKC").replace(/\s+/gu, " "))
+        .pipe(z.string().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS))
+        .optional()
+        .describe(
+          "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
+        ),
+      slotUpdate: z
+        .object({
+          action: z
+            .enum(["add", "replace"])
+            .describe(
+              "add сохраняет прежние детали отдельными записями; replace заменяет их полной новой версией",
+            ),
+          previousMemoryRefs: z
+            .array(z.string().regex(MEMORY_REF_PATTERN))
+            .min(1)
+            .max(50)
+            .describe(
+              "Прочитанные активные memoryRef того же субъекта и слота: для add достаточно прочитанных, для replace все; backend отказывает, если какая-то уже не активна или replace назвал не все",
+            ),
+        })
+        .strict()
+        .optional(),
+      content: z
+        .string()
+        .min(1)
+        .max(MEMORY_CONTENT_MAX_CHARACTERS)
+        .describe("Одна самостоятельная устойчивая запись без догадок"),
+      distinct: z
+        .boolean()
+        .optional()
+        .describe(
+          "true после AGENT_MEMORY_NEAR_DUPLICATE, если это другой факт, а не версия существующего",
+        ),
+      reinforces: z
+        .string()
+        .regex(MEMORY_REF_PATTERN)
+        .optional()
+        .describe(
+          "После AGENT_MEMORY_NEAR_DUPLICATE: memoryRef записи с тем же смыслом; она подкрепляется, новая не создаётся",
+        ),
+      kind: z
+        .enum(["profile", "preference", "fact", "episode", "family_shared"])
+        .describe("Семантический тип записи"),
+      occurredAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})?)?$/u)
+        .refine(
+          (value) => Number.isFinite(Date.parse(value)),
+          "Дата события должна быть корректной ISO-датой",
+        )
+        .optional()
+        .describe(
+          "Только для episode: дата или дата-время события в ISO 8601, из текста или из sentAt сообщения",
+        ),
+      scope: scope.describe("Разрешённая область памяти текущего trust zone"),
+      sensitivity: z.enum(["normal", "sensitive"]).describe("Sensitive всегда требует Eve HITL"),
+      sourceSequence: z
+        .string()
+        .regex(TIMELINE_SEQUENCE_PATTERN)
+        .refine(
+          (value) => BigInt(value) <= POSTGRES_BIGINT_MAX,
+          "Номер сообщения выходит за допустимые границы",
+        )
+        .optional()
+        .describe(
+          "Только для группы: номер #sequence одного сообщения из видимой дельты текущего хода; без поля источником является текущее сообщение",
+        ),
+      subject: modelFacingMemorySubjectSchema.describe("Кому или чему принадлежит утверждение"),
+      thread: memoryThreadSchema
+        .optional()
+        .describe("Необязательное атомарное создание нити или attach"),
+    })
+    .strict()
+    .superRefine((input, context) => {
+      if (
+        input.slotUpdate &&
+        (!input.attribute || input.reinforces !== undefined || input.distinct === true)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["slotUpdate"],
+          message: "slotUpdate требует attribute и несовместим с reinforces/distinct",
+        });
+      }
+      const create = input.thread?.action === "create" ? input.thread : null;
+      if (create?.identity === "project" && input.subject.kind !== "none") {
+        context.addIssue({
+          code: "custom",
+          message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project-thread требует subject.kind=none",
+          path: ["subject"],
+        });
+      }
+      if (input.subject.kind === "label" && input.thread !== undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Текстовая метка не задаёт identity нити",
+          path: ["subject"],
+        });
+      }
+      if (input.scope === "personal" && create?.identity === "project") {
+        context.addIssue({
+          code: "custom",
+          message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи",
+          path: ["thread", "identity"],
+        });
+      }
+      if (input.occurredAt !== undefined && input.kind !== "episode") {
+        context.addIssue({
+          code: "custom",
+          message: "AGENT_MEMORY_INPUT_INVALID: occurredAt применим только к событию",
+          path: ["occurredAt"],
+        });
+      }
+      if (
+        input.attribute !== undefined &&
+        input.kind === "episode" &&
+        input.attribute !== MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `AGENT_MEMORY_INPUT_INVALID: Слот attribute для события допустим только как "${MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE}"`,
+          path: ["attribute"],
+        });
+      }
+      if (input.sourceSequence !== undefined && input.sensitivity === "sensitive") {
+        context.addIssue({
+          code: "custom",
+          message:
+            "AGENT_MEMORY_INPUT_INVALID: Чувствительное сведение можно сохранить только из текущего сообщения его автора",
+          path: ["sourceSequence"],
+        });
+      }
+    });
 }
 
 export const rememberInputSchema = createRememberInputSchema(

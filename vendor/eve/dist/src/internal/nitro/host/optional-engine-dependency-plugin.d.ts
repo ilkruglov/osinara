@@ -9,11 +9,17 @@
  */
 export declare const OPTIONAL_ENGINE_PACKAGES_BY_BACKEND_NAME: Readonly<Record<string, string>>;
 interface BundlerPluginShape {
-    readonly name: string;
-    resolveId?(source: string, importer: string | undefined): {
+  readonly name: string;
+  resolveId?(
+    source: string,
+    importer: string | undefined,
+  ):
+    | {
         external: true;
         id: string;
-    } | null | undefined;
+      }
+    | null
+    | undefined;
 }
 /**
  * Creates the bundler plugin that pins unconfigured optional engine
@@ -24,5 +30,7 @@ interface BundlerPluginShape {
  * are excluded here and take Nitro's externalize-and-trace path
  * instead, keeping their hosted output self-contained.
  */
-export declare function createOptionalEngineDependencyPlugin(unconfiguredPackages: readonly string[]): BundlerPluginShape | null;
+export declare function createOptionalEngineDependencyPlugin(
+  unconfiguredPackages: readonly string[],
+): BundlerPluginShape | null;
 export {};

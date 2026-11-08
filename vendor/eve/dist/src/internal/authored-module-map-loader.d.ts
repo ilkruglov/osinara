@@ -6,5 +6,5 @@ import type { RuntimeDiskCompiledArtifactsSource } from "#runtime/compiled-artif
  * source reloads without relying on Node's module cache for module-map.mjs.
  */
 export declare function loadCompiledModuleMapFromAuthoredSource(input: {
-    readonly compiledArtifactsSource: RuntimeDiskCompiledArtifactsSource;
+  readonly compiledArtifactsSource: RuntimeDiskCompiledArtifactsSource;
 }): Promise<CompiledModuleMap>;

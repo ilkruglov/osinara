@@ -26,7 +26,10 @@ function sourceError(reason: string): AppError {
       reason,
     }),
   );
-  return new AppError("AGENT_MEMORY_EXPLICIT_SOURCE_INVALID", "Не удалось подтвердить сообщение для сохранения памяти. Отправьте запрос ещё раз");
+  return new AppError(
+    "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
+    "Не удалось подтвердить сообщение для сохранения памяти. Отправьте запрос ещё раз",
+  );
 }
 
 export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
@@ -46,7 +49,11 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
   // Eve resumes an approved tool in the same durable turn but supplies freshly revalidated callback
   // auth without replaying the original message metadata. Accept only the exact retained binding.
   const sourceAttributesAbsent =
-    conversationId === undefined && currentTimelineEntryId === undefined && visibleTimelineEntryIds === undefined && memoryReviewBatchId === undefined && memoryReviewSourceEntryIds === undefined;
+    conversationId === undefined &&
+    currentTimelineEntryId === undefined &&
+    visibleTimelineEntryIds === undefined &&
+    memoryReviewBatchId === undefined &&
+    memoryReviewSourceEntryIds === undefined;
   if (
     typeof applicationSessionId === "string" &&
     invokingActor !== null &&
@@ -62,7 +69,15 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
     return;
 
   const internalReview = memoryReviewBatchId !== undefined && currentTimelineEntryId === undefined;
-  const present = [applicationSessionId, conversationId, currentTimelineEntryId, invokingActor, visibleTimelineEntryIds, memoryReviewBatchId, memoryReviewSourceEntryIds].filter((value) => value !== undefined).length;
+  const present = [
+    applicationSessionId,
+    conversationId,
+    currentTimelineEntryId,
+    invokingActor,
+    visibleTimelineEntryIds,
+    memoryReviewBatchId,
+    memoryReviewSourceEntryIds,
+  ].filter((value) => value !== undefined).length;
   if (present === 0) return;
   if (internalReview) {
     if (
@@ -96,7 +111,9 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
     !Array.isArray(visibleTimelineEntryIds) ||
     !visibleTimelineEntryIds.every((entryId) => typeof entryId === "string") ||
     (memoryReviewBatchId === undefined) !== (memoryReviewSourceEntryIds === undefined) ||
-    (memoryReviewSourceEntryIds !== undefined && (!Array.isArray(memoryReviewSourceEntryIds) || !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string")))
+    (memoryReviewSourceEntryIds !== undefined &&
+      (!Array.isArray(memoryReviewSourceEntryIds) ||
+        !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string")))
   ) {
     throw sourceError("turn_attributes_invalid");
   }
@@ -130,7 +147,11 @@ export async function resolveMemoryTurnSource(
   sourceMessageId: string;
   timelineEntryId: string;
 }> {
-  if (sourceSequence !== undefined && (!POSITIVE_SEQUENCE_PATTERN.test(sourceSequence) || BigInt(sourceSequence) > POSTGRES_BIGINT_MAX)) {
+  if (
+    sourceSequence !== undefined &&
+    (!POSITIVE_SEQUENCE_PATTERN.test(sourceSequence) ||
+      BigInt(sourceSequence) > POSTGRES_BIGINT_MAX)
+  ) {
     throw sourceError("source_sequence_invalid");
   }
   const source = await memoryTurnSourceRepository.resolve({
@@ -144,9 +165,16 @@ export async function resolveMemoryTurnSource(
   if (sourceSequence !== undefined && auth.groupId === null && !source.isReview) {
     throw sourceError("personal_delta_source_forbidden");
   }
-  const expectedPartition = source.scope === "group" ? auth.groupId : source.scope === "personal" ? auth.userId : auth.familyId;
+  const expectedPartition =
+    source.scope === "group"
+      ? auth.groupId
+      : source.scope === "personal"
+        ? auth.userId
+        : auth.familyId;
   if (
-    (!source.isReview && (source.invokingActorId !== auth.telegramActorId || source.invokingActorKind !== auth.telegramActorKind)) ||
+    (!source.isReview &&
+      (source.invokingActorId !== auth.telegramActorId ||
+        source.invokingActorKind !== auth.telegramActorKind)) ||
     source.scopePartitionKey !== expectedPartition ||
     !auth.scopes.includes(source.scope)
   ) {

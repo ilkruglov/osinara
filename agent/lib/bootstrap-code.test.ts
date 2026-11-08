@@ -30,7 +30,12 @@ describe("bootstrap code", () => {
     const expiredAt = new Date(generated.record.expiresAt.getTime() + 1);
 
     expect(
-      verifyBootstrapCode({ attempts: 0, code: generated.code, now: expiredAt, record: generated.record }),
+      verifyBootstrapCode({
+        attempts: 0,
+        code: generated.code,
+        now: expiredAt,
+        record: generated.record,
+      }),
     ).toBe(false);
   });
 

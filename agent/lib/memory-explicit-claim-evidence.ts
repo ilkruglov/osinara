@@ -33,7 +33,9 @@ interface ExplicitTimelineSourceRow {
 
 function evidenceSnippet(content: string): string {
   // Code points, not UTF-16 units: a cut never splits a surrogate pair.
-  const bounded = Array.from(content.trim()).slice(0, MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS).join("");
+  const bounded = Array.from(content.trim())
+    .slice(0, MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS)
+    .join("");
   if (!bounded) {
     throw new AppError(
       "AGENT_MEMORY_EVIDENCE_SOURCE_EMPTY",
@@ -55,8 +57,10 @@ export async function prepareExplicitClaimEvidence(
       "Явное сохранение требует одного проверенного источника и явного subject intent",
     );
   }
-  if (source.subject.kind === "label" &&
-    (!source.subject.label.trim() || source.subject.label.length > 200)) {
+  if (
+    source.subject.kind === "label" &&
+    (!source.subject.label.trim() || source.subject.label.length > 200)
+  ) {
     throw new AppError(
       "AGENT_MEMORY_SUBJECT_LABEL_INVALID",
       "Текстовая метка субъекта памяти должна содержать от 1 до 200 символов",
@@ -112,19 +116,29 @@ export async function prepareExplicitClaimEvidence(
                AND source_set.memory_review_batch_id IS NOT NULL
            )
         )`,
-    [source.timelineEntryId, source.conversationId,
+    [
+      source.timelineEntryId,
+      source.conversationId,
       auth.telegramActorKind === "telegram_channel" ? null : auth.telegramActorId,
-      input.provenance?.sessionId ?? null, input.provenance?.turnId ?? null,
-      auth.telegramActorKind === "telegram_channel" ? null : auth.telegramActorKind],
+      input.provenance?.sessionId ?? null,
+      input.provenance?.turnId ?? null,
+      auth.telegramActorKind === "telegram_channel" ? null : auth.telegramActorKind,
+    ],
   );
   const row = result.rows[0];
-  const expectedPartition = input.scope === "group"
-    ? auth.groupId
-    : input.scope === "personal"
-      ? auth.userId
-      : auth.familyId;
-  if (!row || row.family_id !== auth.familyId || row.scope !== input.scope ||
-    row.scope_partition_key !== expectedPartition || !row.content_text) {
+  const expectedPartition =
+    input.scope === "group"
+      ? auth.groupId
+      : input.scope === "personal"
+        ? auth.userId
+        : auth.familyId;
+  if (
+    !row ||
+    row.family_id !== auth.familyId ||
+    row.scope !== input.scope ||
+    row.scope_partition_key !== expectedPartition ||
+    !row.content_text
+  ) {
     throw new AppError(
       "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
       "Текущее проверенное сообщение не относится к выбранной области памяти",
@@ -141,8 +155,8 @@ export async function prepareExplicitClaimEvidence(
       subjectParticipantId = row.author_participant_id;
       subjectConversationId = source.conversationId;
     } else {
-      const invalidAuthor = !row.author_user_id ||
-        (input.scope === "personal" && row.author_user_id !== auth.userId);
+      const invalidAuthor =
+        !row.author_user_id || (input.scope === "personal" && row.author_user_id !== auth.userId);
       if (invalidAuthor) {
         throw new AppError(
           "AGENT_MEMORY_SUBJECT_CURRENT_AUTHOR_INVALID",
@@ -171,13 +185,20 @@ export async function prepareExplicitClaimEvidence(
            AND view.viewer_conversation_id = $2 AND view.family_id = $3
           AND view.eve_session_id = $4 AND view.eve_turn_id = $5
           AND view.viewer_user_id IS NOT DISTINCT FROM $6`,
-      [source.subject.subjectRef, source.conversationId, auth.familyId,
-        input.provenance.sessionId, input.provenance.turnId, auth.userId],
+      [
+        source.subject.subjectRef,
+        source.conversationId,
+        auth.familyId,
+        input.provenance.sessionId,
+        input.provenance.turnId,
+        auth.userId,
+      ],
     );
     const subject = subjectResult.rows[0];
-    const validIdentity = input.scope === "group"
-      ? subject?.subject_participant_id !== null && subject?.subject_user_id === null
-      : subject?.subject_user_id !== null && subject?.subject_participant_id === null;
+    const validIdentity =
+      input.scope === "group"
+        ? subject?.subject_participant_id !== null && subject?.subject_user_id === null
+        : subject?.subject_user_id !== null && subject?.subject_participant_id === null;
     if (!subject || !validIdentity) {
       throw new AppError(
         "AGENT_MEMORY_SUBJECT_REF_INVALID",
@@ -188,11 +209,11 @@ export async function prepareExplicitClaimEvidence(
     subjectConversationId = subjectParticipantId === null ? null : source.conversationId;
     subjectUserId = subject.subject_user_id;
   }
-  const evidenceKind = (subjectParticipantId !== null &&
-    subjectParticipantId !== row.author_participant_id) ||
+  const evidenceKind =
+    (subjectParticipantId !== null && subjectParticipantId !== row.author_participant_id) ||
     (subjectUserId !== null && subjectUserId !== row.author_user_id)
-    ? "reported"
-    : "firsthand";
+      ? "reported"
+      : "firsthand";
 
   return {
     auditActorUserId: auth.userId,
@@ -205,20 +226,22 @@ export async function prepareExplicitClaimEvidence(
     primaryAuthorUserId: row.author_user_id,
     scope: input.scope,
     scopePartitionKey: row.scope_partition_key,
-    sources: [{
-      authorLabelSnapshot: row.author_label,
-      authorParticipantId: row.author_participant_id,
-      authorTelegramUserId: row.telegram_user_id,
-      authorUserId: row.author_user_id,
-      evidenceSnippet: evidenceSnippet(row.content_text),
-      messageThreadId: row.message_thread_id,
-      observedAt: row.sent_at,
-      role: "primary",
-      sourceMessageId: row.telegram_message_id,
-      sourceSnapshot: { content: row.content_text },
-      timelineEntryId: source.timelineEntryId,
-      timelineSequence: row.timeline_sequence,
-    }],
+    sources: [
+      {
+        authorLabelSnapshot: row.author_label,
+        authorParticipantId: row.author_participant_id,
+        authorTelegramUserId: row.telegram_user_id,
+        authorUserId: row.author_user_id,
+        evidenceSnippet: evidenceSnippet(row.content_text),
+        messageThreadId: row.message_thread_id,
+        observedAt: row.sent_at,
+        role: "primary",
+        sourceMessageId: row.telegram_message_id,
+        sourceSnapshot: { content: row.content_text },
+        timelineEntryId: source.timelineEntryId,
+        timelineSequence: row.timeline_sequence,
+      },
+    ],
     subjectConversationId,
     subjectKind: source.subject.kind,
     subjectLabel: source.subject.kind === "label" ? source.subject.label : null,

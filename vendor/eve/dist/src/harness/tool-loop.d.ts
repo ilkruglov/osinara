@@ -2,12 +2,18 @@ import { type ModelMessage } from "ai";
 import { type HarnessStepResult } from "#harness/step-hooks.js";
 import { type StepFn, type ToolLoopHarnessConfig } from "#harness/types.js";
 export declare function createToolLoopHarness(config: ToolLoopHarnessConfig): StepFn;
-type ToolResponsePart = Extract<ModelMessage, {
+type ToolResponsePart = Extract<
+  ModelMessage,
+  {
     role: "tool";
-}>["content"][number];
-type ToolResultPart = Extract<ToolResponsePart, {
+  }
+>["content"][number];
+type ToolResultPart = Extract<
+  ToolResponsePart,
+  {
     type: "tool-result";
-}>;
+  }
+>;
 type StepResponseMessage = HarnessStepResult["response"]["messages"][number];
 /**
  * Appends synthesized tool results for calls that have no result anywhere in
@@ -18,7 +24,7 @@ type StepResponseMessage = HarnessStepResult["response"]["messages"][number];
  * "each tool_use must have a single result".
  */
 export declare function appendMissingToolResultMessages(input: {
-    readonly append: readonly ToolResultPart[];
-    readonly responseMessages: readonly StepResponseMessage[];
+  readonly append: readonly ToolResultPart[];
+  readonly responseMessages: readonly StepResponseMessage[];
 }): StepResponseMessage[];
 export {};

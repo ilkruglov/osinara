@@ -27,8 +27,17 @@ const MARKER_CONTEXT_TAG = "turn_interjection_marker";
 const MARKER_BYTES = 12;
 
 export type TurnInterjectionAttachment =
-  | "animation" | "audio" | "contact" | "document" | "location" | "other" | "photo" | "poll" | "sticker"
-  | "video" | "video_note";
+  | "animation"
+  | "audio"
+  | "contact"
+  | "document"
+  | "location"
+  | "other"
+  | "photo"
+  | "poll"
+  | "sticker"
+  | "video"
+  | "video_note";
 
 export type TurnInterjectionEntry =
   | { kind: "text"; sentAt: string | null; text: string; truncated: boolean }
@@ -88,7 +97,8 @@ export const TURN_INTERJECTION_RULES = `
 
 const ALREADY_SEEN_CONTENT = `Это сообщение ты уже видел во время предыдущего хода: backend добавил его к результату инструмента, пока ты работал. Проверь по истории того хода, что ты с ним сделал. Если уже учёл и ответил, не повторяй сделанное: хватит короткого подтверждения, а если сказать нечего — заверши ход ровно строкой ${SILENT_DIRECTIVE}. Если в тот раз не успел его выполнить, выполни сейчас.`;
 
-const ALREADY_SEEN_NOTICE = "Во время предыдущего хода тебе сообщили только, что это сообщение пришло, без его содержимого. Содержимое ты видишь впервые: обработай сообщение полностью.";
+const ALREADY_SEEN_NOTICE =
+  "Во время предыдущего хода тебе сообщили только, что это сообщение пришло, без его содержимого. Содержимое ты видишь впервые: обработай сообщение полностью.";
 
 /**
  * The series this turn answers holds earlier messages a running turn already showed to the model

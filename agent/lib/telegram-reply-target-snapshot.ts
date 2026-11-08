@@ -53,7 +53,7 @@ function senderProjection(target: JsonRecord): {
   if (!sender) return { senderDisplayName: null, senderUsername: null };
   const senderUsername = nonEmptyText(sender.username);
   const senderDisplayName = senderChat
-    ? nonEmptyText(sender.title) ?? senderUsername
+    ? (nonEmptyText(sender.title) ?? senderUsername)
     : [nonEmptyText(sender.first_name), nonEmptyText(sender.last_name)]
         .filter((part): part is string => part !== null)
         .join(" ") || senderUsername;
@@ -68,13 +68,15 @@ function rejectTarget(
   reason: "foreign_chat" | "identity_mismatch",
   message: TelegramReplyMessage,
 ): null {
-  console.error(JSON.stringify({
-    code: REJECTED_TARGET_CODE,
-    reason,
-    telegramChatId: message.chat.id,
-    telegramReplyTargetChatId: message.replyToMessage?.chat.id ?? null,
-    telegramReplyTargetMessageId: message.replyToMessage?.messageId ?? null,
-  }));
+  console.error(
+    JSON.stringify({
+      code: REJECTED_TARGET_CODE,
+      reason,
+      telegramChatId: message.chat.id,
+      telegramReplyTargetChatId: message.replyToMessage?.chat.id ?? null,
+      telegramReplyTargetMessageId: message.replyToMessage?.messageId ?? null,
+    }),
+  );
   return null;
 }
 
@@ -98,9 +100,12 @@ function verifiedRawTarget(message: TelegramReplyMessage): JsonRecord | null {
 
 function targetSnapshot(rawTarget: JsonRecord): TelegramReplyTargetSnapshot | null {
   // A rich target (a channel post with blocks) has no `text`; its blocks are what the reader saw.
-  const contentText = [nonEmptyText(rawTarget.text), nonEmptyText(rawTarget.caption)]
-    .filter((part): part is string => part !== null)
-    .join("\n") || richMessagePlainText(rawTarget) || "";
+  const contentText =
+    [nonEmptyText(rawTarget.text), nonEmptyText(rawTarget.caption)]
+      .filter((part): part is string => part !== null)
+      .join("\n") ||
+    richMessagePlainText(rawTarget) ||
+    "";
   if (!contentText) return null;
 
   return { contentText, ...senderProjection(rawTarget) };
@@ -119,7 +124,8 @@ export function telegramReplyTargetProjection(
 
   const quotedText = nonEmptyText(record(message.raw.quote)?.text);
   return {
-    quotedText: quotedText === null ? null : clipText(quotedText, TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS),
+    quotedText:
+      quotedText === null ? null : clipText(quotedText, TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS),
     snapshot: targetSnapshot(rawTarget),
   };
 }

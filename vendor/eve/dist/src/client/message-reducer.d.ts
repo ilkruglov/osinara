@@ -1,6 +1,17 @@
 import type { EveAgentReducer } from "#client/reducer.js";
 import type { EveMessageData } from "#client/message-reducer-types.js";
-export type { EveAuthorizationChallenge, EveAuthorizationOutcome, EveAuthorizationPart, EveMessageData, EveDynamicToolPart, EveMessageInputRequest, EveMessage, EveMessageMetadata, EveMessagePart, EveMessageToolMetadata, } from "#client/message-reducer-types.js";
+export type {
+  EveAuthorizationChallenge,
+  EveAuthorizationOutcome,
+  EveAuthorizationPart,
+  EveMessageData,
+  EveDynamicToolPart,
+  EveMessageInputRequest,
+  EveMessage,
+  EveMessageMetadata,
+  EveMessagePart,
+  EveMessageToolMetadata,
+} from "#client/message-reducer-types.js";
 /**
  * Creates a UIMessage-compatible eve reducer for chat and agent UIs.
  *

@@ -41,15 +41,26 @@ export interface TurnEvidence {
 }
 
 /** `skill` is written by the application only (a loaded authored skill in a failed or heavy turn). */
-export type ImprovementCategory = "memory" | "other" | "prompt" | "skill" | "tool_error" | "workflow";
+export type ImprovementCategory =
+  "memory" | "other" | "prompt" | "skill" | "tool_error" | "workflow";
 
 function emptyEvidence(): TurnEvidence {
-  return { calls: [], failedTools: [], loadedSkills: [], stepCount: 0, toolNames: [], turnFailure: null };
+  return {
+    calls: [],
+    failedTools: [],
+    loadedSkills: [],
+    stepCount: 0,
+    toolNames: [],
+    turnFailure: null,
+  };
 }
 
 /** Short stable hash of a call's input: the identity of a repeat, never stored as text. */
 function inputHash(input: unknown): string {
-  return createHash("sha256").update(canonicalJson(input ?? null)).digest("hex").slice(0, 16);
+  return createHash("sha256")
+    .update(canonicalJson(input ?? null))
+    .digest("hex")
+    .slice(0, 16);
 }
 
 function clip(text: string): string {
@@ -104,7 +115,11 @@ export function createTurnEvidenceCollector() {
         }
         if (action.kind !== "tool-call" || typeof action.toolName !== "string") continue;
         evidence.toolNames.push(action.toolName);
-        const call: TurnToolCall = { code: null, inputHash: inputHash(action.input), toolName: action.toolName };
+        const call: TurnToolCall = {
+          code: null,
+          inputHash: inputHash(action.input),
+          toolName: action.toolName,
+        };
         evidence.calls.push(call);
         if (typeof action.callId === "string") {
           callTools.set(`${input.sessionId}:${action.callId}`, action.toolName);
@@ -129,12 +144,18 @@ export function createTurnEvidenceCollector() {
     }): void {
       if (input.status !== "failed") return;
       const evidence = evidenceFor(key(input.sessionId, input.turnId));
-      const toolName = input.toolName ??
-        (typeof input.callId === "string" ? callTools.get(`${input.sessionId}:${input.callId}`) : undefined) ??
+      const toolName =
+        input.toolName ??
+        (typeof input.callId === "string"
+          ? callTools.get(`${input.sessionId}:${input.callId}`)
+          : undefined) ??
         "unknown";
       const code = input.error?.code ?? "UNKNOWN";
       evidence.failedTools.push({ code, message: clip(input.error?.message ?? ""), toolName });
-      const record = typeof input.callId === "string" ? callRecords.get(`${input.sessionId}:${input.callId}`) : undefined;
+      const record =
+        typeof input.callId === "string"
+          ? callRecords.get(`${input.sessionId}:${input.callId}`)
+          : undefined;
       if (record) record.code = code;
     },
 
@@ -154,9 +175,11 @@ export function createTurnEvidenceCollector() {
 }
 
 export function shouldReflectOnTurn(evidence: TurnEvidence): boolean {
-  return evidence.failedTools.length > 0 ||
+  return (
+    evidence.failedTools.length > 0 ||
     evidence.turnFailure !== null ||
-    evidence.stepCount >= REFLECTION_STEP_THRESHOLD;
+    evidence.stepCount >= REFLECTION_STEP_THRESHOLD
+  );
 }
 
 function normalizeSummary(summary: string): string {

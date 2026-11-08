@@ -27,8 +27,7 @@ function classifyRemoteError(e, n) {
       state: `auth-required`,
       challenge: { kind: `vercel-deployment-protection` },
     };
-  if (isEveOidcChallenge(e))
-    return { state: `auth-required`, challenge: { kind: `eve-oidc` } };
+  if (isEveOidcChallenge(e)) return { state: `auth-required`, challenge: { kind: `eve-oidc` } };
   if (e instanceof ClientError) {
     let t = vercelTrustedSourcesErrorCode(e.message);
     if (
@@ -60,8 +59,7 @@ async function probeRemoteInfo(n) {
   let r = await probeAgentInfo({ client: n.client });
   if (r.kind === `ready`) return { state: `ready`, info: r.info };
   let { error: i } = r;
-  return (i instanceof AgentInfoResponseError ||
-    (i instanceof ClientError && i.status === 404)) &&
+  return (i instanceof AgentInfoResponseError || (i instanceof ClientError && i.status === 404)) &&
     (await probeDeploymentHealth(n.client))
     ? { state: `ready` }
     : classifyRemoteError(i, n.phase);

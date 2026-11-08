@@ -12,14 +12,27 @@ import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 
-export interface ProfileField { domains: string[]; value: string; }
+export interface ProfileField {
+  domains: string[];
+  value: string;
+}
 export type FormProfile = Record<string, ProfileField>;
-const FORBIDDEN_FIELDS: ReadonlySet<string> = new Set(["card", "cardnumber", "cvc", "cvv", "expiry", "pan", "password"]);
+const FORBIDDEN_FIELDS: ReadonlySet<string> = new Set([
+  "card",
+  "cardnumber",
+  "cvc",
+  "cvv",
+  "expiry",
+  "pan",
+  "password",
+]);
 const PROFILE_INVALID = "AGENT_BROWSER_TASK_PROFILE_INVALID";
 
 const schema = z.record(
   z.string().min(1).max(64),
-  z.object({ domains: z.array(z.string().min(1)).min(1), value: z.string().min(1).max(512) }).strict(),
+  z
+    .object({ domains: z.array(z.string().min(1)).min(1), value: z.string().min(1).max(512) })
+    .strict(),
 );
 
 export function parseFormProfile(json: string): FormProfile {
@@ -31,7 +44,10 @@ export function parseFormProfile(json: string): FormProfile {
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    throw new AppError(PROFILE_INVALID, "Анкета не соответствует форме: у каждого поля нужны value и domains");
+    throw new AppError(
+      PROFILE_INVALID,
+      "Анкета не соответствует форме: у каждого поля нужны value и domains",
+    );
   }
   for (const field of Object.keys(parsed.data)) {
     if (FORBIDDEN_FIELDS.has(field.toLowerCase())) {
@@ -82,11 +98,16 @@ export function upsertProfileField(
   const field = input.field.trim();
   const value = input.value.trim();
   const domains = [...new Set(input.domains.map((d) => d.trim().toLowerCase()).filter(Boolean))];
-  if (!field || FORBIDDEN_FIELDS.has(field.toLowerCase())) throw new AppError(PROFILE_INVALID, `Поле ${input.field} в анкете хранить нельзя`);
+  if (!field || FORBIDDEN_FIELDS.has(field.toLowerCase()))
+    throw new AppError(PROFILE_INVALID, `Поле ${input.field} в анкете хранить нельзя`);
   if (!value) throw new AppError(PROFILE_INVALID, `Пустое значение для поля ${field}`);
-  if (domains.length === 0) throw new AppError(PROFILE_INVALID, `Для поля ${field} не названо ни одного домена`);
+  if (domains.length === 0)
+    throw new AppError(PROFILE_INVALID, `Для поля ${field} не названо ни одного домена`);
   const previous = profile[field];
-  const merged = previous && previous.value === value ? [...new Set([...previous.domains, ...domains])] : domains;
+  const merged =
+    previous && previous.value === value
+      ? [...new Set([...previous.domains, ...domains])]
+      : domains;
   return { ...profile, [field]: { domains: merged, value } };
 }
 

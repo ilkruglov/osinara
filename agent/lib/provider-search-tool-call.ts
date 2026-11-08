@@ -18,7 +18,10 @@
  */
 import type { LanguageModelV4Content, LanguageModelV4StreamPart } from "@ai-sdk/provider";
 
-export const PROVIDER_SEARCH_TOOL_NAMES: ReadonlySet<string> = new Set(["web_search", "web_search_2025_08_26"]);
+export const PROVIDER_SEARCH_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "web_search",
+  "web_search_2025_08_26",
+]);
 export const PROVIDER_SEARCH_FUNCTION_CALL_CODE = "AGENT_MODEL_PROVIDER_SEARCH_AS_FUNCTION_CALL";
 
 type ToolCallPart = Extract<LanguageModelV4StreamPart, { type: "tool-call" }>;
@@ -28,10 +31,12 @@ export function isStrayProviderSearchCall(
   part: { type: string },
   localTools: ReadonlySet<string> = new Set(),
 ): part is ToolCallPart {
-  return part.type === "tool-call" &&
+  return (
+    part.type === "tool-call" &&
     PROVIDER_SEARCH_TOOL_NAMES.has((part as ToolCallPart).toolName) &&
     !localTools.has((part as ToolCallPart).toolName) &&
-    (part as ToolCallPart).providerExecuted !== true;
+    (part as ToolCallPart).providerExecuted !== true
+  );
 }
 
 export function strayProviderSearchResult(call: ToolCallPart): ToolResultPart {
@@ -40,7 +45,8 @@ export function strayProviderSearchResult(call: ToolCallPart): ToolResultPart {
     isError: true,
     result: {
       code: PROVIDER_SEARCH_FUNCTION_CALL_CODE,
-      reason: "Провайдер вернул серверный поиск как обычный вызов функции без результата. " +
+      reason:
+        "Провайдер вернул серверный поиск как обычный вызов функции без результата. " +
         "Повторите поиск отдельным шагом или ответьте без него.",
     },
     toolCallId: call.toolCallId,

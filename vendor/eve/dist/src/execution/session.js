@@ -5,9 +5,7 @@ function createCompactionConfig(e = {}) {
     n = {
       recentWindowSize: 10,
       threshold:
-        e.contextWindowTokens === void 0
-          ? 1e5
-          : Math.max(1, Math.floor(e.contextWindowTokens * t)),
+        e.contextWindowTokens === void 0 ? 1e5 : Math.max(1, Math.floor(e.contextWindowTokens * t)),
       thresholdPercent: t,
     };
   return e.lastKnownInputTokens === void 0
@@ -43,8 +41,7 @@ function createSession(e) {
     (r.limits = resolveSessionLimits(e)),
     e.outputSchema !== void 0 && (r.outputSchema = e.outputSchema),
     e.subagentDepth !== void 0 && (r.subagentDepth = e.subagentDepth),
-    e.workflowMaxSubagents !== void 0 &&
-      (r.workflowMaxSubagents = e.workflowMaxSubagents),
+    e.workflowMaxSubagents !== void 0 && (r.workflowMaxSubagents = e.workflowMaxSubagents),
     r
   );
 }
@@ -57,9 +54,7 @@ function createSessionAgent(e, t, n) {
   };
   if (e.model !== void 0) return { ...r, modelReference: e.model };
   if (e.dynamicModel !== void 0) return { ...r, dynamicModel: !0 };
-  throw Error(
-    `Cannot create a session before dynamic subagent config is selected.`,
-  );
+  throw Error(`Cannot create a session before dynamic subagent config is selected.`);
 }
 function refreshSessionFromTurnAgent(e) {
   return {
@@ -75,8 +70,7 @@ function refreshSessionFromTurnAgent(e) {
     compaction: createCompactionConfig({
       contextWindowTokens: e.turnAgent.model?.contextWindowTokens,
       lastKnownInputTokens: e.session.compaction.lastKnownInputTokens,
-      lastKnownPromptMessageCount:
-        e.session.compaction.lastKnownPromptMessageCount,
+      lastKnownPromptMessageCount: e.session.compaction.lastKnownPromptMessageCount,
       thresholdPercent: e.compactionOverrides?.thresholdPercent,
     }),
   };
@@ -84,9 +78,7 @@ function refreshSessionFromTurnAgent(e) {
 function createSessionSystemPrompt(t) {
   let n = formatAvailableSkillsSection(t.turnAgent.availableSkills ?? []);
   return [
-    ...(n === null
-      ? t.turnAgent.instructions
-      : [...t.turnAgent.instructions, n]),
+    ...(n === null ? t.turnAgent.instructions : [...t.turnAgent.instructions, n]),
     ...(t.additions ?? []),
   ].join(`
 
@@ -115,8 +107,7 @@ function projectToDurableSession(e) {
     e.sandboxState !== void 0 && (t.sandboxState = e.sandboxState),
     e.state !== void 0 && (t.state = e.state),
     e.subagentDepth !== void 0 && (t.subagentDepth = e.subagentDepth),
-    e.workflowMaxSubagents !== void 0 &&
-      (t.workflowMaxSubagents = e.workflowMaxSubagents),
+    e.workflowMaxSubagents !== void 0 && (t.workflowMaxSubagents = e.workflowMaxSubagents),
     t
   );
 }
@@ -142,8 +133,7 @@ function hydrateDurableSession(e) {
     t.sandboxState !== void 0 && (i.sandboxState = t.sandboxState),
     t.state !== void 0 && (i.state = t.state),
     t.subagentDepth !== void 0 && (i.subagentDepth = t.subagentDepth),
-    t.workflowMaxSubagents !== void 0 &&
-      (i.workflowMaxSubagents = t.workflowMaxSubagents),
+    t.workflowMaxSubagents !== void 0 && (i.workflowMaxSubagents = t.workflowMaxSubagents),
     i
   );
 }

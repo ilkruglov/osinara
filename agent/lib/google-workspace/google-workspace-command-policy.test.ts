@@ -14,22 +14,27 @@ import {
 
 describe("classifyGoogleWorkspaceCommand", () => {
   it("classifies reviewed reads and mutations independently of argument text", () => {
-    expect(classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "list",
-      "--params",
-      '{"q":"delete everything"}',
-    ])).toBe("read");
-    expect(classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "insert",
-      "--json",
-      '{"summary":"read only"}',
-    ])).toBe("mutation");
-    expect(classifyGoogleWorkspaceCommand(["gmail", "+send", "--to", "a@example.com"]))
-      .toBe("mutation");
+    expect(
+      classifyGoogleWorkspaceCommand([
+        "calendar",
+        "events",
+        "list",
+        "--params",
+        '{"q":"delete everything"}',
+      ]),
+    ).toBe("read");
+    expect(
+      classifyGoogleWorkspaceCommand([
+        "calendar",
+        "events",
+        "insert",
+        "--json",
+        '{"summary":"read only"}',
+      ]),
+    ).toBe("mutation");
+    expect(classifyGoogleWorkspaceCommand(["gmail", "+send", "--to", "a@example.com"])).toBe(
+      "mutation",
+    );
     expect(classifyGoogleWorkspaceCommand(["gmail", "+send", "--help"])).toBe("read");
     expect(classifyGoogleWorkspaceCommand(["schema", "calendar.events.insert"])).toBe("read");
   });
@@ -49,16 +54,18 @@ describe("classifyGoogleWorkspaceCommand", () => {
         /AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*manage_gmail_message/u,
       );
     }
-    expect(() => classifyModelFacingGoogleWorkspaceCommand([
-      "gmail",
-      "users",
-      "messages",
-      "batchDelete",
-      "--params",
-      '{"userId":"me"}',
-      "--json",
-      '{"ids":["message-1","message-2"]}',
-    ])).toThrowError(/manage_gmail_message.*каждый messageId/u);
+    expect(() =>
+      classifyModelFacingGoogleWorkspaceCommand([
+        "gmail",
+        "users",
+        "messages",
+        "batchDelete",
+        "--params",
+        '{"userId":"me"}',
+        "--json",
+        '{"ids":["message-1","message-2"]}',
+      ]),
+    ).toThrowError(/manage_gmail_message.*каждый messageId/u);
     for (const route of [
       ["gmail", "users", "messages", "batchModify"],
       ["gmail", "users", "threads", "delete"],
@@ -66,13 +73,15 @@ describe("classifyGoogleWorkspaceCommand", () => {
       ["gmail", "users", "threads", "trash"],
       ["gmail", "users", "threads", "untrash"],
     ]) {
-      expect(() => classifyModelFacingGoogleWorkspaceCommand([
-        ...route,
-        "--params",
-        '{"userId":"me","id":"target-id"}',
-        "--json",
-        "{}",
-      ])).toThrowError(/manage_gmail_message/u);
+      expect(() =>
+        classifyModelFacingGoogleWorkspaceCommand([
+          ...route,
+          "--params",
+          '{"userId":"me","id":"target-id"}',
+          "--json",
+          "{}",
+        ]),
+      ).toThrowError(/manage_gmail_message/u);
     }
   });
 
@@ -91,50 +100,58 @@ describe("classifyGoogleWorkspaceCommand", () => {
   });
 
   it("explains malformed dotted API routes without misdiagnosing OAuth access", () => {
-    expect(() => classifyGoogleWorkspaceCommand([
-      "gmail",
-      "users.messages.trash",
-      "--params",
-      '{"userId":"me","id":"message-id"}',
-    ])).toThrowError(
-      /resource и method.*отдельными argv.*read-only OAuth/u,
-    );
+    expect(() =>
+      classifyGoogleWorkspaceCommand([
+        "gmail",
+        "users.messages.trash",
+        "--params",
+        '{"userId":"me","id":"message-id"}',
+      ]),
+    ).toThrowError(/resource и method.*отдельными argv.*read-only OAuth/u);
   });
 
   it("accepts only documented flags for reviewed helper routes", () => {
-    expect(classifyGoogleWorkspaceCommand([
-      "calendar",
-      "+insert",
-      "--summary",
-      "Review",
-      "--start",
-      "2026-08-06T10:00:00Z",
-      "--end",
-      "2026-08-06T11:00:00Z",
-      "--meet",
-    ])).toBe("mutation");
-    expect(() => classifyGoogleWorkspaceCommand([
-      "calendar",
-      "+insert",
-      "--summary-file",
-      "/proc/self/environ",
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(
+      classifyGoogleWorkspaceCommand([
+        "calendar",
+        "+insert",
+        "--summary",
+        "Review",
+        "--start",
+        "2026-08-06T10:00:00Z",
+        "--end",
+        "2026-08-06T11:00:00Z",
+        "--meet",
+      ]),
+    ).toBe("mutation");
+    expect(() =>
+      classifyGoogleWorkspaceCommand([
+        "calendar",
+        "+insert",
+        "--summary-file",
+        "/proc/self/environ",
+      ]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
   });
 
   it("requires bounded one-shot Gmail watch execution", () => {
-    expect(classifyGoogleWorkspaceCommand([
-      "gmail",
-      "+watch",
-      "--subscription",
-      "projects/p/subscriptions/inbox",
-      "--once",
-    ])).toBe("mutation");
-    expect(() => classifyGoogleWorkspaceCommand([
-      "gmail",
-      "+watch",
-      "--subscription",
-      "projects/p/subscriptions/inbox",
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*(?:60.*--once|--once.*60)/u);
+    expect(
+      classifyGoogleWorkspaceCommand([
+        "gmail",
+        "+watch",
+        "--subscription",
+        "projects/p/subscriptions/inbox",
+        "--once",
+      ]),
+    ).toBe("mutation");
+    expect(() =>
+      classifyGoogleWorkspaceCommand([
+        "gmail",
+        "+watch",
+        "--subscription",
+        "projects/p/subscriptions/inbox",
+      ]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*(?:60.*--once|--once.*60)/u);
   });
 
   it("rejects trailing command segments instead of inheriting an allowlisted prefix", () => {
@@ -166,59 +183,37 @@ describe("classifyGoogleWorkspaceCommand", () => {
 
   it.each(
     ["--format", "--json", "--page-delay", "--page-limit", "--params"].flatMap((valueFlag) =>
-      ["--attach=/proc/self/environ", "--output=/proc/self/environ", "--upload=/proc/self/environ"]
-        .flatMap((fileFlag) => [
-          [valueFlag, fileFlag],
-          [`${valueFlag}=${fileFlag}`],
-        ]),
+      [
+        "--attach=/proc/self/environ",
+        "--output=/proc/self/environ",
+        "--upload=/proc/self/environ",
+      ].flatMap((fileFlag) => [[valueFlag, fileFlag], [`${valueFlag}=${fileFlag}`]]),
     ),
   )("rejects a file flag smuggled as an API value: %j", (...suffix) => {
-    expect(() => classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "list",
-      ...suffix,
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(() =>
+      classifyGoogleWorkspaceCommand(["calendar", "events", "list", ...suffix]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
   });
 
   it("keeps dry-run route-specific and rejects sanitize when no exact skill grants it", () => {
-    expect(classifyGoogleWorkspaceCommand([
-      "gmail",
-      "+read",
-      "--id",
-      "message-id",
-      "--dry-run",
-    ])).toBe("read");
-    expect(() => classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "list",
-      "--dry-run",
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
-    expect(() => classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "list",
-      "--sanitize",
-      "template-id",
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(
+      classifyGoogleWorkspaceCommand(["gmail", "+read", "--id", "message-id", "--dry-run"]),
+    ).toBe("read");
+    expect(() =>
+      classifyGoogleWorkspaceCommand(["calendar", "events", "list", "--dry-run"]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(() =>
+      classifyGoogleWorkspaceCommand(["calendar", "events", "list", "--sanitize", "template-id"]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
   });
 
   it("applies the Telegram presentation limit only to mutations", () => {
     const longValue = "x".repeat(4_000);
-    expect(classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "list",
-      "--params",
-      longValue,
-    ])).toBe("read");
-    expect(() => classifyGoogleWorkspaceCommand([
-      "calendar",
-      "events",
-      "insert",
-      "--json",
-      longValue,
-    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_ARGUMENTS_TOO_LARGE/u);
+    expect(
+      classifyGoogleWorkspaceCommand(["calendar", "events", "list", "--params", longValue]),
+    ).toBe("read");
+    expect(() =>
+      classifyGoogleWorkspaceCommand(["calendar", "events", "insert", "--json", longValue]),
+    ).toThrowError(/AGENT_GOOGLE_WORKSPACE_ARGUMENTS_TOO_LARGE/u);
   });
 });

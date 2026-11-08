@@ -70,7 +70,11 @@ describe("memory review dispatcher", () => {
   it("claims nothing while a deploy pauses new turns", async () => {
     const fixture = dependencies({ turnStartsPaused: vi.fn().mockResolvedValue(true) });
 
-    await expect(createMemoryReviewDispatcher(fixture.dependencies as never)(new Date("2026-08-12T10:00:00.000Z"))).resolves.toBe(0);
+    await expect(
+      createMemoryReviewDispatcher(fixture.dependencies as never)(
+        new Date("2026-08-12T10:00:00.000Z"),
+      ),
+    ).resolves.toBe(0);
 
     expect(fixture.dependencies.claimPending).not.toHaveBeenCalled();
     expect(fixture.send).not.toHaveBeenCalled();
@@ -79,9 +83,11 @@ describe("memory review dispatcher", () => {
   it("starts exactly one internal task turn for one 50-message batch", async () => {
     const fixture = dependencies();
 
-    await expect(createMemoryReviewDispatcher(fixture.dependencies as never)(
-      new Date("2026-08-12T10:00:00.000Z"),
-    )).resolves.toBe(1);
+    await expect(
+      createMemoryReviewDispatcher(fixture.dependencies as never)(
+        new Date("2026-08-12T10:00:00.000Z"),
+      ),
+    ).resolves.toBe(1);
 
     expect(fixture.dependencies.to).toHaveBeenCalledWith(expect.any(Object), {
       batchId: batch.batchId,
@@ -154,7 +160,9 @@ describe("memory review dispatcher", () => {
     const batches = [1, 2, 3].map((n) => ({ ...batch, batchId: `batch-${n}` }));
     let started = 0;
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const { dependencies: deps } = dependencies({
       claimPending: vi.fn().mockResolvedValue(batches),
       prepareSession: vi.fn(async (claimed: { batchId: string }) => {
@@ -174,7 +182,9 @@ describe("memory review dispatcher", () => {
 
   it("marks a rejected handoff ambiguous because Eve may already have started", async () => {
     const fixture = dependencies({
-      to: vi.fn().mockReturnValue({ send: vi.fn().mockRejectedValue(new Error("connection lost")) }),
+      to: vi
+        .fn()
+        .mockReturnValue({ send: vi.fn().mockRejectedValue(new Error("connection lost")) }),
     });
 
     await createMemoryReviewDispatcher(fixture.dependencies as never)();
@@ -221,7 +231,8 @@ describe("memory review dispatcher", () => {
     const second = { ...batch, batchId: "00000000-0000-4000-8000-000000000051" };
     const fixture = dependencies({
       claimPending: vi.fn().mockResolvedValue([batch, second]),
-      prepareSession: vi.fn()
+      prepareSession: vi
+        .fn()
         .mockRejectedValueOnce(new Error("database unavailable"))
         .mockResolvedValueOnce({
           continuationToken: `memory-review:${second.batchId}`,
@@ -241,7 +252,9 @@ describe("memory review dispatcher", () => {
     );
     expect(fixture.send).toHaveBeenCalledTimes(1);
     expect(fixture.dependencies.markRunning).toHaveBeenCalledWith(second, expect.any(Object));
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("AGENT_MEMORY_REVIEW_DISPATCH_FAILED"));
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("AGENT_MEMORY_REVIEW_DISPATCH_FAILED"),
+    );
     consoleError.mockRestore();
   });
 });

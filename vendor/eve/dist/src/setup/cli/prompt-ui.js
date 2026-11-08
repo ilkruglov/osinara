@@ -149,9 +149,7 @@ function renderSelectPrompt(e) {
           let a = i === e.cursor;
           return `${optionRow(n, { colors: e.colors, isCursor: a, isChecked: !1, placeholder: !1, hintPadding: r - n.label.length })}${descriptionLine(n, a, t, e.colors)}`;
         })
-        .join(
-          `\n${t}  `,
-        )}\n${cornerWithNote(cornerFor(e.state, e.colors), e.footerNote)}\n`;
+        .join(`\n${t}  `)}\n${cornerWithNote(cornerFor(e.state, e.colors), e.footerNote)}\n`;
     }
   }
 }
@@ -224,7 +222,7 @@ function renderSearchableSelect(e) {
     return `${r}${n}  ${t.strikethrough(t.dim(e.filter))}${e.filter.trim() ? `\n${n}` : ``}`;
   let i = new Set(e.selectedValues),
     a = 0;
-  for (; e.options[a]?.featured; ) a += 1;
+  for (; e.options[a]?.featured;) a += 1;
   let o = e.viewSize ?? 8,
     s = e.filter === `` && a > 0 ? Math.min(a, o) : o,
     c = e.multiple && e.cursor >= e.options.length,
@@ -233,10 +231,7 @@ function renderSearchableSelect(e) {
   e.filter.length > 0
     ? (u = e.filter + t.inverse(` `))
     : e.placeholder && (u = t.dim(e.placeholder));
-  let d = Math.max(
-      0,
-      Math.min(l - Math.floor(s / 2), Math.max(0, e.options.length - s)),
-    ),
+  let d = Math.max(0, Math.min(l - Math.floor(s / 2), Math.max(0, e.options.length - s))),
     f = Math.min(d + s, e.options.length),
     p = e.options.slice(d, f),
     m = labelColumnWidth(p),
@@ -249,9 +244,7 @@ function renderSearchableSelect(e) {
               return `${optionRow(r, { colors: t, isCursor: o, isChecked: e.multiple && i.has(r.value), placeholder: !1, hintPadding: m - r.label.length })}${descriptionLine(r, o, n, t)}`;
             })
             .join(`\n${n}  `),
-    g = e.multiple
-      ? `\n${n}\n${n}  ${renderSubmitRow(c, t, e.submitLabel)}`
-      : ``,
+    g = e.multiple ? `\n${n}\n${n}  ${renderSubmitRow(c, t, e.submitLabel)}` : ``,
     _ =
       e.options.length > p.length
         ? `\n${n}  ${t.dim(`↑↓ ${e.options.length} options, showing ${d + 1}–${f}`)}`

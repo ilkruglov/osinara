@@ -3,10 +3,7 @@ import { require_picocolors } from "../../node_modules/.pnpm/picocolors@1.1.1/no
 import { AI_GATEWAY_API_KEY_ENV_VAR } from "../ai-gateway-api-key.js";
 import { withSpinner } from "../with-spinner.js";
 import { gatewayModelCapabilities } from "../boxes/model-capabilities.js";
-import {
-  fetchGatewayCatalog,
-  modelOptionsFromCatalog,
-} from "../boxes/select-model.js";
+import { fetchGatewayCatalog, modelOptionsFromCatalog } from "../boxes/select-model.js";
 import { ensureChatGptAuth } from "./chatgpt-auth.js";
 import { WizardCancelledError } from "../step.js";
 import {
@@ -122,17 +119,9 @@ async function runModelFlow(e) {
       ]),
     );
   o?.throwIfAborted();
-  let {
-      id: _,
-      routing: v,
-      serviceTier: y,
-      editable: b,
-      settingsEditable: x,
-    } = p,
+  let { id: _, routing: v, serviceTier: y, editable: b, settingsEditable: x } = p,
     S = p.reasoning === `provider-default` ? null : p.reasoning,
-    C =
-      h ??
-      (m.includes(`ai-gateway-key`) ? `ai-gateway-key` : `ai-gateway-project`),
+    C = h ?? (m.includes(`ai-gateway-key`) ? `ai-gateway-key` : `ai-gateway-project`),
     w = m.includes(C),
     T,
     E = {
@@ -151,8 +140,7 @@ async function runModelFlow(e) {
           text: "`agent.ts` specifies the model provider directly. Model, provider, and service-tier changes stay source-owned; reasoning remains configurable here.",
         }
       : void 0,
-    N =
-      !w && v?.kind !== `external` ? `provider` : b || x ? `model` : `provider`,
+    N = !w && v?.kind !== `external` ? `provider` : b || x ? `model` : `provider`,
     P = v?.kind !== `external` && (e.initialStep === `provider` || !w);
   for (;;) {
     let r;
@@ -178,8 +166,7 @@ async function runModelFlow(e) {
         });
       } catch (e) {
         if (!(e instanceof WizardCancelledError)) throw e;
-        if (hasModelSettingsChanges(E))
-          return { kind: `cancelled`, discardedDraft: !0 };
+        if (hasModelSettingsChanges(E)) return { kind: `cancelled`, discardedDraft: !0 };
         break;
       }
     if (r === `done`) {
@@ -189,9 +176,7 @@ async function runModelFlow(e) {
     if (r === `model`) {
       let e = d.pickModelSettings;
       if (e === void 0)
-        throw Error(
-          `runModelFlow requires a pickModelSettings dep to open the model screen.`,
-        );
+        throw Error(`runModelFlow requires a pickModelSettings dep to open the model screen.`);
       let t = await e({
         model: b
           ? { kind: `pick`, options: modelListRows(g), current: _ }
@@ -216,14 +201,10 @@ async function runModelFlow(e) {
         (E.model = { kind: `set`, value: t.model })),
         t.reasoning !== void 0 &&
           ((S = t.reasoning === "default" ? null : t.reasoning),
-          (E.reasoning =
-            S === null ? { kind: `remove` } : { kind: `set`, value: S })),
+          (E.reasoning = S === null ? { kind: `remove` } : { kind: `set`, value: S })),
         t.serviceTier !== void 0 &&
           !isChatGptModelRouting(v) &&
-          ((y =
-            t.serviceTier === `priority`
-              ? { kind: `priority` }
-              : { kind: `standard` }),
+          ((y = t.serviceTier === `priority` ? { kind: `priority` } : { kind: `standard` }),
           (E.gatewayServiceTier =
             t.serviceTier === `priority`
               ? { kind: `set`, value: `priority` }
@@ -257,24 +238,16 @@ async function runModelFlow(e) {
               value: DEFAULT_CHATGPT_MODEL_SELECTION,
             }),
             (E.gatewayServiceTier = { kind: `remove` })))
-        : isChatGptModelRouting(v) &&
-          (E.model = { kind: `set`, value: DEFAULT_AGENT_MODEL_ID }),
+        : isChatGptModelRouting(v) && (E.model = { kind: `set`, value: DEFAULT_AGENT_MODEL_ID }),
       (A = !0));
     break;
   }
-  let F =
-    E.model.kind === `set` &&
-    parseChatGptModelSelection(E.model.value) !== void 0;
+  let F = E.model.kind === `set` && parseChatGptModelSelection(E.model.value) !== void 0;
   if (
     (A && F && ((E.gatewayServiceTier = { kind: `remove` }), (k = !0)),
     A && k && (await authenticateChatGpt(d, e.withExclusiveTerminal)),
-    A &&
-      hasModelSettingsChanges(E) &&
-      (D = await d.applySettings({ appRoot: t, patch: E })),
-    A &&
-      T !== void 0 &&
-      D?.kind !== `rejected` &&
-      (await d.writeProviderSelection(t, T), (O = T)),
+    A && hasModelSettingsChanges(E) && (D = await d.applySettings({ appRoot: t, patch: E })),
+    A && T !== void 0 && D?.kind !== `rejected` && (await d.writeProviderSelection(t, T), (O = T)),
     D !== void 0 && O === void 0 && o?.throwIfAborted(),
     D === void 0 && O === void 0 && !k)
   )
@@ -302,9 +275,7 @@ async function authenticateChatGpt(e, t) {
 }
 function hasModelSettingsChanges(e) {
   return (
-    e.model.kind !== `keep` ||
-    e.reasoning.kind !== `keep` ||
-    e.gatewayServiceTier.kind !== `keep`
+    e.model.kind !== `keep` || e.reasoning.kind !== `keep` || e.gatewayServiceTier.kind !== `keep`
   );
 }
 async function readCurrentAgentModel(e) {
@@ -338,8 +309,4 @@ async function modelChangeRefusalForUneditableModel(e) {
     ? null
     : `Model is set via ${n?.kind === `external` ? `the external provider \`${n.provider}\`` : `an SDK model call`} in agent.ts, not a string literal; /model can't rewrite it. Edit \`model\` in agent.ts.`;
 }
-export {
-  MODEL_MENU_MESSAGE,
-  modelChangeRefusalForUneditableModel,
-  runModelFlow,
-};
+export { MODEL_MENU_MESSAGE, modelChangeRefusalForUneditableModel, runModelFlow };

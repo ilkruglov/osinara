@@ -19,8 +19,4 @@ async function discoverLibSources(t) {
   });
   return { diagnostics: n.diagnostics, lib: n.sources };
 }
-export {
-  DISCOVER_LIB_DIRECTORY_INVALID,
-  DISCOVER_LIB_ENTRY_UNSUPPORTED,
-  discoverLibSources,
-};
+export { DISCOVER_LIB_DIRECTORY_INVALID, DISCOVER_LIB_ENTRY_UNSUPPORTED, discoverLibSources };

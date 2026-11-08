@@ -31,32 +31,75 @@ function update(message: Record<string, unknown>, updateId = 1) {
     },
     update_id: updateId,
   });
-  if (!parsed) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+  if (!parsed)
+    throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
   return parsed;
 }
 
 describe("isSeriesEligible", () => {
   it("accepts a plain text message from a person or another bot", () => {
     expect(isSeriesEligible(update({}), BOT)).toBe(true);
-    expect(isSeriesEligible(update({ from: { first_name: "Osinara", id: 7, is_bot: true, username: "osinara_bot" } }), BOT)).toBe(true);
+    expect(
+      isSeriesEligible(
+        update({ from: { first_name: "Osinara", id: 7, is_bot: true, username: "osinara_bot" } }),
+        BOT,
+      ),
+    ).toBe(true);
     expect(isSeriesEligible(update({ chat: { id: 101, type: "private" } }), BOT)).toBe(true);
   });
 
   it("accepts a reply to this bot and a mention of this bot only", () => {
-    expect(isSeriesEligible(update({
-      reply_to_message: { chat: { id: -100, type: "supergroup" }, date: 1, from: { first_name: "Мия", id: 9, is_bot: true, username: BOT }, message_id: 5, text: "ответ" },
-    }), BOT)).toBe(true);
+    expect(
+      isSeriesEligible(
+        update({
+          reply_to_message: {
+            chat: { id: -100, type: "supergroup" },
+            date: 1,
+            from: { first_name: "Мия", id: 9, is_bot: true, username: BOT },
+            message_id: 5,
+            text: "ответ",
+          },
+        }),
+        BOT,
+      ),
+    ).toBe(true);
     expect(isSeriesEligible(update({ text: `@${BOT} привет` }), BOT)).toBe(true);
   });
 
   it.each([
-    ["reply to someone else", { reply_to_message: { chat: { id: -100, type: "supergroup" }, date: 1, from: { first_name: "Боря", id: 102, is_bot: false }, message_id: 5, text: "х" } }],
+    [
+      "reply to someone else",
+      {
+        reply_to_message: {
+          chat: { id: -100, type: "supergroup" },
+          date: 1,
+          from: { first_name: "Боря", id: 102, is_bot: false },
+          message_id: 5,
+          text: "х",
+        },
+      },
+    ],
     ["mention of someone else", { text: "@osinara_bot привет" }],
     ["slash command", { text: "/start" }],
     ["voice", { text: "", voice: { file_id: "v", file_size: 1, mime_type: "audio/ogg" } }],
     ["photo", { photo: [{ file_id: "p", file_unique_id: "u", height: 1, width: 1 }] }],
-    ["forward", { forward_origin: { date: 1, sender_user: { first_name: "Х", id: 3, is_bot: false }, type: "user" } }],
-    ["channel post", { from: { first_name: "Channel", id: 136817688, is_bot: true, username: "Channel_Bot" }, sender_chat: { id: -1001, title: "Канал", type: "channel" } }],
+    [
+      "forward",
+      {
+        forward_origin: {
+          date: 1,
+          sender_user: { first_name: "Х", id: 3, is_bot: false },
+          type: "user",
+        },
+      },
+    ],
+    [
+      "channel post",
+      {
+        from: { first_name: "Channel", id: 136817688, is_bot: true, username: "Channel_Bot" },
+        sender_chat: { id: -1001, title: "Канал", type: "channel" },
+      },
+    ],
     ["empty text", { text: "   " }],
   ])("keeps %s out of a series", (_name, overrides) => {
     expect(isSeriesEligible(update(overrides), BOT)).toBe(false);
@@ -66,11 +109,13 @@ describe("isSeriesEligible", () => {
 describe("continuesSeries", () => {
   it("continues for the same author in the same chat and topic", () => {
     expect(continuesSeries(update({}, 1), update({ text: "и ещё" }, 2), BOT)).toBe(true);
-    expect(continuesSeries(
-      update({ is_topic_message: true, message_thread_id: 7 }, 1),
-      update({ is_topic_message: true, message_thread_id: 7, text: "и ещё" }, 2),
-      BOT,
-    )).toBe(true);
+    expect(
+      continuesSeries(
+        update({ is_topic_message: true, message_thread_id: 7 }, 1),
+        update({ is_topic_message: true, message_thread_id: 7, text: "и ещё" }, 2),
+        BOT,
+      ),
+    ).toBe(true);
   });
 
   it.each([
@@ -107,8 +152,10 @@ describe("series marker", () => {
     expect(readTelegramSeriesMarker({})).toBeNull();
     expect(readTelegramSeriesMarker({ osinara_series: "current" })).toBeNull();
     expect(readTelegramSeriesMarker({ osinara_series: { role: "current" } })).toBeNull();
-    expect(readTelegramSeriesMarker({
-      osinara_series: { addressed: true, role: "current", telegramMessageIds: ["x"] },
-    })).toBeNull();
+    expect(
+      readTelegramSeriesMarker({
+        osinara_series: { addressed: true, role: "current", telegramMessageIds: ["x"] },
+      }),
+    ).toBeNull();
   });
 });

@@ -6,8 +6,8 @@ import type { JsonObject } from "#shared/json.js";
  * no catalog id — `semanticErrorId` is reserved for registered rules.
  */
 export interface UpstreamRejectionSummary {
-    readonly name: string;
-    readonly message: string;
+  readonly name: string;
+  readonly message: string;
 }
 /**
  * Extracts the most informative upstream rejection message from a
@@ -16,7 +16,9 @@ export interface UpstreamRejectionSummary {
  * user-facing message should avoid implying a bad tool call. Returns
  * `null` when the error carries nothing better than its raw message.
  */
-export declare function extractUpstreamRejectionMessage(error: unknown): UpstreamRejectionSummary | null;
+export declare function extractUpstreamRejectionMessage(
+  error: unknown,
+): UpstreamRejectionSummary | null;
 /**
  * Returns the distinct upstream tool types referenced by any
  * "tool type 'X' is not supported" rejection in an AI Gateway error's
@@ -54,9 +56,7 @@ export declare function extractModelCallErrorDetails(error: unknown): JsonObject
  * keep the two triggers distinguishable in logs.
  */
 export declare class EmptyModelResponseError extends Error {
-    constructor(options?: {
-        cause?: unknown;
-    });
+  constructor(options?: { cause?: unknown });
 }
 /**
  * Coerces a streamed provider failure into an Error while retaining the raw
@@ -77,4 +77,6 @@ export declare function isNoOutputGeneratedError(error: unknown): boolean;
 /**
  * Classifies a model-call failure into the runtime's recovery policy.
  */
-export declare function classifyModelCallError(error: unknown): "retry" | "recoverable" | "terminal";
+export declare function classifyModelCallError(
+  error: unknown,
+): "retry" | "recoverable" | "terminal";

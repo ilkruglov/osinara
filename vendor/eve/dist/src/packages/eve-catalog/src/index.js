@@ -1,7 +1,5 @@
 function connectionProtocols(e) {
-  return [e.mcp ? `mcp` : null, e.openapi ? `openapi` : null].filter(
-    (e) => e !== null,
-  );
+  return [e.mcp ? `mcp` : null, e.openapi ? `openapi` : null].filter((e) => e !== null);
 }
 const INTEGRATIONS = [
   {
@@ -776,10 +774,4 @@ function connectionEntries() {
 function channelEntries() {
   return integrationsByKind(`channel`);
 }
-export {
-  INTEGRATIONS,
-  channelEntries,
-  connectionEntries,
-  connectionProtocols,
-  integrationsByKind,
-};
+export { INTEGRATIONS, channelEntries, connectionEntries, connectionProtocols, integrationsByKind };

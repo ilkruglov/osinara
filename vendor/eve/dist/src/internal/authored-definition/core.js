@@ -39,28 +39,17 @@ function normalizeAgentDefinition(e, i) {
       `${i} Dynamic model definitions do not support sibling "modelContextWindowTokens" or "modelOptions" fields. Return those overrides from the resolver selection instead.`,
     );
   return (
-    o.description !== void 0 &&
-      (c.description = expectString(o.description, i)),
-    o.compaction !== void 0 &&
-      (c.compaction = normalizeAgentCompactionDefinition(o.compaction, i)),
+    o.description !== void 0 && (c.description = expectString(o.description, i)),
+    o.compaction !== void 0 && (c.compaction = normalizeAgentCompactionDefinition(o.compaction, i)),
     o.build !== void 0 && (c.build = normalizeAgentBuildDefinition(o.build, i)),
     o.experimental !== void 0 &&
-      (c.experimental = normalizeAgentExperimentalDefinition(
-        o.experimental,
-        i,
-      )),
-    o.modelOptions !== void 0 &&
-      (c.modelOptions = normalizeAgentModelOptions(o.modelOptions, i)),
+      (c.experimental = normalizeAgentExperimentalDefinition(o.experimental, i)),
+    o.modelOptions !== void 0 && (c.modelOptions = normalizeAgentModelOptions(o.modelOptions, i)),
     o.modelContextWindowTokens !== void 0 &&
-      (c.modelContextWindowTokens = expectPositiveInteger(
-        o.modelContextWindowTokens,
-        i,
-      )),
+      (c.modelContextWindowTokens = expectPositiveInteger(o.modelContextWindowTokens, i)),
     o.outputSchema !== void 0 && (c.outputSchema = o.outputSchema),
-    o.reasoning !== void 0 &&
-      (c.reasoning = normalizeAgentReasoningDefinition(o.reasoning, i)),
-    o.limits !== void 0 &&
-      (c.limits = normalizeAgentLimitsDefinition(o.limits, i)),
+    o.reasoning !== void 0 && (c.reasoning = normalizeAgentReasoningDefinition(o.reasoning, i)),
+    o.limits !== void 0 && (c.limits = normalizeAgentLimitsDefinition(o.limits, i)),
     c
   );
 }
@@ -95,30 +84,17 @@ function normalizeAgentLimitsDefinition(e, r) {
   let i = expectObjectRecord(e, r);
   expectOnlyKnownKeys(
     i,
-    [
-      `maxInputTokensPerSession`,
-      `maxOutputTokensPerSession`,
-      `sessionTimeoutMs`,
-    ],
+    [`maxInputTokensPerSession`, `maxOutputTokensPerSession`, `sessionTimeoutMs`],
     r,
   );
   let a = {};
   return (
     i.sessionTimeoutMs !== void 0 &&
-      (a.sessionTimeoutMs = expectPositiveIntegerOrFalse(
-        i.sessionTimeoutMs,
-        r,
-      )),
+      (a.sessionTimeoutMs = expectPositiveIntegerOrFalse(i.sessionTimeoutMs, r)),
     i.maxInputTokensPerSession !== void 0 &&
-      (a.maxInputTokensPerSession = expectPositiveIntegerOrFalse(
-        i.maxInputTokensPerSession,
-        r,
-      )),
+      (a.maxInputTokensPerSession = expectPositiveIntegerOrFalse(i.maxInputTokensPerSession, r)),
     i.maxOutputTokensPerSession !== void 0 &&
-      (a.maxOutputTokensPerSession = expectPositiveIntegerOrFalse(
-        i.maxOutputTokensPerSession,
-        r,
-      )),
+      (a.maxOutputTokensPerSession = expectPositiveIntegerOrFalse(i.maxOutputTokensPerSession, r)),
     a
   );
 }
@@ -128,9 +104,7 @@ function normalizeAgentBuildDefinition(e, r) {
   let o = {};
   if (i.externalDependencies !== void 0) {
     if (!Array.isArray(i.externalDependencies)) throw Error(r);
-    o.externalDependencies = Object.freeze(
-      i.externalDependencies.map((e) => expectString(e, r)),
-    );
+    o.externalDependencies = Object.freeze(i.externalDependencies.map((e) => expectString(e, r)));
   }
   return o;
 }
@@ -138,55 +112,38 @@ function normalizeAgentWorkflowDefinition(e, r) {
   let i = expectObjectRecord(e, r);
   expectOnlyKnownKeys(i, [`world`], r);
   let a = {};
-  return (
-    i.world !== void 0 &&
-      (a.world = normalizeAgentWorkflowWorldDefinition(i.world, r)),
-    a
-  );
+  return (i.world !== void 0 && (a.world = normalizeAgentWorkflowWorldDefinition(i.world, r)), a);
 }
 function normalizeAgentWorkflowWorldDefinition(e, t) {
   let n = expectString(e, t);
   if (n.trim() === ``)
-    throw Error(
-      `${t} "experimental.workflow.world" must be a non-empty package name.`,
-    );
+    throw Error(`${t} "experimental.workflow.world" must be a non-empty package name.`);
   return n;
 }
 function normalizeAgentExperimentalDefinition(e, r) {
   let i = expectObjectRecord(e, r);
   expectOnlyKnownKeys(
     i,
-    [
-      `instrumentationProviders`,
-      `subagentPersistentSessions`,
-      `tasks`,
-      `workflow`,
-    ],
+    [`instrumentationProviders`, `subagentPersistentSessions`, `tasks`, `workflow`],
     r,
   );
   let a = {};
   if (i.instrumentationProviders !== void 0) {
     if (typeof i.instrumentationProviders != `boolean`)
-      throw Error(
-        `${r} "experimental.instrumentationProviders" must be a boolean.`,
-      );
+      throw Error(`${r} "experimental.instrumentationProviders" must be a boolean.`);
     a.instrumentationProviders = i.instrumentationProviders;
   }
   if (i.subagentPersistentSessions !== void 0) {
     if (typeof i.subagentPersistentSessions != `boolean`)
-      throw Error(
-        `${r} "experimental.subagentPersistentSessions" must be a boolean.`,
-      );
+      throw Error(`${r} "experimental.subagentPersistentSessions" must be a boolean.`);
     a.subagentPersistentSessions = i.subagentPersistentSessions;
   }
   if (i.tasks !== void 0) {
-    if (typeof i.tasks != `boolean`)
-      throw Error(`${r} "experimental.tasks" must be a boolean.`);
+    if (typeof i.tasks != `boolean`) throw Error(`${r} "experimental.tasks" must be a boolean.`);
     a.tasks = i.tasks;
   }
   return (
-    i.workflow !== void 0 &&
-      (a.workflow = normalizeAgentWorkflowDefinition(i.workflow, r)),
+    i.workflow !== void 0 && (a.workflow = normalizeAgentWorkflowDefinition(i.workflow, r)),
     a
   );
 }
@@ -198,11 +155,7 @@ function normalizeAgentModelOptions(e, r) {
 }
 function normalizeAgentCompactionDefinition(e, i) {
   let a = expectObjectRecord(e, i);
-  expectOnlyKnownKeys(
-    a,
-    [`model`, `modelContextWindowTokens`, `thresholdPercent`],
-    i,
-  );
+  expectOnlyKnownKeys(a, [`model`, `modelContextWindowTokens`, `thresholdPercent`], i);
   let o = {};
   if (a.model !== void 0) {
     if (isDynamicSentinel(a.model))
@@ -213,15 +166,11 @@ function normalizeAgentCompactionDefinition(e, i) {
   }
   if (
     (a.modelContextWindowTokens !== void 0 &&
-      (o.modelContextWindowTokens = expectPositiveInteger(
-        a.modelContextWindowTokens,
-        i,
-      )),
+      (o.modelContextWindowTokens = expectPositiveInteger(a.modelContextWindowTokens, i)),
     a.thresholdPercent !== void 0)
   ) {
     let e = a.thresholdPercent;
-    if (typeof e != `number` || !Number.isFinite(e) || e < 0 || e > 1)
-      throw Error(i);
+    if (typeof e != `number` || !Number.isFinite(e) || e < 0 || e > 1) throw Error(i);
     o.thresholdPercent = e;
   }
   return o;
@@ -231,13 +180,10 @@ function normalizeInstructionsDefinition(e, r) {
   expectOnlyKnownKeys(i, [`content`, `markdown`, `role`], r);
   let o = Object.hasOwn(i, `content`),
     s = Object.hasOwn(i, `markdown`);
-  if (o === s)
-    throw Error(`${r} Provide exactly one of "content" or "markdown".`);
+  if (o === s) throw Error(`${r} Provide exactly one of "content" or "markdown".`);
   if (s) {
     if (Object.hasOwn(i, `role`))
-      throw Error(
-        `${r} The deprecated "markdown" shape does not support "role".`,
-      );
+      throw Error(`${r} The deprecated "markdown" shape does not support "role".`);
     return { content: expectString(i.markdown, r), role: `system` };
   }
   let c = i.role === void 0 ? `system` : expectString(i.role, r);
@@ -247,11 +193,7 @@ function normalizeInstructionsDefinition(e, r) {
 }
 function normalizeSkillDefinition(e, r) {
   let i = expectObjectRecord(e, r);
-  expectOnlyKnownKeys(
-    i,
-    [`description`, `files`, `license`, `markdown`, `metadata`],
-    r,
-  );
+  expectOnlyKnownKeys(i, [`description`, `files`, `license`, `markdown`, `metadata`], r);
   let s = {
       description: expectString(i.description, r),
       markdown: expectString(i.markdown, r),
@@ -273,9 +215,7 @@ function normalizeSkillFiles(e, n) {
       i[e] = t;
       continue;
     }
-    throw Error(
-      `${n} Expected skill file "${e}" to be a string or Uint8Array.`,
-    );
+    throw Error(`${n} Expected skill file "${e}" to be a string or Uint8Array.`);
   }
   return i;
 }
@@ -286,20 +226,11 @@ function normalizeScheduleDefinition(r, i) {
     c = o.markdown !== void 0,
     l = o.run !== void 0;
   if (c && l)
-    throw Error(
-      `${i} Pass either "markdown" (fire-and-forget) or "run" (handler) — not both.`,
-    );
+    throw Error(`${i} Pass either "markdown" (fire-and-forget) or "run" (handler) — not both.`);
   if (!c && !l)
-    throw Error(
-      `${i} Must provide either "markdown" (fire-and-forget) or "run" (handler).`,
-    );
+    throw Error(`${i} Must provide either "markdown" (fire-and-forget) or "run" (handler).`);
   let u = { cron: s };
-  return (
-    c
-      ? (u.markdown = expectString(o.markdown, i))
-      : (u.run = expectFunction(o.run, i)),
-    u
-  );
+  return (c ? (u.markdown = expectString(o.markdown, i)) : (u.run = expectFunction(o.run, i)), u);
 }
 export {
   normalizeAgentDefinition,

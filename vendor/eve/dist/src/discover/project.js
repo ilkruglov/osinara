@@ -12,9 +12,7 @@ import { createDiskProjectSource } from "#discover/project-source.js";
 var DiscoveryProjectResolutionError = class extends Error {
   diagnostic;
   constructor(e) {
-    (super(e.message),
-      (this.name = `DiscoveryProjectResolutionError`),
-      (this.diagnostic = e));
+    (super(e.message), (this.name = `DiscoveryProjectResolutionError`), (this.diagnostic = e));
   }
 };
 async function resolveDiscoveryProject(e = process.cwd(), n = {}) {
@@ -26,8 +24,7 @@ async function resolveDiscoveryProject(e = process.cwd(), n = {}) {
     if (e !== null) return e;
     let n = await tryResolveNestedProjectFromAppRoot(r, a);
     if (n !== null) return n;
-    if (await isFlatAgentRoot(r, a))
-      return { agentRoot: a, appRoot: a, layout: `flat` };
+    if (await isFlatAgentRoot(r, a)) return { agentRoot: a, appRoot: a, layout: `flat` };
     let i = dirname(a);
     if (i === a) break;
     a = i;
@@ -47,24 +44,18 @@ async function resolveSearchDirectory(e, n) {
 async function tryResolveNestedProjectFromAgentDirectory(n, r) {
   if (basename(r) !== `agent`) return null;
   let i = dirname(r);
-  return (await hasProjectMarkers(n, i))
-    ? { agentRoot: r, appRoot: i, layout: `nested` }
-    : null;
+  return (await hasProjectMarkers(n, i)) ? { agentRoot: r, appRoot: i, layout: `nested` } : null;
 }
 async function tryResolveNestedProjectFromAppRoot(e, t) {
   if (!(await hasProjectMarkers(e, t))) return null;
   let r = join(t, `agent`);
-  return (await directoryExists(e, r))
-    ? { agentRoot: r, appRoot: t, layout: `nested` }
-    : null;
+  return (await directoryExists(e, r)) ? { agentRoot: r, appRoot: t, layout: `nested` } : null;
 }
 async function isFlatAgentRoot(e, t) {
   let n = await readDirectoryEntryTypes(e, t);
   return Array.from(n.entries()).some(([e, t]) => {
     let n = classifyAgentRootEntry(e, t);
-    return (
-      n !== `unknown` && n !== `ignored-directory` && n !== `lib-directory`
-    );
+    return n !== `unknown` && n !== `ignored-directory` && n !== `lib-directory`;
   });
 }
 async function hasProjectMarkers(e, t) {

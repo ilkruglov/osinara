@@ -35,7 +35,8 @@ export interface ModelMemoryThreadEntry {
   content: string;
   entryRef: string;
   occurredAt: string;
-  role: "constraint" | "decision" | "episode" | "goal" | "lesson" | "method" | "open_loop" | "outcome";
+  role:
+    "constraint" | "decision" | "episode" | "goal" | "lesson" | "method" | "open_loop" | "outcome";
   sourceRef: string;
   sourceEvidence: ModelMemoryEvidence;
   sourceType: "claim" | "confirmed_outcome";
@@ -50,33 +51,40 @@ interface ThreadSummaryRow {
   updated_at: Date;
 }
 
-type ThreadReadRow = ThreadSummaryRow & { id: string } & ({
-  content: null;
-  entry_ref: null;
-  occurred_at: null;
-  role: null;
-  source_author_label: null;
-  source_evidence_kind: null;
-  source_observed_at: null;
-  source_ref: null;
-  source_type: null;
-} | {
-  content: string;
-  entry_ref: string;
-  occurred_at: Date;
-  role: ModelMemoryThreadEntry["role"];
-  source_author_label: string;
-  source_evidence_kind: ModelMemoryEvidence["kind"];
-  source_observed_at: Date;
-  source_ref: string;
-  source_type: ModelMemoryThreadEntry["sourceType"];
-});
+type ThreadReadRow = ThreadSummaryRow & { id: string } & (
+    | {
+        content: null;
+        entry_ref: null;
+        occurred_at: null;
+        role: null;
+        source_author_label: null;
+        source_evidence_kind: null;
+        source_observed_at: null;
+        source_ref: null;
+        source_type: null;
+      }
+    | {
+        content: string;
+        entry_ref: string;
+        occurred_at: Date;
+        role: ModelMemoryThreadEntry["role"];
+        source_author_label: string;
+        source_evidence_kind: ModelMemoryEvidence["kind"];
+        source_observed_at: Date;
+        source_ref: string;
+        source_type: ModelMemoryThreadEntry["sourceType"];
+      }
+  );
 
 function vectorLiteral(vector: readonly number[]): string {
-  return memoryVectorLiteral(vector, () => new AppError(
-    "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
-    "Не удалось выполнить смысловой поиск нитей памяти",
-  ));
+  return memoryVectorLiteral(
+    vector,
+    () =>
+      new AppError(
+        "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
+        "Не удалось выполнить смысловой поиск нитей памяти",
+      ),
+  );
 }
 
 function toSummary(row: ThreadSummaryRow): ModelMemoryThreadSummary {
@@ -104,10 +112,16 @@ export const memoryThreadQueryRepository = {
   ): Promise<{ items: ModelMemoryThreadSummary[]; nextCursor: string | null }> {
     const limit = requireLimit(input.limit);
     if (input.scope && !auth.scopes.includes(input.scope)) {
-      throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта область нитей памяти недоступна в текущем чате");
+      throw new AppError(
+        "AGENT_MEMORY_SCOPE_DENIED",
+        "Эта область нитей памяти недоступна в текущем чате",
+      );
     }
     if (input.cursor && !THREAD_REF_PATTERN.test(input.cursor)) {
-      throw new AppError("AGENT_MEMORY_THREAD_CURSOR_INVALID", "Некорректный курсор списка нитей памяти");
+      throw new AppError(
+        "AGENT_MEMORY_THREAD_CURSOR_INVALID",
+        "Некорректный курсор списка нитей памяти",
+      );
     }
     const result = await database().query<ThreadSummaryRow>(
       `SELECT thread.thread_ref, thread.title, thread.purpose, thread.status::text,
@@ -124,8 +138,16 @@ export const memoryThreadQueryRepository = {
          AND ($5::text IS NULL OR (thread.updated_at, thread.thread_ref) <
            (cursor.updated_at, cursor.thread_ref))
        ORDER BY thread.updated_at DESC, thread.thread_ref DESC LIMIT $8`,
-      [auth.familyId, auth.scopes, auth.userId, auth.groupId, input.cursor ?? null,
-        input.scope ?? null, input.status ?? null, limit + 1],
+      [
+        auth.familyId,
+        auth.scopes,
+        auth.userId,
+        auth.groupId,
+        input.cursor ?? null,
+        input.scope ?? null,
+        input.status ?? null,
+        limit + 1,
+      ],
     );
     const rows = result.rows.slice(0, limit);
     return {
@@ -141,7 +163,10 @@ export const memoryThreadQueryRepository = {
   ): Promise<ModelMemoryThreadSummary[]> {
     const normalized = query.normalize("NFKC").trim();
     if (!normalized) {
-      throw new AppError("AGENT_MEMORY_THREAD_QUERY_INVALID", "Для поиска нитей памяти нужен запрос");
+      throw new AppError(
+        "AGENT_MEMORY_THREAD_QUERY_INVALID",
+        "Для поиска нитей памяти нужен запрос",
+      );
     }
     requireLimit(limit);
     const embedding = await embedMemoryQuery(normalized);
@@ -161,9 +186,17 @@ export const memoryThreadQueryRepository = {
                   THEN 1 - (thread.title_embedding <=> $6::vector) ELSE 0 END DESC,
                 similarity(thread.title_normalized, lower($5)) DESC,
                 thread.updated_at DESC LIMIT $9`,
-      [auth.familyId, auth.scopes, auth.userId, auth.groupId, normalized,
-        vectorLiteral(embedding), MEMORY_EMBEDDING_MODEL_VERSION,
-        THREAD_TITLE_MIN_SEMANTIC_SIMILARITY, limit],
+      [
+        auth.familyId,
+        auth.scopes,
+        auth.userId,
+        auth.groupId,
+        normalized,
+        vectorLiteral(embedding),
+        MEMORY_EMBEDDING_MODEL_VERSION,
+        THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
+        limit,
+      ],
     );
     return result.rows.map(toSummary);
   },
@@ -178,8 +211,10 @@ export const memoryThreadQueryRepository = {
     thread: ModelMemoryThreadSummary;
     totalCharacters: number;
   }> {
-    if (!THREAD_REF_PATTERN.test(threadRef) ||
-      (input.cursor !== undefined && !THREAD_ENTRY_REF_PATTERN.test(input.cursor))) {
+    if (
+      !THREAD_REF_PATTERN.test(threadRef) ||
+      (input.cursor !== undefined && !THREAD_ENTRY_REF_PATTERN.test(input.cursor))
+    ) {
       throw new AppError("AGENT_MEMORY_THREAD_REF_INVALID", "Некорректная ссылка на нить памяти");
     }
     const limit = requireLimit(input.limit);
@@ -223,8 +258,15 @@ export const memoryThreadQueryRepository = {
          ORDER BY entry.occurred_at DESC, entry.entry_ref DESC LIMIT $7
        ) AS history ON true
        ORDER BY history.occurred_at DESC NULLS LAST, history.entry_ref DESC NULLS LAST`,
-      [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadRef,
-        input.cursor ?? null, limit + 1],
+      [
+        auth.familyId,
+        auth.scopes,
+        auth.userId,
+        auth.groupId,
+        threadRef,
+        input.cursor ?? null,
+        limit + 1,
+      ],
     );
     const thread = result.rows[0];
     if (!thread) throw new AppError("AGENT_MEMORY_THREAD_NOT_FOUND", "Нить памяти не найдена");

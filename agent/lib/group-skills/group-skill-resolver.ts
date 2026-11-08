@@ -25,7 +25,10 @@ import {
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
 import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
-import { TELEGRAM_WIDGET_SKILL_DEFINITION, TELEGRAM_WIDGET_SKILL_NAME } from "../telegram-widgets/telegram-widget-skill.js";
+import {
+  TELEGRAM_WIDGET_SKILL_DEFINITION,
+  TELEGRAM_WIDGET_SKILL_NAME,
+} from "../telegram-widgets/telegram-widget-skill.js";
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS } from "./trusted-google-workspace-skills.js";
 import { knowledgeSkills } from "./knowledge-skill-packages.js";
 import { KNOWLEDGE_SKILL_CAPABILITY } from "./knowledge-skills.js";
@@ -42,7 +45,8 @@ function imageGenerationSkill(
 ): Record<string, SkillDefinition> {
   // A trusted scheduled run (a morning greeting card) may generate; an external one still may not.
   return IMAGE_GENERATION_AVAILABLE &&
-      (scheduledAllowed || options.scheduledRun !== true) && options.subagent !== true
+    (scheduledAllowed || options.scheduledRun !== true) &&
+    options.subagent !== true
     ? { [IMAGE_GENERATION_SKILL_NAME]: IMAGE_GENERATION_SKILL_DEFINITION }
     : {};
 }
@@ -68,7 +72,10 @@ export function resolveTrustedSessionSkills(
 interface ExternalTurnSkillDependencies {
   capturePackages?: typeof authoredSkillRepository.capturePackages;
   /** Authored skills granted to the group whose steps its current allowlist covers. */
-  packagesForGroup(identity: { familyId: string; groupId: string }): Promise<readonly AuthoredSkillPackage[]>;
+  packagesForGroup(identity: {
+    familyId: string;
+    groupId: string;
+  }): Promise<readonly AuthoredSkillPackage[]>;
 }
 
 function packageDefinition(pkg: AuthoredSkillPackage): SkillDefinition {
@@ -96,7 +103,8 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
     // public load_skill executor knows only dynamic packages, so they must reach the sandbox here.
     if (tools.allowed.has(KNOWLEDGE_SKILL_CAPABILITY)) Object.assign(skills, knowledgeSkills());
     // The widget skill rides on the send_widget grant; the load_skill wrapper re-checks it live.
-    if (TELEGRAM_WIDGETS_ENABLED && tools.allowed.has("send_widget")) skills[TELEGRAM_WIDGET_SKILL_NAME] = TELEGRAM_WIDGET_SKILL_DEFINITION;
+    if (TELEGRAM_WIDGETS_ENABLED && tools.allowed.has("send_widget"))
+      skills[TELEGRAM_WIDGET_SKILL_NAME] = TELEGRAM_WIDGET_SKILL_DEFINITION;
     const identity = resolveExternalGroupPolicyIdentity(auth);
     if (!identity) return skills;
     let packages: readonly AuthoredSkillPackage[];
@@ -104,13 +112,16 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
       packages = await dependencies.packagesForGroup(identity);
     } catch (error) {
       // A lookup failure leaves the group without authored skills for this turn; nothing widens.
-      console.error(JSON.stringify({
-        code: "AGENT_SKILL_GRANT_LOOKUP_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_SKILL_GRANT_LOOKUP_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       return skills;
     }
-    if (options.provenance) await dependencies.capturePackages?.(identity.familyId, options.provenance, packages);
+    if (options.provenance)
+      await dependencies.capturePackages?.(identity.familyId, options.provenance, packages);
     for (const pkg of packages) {
       // A static name can never be shadowed by a grant; the rubric already refuses such names.
       if (pkg.name in skills) continue;

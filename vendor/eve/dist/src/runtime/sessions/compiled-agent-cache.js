@@ -67,15 +67,13 @@ async function getOrLoadFullBundle(e) {
     i = getRuntimeCompiledArtifactsCacheKey(t),
     a = await resolveRuntimeCompiledArtifactsVersionedCacheKey(t),
     s = r.bundleCacheKeyBySourceKey.get(i);
-  (s !== void 0 && s !== a && r.bundleCache.delete(s),
-    r.bundleCacheKeyBySourceKey.set(i, a));
+  (s !== void 0 && s !== a && r.bundleCache.delete(s), r.bundleCacheKeyBySourceKey.set(i, a));
   let c = r.bundleCache.get(a);
   if (c !== void 0) return c;
   let l = loadFullBundle(t).catch((e) => {
     throw (
       r.bundleCache.delete(a),
-      r.bundleCacheKeyBySourceKey.get(i) === a &&
-        r.bundleCacheKeyBySourceKey.delete(i),
+      r.bundleCacheKeyBySourceKey.get(i) === a && r.bundleCacheKeyBySourceKey.delete(i),
       e
     );
   });

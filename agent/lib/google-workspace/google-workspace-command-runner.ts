@@ -10,10 +10,7 @@
  */
 import type { ToolContext } from "eve/tools";
 
-import {
-  GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS,
-  SANDBOX_RUNNER_BASE_URL,
-} from "../../config.js";
+import { GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS, SANDBOX_RUNNER_BASE_URL } from "../../config.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import type { GoogleIntegrationAuthorization } from "./google-integration-contract.js";
@@ -58,7 +55,8 @@ export function createGoogleWorkspaceCommandRunner(
       throw new ModelFacingError({
         category: "authorization",
         code: "AGENT_GOOGLE_WORKSPACE_ACCESS_TOKEN_INVALID",
-        correction: "Не повторяйте команду. Подключите Google Workspace заново и отправьте новый запрос.",
+        correction:
+          "Не повторяйте команду. Подключите Google Workspace заново и отправьте новый запрос.",
         reason: "Не удалось получить обязательный токен доступа Google Workspace.",
         retryable: false,
         sideEffectStatus: "not_started",
@@ -66,23 +64,32 @@ export function createGoogleWorkspaceCommandRunner(
     }
     let result;
     try {
-      result = await dependencies.run({
-        accessToken,
-        argv: [...argv],
-        timeoutMs: GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS,
-        workspaceId: auth.workspaceId,
-      }, ctx.abortSignal);
+      result = await dependencies.run(
+        {
+          accessToken,
+          argv: [...argv],
+          timeoutMs: GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS,
+          workspaceId: auth.workspaceId,
+        },
+        ctx.abortSignal,
+      );
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_FAILED",
-        error: boundedDiagnostic(error instanceof Error ? error.message : String(error), accessToken),
-        kind,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_FAILED",
+          error: boundedDiagnostic(
+            error instanceof Error ? error.message : String(error),
+            accessToken,
+          ),
+          kind,
+        }),
+      );
       if (ctx.abortSignal.aborted) {
         throw new ModelFacingError({
           category: "operation",
           code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_CANCELLED",
-          correction: "Не повторяйте команду автоматически. Выполните её снова только по новому запросу пользователя.",
+          correction:
+            "Не повторяйте команду автоматически. Выполните её снова только по новому запросу пользователя.",
           reason: "Выполнение команды Google Workspace отменено.",
           retryable: false,
           sideEffectStatus: kind === "mutation" ? "unknown" : "not_started",
@@ -90,15 +97,18 @@ export function createGoogleWorkspaceCommandRunner(
       }
       throw new ModelFacingError({
         category: "dependency",
-        code: kind === "mutation"
-          ? "AGENT_GOOGLE_WORKSPACE_EXECUTION_AMBIGUOUS"
-          : "AGENT_GOOGLE_WORKSPACE_EXECUTION_FAILED",
-        correction: kind === "mutation"
-          ? "Не повторяйте mutation. Сначала отдельной read-командой проверьте фактическое состояние Google Workspace."
-          : "Повторите read-команду один раз; при повторном сбое сообщите пользователю.",
-        reason: kind === "mutation"
-          ? "Связь с runner оборвалась после начала mutation; внешнее действие могло выполниться."
-          : "Read-команда не была выполнена из-за сбоя связи с runner.",
+        code:
+          kind === "mutation"
+            ? "AGENT_GOOGLE_WORKSPACE_EXECUTION_AMBIGUOUS"
+            : "AGENT_GOOGLE_WORKSPACE_EXECUTION_FAILED",
+        correction:
+          kind === "mutation"
+            ? "Не повторяйте mutation. Сначала отдельной read-командой проверьте фактическое состояние Google Workspace."
+            : "Повторите read-команду один раз; при повторном сбое сообщите пользователю.",
+        reason:
+          kind === "mutation"
+            ? "Связь с runner оборвалась после начала mutation; внешнее действие могло выполниться."
+            : "Read-команда не была выполнена из-за сбоя связи с runner.",
         retryable: kind === "read",
         sideEffectStatus: kind === "mutation" ? "unknown" : "not_started",
       });
@@ -108,18 +118,21 @@ export function createGoogleWorkspaceCommandRunner(
       return { ...result, stderr: diagnostic ?? "" };
     }
 
-    console.error(JSON.stringify({
-      code: "AGENT_GOOGLE_WORKSPACE_COMMAND_FAILED",
-      exitCode: result.exitCode,
-      stderr: diagnostic,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_GOOGLE_WORKSPACE_COMMAND_FAILED",
+        exitCode: result.exitCode,
+        stderr: diagnostic,
+      }),
+    );
     if (result.exitCode === 124 || result.exitCode === 137) {
       throw new ModelFacingError({
         category: "dependency",
         code: "AGENT_GOOGLE_WORKSPACE_EXECUTION_TIMEOUT",
-        correction: kind === "mutation"
-          ? "Не повторяйте mutation. Сначала отдельной read-командой проверьте фактическое состояние."
-          : "Сузьте период, фильтр или размер страницы и повторите read-команду один раз.",
+        correction:
+          kind === "mutation"
+            ? "Не повторяйте mutation. Сначала отдельной read-командой проверьте фактическое состояние."
+            : "Сузьте период, фильтр или размер страницы и повторите read-команду один раз.",
         reason: "Команда Google Workspace не завершилась за отведённое время.",
         retryable: kind === "read",
         sideEffectStatus: kind === "mutation" ? "unknown" : "not_started",
@@ -128,12 +141,14 @@ export function createGoogleWorkspaceCommandRunner(
     throw new ModelFacingError({
       category: "input",
       code: "AGENT_GOOGLE_WORKSPACE_COMMAND_FAILED",
-      correction: kind === "mutation"
-        ? "Не повторяйте mutation автоматически. Проверьте фактическое состояние read-командой, затем исправьте payload по schema."
-        : "Исправьте параметры по gws schema и повторите read-команду один раз.",
-      reason: diagnostic === null
-        ? "Google Workspace отклонил команду без дополнительной диагностики."
-        : `Google Workspace отклонил команду: ${diagnostic}`,
+      correction:
+        kind === "mutation"
+          ? "Не повторяйте mutation автоматически. Проверьте фактическое состояние read-командой, затем исправьте payload по schema."
+          : "Исправьте параметры по gws schema и повторите read-команду один раз.",
+      reason:
+        diagnostic === null
+          ? "Google Workspace отклонил команду без дополнительной диагностики."
+          : `Google Workspace отклонил команду: ${diagnostic}`,
       retryable: kind === "read",
       sideEffectStatus: kind === "mutation" ? "unknown" : "not_started",
     });

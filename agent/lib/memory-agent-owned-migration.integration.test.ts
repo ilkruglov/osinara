@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const MIGRATION_NAME = "059_main_agent_owned_memory.sql";
 const TEST_SCHEMA = "test_main_agent_owned_memory";
 
@@ -92,8 +91,15 @@ describeWithDatabase("059 main-agent-owned memory migration", () => {
          VALUES ($1, $2, 'family', $2, 'primary', 'firsthand', $3, 'Семья', $4, $5, $6,
                  'Анна', now(), 'Подготовка к марафону началась', $7, 1, 59001,
                  '{"content":"Подготовка к марафону началась"}'::jsonb)`,
-        [claim.rows[0]!.id, family.rows[0]!.id, conversation.rows[0]!.id,
-          group.rows[0]!.id, participant.rows[0]!.id, user.rows[0]!.id, message.rows[0]!.id],
+        [
+          claim.rows[0]!.id,
+          family.rows[0]!.id,
+          conversation.rows[0]!.id,
+          group.rows[0]!.id,
+          participant.rows[0]!.id,
+          user.rows[0]!.id,
+          message.rows[0]!.id,
+        ],
       );
       const thread = await client.query<{ id: string }>(
         `INSERT INTO memory_threads
@@ -118,26 +124,39 @@ describeWithDatabase("059 main-agent-owned memory migration", () => {
                  'semantic-extractor-v1', 'memory-candidate-v2', repeat('a', 64), repeat('b', 64))`,
         [conversation.rows[0]!.id, family.rows[0]!.id, user.rows[0]!.id],
       );
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_extraction_retention_holds"))
-        .rows).toEqual([{ count: 1 }]);
+      expect(
+        (
+          await client.query(
+            "SELECT count(*)::integer AS count FROM memory_extraction_retention_holds",
+          )
+        ).rows,
+      ).toEqual([{ count: 1 }]);
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));
 
-      expect((await client.query(
-        `SELECT
+      expect(
+        (
+          await client.query(
+            `SELECT
            (SELECT count(*)::integer FROM memory_items WHERE id = $1) AS claims,
            (SELECT count(*)::integer FROM memory_threads WHERE id = $2) AS threads,
            (SELECT count(*)::integer FROM memory_thread_entries WHERE source_claim_id = $1) AS entries,
            (SELECT count(*)::integer FROM memory_extraction_retention_holds) AS holds,
            (SELECT count(*)::integer FROM memory_extraction_jobs WHERE status = 'failed') AS failed_jobs`,
-        [claim.rows[0]!.id, thread.rows[0]!.id],
-      )).rows).toEqual([{ claims: 1, entries: 1, failed_jobs: 1, holds: 0, threads: 1 }]);
-      expect((await client.query(
-        `SELECT count(*)::integer AS count FROM information_schema.columns
+            [claim.rows[0]!.id, thread.rows[0]!.id],
+          )
+        ).rows,
+      ).toEqual([{ claims: 1, entries: 1, failed_jobs: 1, holds: 0, threads: 1 }]);
+      expect(
+        (
+          await client.query(
+            `SELECT count(*)::integer AS count FROM information_schema.columns
          WHERE table_schema = $1 AND table_name = 'memory_mutation_operations'
            AND column_name IN ('thread_id', 'thread_action')`,
-        [TEST_SCHEMA],
-      )).rows).toEqual([{ count: 2 }]);
+            [TEST_SCHEMA],
+          )
+        ).rows,
+      ).toEqual([{ count: 2 }]);
 
       await client.query(
         `INSERT INTO telegram_group_messages
@@ -147,8 +166,13 @@ describeWithDatabase("059 main-agent-owned memory migration", () => {
                  'text', 'Новое сообщение не удерживается extraction', now())`,
         [conversation.rows[0]!.id, group.rows[0]!.id],
       );
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_extraction_retention_holds"))
-        .rows).toEqual([{ count: 0 }]);
+      expect(
+        (
+          await client.query(
+            "SELECT count(*)::integer AS count FROM memory_extraction_retention_holds",
+          )
+        ).rows,
+      ).toEqual([{ count: 0 }]);
     } finally {
       try {
         await client.query("RESET search_path");

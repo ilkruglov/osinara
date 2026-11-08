@@ -27,13 +27,17 @@ describe("integration tool usability contracts", () => {
 
     expect(jsonSchema.required).toEqual(expect.arrayContaining(["question", "scope"]));
     expect(schema.safeParse({ path: "photos/image.png", scope: "personal" }).success).toBe(false);
-    expect(schema.safeParse({ path: "photos/image.png", question: "Что изображено?" }).success).toBe(false);
-    expect(schema.safeParse({
-      attachmentId: ATTACHMENT_ID,
-      path: "photos/image.png",
-      question: "Что изображено?",
-      scope: "personal",
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({ path: "photos/image.png", question: "Что изображено?" }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        attachmentId: ATTACHMENT_ID,
+        path: "photos/image.png",
+        question: "Что изображено?",
+        scope: "personal",
+      }).success,
+    ).toBe(true);
   });
 
   it("publishes a strict required attachmentId schema", () => {

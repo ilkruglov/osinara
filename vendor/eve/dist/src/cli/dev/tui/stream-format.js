@@ -29,9 +29,7 @@ function stripPasteStart(e) {
   return e.startsWith(PASTE_START) ? e.slice(6) : e;
 }
 function isIncompleteOsc(e) {
-  return (
-    e.startsWith(`\x1B]`) && !e.includes(`\x07`, 2) && !e.includes(`\x1B\\`, 2)
-  );
+  return e.startsWith(`\x1B]`) && !e.includes(`\x07`, 2) && !e.includes(`\x1B\\`, 2);
 }
 function stripPromptControlCharacters(e) {
   let t = ``;
@@ -82,10 +80,9 @@ function nextKey(r) {
     }
     return { key: { type: `escape` }, consumed: 1 };
   }
-  if (i < ` ` || i === ``)
-    return { key: parseKey(Buffer.from(i)), consumed: 1 };
+  if (i < ` ` || i === ``) return { key: parseKey(Buffer.from(i)), consumed: 1 };
   let a = 1;
-  for (; a < r.length; ) {
+  for (; a < r.length;) {
     let e = r[a];
     if (e === `\x1B` || e < ` ` || e === ``) break;
     a += 1;
@@ -165,9 +162,7 @@ function parseKey(e) {
       return { type: `escape` };
     default: {
       let e = stripPromptControlCharacters(t);
-      return e.length > 0
-        ? { type: `text`, value: e, framing: `unframed` }
-        : { type: `ignore` };
+      return e.length > 0 ? { type: `text`, value: e, framing: `unframed` } : { type: `ignore` };
     }
   }
 }
@@ -203,13 +198,7 @@ function formatTurnDuration(e) {
   if (r === 0) return `${n}s`;
   let i = r % 60,
     a = Math.floor(r / 60);
-  return a === 0
-    ? n === 0
-      ? `${i}min`
-      : `${i}min ${n}s`
-    : i === 0
-      ? `${a}h`
-      : `${a}h ${i}min`;
+  return a === 0 ? (n === 0 ? `${i}min` : `${i}min ${n}s`) : i === 0 ? `${a}h` : `${a}h ${i}min`;
 }
 function formatTokenFlow(e, t) {
   let n = formatCompactTokenCount(e.inputTokens),
@@ -224,8 +213,7 @@ function formatContextPercentage(e, t) {
 }
 function formatAssistantResponseStats(e, t) {
   if (t === `tokensPerSecond`) return formatTokensPerSecond(e.tokensPerSecond);
-  if (e.outputTokens != null)
-    return `${e.outputTokens.toLocaleString()} output tokens`;
+  if (e.outputTokens != null) return `${e.outputTokens.toLocaleString()} output tokens`;
 }
 function formatTokensPerSecond(e) {
   if (e != null) return `${formatNumber(e)} tok/s`;

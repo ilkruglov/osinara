@@ -86,8 +86,14 @@ function lastBoundary(content: string, from: number, to: number): number {
 
 /** Splits one paragraph longer than the cap along sentences, clauses, then words. */
 function splitLongParagraph(content: string, paragraph: Span, maxCharacters: number): Span[] {
-  const minBoundary = Math.min(MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS, Math.floor(maxCharacters / 2));
-  const overlap = Math.min(MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS, Math.floor(maxCharacters / 4));
+  const minBoundary = Math.min(
+    MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS,
+    Math.floor(maxCharacters / 2),
+  );
+  const overlap = Math.min(
+    MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS,
+    Math.floor(maxCharacters / 4),
+  );
   const spans: Span[] = [];
   let start = paragraph.start;
   while (start < paragraph.end) {
@@ -109,8 +115,10 @@ function splitLongParagraph(content: string, paragraph: Span, maxCharacters: num
     const overlapFrom = Math.max(start + 1, end - overlap);
     let wordStart = overlapFrom;
     const wordSearchFloor = Math.max(start + 1, end - 2 * overlap);
-    while (wordStart > wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!)) wordStart -= 1;
-    if (wordStart === wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!)) wordStart = overlapFrom;
+    while (wordStart > wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!))
+      wordStart -= 1;
+    if (wordStart === wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!))
+      wordStart = overlapFrom;
     const boundary = lastBoundary(content, wordStart, end - 1);
     start = wholeCharacterStart(content, boundary === -1 ? wordStart : boundary);
   }
@@ -148,8 +156,11 @@ function chunkText(content: string, maxCharacters: number): MemoryEmbeddingChunk
       spans.push(...splitLongParagraph(content, paragraph, maxCharacters));
       continue;
     }
-    if (open && (open.end - open.start < MEMORY_EMBEDDING_CHUNK_MIN_PARAGRAPH_CHARACTERS) &&
-        paragraph.end - open.start <= maxCharacters) {
+    if (
+      open &&
+      open.end - open.start < MEMORY_EMBEDDING_CHUNK_MIN_PARAGRAPH_CHARACTERS &&
+      paragraph.end - open.start <= maxCharacters
+    ) {
       open = { end: paragraph.end, start: open.start };
       continue;
     }

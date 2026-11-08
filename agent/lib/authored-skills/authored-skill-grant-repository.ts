@@ -47,17 +47,25 @@ async function findExternalGroup(familyId: string, group: string): Promise<Group
     [familyId, group.trim()],
   );
   if (result.rows.length === 0) {
-    throw new AppError("AGENT_SKILL_GROUP_NOT_FOUND", `Внешней группы «${group}» у семьи нет; проверь status в manage_telegram_group`);
+    throw new AppError(
+      "AGENT_SKILL_GROUP_NOT_FOUND",
+      `Внешней группы «${group}» у семьи нет; проверь status в manage_telegram_group`,
+    );
   }
   if (result.rows.length > 1) {
     const ids = result.rows.map((row) => row.telegram_chat_id).join(", ");
-    throw new AppError("AGENT_SKILL_GROUP_AMBIGUOUS", `Под названием «${group}» несколько групп; укажи chat id: ${ids}`);
+    throw new AppError(
+      "AGENT_SKILL_GROUP_AMBIGUOUS",
+      `Под названием «${group}» несколько групп; укажи chat id: ${ids}`,
+    );
   }
   return result.rows[0]!;
 }
 
 function requireCoveredTools(name: string, markdown: string, allowed: ReadonlySet<string>): void {
-  const missing = externalGroupMissingTools(markdown, allowed, { imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE });
+  const missing = externalGroupMissingTools(markdown, allowed, {
+    imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE,
+  });
   if (missing.length > 0) {
     throw new AppError(
       "AGENT_SKILL_GROUP_TOOLS_MISSING",
@@ -67,7 +75,10 @@ function requireCoveredTools(name: string, markdown: string, allowed: ReadonlySe
 }
 
 export const authoredSkillGrantRepository = {
-  async grant(caller: FamilyCaller, input: { group: string; name: string }): Promise<{
+  async grant(
+    caller: FamilyCaller,
+    input: { group: string; name: string },
+  ): Promise<{
     granted: boolean;
     group: { telegramChatId: string; title: string };
     name: string;
@@ -82,7 +93,8 @@ export const authoredSkillGrantRepository = {
         [caller.familyId, input.name],
       );
       const row = skill.rows[0];
-      if (!row) throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
+      if (!row)
+        throw new AppError("AGENT_SKILL_NOT_FOUND", `Навыка ${input.name} нет среди активных`);
       requireCoveredTools(input.name, row.markdown, new Set(group.tool_allowlist));
       const existing = await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM authored_skill_group_grants AS grant_row
@@ -103,10 +115,20 @@ export const authoredSkillGrantRepository = {
       );
       await client.query("COMMIT");
       const granted = (inserted.rowCount ?? 0) > 0;
-      console.info(JSON.stringify({
-        code: "AGENT_SKILL_GRANTED", familyId: caller.familyId, granted, groupId: group.id, name: input.name,
-      }));
-      return { granted, group: { telegramChatId: group.telegram_chat_id, title: group.title }, name: input.name };
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_GRANTED",
+          familyId: caller.familyId,
+          granted,
+          groupId: group.id,
+          name: input.name,
+        }),
+      );
+      return {
+        granted,
+        group: { telegramChatId: group.telegram_chat_id, title: group.title },
+        name: input.name,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -115,7 +137,10 @@ export const authoredSkillGrantRepository = {
     }
   },
 
-  async revoke(caller: FamilyCaller, input: { group: string; name: string }): Promise<{
+  async revoke(
+    caller: FamilyCaller,
+    input: { group: string; name: string },
+  ): Promise<{
     group: { telegramChatId: string; title: string };
     name: string;
   }> {
@@ -132,11 +157,24 @@ export const authoredSkillGrantRepository = {
         [caller.familyId, group.id, input.name],
       );
       if ((deleted.rowCount ?? 0) === 0) {
-        throw new AppError("AGENT_SKILL_GRANT_NOT_FOUND", `Навык ${input.name} этой группе не выдавался`);
+        throw new AppError(
+          "AGENT_SKILL_GRANT_NOT_FOUND",
+          `Навык ${input.name} этой группе не выдавался`,
+        );
       }
       await client.query("COMMIT");
-      console.info(JSON.stringify({ code: "AGENT_SKILL_REVOKED", familyId: caller.familyId, groupId: group.id, name: input.name }));
-      return { group: { telegramChatId: group.telegram_chat_id, title: group.title }, name: input.name };
+      console.info(
+        JSON.stringify({
+          code: "AGENT_SKILL_REVOKED",
+          familyId: caller.familyId,
+          groupId: group.id,
+          name: input.name,
+        }),
+      );
+      return {
+        group: { telegramChatId: group.telegram_chat_id, title: group.title },
+        name: input.name,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -147,7 +185,11 @@ export const authoredSkillGrantRepository = {
 
   /** Grants of the family's active skills, for the library listing. */
   async grants(familyId: string): Promise<AuthoredSkillGrant[]> {
-    const result = await database().query<{ name: string; telegram_chat_id: string; title: string }>(
+    const result = await database().query<{
+      name: string;
+      telegram_chat_id: string;
+      title: string;
+    }>(
       `SELECT skill.name, telegram_group.title, telegram_group.telegram_chat_id
          FROM authored_skill_group_grants AS grant_row
          JOIN authored_skills AS skill ON skill.id = grant_row.skill_id
@@ -156,11 +198,18 @@ export const authoredSkillGrantRepository = {
         ORDER BY skill.name, lower(telegram_group.title)`,
       [familyId],
     );
-    return result.rows.map((row) => ({ groupTitle: row.title, name: row.name, telegramChatId: row.telegram_chat_id }));
+    return result.rows.map((row) => ({
+      groupTitle: row.title,
+      name: row.name,
+      telegramChatId: row.telegram_chat_id,
+    }));
   },
 
   /** Active granted skills whose steps the group's current allowlist covers. */
-  async packagesForGroup(input: { familyId: string; groupId: string }): Promise<AuthoredSkillPackage[]> {
+  async packagesForGroup(input: {
+    familyId: string;
+    groupId: string;
+  }): Promise<AuthoredSkillPackage[]> {
     const result = await database().query<PackageRow>(
       `SELECT skill.name, skill.description, skill.markdown, skill.files, skill.version, telegram_group.tool_allowlist
          FROM authored_skill_group_grants AS grant_row
@@ -173,12 +222,27 @@ export const authoredSkillGrantRepository = {
       [input.groupId, input.familyId],
     );
     return result.rows
-      .filter((row) => externalGroupMissingTools(row.markdown, new Set(row.tool_allowlist), { imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE }).length === 0)
-      .map((row) => ({ description: row.description, files: row.files, markdown: row.markdown, name: row.name, version: row.version }));
+      .filter(
+        (row) =>
+          externalGroupMissingTools(row.markdown, new Set(row.tool_allowlist), {
+            imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE,
+          }).length === 0,
+      )
+      .map((row) => ({
+        description: row.description,
+        files: row.files,
+        markdown: row.markdown,
+        name: row.name,
+        version: row.version,
+      }));
   },
 
   /** Markdown of the granted active skill, or null when the group holds no such grant. */
-  async grantedMarkdown(input: { familyId: string; groupId: string; name: string }): Promise<string | null> {
+  async grantedMarkdown(input: {
+    familyId: string;
+    groupId: string;
+    name: string;
+  }): Promise<string | null> {
     const result = await database().query<{ markdown: string }>(
       `SELECT skill.markdown
          FROM authored_skill_group_grants AS grant_row

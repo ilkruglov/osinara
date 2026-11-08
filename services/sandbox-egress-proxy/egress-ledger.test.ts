@@ -15,7 +15,11 @@ describe("createEgressLedger", () => {
   it("logs each connection with its bytes and duration", () => {
     const lines: string[] = [];
     let now = Date.UTC(2026, 9, 5, 12);
-    const ledger = createEgressLedger({ dailyBytes: 10_000, log: (line) => lines.push(line), now: () => now });
+    const ledger = createEgressLedger({
+      dailyBytes: 10_000,
+      log: (line) => lines.push(line),
+      now: () => now,
+    });
 
     const meter = ledger.open("172.20.0.5")!;
     meter.add("up", 200);
@@ -24,10 +28,18 @@ describe("createEgressLedger", () => {
     meter.close({ host: "example.com", kind: "connect", port: 443 });
     meter.close({ host: "example.com", kind: "connect", port: 443 });
 
-    expect(lines.map((line) => JSON.parse(line))).toEqual([{
-      bytesDown: 900, bytesUp: 200, client: "172.20.0.5", code: "SANDBOX_EGRESS_CONNECTION",
-      host: "example.com", kind: "connect", ms: 30, port: 443,
-    }]);
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      {
+        bytesDown: 900,
+        bytesUp: 200,
+        client: "172.20.0.5",
+        code: "SANDBOX_EGRESS_CONNECTION",
+        host: "example.com",
+        kind: "connect",
+        ms: 30,
+        port: 443,
+      },
+    ]);
   });
 
   it("adds up a client's connections, closed and open, and refuses past the budget until the next day", () => {
@@ -35,7 +47,11 @@ describe("createEgressLedger", () => {
     // was counted only when it closed, so neither many small nor one long connection was bounded.
     const lines: string[] = [];
     let now = Date.UTC(2026, 9, 5, 12);
-    const ledger = createEgressLedger({ dailyBytes: 1_000, log: (line) => lines.push(line), now: () => now });
+    const ledger = createEgressLedger({
+      dailyBytes: 1_000,
+      log: (line) => lines.push(line),
+      now: () => now,
+    });
 
     for (let index = 0; index < 2; index += 1) {
       const meter = ledger.open("172.20.0.5")!;

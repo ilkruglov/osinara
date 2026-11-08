@@ -52,10 +52,12 @@ describe("memory review owner alert dispatcher", () => {
 
   it("tells the owner that a skipped pass will not be revisited", async () => {
     const fixture = dependencies({
-      claimPending: vi.fn().mockResolvedValue([{
-        ...alert,
-        diagnosticCode: "AGENT_MEMORY_REVIEW_PASS_SKIPPED",
-      }]),
+      claimPending: vi.fn().mockResolvedValue([
+        {
+          ...alert,
+          diagnosticCode: "AGENT_MEMORY_REVIEW_PASS_SKIPPED",
+        },
+      ]),
     });
 
     await expect(createMemoryReviewOwnerAlertDispatcher(fixture)()).resolves.toBe(1);
@@ -70,11 +72,15 @@ describe("memory review owner alert dispatcher", () => {
 
   it("records a definite Telegram rejection without retry", async () => {
     const fixture = dependencies({
-      deliver: vi.fn().mockRejectedValue(new MemoryReviewOwnerAlertTransportError(
-        "failed",
-        "AGENT_MEMORY_REVIEW_OWNER_ALERT_TELEGRAM_REJECTED",
-        "Telegram отклонил уведомление владельца",
-      )),
+      deliver: vi
+        .fn()
+        .mockRejectedValue(
+          new MemoryReviewOwnerAlertTransportError(
+            "failed",
+            "AGENT_MEMORY_REVIEW_OWNER_ALERT_TELEGRAM_REJECTED",
+            "Telegram отклонил уведомление владельца",
+          ),
+        ),
     });
 
     await expect(createMemoryReviewOwnerAlertDispatcher(fixture)()).resolves.toBe(1);
@@ -90,7 +96,8 @@ describe("memory review owner alert dispatcher", () => {
     const second = { ...alert, alertId: "00000000-0000-4000-8000-000000000081" };
     const fixture = dependencies({
       claimPending: vi.fn().mockResolvedValue([alert, second]),
-      deliver: vi.fn()
+      deliver: vi
+        .fn()
         .mockRejectedValueOnce(new Error("connection reset"))
         .mockResolvedValueOnce(undefined),
     });
@@ -103,9 +110,9 @@ describe("memory review owner alert dispatcher", () => {
       status: "ambiguous",
     });
     expect(fixture.markDelivered).toHaveBeenCalledWith(second);
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining(
-      "AGENT_MEMORY_REVIEW_OWNER_ALERT_DELIVERY_AMBIGUOUS",
-    ));
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("AGENT_MEMORY_REVIEW_OWNER_ALERT_DELIVERY_AMBIGUOUS"),
+    );
     consoleError.mockRestore();
   });
 });

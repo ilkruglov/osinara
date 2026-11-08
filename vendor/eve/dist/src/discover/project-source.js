@@ -39,18 +39,14 @@ function createMemoryProjectSource(e) {
     t.set(e, i);
     let a = splitPosixPath(e);
     if (a.length === 0)
-      throw TypeError(
-        `MemoryProjectSource: cannot register root path "${n}" as a file.`,
-      );
+      throw TypeError(`MemoryProjectSource: cannot register root path "${n}" as a file.`);
     let o = a[a.length - 1];
-    if (o === void 0)
-      throw TypeError(`MemoryProjectSource: empty file name in "${n}".`);
+    if (o === void 0) throw TypeError(`MemoryProjectSource: empty file name in "${n}".`);
     let s = `/`;
     for (let e = 0; e < a.length - 1; e += 1) {
       let t = a[e];
       t !== void 0 &&
-        (registerChildOfDirectory(s, t, `directory`),
-        (s = s === `/` ? `/${t}` : `${s}/${t}`));
+        (registerChildOfDirectory(s, t, `directory`), (s = s === `/` ? `/${t}` : `${s}/${t}`));
     }
     registerChildOfDirectory(s, o, `file`);
   }
@@ -62,8 +58,7 @@ function createMemoryProjectSource(e) {
     for (let e = 0; e < n.length; e += 1) {
       let t = n[e];
       t !== void 0 &&
-        (registerChildOfDirectory(r, t, `directory`),
-        (r = r === `/` ? `/${t}` : `${r}/${t}`));
+        (registerChildOfDirectory(r, t, `directory`), (r = r === `/` ? `/${t}` : `${r}/${t}`));
     }
   }
   return {

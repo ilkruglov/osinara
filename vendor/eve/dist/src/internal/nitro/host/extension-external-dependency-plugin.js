@@ -8,8 +8,7 @@ function createExtensionExternalDependencyPlugin(e) {
     : {
         name: `eve-extension-external-dependency`,
         resolveId(e) {
-          return [...t.keys()].find((t) => e === t || e.startsWith(`${t}/`)) ===
-            void 0
+          return [...t.keys()].find((t) => e === t || e.startsWith(`${t}/`)) === void 0
             ? null
             : { external: !0, id: e };
         },
@@ -41,18 +40,14 @@ function resolveDependencyEntry(a, o) {
       .find(existsSync);
     if (o === void 0) throw e;
     let c = JSON.parse(readFileSync(o, `utf8`)),
-      l =
-        resolveImportExport(c.exports) ??
-        stringValue(c.module) ??
-        stringValue(c.main);
+      l = resolveImportExport(c.exports) ?? stringValue(c.module) ?? stringValue(c.main);
     if (l === void 0) throw e;
     return resolve(dirname(o), l);
   }
 }
 function resolveImportExport(e) {
   if (typeof e == `string`) return e;
-  if (Array.isArray(e))
-    return e.map(resolveImportExport).find((e) => e !== void 0);
+  if (Array.isArray(e)) return e.map(resolveImportExport).find((e) => e !== void 0);
   if (typeof e != `object` || !e) return;
   let t = e;
   if (`.` in t) return resolveImportExport(t[`.`]);
@@ -73,7 +68,4 @@ function collectDependencyAnchors(e) {
     }
   return t;
 }
-export {
-  createExtensionExternalDependencyPlugin,
-  resolveExtensionExternalDependencyPaths,
-};
+export { createExtensionExternalDependencyPlugin, resolveExtensionExternalDependencyPaths };

@@ -17,7 +17,10 @@ vi.mock("../database.js", () => ({
   database: () => ({ connect: async () => ({ query: clientQuery, release }), query }),
 }));
 
-import { authorizeCurrentExternalGroupCapability, loadCurrentExternalGroupCapabilities } from "./external-group-live-policy.js";
+import {
+  authorizeCurrentExternalGroupCapability,
+  loadCurrentExternalGroupCapabilities,
+} from "./external-group-live-policy.js";
 
 const IDENTITY = { familyId: "family-1", groupId: "group-1" };
 
@@ -30,10 +33,16 @@ describe("current external-group capability policy", () => {
 
   it("authorizes a capability and the grants it also requires from one locked read", async () => {
     clientQuery.mockImplementation(async (sql: string) =>
-      sql.startsWith("SELECT") ? { rows: [{ tool_allowlist: ["fetch_telegram_avatars"] }] } : { rows: [] });
+      sql.startsWith("SELECT")
+        ? { rows: [{ tool_allowlist: ["fetch_telegram_avatars"] }] }
+        : { rows: [] },
+    );
 
-    await expect(authorizeCurrentExternalGroupCapability(IDENTITY, "fetch_telegram_avatars", { alsoRequired: ["generate_image"] }))
-      .rejects.toMatchObject({ code: "AGENT_GROUP_TOOL_FORBIDDEN" });
+    await expect(
+      authorizeCurrentExternalGroupCapability(IDENTITY, "fetch_telegram_avatars", {
+        alsoRequired: ["generate_image"],
+      }),
+    ).rejects.toMatchObject({ code: "AGENT_GROUP_TOOL_FORBIDDEN" });
     const selects = clientQuery.mock.calls.filter(([sql]) => String(sql).startsWith("SELECT"));
     expect(selects).toHaveLength(1);
     expect(selects[0]![0]).toMatch(/FOR SHARE/u);
@@ -41,13 +50,20 @@ describe("current external-group capability policy", () => {
     expect(release).toHaveBeenCalledTimes(1);
 
     clientQuery.mockImplementation(async (sql: string) =>
-      sql.startsWith("SELECT") ? { rows: [{ tool_allowlist: ["fetch_telegram_avatars", "generate_image"] }] } : { rows: [] });
-    await expect(authorizeCurrentExternalGroupCapability(IDENTITY, "fetch_telegram_avatars", { alsoRequired: ["generate_image"] }))
-      .resolves.toBeUndefined();
+      sql.startsWith("SELECT")
+        ? { rows: [{ tool_allowlist: ["fetch_telegram_avatars", "generate_image"] }] }
+        : { rows: [] },
+    );
+    await expect(
+      authorizeCurrentExternalGroupCapability(IDENTITY, "fetch_telegram_avatars", {
+        alsoRequired: ["generate_image"],
+      }),
+    ).resolves.toBeUndefined();
     expect(clientQuery).toHaveBeenCalledWith("COMMIT");
     // Any one of a list authorizes the capability itself; the required grants are all needed.
-    await expect(authorizeCurrentExternalGroupCapability(IDENTITY, ["send_workspace_image", "generate_image"]))
-      .resolves.toBeUndefined();
+    await expect(
+      authorizeCurrentExternalGroupCapability(IDENTITY, ["send_workspace_image", "generate_image"]),
+    ).resolves.toBeUndefined();
   });
 
   it("loads the exact allowlist only from the current external registration", async () => {

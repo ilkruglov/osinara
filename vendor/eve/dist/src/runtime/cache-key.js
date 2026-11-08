@@ -5,8 +5,7 @@ async function resolveRuntimeCompiledArtifactsVersionedCacheKey(n) {
   let r = getRuntimeCompiledArtifactsCacheKey(n),
     i = await resolveCompileMetadataMtimeMs(n);
   try {
-    let e = (await loadCompileMetadata({ compiledArtifactsSource: n }))
-      ?.discovery.sourceGraphHash;
+    let e = (await loadCompileMetadata({ compiledArtifactsSource: n }))?.discovery.sourceGraphHash;
     return e === void 0 || e.length === 0
       ? i === void 0
         ? r

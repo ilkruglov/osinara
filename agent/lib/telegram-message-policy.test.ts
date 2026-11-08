@@ -7,10 +7,7 @@
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
  */
-import {
-  buildTelegramTurnMessage,
-  collectTelegramFileParts,
-} from "eve/channels/telegram";
+import { buildTelegramTurnMessage, collectTelegramFileParts } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -96,34 +93,43 @@ describe("isMessageAddressedToBot", () => {
     ).toBe(true);
   });
 
-  it.each(["/ask помоги", "/clear", "/clear 😁", "/ask@FAMILY_AGENT помоги", "/ask@other_bot помоги"])(
-    "does not treat an application-unsupported slash command as an address: %s",
-    (text) => {
-      expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
-    },
-  );
+  it.each([
+    "/ask помоги",
+    "/clear",
+    "/clear 😁",
+    "/ask@FAMILY_AGENT помоги",
+    "/ask@other_bot помоги",
+  ])("does not treat an application-unsupported slash command as an address: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
+  });
 
   it("does not let a reply route turn an unsupported slash command into an address", () => {
-    expect(isMessageAddressedToBot({
-      ...groupMessage,
-      replyToMessage: {
-        from: { id: "bot", isBot: true, username: "family_agent" },
-      },
-      text: "/clear",
-    }, "family_agent")).toBe(false);
+    expect(
+      isMessageAddressedToBot(
+        {
+          ...groupMessage,
+          replyToMessage: {
+            from: { id: "bot", isBot: true, username: "family_agent" },
+          },
+          text: "/clear",
+        },
+        "family_agent",
+      ),
+    ).toBe(false);
   });
 
   it("does not hide a mention after text that exceeds the Telegram command limit", () => {
     const oversizedCommand = `/${"a".repeat(33)} @family_agent помоги`;
 
-    expect(isMessageAddressedToBot({ ...groupMessage, text: oversizedCommand }, "family_agent"))
-      .toBe(true);
+    expect(
+      isMessageAddressedToBot({ ...groupMessage, text: oversizedCommand }, "family_agent"),
+    ).toBe(true);
   });
 
   it("does not treat an indented command as a Telegram bot command", () => {
-    expect(isMessageAddressedToBot({ ...groupMessage, text: "  /ask помоги" }, "family_agent")).toBe(
-      false,
-    );
+    expect(
+      isMessageAddressedToBot({ ...groupMessage, text: "  /ask помоги" }, "family_agent"),
+    ).toBe(false);
   });
 
   it("does not match this bot username inside another mention", () => {
@@ -173,17 +179,21 @@ describe("hasTelegramInboundMedia", () => {
     "video_note",
     "voice",
   ])("detects the Telegram %s field before any file download", (field) => {
-    expect(hasTelegramInboundMedia({
-      attachments: [],
-      raw: { [field]: { file_id: "telegram-file-1" } },
-    })).toBe(true);
+    expect(
+      hasTelegramInboundMedia({
+        attachments: [],
+        raw: { [field]: { file_id: "telegram-file-1" } },
+      }),
+    ).toBe(true);
   });
 
   it("also detects Eve-parsed attachments and permits text-only messages", () => {
-    expect(hasTelegramInboundMedia({
-      attachments: [{ fileId: "telegram-file-1", kind: "photo" }],
-      raw: {},
-    })).toBe(true);
+    expect(
+      hasTelegramInboundMedia({
+        attachments: [{ fileId: "telegram-file-1", kind: "photo" }],
+        raw: {},
+      }),
+    ).toBe(true);
     expect(hasTelegramInboundMedia({ attachments: [], raw: { text: "обычный текст" } })).toBe(
       false,
     );
@@ -192,71 +202,118 @@ describe("hasTelegramInboundMedia", () => {
   it.each(["chat_shared", "poll", "rich_message", "users_shared"])(
     "permits a text-only %s object without Telegram file references",
     (field) => {
-      expect(hasTelegramInboundMedia({
-        attachments: [],
-        raw: { [field]: { text: "только текст" } },
-      })).toBe(false);
+      expect(
+        hasTelegramInboundMedia({
+          attachments: [],
+          raw: { [field]: { text: "только текст" } },
+        }),
+      ).toBe(false);
     },
   );
 });
 
 describe("classifyTelegramInboundMedia", () => {
   const nativePhoto = {
-    attachments: [{
-      fileId: "telegram-photo-1",
-      fileUniqueId: "telegram-photo-unique-1",
-      kind: "photo" as const,
-      mediaType: "image/jpeg",
-    }],
+    attachments: [
+      {
+        fileId: "telegram-photo-1",
+        fileUniqueId: "telegram-photo-unique-1",
+        kind: "photo" as const,
+        mediaType: "image/jpeg",
+      },
+    ],
     raw: {
-      photo: [{
-        file_id: "telegram-photo-1",
-        file_unique_id: "telegram-photo-unique-1",
-        height: 640,
-        width: 640,
-      }],
+      photo: [
+        {
+          file_id: "telegram-photo-1",
+          file_unique_id: "telegram-photo-unique-1",
+          height: 640,
+          width: 640,
+        },
+      ],
     },
   };
 
   // A rich message with text is a text message; a file inside its blocks (a video a post embeds)
   // does not turn the whole post into refused media. Photos are lifted before classification.
   it("treats a rich message with text as text even when a block carries a file", () => {
-    expect(classifyTelegramInboundMedia({
-      attachments: [],
-      raw: { rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }, { text: "пост", type: "paragraph" }] } },
-    })).toBe("none");
-    expect(classifyTelegramInboundMedia({
-      attachments: [],
-      raw: { rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }] } },
-    })).toBe("unsupported_media");
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [],
+        raw: {
+          rich_message: {
+            blocks: [
+              { type: "video", video: { file_id: "v1" } },
+              { text: "пост", type: "paragraph" },
+            ],
+          },
+        },
+      }),
+    ).toBe("none");
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [],
+        raw: { rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }] } },
+      }),
+    ).toBe("unsupported_media");
   });
 
   it("classifies a lifted rich photo without text as a native photo", () => {
     const sizes = [{ file_id: "rich-photo", file_unique_id: "u", height: 640, width: 640 }];
-    expect(classifyTelegramInboundMedia({
-      attachments: [{ fileId: "rich-photo", fileUniqueId: "u", kind: "photo", mediaType: "image/jpeg" }],
-      raw: { photo: sizes, rich_message: { blocks: [{ photo: sizes, type: "photo" }] } },
-    })).toBe("native_photo");
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [
+          { fileId: "rich-photo", fileUniqueId: "u", kind: "photo", mediaType: "image/jpeg" },
+        ],
+        raw: { photo: sizes, rich_message: { blocks: [{ photo: sizes, type: "photo" }] } },
+      }),
+    ).toBe("native_photo");
   });
 
   it("classifies a lifted rich document as a text or image document candidate", () => {
     const document = { file_id: "rich-doc", file_name: "notes.md", mime_type: "text/markdown" };
-    expect(classifyTelegramInboundMedia({
-      attachments: [{ fileId: "rich-doc", fileName: "notes.md", kind: "document", mediaType: "text/markdown" }],
-      raw: { document, rich_message: { blocks: [{ document, type: "document" }] } },
-    })).toBe("text_document_candidate");
-    expect(hasTelegramRawMediaBesidesLifted({ document, rich_message: { blocks: [{ document, type: "document" }] } })).toBe(false);
-    expect(hasTelegramRawMediaBesidesLifted({ document, rich_message: { blocks: [{ document, type: "document" }] }, voice: { file_id: "v" } })).toBe(true);
-    expect(hasTelegramRawMediaBesidesLifted({ rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }] } })).toBe(true);
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [
+          {
+            fileId: "rich-doc",
+            fileName: "notes.md",
+            kind: "document",
+            mediaType: "text/markdown",
+          },
+        ],
+        raw: { document, rich_message: { blocks: [{ document, type: "document" }] } },
+      }),
+    ).toBe("text_document_candidate");
+    expect(
+      hasTelegramRawMediaBesidesLifted({
+        document,
+        rich_message: { blocks: [{ document, type: "document" }] },
+      }),
+    ).toBe(false);
+    expect(
+      hasTelegramRawMediaBesidesLifted({
+        document,
+        rich_message: { blocks: [{ document, type: "document" }] },
+        voice: { file_id: "v" },
+      }),
+    ).toBe(true);
+    expect(
+      hasTelegramRawMediaBesidesLifted({
+        rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }] },
+      }),
+    ).toBe(true);
   });
 
   it("classifies text, one native photo, and unsupported media explicitly", () => {
     expect(classifyTelegramInboundMedia({ attachments: [], raw: { text: "текст" } })).toBe("none");
     expect(classifyTelegramInboundMedia(nativePhoto)).toBe("native_photo");
-    expect(classifyTelegramInboundMedia({
-      attachments: [{ fileId: "image-document", kind: "document", mediaType: "image/jpeg" }],
-      raw: { document: { file_id: "image-document", mime_type: "image/jpeg" } },
-    })).toBe("image_document_candidate");
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [{ fileId: "image-document", kind: "document", mediaType: "image/jpeg" }],
+        raw: { document: { file_id: "image-document", mime_type: "image/jpeg" } },
+      }),
+    ).toBe("image_document_candidate");
   });
 
   it.each([
@@ -278,15 +335,21 @@ describe("classifyTelegramInboundMedia", () => {
   });
 
   it("rejects a document without an image declaration or recognized static image extension", () => {
-    expect(classifyTelegramInboundMedia({
-      attachments: [{
-        fileId: "document",
-        fileName: "report.pdf",
-        kind: "document",
-        mediaType: "application/pdf",
-      }],
-      raw: { document: { file_id: "document", file_name: "report.pdf", mime_type: "application/pdf" } },
-    })).toBe("unsupported_media");
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [
+          {
+            fileId: "document",
+            fileName: "report.pdf",
+            kind: "document",
+            mediaType: "application/pdf",
+          },
+        ],
+        raw: {
+          document: { file_id: "document", file_name: "report.pdf", mime_type: "application/pdf" },
+        },
+      }),
+    ).toBe("unsupported_media");
   });
 
   it.each([
@@ -300,54 +363,64 @@ describe("classifyTelegramInboundMedia", () => {
     ["application/yaml", "settings.YAML"],
     ["application/yaml", "config.yml"],
   ])("classifies a supported text document declared as %s named %s", (mediaType, fileName) => {
-    expect(classifyTelegramInboundMedia({
-      attachments: [{ fileId: "text-document", fileName, kind: "document", mediaType }],
-      raw: {
-        document: {
-          file_id: "text-document",
-          file_name: fileName,
-          mime_type: mediaType,
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [{ fileId: "text-document", fileName, kind: "document", mediaType }],
+        raw: {
+          document: {
+            file_id: "text-document",
+            file_name: fileName,
+            mime_type: mediaType,
+          },
         },
-      },
-    })).toBe("text_document_candidate");
+      }),
+    ).toBe("text_document_candidate");
   });
 
   it("treats Telegram's spreadsheet declaration as metadata for a CSV candidate", () => {
-    expect(classifyTelegramInboundMedia({
-      attachments: [{
-        fileId: "csv-document",
-        fileName: "report.csv",
-        kind: "document",
-        mediaType: "application/vnd.ms-excel",
-      }],
-      raw: {
-        document: {
-          file_id: "csv-document",
-          file_name: "report.csv",
-          mime_type: "application/vnd.ms-excel",
+    expect(
+      classifyTelegramInboundMedia({
+        attachments: [
+          {
+            fileId: "csv-document",
+            fileName: "report.csv",
+            kind: "document",
+            mediaType: "application/vnd.ms-excel",
+          },
+        ],
+        raw: {
+          document: {
+            file_id: "csv-document",
+            file_name: "report.csv",
+            mime_type: "application/vnd.ms-excel",
+          },
         },
-      },
-    })).toBe("text_document_candidate");
+      }),
+    ).toBe("text_document_candidate");
   });
 
   it.each(["report.pdf", "document.docx", "archive.zip"])(
     "does not classify unsupported document %s as readable text",
     (fileName) => {
-      expect(classifyTelegramInboundMedia({
-        attachments: [{
-          fileId: "unsupported-document",
-          fileName,
-          kind: "document",
-          mediaType: "application/octet-stream",
-        }],
-        raw: {
-          document: {
-            file_id: "unsupported-document",
-            file_name: fileName,
-            mime_type: "application/octet-stream",
+      expect(
+        classifyTelegramInboundMedia({
+          attachments: [
+            {
+              fileId: "unsupported-document",
+              fileName,
+              kind: "document",
+              mediaType: "application/octet-stream",
+            },
+          ],
+          raw: {
+            document: {
+              file_id: "unsupported-document",
+              file_name: fileName,
+              mime_type: "application/octet-stream",
+            },
           },
-        },
-      })).toBe("unsupported_media");
+        }),
+      ).toBe("unsupported_media");
     },
   );
 
@@ -367,13 +440,18 @@ describe("classifyTelegramInboundMedia", () => {
 
 describe("TELEGRAM_EVE_UPLOAD_POLICY", () => {
   it("keeps a Telegram photo out of the primary model while preserving its caption", () => {
-    const fileParts = collectTelegramFileParts([{
-      fileId: "telegram-photo-1",
-      fileName: "photo.jpg",
-      kind: "photo",
-      mediaType: "image/jpeg",
-      size: 1_024,
-    }], TELEGRAM_EVE_UPLOAD_POLICY);
+    const fileParts = collectTelegramFileParts(
+      [
+        {
+          fileId: "telegram-photo-1",
+          fileName: "photo.jpg",
+          kind: "photo",
+          mediaType: "image/jpeg",
+          size: 1_024,
+        },
+      ],
+      TELEGRAM_EVE_UPLOAD_POLICY,
+    );
 
     expect(fileParts).toEqual([]);
     expect(buildTelegramTurnMessage({ caption: "Что изображено?", text: "" }, fileParts)).toBe(

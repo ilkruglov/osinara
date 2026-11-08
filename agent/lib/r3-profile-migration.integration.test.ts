@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_r3_profile_migration";
 const MIGRATION_NAME = "052_r3_verified_profiles.sql";
 
@@ -77,10 +76,12 @@ describeWithDatabase("052 R3 verified profiles migration", () => {
          VALUES ($1, '-1004802', 'External B', 'external', 'addressed_only') RETURNING id`,
         [family.rows[0]!.id],
       );
-      await expect(client.query(
-        "SELECT enabled FROM external_profile_projection_policies WHERE group_id = $1",
-        [created.rows[0]!.id],
-      )).resolves.toMatchObject({ rows: [{ enabled: false }] });
+      await expect(
+        client.query(
+          "SELECT enabled FROM external_profile_projection_policies WHERE group_id = $1",
+          [created.rows[0]!.id],
+        ),
+      ).resolves.toMatchObject({ rows: [{ enabled: false }] });
 
       const conversations = await client.query<{ id: string; telegram_group_id: string }>(
         `SELECT id, telegram_group_id FROM application_conversations
@@ -107,13 +108,20 @@ describeWithDatabase("052 R3 verified profiles migration", () => {
       );
       expect(subject.rows[0]!.subject_ref).toMatch(/^subj_[0-9a-f]{32}$/u);
 
-      await expect(client.query(
-        `INSERT INTO profile_subjects
+      await expect(
+        client.query(
+          `INSERT INTO profile_subjects
            (conversation_id, family_id, subject_participant_id, subject_conversation_id,
             display_label_snapshot, last_verified_at)
          VALUES ($1, $2, $3, $4, 'Анна', now())`,
-        [secondConversation.id, family.rows[0]!.id, participant.rows[0]!.id, firstConversation.id],
-      )).rejects.toThrow();
+          [
+            secondConversation.id,
+            family.rows[0]!.id,
+            participant.rows[0]!.id,
+            firstConversation.id,
+          ],
+        ),
+      ).rejects.toThrow();
 
       const view = await client.query<{ id: string; profile_view_ref: string }>(
         `INSERT INTO profile_views
@@ -125,13 +133,15 @@ describeWithDatabase("052 R3 verified profiles migration", () => {
       expect(view.rows[0]!.profile_view_ref).toMatch(/^view_[0-9a-f]{32}$/u);
 
       await client.query("DELETE FROM telegram_groups WHERE id = $1", [existing.rows[0]!.id]);
-      await expect(client.query(
-        `SELECT
+      await expect(
+        client.query(
+          `SELECT
            (SELECT count(*)::integer FROM external_profile_projection_policies WHERE group_id = $1) AS policies,
            (SELECT count(*)::integer FROM external_profile_projection_notices WHERE group_id = $1) AS notices,
            (SELECT count(*)::integer FROM profile_views WHERE id = $2) AS views`,
-        [existing.rows[0]!.id, view.rows[0]!.id],
-      )).resolves.toMatchObject({ rows: [{ notices: 0, policies: 0, views: 0 }] });
+          [existing.rows[0]!.id, view.rows[0]!.id],
+        ),
+      ).resolves.toMatchObject({ rows: [{ notices: 0, policies: 0, views: 0 }] });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       client.release();

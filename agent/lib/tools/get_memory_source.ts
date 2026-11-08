@@ -14,9 +14,11 @@ import { MEMORY_REF_PATTERN } from "../model-memory.js";
 export default defineTool({
   description:
     "Показать безопасное происхождение записи личного эффективного профиля по opaque memoryRef.",
-  inputSchema: z.object({
-    memoryRef: z.string().regex(MEMORY_REF_PATTERN),
-  }).strict(),
+  inputSchema: z
+    .object({
+      memoryRef: z.string().regex(MEMORY_REF_PATTERN),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await memorySourceRepository.lookup(requireMemoryAuthorization(ctx), input.memoryRef);
   },

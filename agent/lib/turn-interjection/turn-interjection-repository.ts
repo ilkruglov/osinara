@@ -37,18 +37,32 @@ export interface TurnInterjectionShowCoordinate {
 }
 
 export type EarlyVoiceTranscription =
-  | { status: "started" }
-  | { status: "transcribed"; transcript: string }
-  | { status: "unavailable" };
+  { status: "started" } | { status: "transcribed"; transcript: string } | { status: "unavailable" };
 
 function requireCoordinate(coordinate: TurnInterjectionShowCoordinate): void {
-  requireNonEmpty(coordinate.eveSessionId, "AGENT_TURN_INTERJECTION_SESSION_INVALID", "Не удалось определить сессию текущего хода");
-  requireNonEmpty(coordinate.eveTurnId, "AGENT_TURN_INTERJECTION_TURN_INVALID", "Не удалось определить текущий ход");
-  requireNonEmpty(coordinate.toolCallId, "AGENT_TURN_INTERJECTION_CALL_INVALID", "Не удалось определить вызов инструмента");
+  requireNonEmpty(
+    coordinate.eveSessionId,
+    "AGENT_TURN_INTERJECTION_SESSION_INVALID",
+    "Не удалось определить сессию текущего хода",
+  );
+  requireNonEmpty(
+    coordinate.eveTurnId,
+    "AGENT_TURN_INTERJECTION_TURN_INVALID",
+    "Не удалось определить текущий ход",
+  );
+  requireNonEmpty(
+    coordinate.toolCallId,
+    "AGENT_TURN_INTERJECTION_CALL_INVALID",
+    "Не удалось определить вызов инструмента",
+  );
 }
 
 function requireApplicationSessionId(value: string): string {
-  return requireUuid(value, "AGENT_TURN_INTERJECTION_CONTEXT_INVALID", "Не удалось определить текущий контекст разговора");
+  return requireUuid(
+    value,
+    "AGENT_TURN_INTERJECTION_CONTEXT_INVALID",
+    "Не удалось определить текущий контекст разговора",
+  );
 }
 
 export const turnInterjectionRepository = {
@@ -56,15 +70,21 @@ export const turnInterjectionRepository = {
    * Waiting messages after the turn's own update in the same chat queue, oldest first. Album members
    * and messages owned by another tool call or already seen by the model are excluded.
    */
-  async listCandidates(input: TurnInterjectionShowCoordinate & {
-    /** Page cursor: only messages after this update; defaults to the turn's own update. */
-    afterUpdateId?: string;
-    currentUpdateId: string;
-    limit: number;
-    telegramUserId: string;
-  }): Promise<TurnInterjectionCandidate[]> {
+  async listCandidates(
+    input: TurnInterjectionShowCoordinate & {
+      /** Page cursor: only messages after this update; defaults to the turn's own update. */
+      afterUpdateId?: string;
+      currentUpdateId: string;
+      limit: number;
+      telegramUserId: string;
+    },
+  ): Promise<TurnInterjectionCandidate[]> {
     requireCoordinate(input);
-    requireNonEmpty(input.telegramUserId, "AGENT_TURN_INTERJECTION_ACTOR_INVALID", "Не удалось определить автора текущего хода");
+    requireNonEmpty(
+      input.telegramUserId,
+      "AGENT_TURN_INTERJECTION_ACTOR_INVALID",
+      "Не удалось определить автора текущего хода",
+    );
     const result = await database().query<{
       album_member_count: number;
       payload: Record<string, unknown>;
@@ -104,13 +124,14 @@ export const turnInterjectionRepository = {
       albumMemberCount: row.album_member_count,
       payload: row.payload,
       updateId: row.update_id,
-      voice: row.voice_file_id === null
-        ? null
-        : {
-            fileId: row.voice_file_id,
-            ...(row.voice_file_size === null ? {} : { fileSize: Number(row.voice_file_size) }),
-            ...(row.voice_mime_type === null ? {} : { mimeType: row.voice_mime_type }),
-          },
+      voice:
+        row.voice_file_id === null
+          ? null
+          : {
+              fileId: row.voice_file_id,
+              ...(row.voice_file_size === null ? {} : { fileSize: Number(row.voice_file_size) }),
+              ...(row.voice_mime_type === null ? {} : { mimeType: row.voice_mime_type }),
+            },
       voiceTranscript: row.voice_transcript,
     }));
   },
@@ -148,7 +169,10 @@ export const turnInterjectionRepository = {
   },
 
   /** The tool result carrying these messages is about to be handed back to the turn. */
-  async markReturned(coordinate: TurnInterjectionShowCoordinate, updateIds: readonly string[]): Promise<void> {
+  async markReturned(
+    coordinate: TurnInterjectionShowCoordinate,
+    updateIds: readonly string[],
+  ): Promise<void> {
     requireCoordinate(coordinate);
     await database().query(
       `UPDATE telegram_turn_interjections interjection
@@ -158,7 +182,12 @@ export const turnInterjectionRepository = {
                  WHERE step.eve_session_id = interjection.eve_session_id AND step.eve_turn_id = interjection.eve_turn_id))
         WHERE interjection.update_id = ANY($1::bigint[]) AND interjection.eve_session_id = $2
           AND interjection.eve_turn_id = $3 AND interjection.tool_call_id = $4`,
-      [updateIds.map(requireUpdateId), coordinate.eveSessionId, coordinate.eveTurnId, coordinate.toolCallId],
+      [
+        updateIds.map(requireUpdateId),
+        coordinate.eveSessionId,
+        coordinate.eveTurnId,
+        coordinate.toolCallId,
+      ],
     );
   },
 
@@ -180,9 +209,21 @@ export const turnInterjectionRepository = {
    * message may then be answered twice, but it is never lost (Codex review, 28 September 2026).
    */
   async stepStarted(eveSessionId: string, eveTurnId: string, stepIndex: number): Promise<number> {
-    requireNonEmpty(eveSessionId, "AGENT_TURN_INTERJECTION_SESSION_INVALID", "Не удалось определить сессию текущего хода");
-    requireNonEmpty(eveTurnId, "AGENT_TURN_INTERJECTION_TURN_INVALID", "Не удалось определить текущий ход");
-    if (!Number.isInteger(stepIndex) || stepIndex < 0) throw new AppError("AGENT_TURN_INTERJECTION_STEP_INVALID", "Не удалось определить шаг модели");
+    requireNonEmpty(
+      eveSessionId,
+      "AGENT_TURN_INTERJECTION_SESSION_INVALID",
+      "Не удалось определить сессию текущего хода",
+    );
+    requireNonEmpty(
+      eveTurnId,
+      "AGENT_TURN_INTERJECTION_TURN_INVALID",
+      "Не удалось определить текущий ход",
+    );
+    if (!Number.isInteger(stepIndex) || stepIndex < 0)
+      throw new AppError(
+        "AGENT_TURN_INTERJECTION_STEP_INVALID",
+        "Не удалось определить шаг модели",
+      );
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -263,7 +304,11 @@ export const turnInterjectionRepository = {
 
   async saveEarlyVoiceTranscript(updateId: string, transcript: string): Promise<string | null> {
     const normalized = transcript.trim();
-    requireNonEmpty(normalized, "AGENT_VOICE_TRANSCRIPT_EMPTY", "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз");
+    requireNonEmpty(
+      normalized,
+      "AGENT_VOICE_TRANSCRIPT_EMPTY",
+      "В голосовом сообщении не удалось распознать речь. Запишите его ещё раз",
+    );
     const result = await database().query<{ voice_transcript: string }>(
       `UPDATE telegram_ingress_updates
           SET voice_transcript = COALESCE(voice_transcript, $2),
@@ -316,7 +361,10 @@ export const turnInterjectionRepository = {
     applicationSessionId: string,
   ): Promise<Map<string, TurnInterjectionContentKind>> {
     if (updateIds.length === 0) return new Map();
-    const result = await database().query<{ content_kind: TurnInterjectionContentKind; update_id: string }>(
+    const result = await database().query<{
+      content_kind: TurnInterjectionContentKind;
+      update_id: string;
+    }>(
       `SELECT update_id::text, content_kind FROM telegram_turn_interjections
         WHERE update_id = ANY($1::bigint[]) AND application_session_id = $2 AND delivered_at IS NOT NULL`,
       [updateIds.map(requireUpdateId), requireApplicationSessionId(applicationSessionId)],

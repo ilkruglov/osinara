@@ -8,10 +8,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  resolvePublicInternetAddress,
-  type PublicDnsClient,
-} from "./public-dns-resolver.js";
+import { resolvePublicInternetAddress, type PublicDnsClient } from "./public-dns-resolver.js";
 
 function dnsClient(ipv4: string[]): PublicDnsClient {
   return {

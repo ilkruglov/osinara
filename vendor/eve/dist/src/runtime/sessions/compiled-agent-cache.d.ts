@@ -8,21 +8,21 @@ import type { RuntimeSubagentRegistry } from "#runtime/subagents/registry.js";
 import type { RuntimeToolRegistry } from "#runtime/tools/registry.js";
 import type { ResolvedAgent } from "#runtime/types.js";
 export interface CompiledRuntimeAgentBundle {
-    readonly adapterRegistry: RuntimeAdapterRegistry;
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly graph: ResolvedAgentGraphBundle;
-    readonly hookRegistry: RuntimeHookRegistry;
-    readonly moduleMap: CompiledModuleMap;
-    /**
-     * Id of the active node in the graph. `undefined` for root bundles.
-     * Persisted by the BundleKey codec so per-node bundles survive
-     * serialization across workflow step boundaries.
-     */
-    readonly nodeId?: string;
-    readonly resolvedAgent: ResolvedAgent;
-    readonly subagentRegistry: RuntimeSubagentRegistry;
-    readonly toolRegistry: RuntimeToolRegistry;
-    readonly turnAgent: RuntimeTurnAgent;
+  readonly adapterRegistry: RuntimeAdapterRegistry;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly graph: ResolvedAgentGraphBundle;
+  readonly hookRegistry: RuntimeHookRegistry;
+  readonly moduleMap: CompiledModuleMap;
+  /**
+   * Id of the active node in the graph. `undefined` for root bundles.
+   * Persisted by the BundleKey codec so per-node bundles survive
+   * serialization across workflow step boundaries.
+   */
+  readonly nodeId?: string;
+  readonly resolvedAgent: ResolvedAgent;
+  readonly subagentRegistry: RuntimeSubagentRegistry;
+  readonly toolRegistry: RuntimeToolRegistry;
+  readonly turnAgent: RuntimeTurnAgent;
 }
 /**
  * Returns a compiled runtime agent bundle for the given source and optional
@@ -34,8 +34,8 @@ export interface CompiledRuntimeAgentBundle {
  * pointing at the target node. When omitted the root bundle is returned.
  */
 export declare function getCompiledRuntimeAgentBundle(input: {
-    readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
-    readonly nodeId?: string;
+  readonly compiledArtifactsSource: RuntimeCompiledArtifactsSource;
+  readonly nodeId?: string;
 }): Promise<CompiledRuntimeAgentBundle>;
 /**
  * Clears all cached compiled runtime agent bundles on the active runtime

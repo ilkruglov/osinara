@@ -10,7 +10,12 @@ import { describe, expect, it } from "vitest";
 
 import { modelProviderConfig } from "./model-provider-config.js";
 import {
-  memoryReviewModel, memoryReviewTransport, primaryModel, visionModel, visionTransport, voiceTranscriptionModel,
+  memoryReviewModel,
+  memoryReviewTransport,
+  primaryModel,
+  visionModel,
+  visionTransport,
+  voiceTranscriptionModel,
 } from "./model-registry.js";
 
 describe("model registry", () => {
@@ -41,8 +46,16 @@ describe("model registry", () => {
       protocol: "deepseek-responses" as const,
       reasoning: { effort: "max" as const },
     };
-    const vision = { id: "deepseek-v4-flash-vision-exp", maxOutputTokens: 128_000, reasoningEffort: "high" as const, supportsImageInput: true as const };
-    expect(visionTransport(transport, vision)).toEqual({ ...transport, reasoning: { effort: "high" } });
+    const vision = {
+      id: "deepseek-v4-flash-vision-exp",
+      maxOutputTokens: 128_000,
+      reasoningEffort: "high" as const,
+      supportsImageInput: true as const,
+    };
+    expect(visionTransport(transport, vision)).toEqual({
+      ...transport,
+      reasoning: { effort: "high" },
+    });
     expect(visionTransport(transport, { ...vision, reasoningEffort: undefined })).toBe(transport);
     expect(visionTransport(transport, { supportsImageInput: false })).toBe(transport);
     const chat = {
@@ -60,9 +73,14 @@ describe("model registry", () => {
       protocol: "deepseek-responses" as const,
       reasoning: { effort: "high" as const },
     };
-    const primary = { contextWindowTokens: 1_000_000, id: "deepseek-flash", maxOutputTokens: 128_000 };
-    expect(memoryReviewTransport(responses, { ...primary, memoryReviewReasoningEffort: "low" }))
-      .toEqual({ ...responses, reasoning: { effort: "low" } });
+    const primary = {
+      contextWindowTokens: 1_000_000,
+      id: "deepseek-flash",
+      maxOutputTokens: 128_000,
+    };
+    expect(
+      memoryReviewTransport(responses, { ...primary, memoryReviewReasoningEffort: "low" }),
+    ).toEqual({ ...responses, reasoning: { effort: "low" } });
     expect(memoryReviewTransport(responses, primary)).toBe(responses);
     const chat = {
       baseUrl: "https://api.deepseek.com",
@@ -70,12 +88,19 @@ describe("model registry", () => {
       providerName: "deepseek" as const,
       reasoning: { effort: "high" as const, format: "deepseek" as const, type: "effort" as const },
     };
-    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "low" }))
-      .toEqual({ ...chat, reasoning: { ...chat.reasoning, effort: "low" } });
-    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "none" }))
-      .toEqual({ ...chat, reasoning: { format: "deepseek", type: "none" } });
-    const anthropic = { baseUrl: "https://api.deepseek.com/anthropic", protocol: "anthropic-messages" as const };
-    expect(memoryReviewTransport(anthropic as never, { ...primary, memoryReviewReasoningEffort: "low" })).toBe(anthropic);
+    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "low" })).toEqual(
+      { ...chat, reasoning: { ...chat.reasoning, effort: "low" } },
+    );
+    expect(
+      memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "none" }),
+    ).toEqual({ ...chat, reasoning: { format: "deepseek", type: "none" } });
+    const anthropic = {
+      baseUrl: "https://api.deepseek.com/anthropic",
+      protocol: "anthropic-messages" as const,
+    };
+    expect(
+      memoryReviewTransport(anthropic as never, { ...primary, memoryReviewReasoningEffort: "low" }),
+    ).toBe(anthropic);
   });
 
   it("reviews with the primary model itself unless an effort is configured", () => {

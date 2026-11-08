@@ -28,13 +28,14 @@ const runtimePaths = [
 
 describe("Eve task origin auth patch", () => {
   it("carries the originating turn caller through every durable task wake", async () => {
-    const [keys, workflowSteps, dispatchShared, dispatchTask, delegate, childWorkflow, childSteps] = await Promise.all(
-      runtimePaths.map((path) => readFile(path, "utf8")),
-    );
+    const [keys, workflowSteps, dispatchShared, dispatchTask, delegate, childWorkflow, childSteps] =
+      await Promise.all(runtimePaths.map((path) => readFile(path, "utf8")));
 
     expect(codeText(keys)).toContain(codeText("eve.turnOriginAuth"));
     expect(codeText(workflowSteps)).toContain(codeText("TurnOriginAuthKey"));
-    expect(codeText(workflowSteps)).toContain(codeText("getHarnessEmissionState(s.state).turnId.length === 0"));
+    expect(codeText(workflowSteps)).toContain(
+      codeText("getHarnessEmissionState(s.state).turnId.length === 0"),
+    );
     expect(codeText(dispatchShared)).toContain(codeText("turnOriginAuth"));
     expect(codeText(dispatchTask)).toContain(codeText("auth: i.turnOriginAuth ?? null"));
     expect(codeText(delegate)).toContain(codeText("parentAuth: n.auth"));
@@ -44,12 +45,10 @@ describe("Eve task origin auth patch", () => {
   });
 
   it("captures auth only at a new turn boundary and ignores same-turn HITL auth", async () => {
-    const source = await readFile(
-      "vendor/eve/dist/src/execution/workflow-steps.js",
-      "utf8",
-    );
+    const source = await readFile("vendor/eve/dist/src/execution/workflow-steps.js", "utf8");
     const expressionStart = source.search(/a\.input\?\.kind\s*===\s*`deliver`\s*&&\s*\(/u);
-    const endOffset = expressionStart < 0 ? -1 : source.slice(expressionStart).search(/;\s*let l\s*=/u);
+    const endOffset =
+      expressionStart < 0 ? -1 : source.slice(expressionStart).search(/;\s*let l\s*=/u);
     const expressionEnd = endOffset < 0 ? -1 : expressionStart + endOffset;
     if (expressionStart < 0 || expressionEnd < 0) {
       throw new Error("TEST_EVE_TURN_ORIGIN_AUTH_SHAPE_INVALID");
@@ -78,14 +77,15 @@ describe("Eve task origin auth patch", () => {
     const firstAuth = { principalId: "user-a" };
     const hitlAuth = { principalId: "approver-b" };
     const taskAuth = { principalId: "user-c" };
-    const apply = (input: unknown, turnId: string) => applyDelivery(
-      input,
-      contextAdapter,
-      { state: { turnId } },
-      taskDeliveryKey,
-      originAuthKey,
-      (state) => state as { turnId: string },
-    );
+    const apply = (input: unknown, turnId: string) =>
+      applyDelivery(
+        input,
+        contextAdapter,
+        { state: { turnId } },
+        taskDeliveryKey,
+        originAuthKey,
+        (state) => state as { turnId: string },
+      );
 
     apply({ input: { auth: firstAuth, kind: "deliver", payloads: [] } }, "");
     expect(context.get(originAuthKey)).toBe(firstAuth);
@@ -93,14 +93,17 @@ describe("Eve task origin auth patch", () => {
     apply({ input: { auth: hitlAuth, kind: "deliver", payloads: [] } }, "turn_12");
     expect(context.get(originAuthKey)).toBe(firstAuth);
 
-    apply({
-      input: {
-        auth: taskAuth,
-        kind: "deliver",
-        payloads: [],
-        taskDeliveryId: "task-c:ready:completed",
+    apply(
+      {
+        input: {
+          auth: taskAuth,
+          kind: "deliver",
+          payloads: [],
+          taskDeliveryId: "task-c:ready:completed",
+        },
       },
-    }, "");
+      "",
+    );
     expect(context.get(originAuthKey)).toBe(taskAuth);
     expect(context.get(taskDeliveryKey)).toBe(true);
 
@@ -109,10 +112,7 @@ describe("Eve task origin auth patch", () => {
   });
 
   it("places each task's complete frozen caller on every parent delivery envelope", async () => {
-    const source = await readFile(
-      "vendor/eve/dist/src/execution/tasks/child/steps.js",
-      "utf8",
-    );
+    const source = await readFile("vendor/eve/dist/src/execution/tasks/child/steps.js", "utf8");
     const bodyStart = source.search(/const log\s*=/u);
     if (bodyStart < 0) throw new Error("TEST_EVE_TASK_STEPS_SHAPE_INVALID");
     const instrumentedSource = `
@@ -127,9 +127,9 @@ describe("Eve task origin auth patch", () => {
       ${source.slice(bodyStart)}
       export {delivered as __delivered};
     `;
-    const runtime = await import(
+    const runtime = (await import(
       `data:text/javascript;base64,${Buffer.from(instrumentedSource).toString("base64")}`
-    ) as {
+    )) as {
       __delivered: [string, { auth?: unknown }][];
       wakeTaskAuthorizationParentStep(input: unknown): Promise<void>;
       wakeTaskInputRequestParentStep(input: unknown): Promise<void>;

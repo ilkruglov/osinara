@@ -24,10 +24,7 @@ function createRuntimeToolResultFromValue(e) {
     output: toolResultOutputToJsonValue({
       output: {
         type: e.isError === !0 ? `error-json` : `json`,
-        value:
-          e.isError === !0 && e.output instanceof Error
-            ? e.output.message
-            : e.output,
+        value: e.isError === !0 && e.output instanceof Error ? e.output.message : e.output,
       },
       toolCallId: e.callId,
       toolName: e.toolName,
@@ -98,11 +95,7 @@ function toolResultOutputToJsonValue(e) {
   );
 }
 function isToolResultError(e) {
-  return (
-    e.type === `error-json` ||
-    e.type === `error-text` ||
-    e.type === `execution-denied`
-  );
+  return e.type === `error-json` || e.type === `error-text` || e.type === `execution-denied`;
 }
 export {
   createRuntimeToolResultFromMessagePart,

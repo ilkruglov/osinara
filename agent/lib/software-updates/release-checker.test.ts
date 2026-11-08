@@ -20,8 +20,7 @@ const manifest: SoftwareUpdateManifest = {
   images: {
     app: `ghcr.io/nyxandro/osinara-app@sha256:${"a".repeat(64)}`,
     edge: `ghcr.io/nyxandro/osinara-edge@sha256:${"a".repeat(64)}`,
-    sandboxEgressProxy:
-      `ghcr.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${"a".repeat(64)}`,
+    sandboxEgressProxy: `ghcr.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${"a".repeat(64)}`,
     sandboxRunner: `ghcr.io/nyxandro/osinara-sandbox-runner@sha256:${"a".repeat(64)}`,
     sandboxRuntime: `ghcr.io/nyxandro/osinara-sandbox-runtime@sha256:${"a".repeat(64)}`,
   },

@@ -119,11 +119,12 @@ function sourceIdentity(auth: MemoryAuthorization, input: CreateMemoryInput): So
       "Для контроля создания нити требуется проверенный источник текущего сообщения",
     );
   }
-  const partitionKey = input.scope === "personal"
-    ? auth.userId
-    : input.scope === "group"
-      ? auth.groupId
-      : auth.familyId;
+  const partitionKey =
+    input.scope === "personal"
+      ? auth.userId
+      : input.scope === "group"
+        ? auth.groupId
+        : auth.familyId;
   if (!partitionKey) {
     throw new AppError(
       "AGENT_MEMORY_CONTEXT_INVALID",
@@ -139,8 +140,12 @@ function sourceIdentity(auth: MemoryAuthorization, input: CreateMemoryInput): So
 }
 
 function requireSameRequest(row: AttemptRow, source: AttemptSource): void {
-  if (row.conversation_id !== source.conversationId || row.scope !== source.scope ||
-    row.scope_partition_key !== source.partitionKey || row.timeline_entry_id !== source.timelineEntryId) {
+  if (
+    row.conversation_id !== source.conversationId ||
+    row.scope !== source.scope ||
+    row.scope_partition_key !== source.partitionKey ||
+    row.timeline_entry_id !== source.timelineEntryId
+  ) {
     throw new AppError(
       "AGENT_MEMORY_OPERATION_CONFLICT",
       "Идентификатор операции уже связан с другим источником памяти",
@@ -178,10 +183,9 @@ function throwForExistingAttempt(row: AttemptRow, source: AttemptSource): void {
 }
 
 async function lockSource(client: PoolClient, source: SourceIdentity): Promise<void> {
-  await client.query(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-    [`memory-thread-attempt:${source.conversationId}:${source.timelineEntryId}`],
-  );
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `memory-thread-attempt:${source.conversationId}:${source.timelineEntryId}`,
+  ]);
 }
 
 async function operationAttempt(
@@ -191,7 +195,7 @@ async function operationAttempt(
   forUpdate: boolean,
 ): Promise<AttemptRow | null> {
   const result = await client.query<AttemptRow>(
-     `SELECT conversation_id, timeline_entry_id, scope::text, scope_partition_key,
+    `SELECT conversation_id, timeline_entry_id, scope::text, scope_partition_key,
             operation_key, input_hash, attempt_number, status, lease_token,
             lease_expires_at > now() AS lease_active, candidate_thread_refs, candidate_titles
      FROM memory_thread_creation_attempts
@@ -266,9 +270,18 @@ export async function reserveMemoryThreadCreationAttempt(
         operation_key, input_hash, attempt_number, status, lease_token, lease_expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9,
              now() + ($10 * interval '1 millisecond'))`,
-    [auth.familyId, source.scope, source.partitionKey, source.conversationId,
-      source.timelineEntryId, source.operationKey, source.inputHash, attemptNumber,
-      leaseToken, THREAD_CREATION_ATTEMPT_LEASE_MILLISECONDS],
+    [
+      auth.familyId,
+      source.scope,
+      source.partitionKey,
+      source.conversationId,
+      source.timelineEntryId,
+      source.operationKey,
+      source.inputHash,
+      attemptNumber,
+      leaseToken,
+      THREAD_CREATION_ATTEMPT_LEASE_MILLISECONDS,
+    ],
   );
   return { attemptNumber, leaseToken, operationKey: source.operationKey };
 }
@@ -284,8 +297,11 @@ export async function requireMemoryThreadCreationReservation(
   const row = await operationAttempt(client, auth.familyId, reservation.operationKey, true);
   if (!row) throw attemptStale();
   requireSameRequest(row, source);
-  if (row.status !== "pending" || row.lease_token !== reservation.leaseToken ||
-    row.attempt_number !== reservation.attemptNumber) {
+  if (
+    row.status !== "pending" ||
+    row.lease_token !== reservation.leaseToken ||
+    row.attempt_number !== reservation.attemptNumber
+  ) {
     throw attemptStale();
   }
 }
@@ -302,9 +318,13 @@ export async function recordMemoryThreadCandidateAttempt(
      SET status = 'candidate', lease_token = NULL, lease_expires_at = NULL,
          candidate_thread_refs = $4, candidate_titles = $5, updated_at = now()
      WHERE family_id = $1 AND operation_key = $2 AND lease_token = $3 AND status = 'pending'`,
-    [auth.familyId, reservation.operationKey, reservation.leaseToken,
+    [
+      auth.familyId,
+      reservation.operationKey,
+      reservation.leaseToken,
       candidates.map((candidate) => candidate.threadRef),
-      candidates.map((candidate) => candidate.title)],
+      candidates.map((candidate) => candidate.title),
+    ],
   );
   if (result.rowCount !== 1) throw attemptStateInvalid();
 }
@@ -314,18 +334,19 @@ export async function completeMemoryThreadCreationAttempt(
   auth: MemoryAuthorization,
   reservation: MemoryThreadCreationReservation,
 ): Promise<void> {
-  const result = reservation.attemptNumber === 1
-    ? await client.query(
-        `DELETE FROM memory_thread_creation_attempts
+  const result =
+    reservation.attemptNumber === 1
+      ? await client.query(
+          `DELETE FROM memory_thread_creation_attempts
          WHERE family_id = $1 AND operation_key = $2 AND lease_token = $3 AND status = 'pending'`,
-        [auth.familyId, reservation.operationKey, reservation.leaseToken],
-      )
-    : await client.query(
-        `UPDATE memory_thread_creation_attempts
+          [auth.familyId, reservation.operationKey, reservation.leaseToken],
+        )
+      : await client.query(
+          `UPDATE memory_thread_creation_attempts
          SET status = 'completed', lease_token = NULL, lease_expires_at = NULL, updated_at = now()
          WHERE family_id = $1 AND operation_key = $2 AND lease_token = $3 AND status = 'pending'`,
-        [auth.familyId, reservation.operationKey, reservation.leaseToken],
-      );
+          [auth.familyId, reservation.operationKey, reservation.leaseToken],
+        );
   if (result.rowCount !== 1) throw attemptStateInvalid();
 }
 
@@ -348,8 +369,7 @@ export async function beginMemoryThreadCandidateAttach(
 ): Promise<boolean> {
   if (input.thread?.action !== "attach") return false;
   const source = sourceIdentity(auth, input);
-  const attempts = await client.query<Pick<AttemptRow,
-    "candidate_thread_refs" | "status">>(
+  const attempts = await client.query<Pick<AttemptRow, "candidate_thread_refs" | "status">>(
     `SELECT status, candidate_thread_refs
      FROM memory_thread_creation_attempts
      WHERE family_id = $1 AND conversation_id = $2 AND timeline_entry_id = $3

@@ -15,22 +15,36 @@ function telegram(...bodies: Array<{ body: unknown; status?: number }>) {
   const queue = [...bodies];
   return vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => {
     const next = queue.shift()!;
-    return new Response(JSON.stringify(next.body), { headers: { "content-type": "application/json" }, status: next.status ?? 200 });
+    return new Response(JSON.stringify(next.body), {
+      headers: { "content-type": "application/json" },
+      status: next.status ?? 200,
+    });
   });
 }
 
 function call(fetch: ReturnType<typeof telegram>, index: number) {
   const [url, init] = fetch.mock.calls[index]!;
-  return { body: JSON.parse(String(init?.body)) as Record<string, unknown>, method: String(url).split("/").at(-1) };
+  return {
+    body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+    method: String(url).split("/").at(-1),
+  };
 }
 
 describe("ensureTelegramWhisperCommand", () => {
   it("declares the ephemeral command for all group chats when it is missing", async () => {
-    const fetch = telegram({ body: { ok: true, result: [] } }, { body: { ok: true, result: true } });
+    const fetch = telegram(
+      { body: { ok: true, result: [] } },
+      { body: { ok: true, result: true } },
+    );
 
-    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe("updated");
+    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe(
+      "updated",
+    );
 
-    expect(call(fetch, 0)).toEqual({ body: { scope: { type: "all_group_chats" } }, method: "getMyCommands" });
+    expect(call(fetch, 0)).toEqual({
+      body: { scope: { type: "all_group_chats" } },
+      method: "getMyCommands",
+    });
     expect(call(fetch, 1)).toEqual({
       body: { commands: [TELEGRAM_WHISPER_BOT_COMMAND], scope: { type: "all_group_chats" } },
       method: "setMyCommands",
@@ -40,24 +54,43 @@ describe("ensureTelegramWhisperCommand", () => {
   it("leaves a matching declaration alone", async () => {
     const fetch = telegram({ body: { ok: true, result: [{ ...TELEGRAM_WHISPER_BOT_COMMAND }] } });
 
-    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe("unchanged");
+    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe(
+      "unchanged",
+    );
     expect(fetch).toHaveBeenCalledOnce();
   });
 
   it("keeps other group commands when it adds or repairs its own", async () => {
     const fetch = telegram(
-      { body: { ok: true, result: [{ command: "help", description: "Справка" }, { command: "whisper", description: "старое" }] } },
+      {
+        body: {
+          ok: true,
+          result: [
+            { command: "help", description: "Справка" },
+            { command: "whisper", description: "старое" },
+          ],
+        },
+      },
       { body: { ok: true, result: true } },
     );
 
-    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe("updated");
-    expect(call(fetch, 1).body.commands).toEqual([{ command: "help", description: "Справка" }, TELEGRAM_WHISPER_BOT_COMMAND]);
+    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).resolves.toBe(
+      "updated",
+    );
+    expect(call(fetch, 1).body.commands).toEqual([
+      { command: "help", description: "Справка" },
+      TELEGRAM_WHISPER_BOT_COMMAND,
+    ]);
   });
 
   it("fails with a stable code when Telegram refuses", async () => {
-    const fetch = telegram({ body: { description: "Unauthorized", error_code: 401, ok: false }, status: 401 });
+    const fetch = telegram({
+      body: { description: "Unauthorized", error_code: 401, ok: false },
+      status: 401,
+    });
 
-    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch }))
-      .rejects.toMatchObject({ code: "AGENT_TELEGRAM_WHISPER_COMMAND_FAILED" });
+    await expect(ensureTelegramWhisperCommand({ botToken: "token", fetch })).rejects.toMatchObject({
+      code: "AGENT_TELEGRAM_WHISPER_COMMAND_FAILED",
+    });
   });
 });

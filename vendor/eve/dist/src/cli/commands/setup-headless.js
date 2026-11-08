@@ -5,13 +5,7 @@ function headlessSetupContinuation(e) {
       : [`--answer`, `${e.question.key}=<JSON value>`];
   return {
     command: `eve`,
-    args: [
-      `add`,
-      e.item,
-      `--non-interactive`,
-      ...(e.installed ? [`--skip-install`] : []),
-      ...t,
-    ],
+    args: [`add`, e.item, `--non-interactive`, ...(e.installed ? [`--skip-install`] : []), ...t],
   };
 }
 function reportHeadlessSetupCompletion(e) {
@@ -38,8 +32,4 @@ function reportHeadlessSetupCompletion(e) {
 function serializeHeadlessSetupEvent(e) {
   return JSON.stringify(e);
 }
-export {
-  headlessSetupContinuation,
-  reportHeadlessSetupCompletion,
-  serializeHeadlessSetupEvent,
-};
+export { headlessSetupContinuation, reportHeadlessSetupCompletion, serializeHeadlessSetupEvent };

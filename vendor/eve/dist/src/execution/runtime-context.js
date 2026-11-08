@@ -32,8 +32,7 @@ function buildRunContext(t) {
     });
   }
   return (
-    r.continuationToken !== void 0 &&
-      i.set(ContinuationTokenKey, r.continuationToken),
+    r.continuationToken !== void 0 && i.set(ContinuationTokenKey, r.continuationToken),
     i.set(ModeKey, r.mode),
     i.set(AuthKey, a),
     i.set(InitiatorAuthKey, r.initiatorAuth ?? a),
@@ -44,8 +43,7 @@ function buildRunContext(t) {
     r.delivery !== void 0 && i.set(ChannelDeliveryKey, r.delivery),
     r.callback !== void 0 && i.set(SessionCallbackKey, r.callback),
     r.parent !== void 0 && i.set(ParentSessionKey, r.parent),
-    r.parentTraceContext !== void 0 &&
-      i.set(ParentTraceContextKey, r.parentTraceContext),
+    r.parentTraceContext !== void 0 && i.set(ParentTraceContextKey, r.parentTraceContext),
     r.subagentDepth !== void 0 && i.set(SubagentDepthKey, r.subagentDepth),
     i
   );

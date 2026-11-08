@@ -46,18 +46,22 @@ try {
     );
   }
   await client.query("COMMIT");
-  console.log(JSON.stringify({
-    code: "AGENT_MEMORY_REINDEX_QUEUED",
-    modelVersion: MEMORY_EMBEDDING_MODEL_VERSION,
-    queued: candidates.rows.length,
-  }));
+  console.log(
+    JSON.stringify({
+      code: "AGENT_MEMORY_REINDEX_QUEUED",
+      modelVersion: MEMORY_EMBEDDING_MODEL_VERSION,
+      queued: candidates.rows.length,
+    }),
+  );
 } catch (error) {
   await client.query("ROLLBACK");
-  console.error(JSON.stringify({
-    code: "AGENT_MEMORY_REINDEX_FAILED",
-    errorName: error instanceof Error ? error.name : "UnknownError",
-    message: error instanceof Error ? error.message : String(error),
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_MEMORY_REINDEX_FAILED",
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
+    }),
+  );
   throw error;
 } finally {
   client.release();

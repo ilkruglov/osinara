@@ -39,7 +39,9 @@ export const MEMORY_REVIEW_DENIED_TOOL_NAMES = [
 
 const deniedInput = z.record(z.string(), z.unknown());
 const reviewRememberSchema = rememberInputSchema.refine(
-  (input) => input.basis === "agent_inferred" && input.sensitivity === "normal" &&
+  (input) =>
+    input.basis === "agent_inferred" &&
+    input.sensitivity === "normal" &&
     input.sourceSequence !== undefined,
   {
     message:
@@ -71,10 +73,11 @@ function reviewRemember(): AnyTool {
     async execute(input, ctx) {
       if (ctx.session.auth.current?.attributes.groupType === "external") {
         const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
-        if (!identity) throw new AppError(
-          "AGENT_GROUP_TOOL_FORBIDDEN",
-          "Текущая регистрация внешней группы не подтверждена",
-        );
+        if (!identity)
+          throw new AppError(
+            "AGENT_GROUP_TOOL_FORBIDDEN",
+            "Текущая регистрация внешней группы не подтверждена",
+          );
         await authorizeCurrentExternalGroupCapability(identity, "remember");
       }
       return await definition.execute(input, ctx);
@@ -82,19 +85,17 @@ function reviewRemember(): AnyTool {
   }) as unknown as AnyTool;
 }
 
-function reviewRead(
-  capability: ExternalGroupToolName,
-  definition: AnyTool,
-): AnyTool {
+function reviewRead(capability: ExternalGroupToolName, definition: AnyTool): AnyTool {
   return defineTool({
     ...definition,
     async execute(input, ctx) {
       if (ctx.session.auth.current?.attributes.groupType === "external") {
         const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
-        if (!identity) throw new AppError(
-          "AGENT_GROUP_TOOL_FORBIDDEN",
-          "Текущая регистрация внешней группы не подтверждена",
-        );
+        if (!identity)
+          throw new AppError(
+            "AGENT_GROUP_TOOL_FORBIDDEN",
+            "Текущая регистрация внешней группы не подтверждена",
+          );
         // Descriptor grants are snapshots; every read must authorize against the live registration.
         await authorizeCurrentExternalGroupCapability(identity, capability);
       }
@@ -126,10 +127,7 @@ export function buildMemoryReviewToolSurface(
   }
   if (allowed("remember")) surface.remember = reviewRemember();
   if (allowed("search_memories")) {
-    surface.search_memories = reviewRead(
-      "search_memories",
-      searchMemories as unknown as AnyTool,
-    );
+    surface.search_memories = reviewRead("search_memories", searchMemories as unknown as AnyTool);
   }
   if (allowed("search_memory_threads")) {
     surface.search_memory_threads = reviewRead(

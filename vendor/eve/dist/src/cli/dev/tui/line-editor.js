@@ -1,7 +1,4 @@
-import {
-  inputTextWidth,
-  offsetAtVisibleColumn,
-} from "#cli/ui/terminal-text.js";
+import { inputTextWidth, offsetAtVisibleColumn } from "#cli/ui/terminal-text.js";
 import {
   graphemeBoundaryAtOrAfter,
   graphemes,
@@ -36,9 +33,7 @@ function deleteForward(e) {
   return { text: r, cursor: graphemeBoundaryAtOrAfter(r, e.cursor) };
 }
 function moveLeft(e) {
-  return e.cursor === 0
-    ? e
-    : { text: e.text, cursor: previousGraphemeBoundary(e.text, e.cursor) };
+  return e.cursor === 0 ? e : { text: e.text, cursor: previousGraphemeBoundary(e.text, e.cursor) };
 }
 function moveRight(e) {
   return e.cursor >= e.text.length
@@ -61,20 +56,18 @@ function killToEnd(e) {
 }
 function killToStart(e) {
   let t = logicalLineStart(e.text, e.cursor);
-  return e.cursor <= t
-    ? e
-    : { text: e.text.slice(0, t) + e.text.slice(e.cursor), cursor: t };
+  return e.cursor <= t ? e : { text: e.text.slice(0, t) + e.text.slice(e.cursor), cursor: t };
 }
 function deleteWord(e) {
   if (e.cursor === 0) return e;
   let t = logicalLineStart(e.text, e.cursor),
     r = e.cursor;
-  for (; r > t; ) {
+  for (; r > t;) {
     let t = previousGraphemeBoundary(e.text, r);
     if (!isWhitespace(e.text.slice(t, r))) break;
     r = t;
   }
-  for (; r > t; ) {
+  for (; r > t;) {
     let t = previousGraphemeBoundary(e.text, r);
     if (isWhitespace(e.text.slice(t, r))) break;
     r = t;
@@ -190,9 +183,7 @@ function layoutPromptInput(e) {
     i = 0;
   for (let a of e.text.split(`
 `))
-    (e.cursor >= i &&
-      e.cursor <= i + a.length &&
-      ((n = t.length), (r = e.cursor - i)),
+    (e.cursor >= i && e.cursor <= i + a.length && ((n = t.length), (r = e.cursor - i)),
       t.push({ text: a, start: i }),
       (i += a.length + 1));
   return { rows: t, caretRow: n, caretOffset: r };
@@ -223,18 +214,12 @@ var PromptHistory = class {
     ((this.#t = this.#e.length), (this.#n = e));
   }
   previous(e) {
-    if (
-      this.#e.length !== 0 &&
-      (this.#t === this.#e.length && (this.#n = e), this.#t !== 0)
-    )
+    if (this.#e.length !== 0 && (this.#t === this.#e.length && (this.#n = e), this.#t !== 0))
       return (--this.#t, this.#e[this.#t]);
   }
   next() {
     if (!(this.#t >= this.#e.length))
-      return (
-        (this.#t += 1),
-        this.#t === this.#e.length ? this.#n : this.#e[this.#t]
-      );
+      return ((this.#t += 1), this.#t === this.#e.length ? this.#n : this.#e[this.#t]);
   }
   #r() {
     ((this.#t = this.#e.length), (this.#n = ``));

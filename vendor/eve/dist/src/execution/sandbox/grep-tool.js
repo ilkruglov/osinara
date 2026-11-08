@@ -1,15 +1,10 @@
 import { normalizeModelPath } from "#runtime/framework-tools/file-state.js";
-import {
-  MAX_OUTPUT_BYTES,
-  capLineLength,
-} from "#execution/sandbox/truncate-output.js";
+import { MAX_OUTPUT_BYTES, capLineLength } from "#execution/sandbox/truncate-output.js";
 import { shellQuote } from "#execution/sandbox/shell-quote.js";
 import { resolveAbsoluteFilePath } from "#execution/sandbox/require-sandbox.js";
 import { ripgrepIsAvailable } from "#execution/sandbox/ripgrep-probe.js";
 async function executeGrepOnSandbox(t, n) {
-  let r = normalizeModelPath(
-      await resolveAbsoluteFilePath(t, n.path ?? `/workspace`),
-    ),
+  let r = normalizeModelPath(await resolveAbsoluteFilePath(t, n.path ?? `/workspace`)),
     o = Math.min(Math.max(1, n.limit ?? 100), 1e3),
     s = n.context !== void 0 && n.context > 0 ? n.context : 0,
     c = (await ripgrepIsAvailable(t))
@@ -32,10 +27,7 @@ async function executeGrepOnSandbox(t, n) {
           pattern: n.pattern,
         }),
     l = await t.run({ command: c });
-  if (
-    (l.exitCode !== 0 && l.exitCode !== 1) ||
-    (l.exitCode === 1 && l.stderr.trim().length > 0)
-  )
+  if ((l.exitCode !== 0 && l.exitCode !== 1) || (l.exitCode === 1 && l.stderr.trim().length > 0))
     throw buildGrepExecutionError(c, l.exitCode, l.stderr);
   let u = l.stdout;
   return u.trim().length === 0
@@ -43,13 +35,7 @@ async function executeGrepOnSandbox(t, n) {
     : processOutput({ effectiveLimit: o, normalizedPath: r, stdout: u });
 }
 function buildRipgrepCommand(e) {
-  let t = [
-    `rg`,
-    `--line-number`,
-    `--color=never`,
-    `--hidden`,
-    `--glob '!.git/*'`,
-  ];
+  let t = [`rg`, `--line-number`, `--color=never`, `--hidden`, `--glob '!.git/*'`];
   return (
     e.ignoreCase && t.push(`--ignore-case`),
     e.literal && t.push(`--fixed-strings`),
@@ -103,10 +89,7 @@ function processOutput(e) {
       t.push(
         `Match limit reached (${e.effectiveLimit}). Use a larger limit or more specific pattern.`,
       ),
-      s &&
-        t.push(
-          `Output truncated due to size. Use a more specific path or pattern.`,
-        ),
+      s && t.push(`Output truncated due to size. Use a more specific path or pattern.`),
       (l += `\n\n[${t.join(` `)}]`));
   }
   return { content: l, matchCount: o, path: e.normalizedPath, truncated: c };

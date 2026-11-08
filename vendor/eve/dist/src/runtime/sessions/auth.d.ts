@@ -18,22 +18,30 @@ export type RuntimeSessionAuthContext = z.infer<typeof runtimeSessionAuthContext
 /**
  * Zod schema for one serializable runtime session auth context.
  */
-declare const runtimeSessionAuthContextSchema: z.ZodObject<{
-    attributes: z.ZodReadonly<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodString, z.ZodReadonly<z.ZodArray<z.ZodString>>]>>>;
+declare const runtimeSessionAuthContextSchema: z.ZodObject<
+  {
+    attributes: z.ZodReadonly<
+      z.ZodRecord<
+        z.ZodString,
+        z.ZodUnion<readonly [z.ZodString, z.ZodReadonly<z.ZodArray<z.ZodString>>]>
+      >
+    >;
     authenticator: z.ZodEnum<{
-        "http-basic": "http-basic";
-        "jwt-ecdsa": "jwt-ecdsa";
-        "jwt-hmac": "jwt-hmac";
-        oidc: "oidc";
+      "http-basic": "http-basic";
+      "jwt-ecdsa": "jwt-ecdsa";
+      "jwt-hmac": "jwt-hmac";
+      oidc: "oidc";
     }>;
     issuer: z.ZodOptional<z.ZodString>;
     principalId: z.ZodString;
     principalType: z.ZodEnum<{
-        runtime: "runtime";
-        service: "service";
-        unknown: "unknown";
-        user: "user";
+      runtime: "runtime";
+      service: "service";
+      unknown: "unknown";
+      user: "user";
     }>;
     subject: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
+  },
+  z.core.$strict
+>;
 export {};

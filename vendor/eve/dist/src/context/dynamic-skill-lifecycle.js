@@ -37,9 +37,7 @@ async function formatDynamicSkillAnnouncement(e) {
     }) ?? ``
   );
 }
-const PendingSkillAnnouncementKey = new ContextKey(
-  `eve.pendingSkillAnnouncement`,
-);
+const PendingSkillAnnouncementKey = new ContextKey(`eve.pendingSkillAnnouncement`);
 async function dispatchDynamicSkillEvent(e) {
   let { ctx: o, resolvers: s, event: c, messages: l } = e;
   if (o.get(PendingSkillAnnouncementKey) === void 0) {
@@ -65,9 +63,7 @@ async function dispatchDynamicSkillEvent(e) {
         if (n == null) return { resolver: e, named: [] };
         let r, i;
         return (
-          isBrandedSkillEntry(n)
-            ? ((r = { _single: n }), (i = !0))
-            : ((r = n), (i = !1)),
+          isBrandedSkillEntry(n) ? ((r = { _single: n }), (i = !0)) : ((r = n), (i = !1)),
           { resolver: e, named: qualifyDynamicSkillNames(e, i, r) }
         );
       }),
@@ -114,10 +110,8 @@ async function dispatchDynamicSkillEvent(e) {
           .map((e) => e.name),
       ),
       t = new Set();
-    for (let { resolver: n } of p)
-      for (let r of f[n.slug] ?? []) e.has(r.name) || t.add(r.name);
-    for (let e of t)
-      await removeSkillPackageFromSandbox({ name: e, sandbox: _ });
+    for (let { resolver: n } of p) for (let r of f[n.slug] ?? []) e.has(r.name) || t.add(r.name);
+    for (let e of t) await removeSkillPackageFromSandbox({ name: e, sandbox: _ });
     await Promise.all(
       p.flatMap(({ skills: e }) =>
         e.map((t) => writeSkillPackageToSandbox({ sandbox: _, skill: t })),
@@ -131,8 +125,7 @@ async function dispatchDynamicSkillEvent(e) {
     ));
 }
 async function refreshDynamicSessionSkillsForRuntimeRevision(e) {
-  if (e.ctx.get(SessionDynamicSkillRuntimeRevisionKey) === e.runtimeRevision)
-    return;
+  if (e.ctx.get(SessionDynamicSkillRuntimeRevisionKey) === e.runtimeRevision) return;
   let t = e.ctx.get(DynamicSkillManifestKey) ?? {};
   (e.ctx.set(DynamicSkillManifestKey, {}),
     e.ctx.setVirtualContext(

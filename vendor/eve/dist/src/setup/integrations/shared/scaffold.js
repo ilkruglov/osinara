@@ -10,14 +10,11 @@ async function installScaffoldDependencies(e) {
   let r = e.deps ?? defaultDeps,
     i = await r.detectPackageManager(e.projectPath);
   packageManagerInstallSucceeded(
-    await withPhase(
-      e.log,
-      `Installing channel dependencies (${i.kind} install)...`,
-      () =>
-        r.runPackageManagerInstall(i.kind, e.projectPath, {
-          onOutput: createPromptCommandOutput(e.log),
-          signal: e.signal,
-        }),
+    await withPhase(e.log, `Installing channel dependencies (${i.kind} install)...`, () =>
+      r.runPackageManagerInstall(i.kind, e.projectPath, {
+        onOutput: createPromptCommandOutput(e.log),
+        signal: e.signal,
+      }),
     ),
   ) ||
     e.log.warning(

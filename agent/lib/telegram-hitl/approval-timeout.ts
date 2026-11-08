@@ -55,11 +55,12 @@ const TIMEOUT_MINUTES = Math.round(TELEGRAM_HITL_APPROVAL_TIMEOUT_MS / 60_000);
 const NO_ANSWER_TEXT = "Пользователь не ответил на вопрос вовремя.";
 
 function approvalTimeoutContext(claim: TimedOutApprovalClaim): string {
-  const subject = claim.kind === "question"
-    ? "не ответил на заданный вопрос"
-    : claim.toolName === null
-    ? "не подтвердил запрошенное действие"
-    : `не подтвердил действие «${claim.toolName}»`;
+  const subject =
+    claim.kind === "question"
+      ? "не ответил на заданный вопрос"
+      : claim.toolName === null
+        ? "не подтвердил запрошенное действие"
+        : `не подтвердил действие «${claim.toolName}»`;
   return [
     `Пользователь ${subject} более ${TIMEOUT_MINUTES} мин, поэтому оно не выполнено.`,
     "Сообщи пользователю, что подтверждение не получено и действие не отработало, и продолжай работу как обычно.",
@@ -107,11 +108,13 @@ async function releaseLease(
     await dependencies.repository.failTimeout(claim, TIMEOUT_RESPONSE_FAILED);
   } catch (releaseError) {
     // The lease expires on its own; losing it must not abandon the rest of the leased batch.
-    console.error(JSON.stringify({
-      approvalId: claim.id,
-      code: TIMEOUT_LEASE_RELEASE_FAILED,
-      error: releaseError instanceof Error ? releaseError.message : String(releaseError),
-    }));
+    console.error(
+      JSON.stringify({
+        approvalId: claim.id,
+        code: TIMEOUT_LEASE_RELEASE_FAILED,
+        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+      }),
+    );
   }
 }
 
@@ -126,27 +129,33 @@ async function resolveSession(
   try {
     // Eve settles each original tool call exactly once. Cancel keeps the side effect unexecuted
     // while the persisted context carries the reason, which the approval outcome cannot express.
-    const result = await dependencies.attachSession(first.eveSessionId).respond(
-      claims.map(timeoutInputResponse),
-      { auth: first.auth, context: claims.map(approvalTimeoutContext) },
-    );
+    const result = await dependencies
+      .attachSession(first.eveSessionId)
+      .respond(claims.map(timeoutInputResponse), {
+        auth: first.auth,
+        context: claims.map(approvalTimeoutContext),
+      });
     active = result.status === "accepted";
     if (!active) {
       // The parked turn is gone; settling the rows is the only way to release the rotation veto.
-      console.error(JSON.stringify({
-        approvalIds: claims.map((claim) => claim.id),
-        code: TIMEOUT_SESSION_INACTIVE,
-        eveSessionId: first.eveSessionId,
-      }));
+      console.error(
+        JSON.stringify({
+          approvalIds: claims.map((claim) => claim.id),
+          code: TIMEOUT_SESSION_INACTIVE,
+          eveSessionId: first.eveSessionId,
+        }),
+      );
     }
   } catch (error) {
     // The leases are released so the next sweep retries; a frozen chat must never be the resting state.
-    console.error(JSON.stringify({
-      approvalIds: claims.map((claim) => claim.id),
-      code: TIMEOUT_RESPONSE_FAILED,
-      error: error instanceof Error ? error.message : String(error),
-      eveSessionId: first.eveSessionId,
-    }));
+    console.error(
+      JSON.stringify({
+        approvalIds: claims.map((claim) => claim.id),
+        code: TIMEOUT_RESPONSE_FAILED,
+        error: error instanceof Error ? error.message : String(error),
+        eveSessionId: first.eveSessionId,
+      }),
+    );
     for (const claim of claims) await releaseLease(dependencies, claim);
     return 0;
   }
@@ -160,11 +169,13 @@ async function resolveSession(
       settled = await dependencies.repository.completeTimeout(claim, now);
     } catch (error) {
       // One failed settlement must not abandon the rest of the leased batch.
-      console.error(JSON.stringify({
-        approvalId: claim.id,
-        code: TIMEOUT_SETTLEMENT_FAILED,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          approvalId: claim.id,
+          code: TIMEOUT_SETTLEMENT_FAILED,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       continue;
     }
     if (!settled) continue;
@@ -178,11 +189,13 @@ async function resolveSession(
       await dependencies.finalizePrompt(claim);
     } catch (error) {
       // The approval is already terminal; a stale keyboard is cosmetic and must not retry the cancel.
-      console.error(JSON.stringify({
-        approvalId: claim.id,
-        code: TIMEOUT_PROMPT_FINALIZE_FAILED,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          approvalId: claim.id,
+          code: TIMEOUT_PROMPT_FINALIZE_FAILED,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   }
   return resolved;

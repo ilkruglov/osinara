@@ -45,9 +45,7 @@ export type BehaviorPreferenceReadAuthorization =
   | BehaviorPreferenceBotReadAuthorization
   | BehaviorPreferenceScheduledReadAuthorization;
 
-type PreferenceContext =
-  | Pick<DynamicResolveContext, "session">
-  | Pick<SessionContext, "session">;
+type PreferenceContext = Pick<DynamicResolveContext, "session"> | Pick<SessionContext, "session">;
 
 function contextError(): AppError {
   return new AppError(
@@ -121,7 +119,9 @@ export function requireBehaviorPreferenceReadAuthorization(
   return requireBehaviorPreferenceAuthorization(ctx);
 }
 
-function botReadAuthorization(ctx: PreferenceContext): BehaviorPreferenceBotReadAuthorization | null {
+function botReadAuthorization(
+  ctx: PreferenceContext,
+): BehaviorPreferenceBotReadAuthorization | null {
   const caller = resolveSessionCaller(ctx);
   const attributes = caller?.attributes;
   if (attributes?.telegramActorKind !== "telegram_bot") return null;

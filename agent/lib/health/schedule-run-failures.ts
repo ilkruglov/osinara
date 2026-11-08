@@ -30,7 +30,12 @@ export interface ScheduleRunFailures {
   count: number;
   hiddenPersonal: number;
   otherSchedules: { count: number; schedules: number };
-  schedules: { codes: { code: string; count: number }[]; count: number; otherCodes: number; title: string }[];
+  schedules: {
+    codes: { code: string; count: number }[];
+    count: number;
+    otherCodes: number;
+    title: string;
+  }[];
 }
 
 export const NO_SCHEDULE_RUN_FAILURES: ScheduleRunFailures = {
@@ -47,9 +52,14 @@ function byCountThen<T extends { count: number }>(key: (entry: T) => string) {
   return (left: T, right: T) => right.count - left.count || key(left).localeCompare(key(right));
 }
 
-export function summarizeScheduleRunFailures(rows: readonly ScheduleRunFailureRow[]): ScheduleRunFailures {
+export function summarizeScheduleRunFailures(
+  rows: readonly ScheduleRunFailureRow[],
+): ScheduleRunFailures {
   let hiddenPersonal = 0;
-  const visible = new Map<string, { codes: { code: string; count: number }[]; count: number; title: string }>();
+  const visible = new Map<
+    string,
+    { codes: { code: string; count: number }[]; count: number; title: string }
+  >();
   for (const row of rows) {
     if (row.title === null) {
       hiddenPersonal += row.count;
@@ -75,7 +85,10 @@ export function summarizeScheduleRunFailures(rows: readonly ScheduleRunFailureRo
   return {
     count: rows.reduce((sum, row) => sum + row.count, 0),
     hiddenPersonal,
-    otherSchedules: { count: rest.reduce((sum, schedule) => sum + schedule.count, 0), schedules: rest.length },
+    otherSchedules: {
+      count: rest.reduce((sum, schedule) => sum + schedule.count, 0),
+      schedules: rest.length,
+    },
     schedules: named,
   };
 }
@@ -89,8 +102,11 @@ export function formatScheduleRunFailures(failures: ScheduleRunFailures): string
     return `«${schedule.title.replace(/\s+/gu, " ").trim()}» ×${schedule.count} (${codes.join(", ")})`;
   });
   if (failures.otherSchedules.schedules > 0) {
-    parts.push(`ещё ${failures.otherSchedules.schedules} сценариев ×${failures.otherSchedules.count}`);
+    parts.push(
+      `ещё ${failures.otherSchedules.schedules} сценариев ×${failures.otherSchedules.count}`,
+    );
   }
-  if (failures.hiddenPersonal > 0) parts.push(`личные сценарии других участников ×${failures.hiddenPersonal}`);
+  if (failures.hiddenPersonal > 0)
+    parts.push(`личные сценарии других участников ×${failures.hiddenPersonal}`);
   return `Сценарии по расписанию: ${failures.count} сбоев: ${parts.join("; ")}.`;
 }

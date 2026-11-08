@@ -12,9 +12,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_unified_group_timeline_migration";
 
 describeWithDatabase("033 unified Telegram group timeline migration", () => {
@@ -111,7 +110,12 @@ describeWithDatabase("033 unified Telegram group timeline migration", () => {
          ORDER BY message.sequence_id`,
       );
       expect(rows.rows).toEqual([
-        { actor_kind: "user", attachment_file_id: "secret-file-id", reply_sequence: null, sequence_id: "1" },
+        {
+          actor_kind: "user",
+          attachment_file_id: "secret-file-id",
+          reply_sequence: null,
+          sequence_id: "1",
+        },
         { actor_kind: "user", attachment_file_id: null, reply_sequence: "1", sequence_id: "2" },
       ]);
       const state = await client.query<{ aliases: string; counter: string }>(

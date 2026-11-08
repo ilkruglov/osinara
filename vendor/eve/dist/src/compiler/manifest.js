@@ -34,9 +34,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
   ]),
   compiledChannelCorsSchema = z
     .object({
-      origin: z
-        .union([z.literal(`*`), z.literal(`null`), z.array(z.string())])
-        .optional(),
+      origin: z.union([z.literal(`*`), z.literal(`null`), z.array(z.string())]).optional(),
       methods: z.union([z.literal(`*`), z.array(z.string())]).optional(),
       allowHeaders: z.union([z.literal(`*`), z.array(z.string())]).optional(),
       exposeHeaders: z.union([z.literal(`*`), z.array(z.string())]).optional(),
@@ -106,10 +104,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
       thresholdPercent: z.number().finite().min(0).max(1).optional(),
     })
     .strict(),
-  sessionTokenLimitSchema = z.union([
-    z.number().int().positive(),
-    z.literal(!1),
-  ]),
+  sessionTokenLimitSchema = z.union([z.number().int().positive(), z.literal(!1)]),
   sessionTimeoutSchema = z.union([z.number().int().positive(), z.literal(!1)]),
   compiledAgentLimitsDefinitionSchema = z
     .object({
@@ -137,15 +132,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
     name: z.string(),
     outputSchema: jsonObjectSchema.optional(),
     reasoning: z
-      .enum([
-        `provider-default`,
-        `none`,
-        `minimal`,
-        `low`,
-        `medium`,
-        `high`,
-        `xhigh`,
-      ])
+      .enum([`provider-default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`])
       .optional(),
     source: moduleSourceRefSchema.optional(),
     limits: compiledAgentLimitsDefinitionSchema.optional(),
@@ -184,9 +171,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
     logicalPath: z.string(),
   },
   compiledSkillSourceSchema = z.discriminatedUnion(`sourceKind`, [
-    z
-      .object({ ...compiledSkillBaseFields, sourceKind: z.literal(`markdown`) })
-      .strict(),
+    z.object({ ...compiledSkillBaseFields, sourceKind: z.literal(`markdown`) }).strict(),
     z
       .object({
         ...compiledSkillBaseFields,
@@ -332,9 +317,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
     disabledFrameworkTools: z.array(z.string()).readonly(),
     workflowTool: compiledWorkflowToolDefinitionSchema.optional(),
     webSearchProvider: z.enum([`exa`, `parallel`]).optional(),
-    dynamicInstructions: z
-      .array(compiledDynamicInstructionsDefinitionSchema)
-      .default([]),
+    dynamicInstructions: z.array(compiledDynamicInstructionsDefinitionSchema).default([]),
     dynamicSkills: z.array(compiledDynamicSkillDefinitionSchema).default([]),
     dynamicTools: z.array(compiledDynamicToolDefinitionSchema).default([]),
     extensionMounts: z.array(compiledExtensionMountSchema).default([]),
@@ -406,9 +389,7 @@ const COMPILED_AGENT_MANIFEST_KIND = `eve-agent-compiled-manifest`,
       disabledFrameworkTools: z.array(z.string()).readonly(),
       workflowTool: compiledWorkflowToolDefinitionSchema.optional(),
       webSearchProvider: z.enum([`exa`, `parallel`]).optional(),
-      dynamicInstructions: z
-        .array(compiledDynamicInstructionsDefinitionSchema)
-        .default([]),
+      dynamicInstructions: z.array(compiledDynamicInstructionsDefinitionSchema).default([]),
       dynamicSkills: z.array(compiledDynamicSkillDefinitionSchema).default([]),
       dynamicTools: z.array(compiledDynamicToolDefinitionSchema).default([]),
       hooks: z.array(compiledHookDefinitionSchema),
@@ -435,9 +416,7 @@ function createCompiledAgentResources(e) {
     diagnosticsSummary: e.diagnosticsSummary ?? { errors: 0, warnings: 0 },
     disabledFrameworkTools: [...(e.disabledFrameworkTools ?? [])],
     workflowTool:
-      e.workflowTool === void 0
-        ? void 0
-        : { maxSubagents: e.workflowTool.maxSubagents },
+      e.workflowTool === void 0 ? void 0 : { maxSubagents: e.workflowTool.maxSubagents },
     webSearchProvider: e.webSearchProvider,
     dynamicInstructions: [...(e.dynamicInstructions ?? [])],
     dynamicSkills: [...(e.dynamicSkills ?? [])],
@@ -473,9 +452,7 @@ function cloneCompiledAgentDefinition(e) {
         ? void 0
         : {
             externalDependencies:
-              e.build.externalDependencies === void 0
-                ? void 0
-                : [...e.build.externalDependencies],
+              e.build.externalDependencies === void 0 ? void 0 : [...e.build.externalDependencies],
           },
     compaction: {
       model:
@@ -490,8 +467,7 @@ function cloneCompiledAgentDefinition(e) {
         ? void 0
         : {
             instrumentationProviders: e.experimental.instrumentationProviders,
-            subagentPersistentSessions:
-              e.experimental.subagentPersistentSessions,
+            subagentPersistentSessions: e.experimental.subagentPersistentSessions,
             tasks: e.experimental.tasks,
             workflow:
               e.experimental.workflow === void 0
@@ -517,8 +493,7 @@ function cloneCompiledAgentDefinition(e) {
 }
 function deriveResourceRootEntries(e) {
   let t = new Set();
-  for (let n of e.sandboxWorkspaces ?? [])
-    for (let e of n.rootEntries) t.add(e);
+  for (let n of e.sandboxWorkspaces ?? []) for (let e of n.rootEntries) t.add(e);
   return [...t].sort((e, t) => e.localeCompare(t));
 }
 function createCompiledSubagentNodeId(e, t) {
@@ -537,11 +512,9 @@ function createCompiledAgentManifest(e) {
 function cloneCompiledRuntimeModelReference(e) {
   let t = { id: e.id, routing: cloneModelRouting(e.routing) };
   return (
-    e.contextWindowTokens !== void 0 &&
-      (t.contextWindowTokens = e.contextWindowTokens),
+    e.contextWindowTokens !== void 0 && (t.contextWindowTokens = e.contextWindowTokens),
     e.maxOutputTokens !== void 0 && (t.maxOutputTokens = e.maxOutputTokens),
-    e.providerOptions !== void 0 &&
-      (t.providerOptions = { ...e.providerOptions }),
+    e.providerOptions !== void 0 && (t.providerOptions = { ...e.providerOptions }),
     e.source !== void 0 && (t.source = { ...e.source }),
     t
   );

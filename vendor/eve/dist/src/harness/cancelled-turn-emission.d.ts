@@ -8,4 +8,7 @@ import type { HarnessEmissionState } from "#harness/emission.js";
  * cancelled turn's preamble — the turn id is reconstructed via
  * {@link activeTurnId} and `sessionStarted` is stamped `true`.
  */
-export declare function emitCancelledTurn(emitFn: HarnessEmitFn, state: HarnessEmissionState): Promise<HarnessEmissionState>;
+export declare function emitCancelledTurn(
+  emitFn: HarnessEmitFn,
+  state: HarnessEmissionState,
+): Promise<HarnessEmissionState>;

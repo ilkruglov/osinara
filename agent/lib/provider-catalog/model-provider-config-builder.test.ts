@@ -11,14 +11,9 @@ import { describe, expect, it } from "vitest";
 
 import { parseModelProviderConfig } from "../model-provider-config-schema.js";
 import { buildModelProviderConfig } from "./model-provider-config-builder.js";
-import type {
-  ProviderCatalogModel,
-  ReasoningSelection,
-} from "./provider-catalog.js";
+import type { ProviderCatalogModel, ReasoningSelection } from "./provider-catalog.js";
 
-function catalogModel(
-  overrides: Partial<ProviderCatalogModel> = {},
-): ProviderCatalogModel {
+function catalogModel(overrides: Partial<ProviderCatalogModel> = {}): ProviderCatalogModel {
   return {
     contextWindowTokens: 64_000,
     defaultReasoningOption: null,
@@ -69,13 +64,16 @@ describe("buildModelProviderConfig", () => {
     expected: object;
     model: ProviderCatalogModel;
     reasoning: ReasoningSelection | null;
-  }>)("builds the exact DeepSeek transport for reasoning $reasoning", ({ expected, model, reasoning }) => {
-    const config = buildModelProviderConfig("deepseek", model, reasoning, false);
+  }>)(
+    "builds the exact DeepSeek transport for reasoning $reasoning",
+    ({ expected, model, reasoning }) => {
+      const config = buildModelProviderConfig("deepseek", model, reasoning, false);
 
-    expect(config.provider).toBe("deepseek");
-    expect(config.agent.transport).toEqual(expected);
-    expect(parseModelProviderConfig(config)).toEqual(config);
-  });
+      expect(config.provider).toBe("deepseek");
+      expect(config.agent.transport).toEqual(expected);
+      expect(parseModelProviderConfig(config)).toEqual(config);
+    },
+  );
 
   it("uses the same image-capable model for primary and vision and fixed voice model", () => {
     const model = catalogModel({ supportsImageInput: true });
@@ -109,24 +107,23 @@ describe("buildModelProviderConfig", () => {
     const model = catalogModel({ reasoningOptions: [{ effort: "high", type: "effort" }] });
 
     expect(() => buildModelProviderConfig("deepseek", model, selected, false)).not.toThrow();
-    expect(() => buildModelProviderConfig(
-      "deepseek",
-      model,
-      { effort: "low", type: "effort" },
-      false,
-    )).toThrow("AGENT_PROVIDER_CONFIG_REASONING_NOT_AVAILABLE");
+    expect(() =>
+      buildModelProviderConfig("deepseek", model, { effort: "low", type: "effort" }, false),
+    ).toThrow("AGENT_PROVIDER_CONFIG_REASONING_NOT_AVAILABLE");
   });
 
   it("rejects null when the catalog requires an explicit reasoning selection", () => {
-    expect(() => buildModelProviderConfig("deepseek", catalogModel(), null, false))
-      .toThrow("AGENT_PROVIDER_CONFIG_REASONING_NOT_AVAILABLE");
+    expect(() => buildModelProviderConfig("deepseek", catalogModel(), null, false)).toThrow(
+      "AGENT_PROVIDER_CONFIG_REASONING_NOT_AVAILABLE",
+    );
   });
 
   it("rejects malformed injected reasoning metadata with a stable error", () => {
     const model = catalogModel({ reasoningOptions: [null] as never });
 
-    expect(() => buildModelProviderConfig("deepseek", model, null, false))
-      .toThrow("AGENT_PROVIDER_CONFIG_REASONING_INVALID");
+    expect(() => buildModelProviderConfig("deepseek", model, null, false)).toThrow(
+      "AGENT_PROVIDER_CONFIG_REASONING_INVALID",
+    );
   });
 
   it.each([
@@ -138,21 +135,20 @@ describe("buildModelProviderConfig", () => {
     ["unknown image support", { supportsImageInput: null }],
     ["missing tool support", { supportsTools: false }],
   ])("rejects installer-unsafe metadata: %s", (_case, overrides) => {
-    expect(() => buildModelProviderConfig(
-      "deepseek",
-      catalogModel(overrides),
-      null,
-      false,
-    )).toThrow("AGENT_PROVIDER_CONFIG_MODEL_INVALID");
+    expect(() =>
+      buildModelProviderConfig("deepseek", catalogModel(overrides), null, false),
+    ).toThrow("AGENT_PROVIDER_CONFIG_MODEL_INVALID");
   });
 
   it("rejects a model protocol that contradicts its fixed provider transport", () => {
-    expect(() => buildModelProviderConfig(
-      "deepseek",
-      catalogModel({ protocol: "anthropic-messages" }),
-      null,
-      false,
-    )).toThrow("AGENT_PROVIDER_CONFIG_PROTOCOL_INVALID");
+    expect(() =>
+      buildModelProviderConfig(
+        "deepseek",
+        catalogModel({ protocol: "anthropic-messages" }),
+        null,
+        false,
+      ),
+    ).toThrow("AGENT_PROVIDER_CONFIG_PROTOCOL_INVALID");
   });
 
   it("rejects adaptive enabled reasoning on the DeepSeek Chat Completions transport", () => {
@@ -160,11 +156,8 @@ describe("buildModelProviderConfig", () => {
       reasoningOptions: [{ mode: "adaptive", type: "enabled" }],
     });
 
-    expect(() => buildModelProviderConfig(
-      "deepseek",
-      model,
-      { mode: "adaptive", type: "enabled" },
-      false,
-    )).toThrow("AGENT_PROVIDER_CONFIG_REASONING_UNSUPPORTED");
+    expect(() =>
+      buildModelProviderConfig("deepseek", model, { mode: "adaptive", type: "enabled" }, false),
+    ).toThrow("AGENT_PROVIDER_CONFIG_REASONING_UNSUPPORTED");
   });
 });

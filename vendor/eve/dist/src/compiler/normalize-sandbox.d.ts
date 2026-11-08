@@ -5,5 +5,12 @@ import { type ModuleBackedDefinitionLoadOptions } from "#compiler/normalize-help
  * Compiles one authored sandbox module into the normalized sandbox
  * definition stored on the compiled agent manifest.
  */
-export declare function compileSandboxDefinition(agentRoot: string, source: SandboxSourceRef, options?: ModuleBackedDefinitionLoadOptions): Promise<CompiledSandboxDefinition>;
-export declare function resolveParentSandboxSelector(value: unknown, message: string): Promise<boolean>;
+export declare function compileSandboxDefinition(
+  agentRoot: string,
+  source: SandboxSourceRef,
+  options?: ModuleBackedDefinitionLoadOptions,
+): Promise<CompiledSandboxDefinition>;
+export declare function resolveParentSandboxSelector(
+  value: unknown,
+  message: string,
+): Promise<boolean>;

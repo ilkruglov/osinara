@@ -13,4 +13,6 @@ export declare function isStreamDisconnectError(error: unknown): boolean;
  * All read errors — including socket disconnections — propagate to the caller.
  * Use {@link isStreamDisconnectError} to classify them.
  */
-export declare function readNdjsonStream(body: ReadableStream<Uint8Array>): AsyncGenerator<MessageStreamEvent>;
+export declare function readNdjsonStream(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<MessageStreamEvent>;

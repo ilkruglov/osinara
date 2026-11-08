@@ -9,7 +9,7 @@ import type { ContextReader } from "#context/key.js";
  * `LiveStepToolsKey`). Session and turn tools replay durable metadata.
  */
 export declare function buildResponseAuthorizationTools(input: {
-    readonly authoredTools: HarnessToolMap;
-    readonly context?: ContextReader;
+  readonly authoredTools: HarnessToolMap;
+  readonly context?: ContextReader;
 }): HarnessToolMap;
 export declare function buildDynamicTools(ctx: ContextReader): readonly HarnessToolDefinition[];

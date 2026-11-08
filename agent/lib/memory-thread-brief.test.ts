@@ -31,9 +31,11 @@ const SOURCE = {
 
 describe("memory thread brief generator", () => {
   it("copies source-backed records into ordered deterministic blocks", () => {
-    expect(buildMemoryThreadBrief({
-      entries: [{ ...SOURCE, ref: "entry_method", role: "method" }, SOURCE],
-    })).toEqual([
+    expect(
+      buildMemoryThreadBrief({
+        entries: [{ ...SOURCE, ref: "entry_method", role: "method" }, SOURCE],
+      }),
+    ).toEqual([
       { content: SOURCE.content, kind: "constraints_conflicts", sourceEntryRefs: [SOURCE.ref] },
       { content: SOURCE.content, kind: "method", sourceEntryRefs: ["entry_method"] },
     ]);
@@ -54,11 +56,15 @@ describe("memory thread brief generator", () => {
   });
 
   it("preserves unresolved conflict metadata without synthesizing a conclusion", () => {
-    const blocks = buildMemoryThreadBrief({ entries: [{
-      ...SOURCE,
-      conflictingEntryRefs: ["entry_b"],
-      unresolvedConflictRefs: ["conf_0123456789abcdef0123456789abcdef"],
-    }] });
+    const blocks = buildMemoryThreadBrief({
+      entries: [
+        {
+          ...SOURCE,
+          conflictingEntryRefs: ["entry_b"],
+          unresolvedConflictRefs: ["conf_0123456789abcdef0123456789abcdef"],
+        },
+      ],
+    });
 
     expect(blocks).toEqual([
       {
@@ -74,7 +80,9 @@ describe("memory thread brief generator", () => {
 
 function thread(overrides: Partial<ActivatedMemoryThread> = {}): ActivatedMemoryThread {
   return {
-    blocks: [{ content: SOURCE.content, kind: "constraints_conflicts", sourceEntryRefs: [SOURCE.ref] }],
+    blocks: [
+      { content: SOURCE.content, kind: "constraints_conflicts", sourceEntryRefs: [SOURCE.ref] },
+    ],
     episodes: [],
     purpose: "Сохранять решения и результаты",
     relevance: { retrievalHits: 1, skillHint: false, titleMatch: false },
@@ -89,9 +97,18 @@ function thread(overrides: Partial<ActivatedMemoryThread> = {}): ActivatedMemory
 describe("memory thread context assembly", () => {
   it("prioritizes skill, title, and retrieval hits and caps context at two threads", () => {
     const context = assembleMemoryThreadContext([
-      thread({ threadRef: "thread_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", relevance: { retrievalHits: 9, skillHint: false, titleMatch: false } }),
-      thread({ threadRef: "thread_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", relevance: { retrievalHits: 1, skillHint: false, titleMatch: true } }),
-      thread({ threadRef: "thread_cccccccccccccccccccccccccccccccc", relevance: { retrievalHits: 0, skillHint: true, titleMatch: false } }),
+      thread({
+        threadRef: "thread_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        relevance: { retrievalHits: 9, skillHint: false, titleMatch: false },
+      }),
+      thread({
+        threadRef: "thread_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        relevance: { retrievalHits: 1, skillHint: false, titleMatch: true },
+      }),
+      thread({
+        threadRef: "thread_cccccccccccccccccccccccccccccccc",
+        relevance: { retrievalHits: 0, skillHint: true, titleMatch: false },
+      }),
     ]);
 
     expect(context.threads.map((item) => item.threadRef)).toEqual([
@@ -116,15 +133,17 @@ describe("memory thread context assembly", () => {
   });
 
   it("represents a completed subthread by its completion episode during ordinary activation", () => {
-    const context = assembleMemoryThreadContext([thread({
-      blocks: [],
-      completionEpisode: {
-        content: "Марафон завершён, результат 3:58",
-        sourceEntryRefs: ["entry_completion"],
-      },
-      status: "completed",
-      title: "Марафон 2027",
-    })]);
+    const context = assembleMemoryThreadContext([
+      thread({
+        blocks: [],
+        completionEpisode: {
+          content: "Марафон завершён, результат 3:58",
+          sourceEntryRefs: ["entry_completion"],
+        },
+        status: "completed",
+        title: "Марафон 2027",
+      }),
+    ]);
 
     expect(context.threads[0]).toMatchObject({
       completionEpisode: { content: "Марафон завершён, результат 3:58" },

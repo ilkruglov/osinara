@@ -1,8 +1,4 @@
-import {
-  createCliTheme,
-  renderCliBanner,
-  renderCliSection,
-} from "#cli/ui/output.js";
+import { createCliTheme, renderCliBanner, renderCliSection } from "#cli/ui/output.js";
 import { inspectApplication } from "#services/inspect-application.js";
 function formatInstructions(e) {
   return e.map((e) => `${e.logicalPath} (${e.role})`).join(`, `);
@@ -158,9 +154,7 @@ async function printApplicationInfo(i, a, o = {}) {
         renderCliSection(u, { rows: d, title: `Application` }),
         ``,
         renderCliSection(u, { rows: f, title: `Artifacts` }),
-        ...(c === null
-          ? []
-          : [``, renderCliSection(u, { rows: p, title: `Instructions` })]),
+        ...(c === null ? [] : [``, renderCliSection(u, { rows: p, title: `Instructions` })]),
         ``,
         renderCliSection(u, {
           rows: [

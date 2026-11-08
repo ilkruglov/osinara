@@ -5,13 +5,13 @@ import type { RunInput } from "#channel/types.js";
  * and deserialized at each `"use step"` boundary.
  */
 export interface WorkflowEntryInput {
-    readonly input: RunInput["input"];
-    readonly limits?: RunInput["limits"];
-    readonly sessionTimeoutMs?: number | false;
-    readonly serializedContext: Record<string, unknown>;
+  readonly input: RunInput["input"];
+  readonly limits?: RunInput["limits"];
+  readonly sessionTimeoutMs?: number | false;
+  readonly serializedContext: Record<string, unknown>;
 }
 export interface WorkflowEntryResult {
-    readonly output: unknown;
+  readonly output: unknown;
 }
 /**
  * Long-lived workflow entrypoint. Handles both root sessions and

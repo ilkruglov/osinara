@@ -1,7 +1,4 @@
-import {
-  createSessionWaitingEvent,
-  createTurnCancelledEvent,
-} from "#protocol/message.js";
+import { createSessionWaitingEvent, createTurnCancelledEvent } from "#protocol/message.js";
 import { activeTurnId } from "#harness/active-turn-id.js";
 async function emitCancelledTurn(e, t) {
   return (

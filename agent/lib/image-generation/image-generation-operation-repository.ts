@@ -25,11 +25,14 @@ export type ImageGenerationReservation =
   | { state: "started"; workspaceId: string }
   | { errorCode: string; state: "ambiguous" | "failed" };
 
-function assertReplayMatches(row: OperationRow, input: {
-  inputHash: string;
-  outputPath: string;
-  workspaceId: string;
-}): void {
+function assertReplayMatches(
+  row: OperationRow,
+  input: {
+    inputHash: string;
+    outputPath: string;
+    workspaceId: string;
+  },
+): void {
   if (
     row.workspace_id !== input.workspaceId ||
     row.input_hash !== input.inputHash ||
@@ -43,11 +46,13 @@ function assertReplayMatches(row: OperationRow, input: {
 }
 
 function invalidState(operationKey: string, reason: string): AppError {
-  console.error(JSON.stringify({
-    code: "AGENT_IMAGE_GENERATION_STATE_INVALID",
-    operationKey,
-    reason,
-  }));
+  console.error(
+    JSON.stringify({
+      code: "AGENT_IMAGE_GENERATION_STATE_INVALID",
+      operationKey,
+      reason,
+    }),
+  );
   return new AppError(
     "AGENT_IMAGE_GENERATION_STATE_INVALID",
     "Не удалось восстановить состояние генерации изображения. Создайте новый запрос",
@@ -86,7 +91,8 @@ export const imageGenerationOperationRepository = {
       return { file: row.result, state: "completed" };
     }
     if (row.status === "started") return { state: "started", workspaceId: row.workspace_id };
-    if (!row.error_code) throw invalidState(input.operationKey, "terminal operation has no error code");
+    if (!row.error_code)
+      throw invalidState(input.operationKey, "terminal operation has no error code");
     return { errorCode: row.error_code, state: row.status };
   },
 

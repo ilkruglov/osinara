@@ -69,14 +69,24 @@ interface OrderWatchDispatcherDependencies {
   isMember(watch: ClaimedOrderWatch): Promise<boolean>;
   /** `busy`: the person's browser is in use by a turn; nothing was looked at. */
   observe(watch: ClaimedOrderWatch): Promise<OrderObservation | "busy">;
-  record(watch: ClaimedOrderWatch, receipt: ProactiveDeliveryReceipt, deliveredAt: Date): Promise<void>;
-  repository: Pick<OrderWatchRepository, "claimDue" | "finish" | "purgeFinished" | "release" | "reschedule" | "saveState">;
+  record(
+    watch: ClaimedOrderWatch,
+    receipt: ProactiveDeliveryReceipt,
+    deliveredAt: Date,
+  ): Promise<void>;
+  repository: Pick<
+    OrderWatchRepository,
+    "claimDue" | "finish" | "purgeFinished" | "release" | "reschedule" | "saveState"
+  >;
   send(watch: ClaimedOrderWatch, text: string): Promise<ProactiveDeliveryReceipt>;
 }
 
 type Ending = NonNullable<OrderWatchState["ended"]>;
 
-const SERVICE_NAME: Readonly<Record<OrderWatchService, string>> = { yandex_lavka: "Лавки", yandex_taxi: "такси" };
+const SERVICE_NAME: Readonly<Record<OrderWatchService, string>> = {
+  yandex_lavka: "Лавки",
+  yandex_taxi: "такси",
+};
 /** A login, an account or an order that is gone does not come back by looking again. */
 const FINAL_ERRORS: ReadonlySet<string> = new Set([
   "AGENT_LAVKA_AUTH_REQUIRED",
@@ -85,33 +95,66 @@ const FINAL_ERRORS: ReadonlySet<string> = new Set([
 ]);
 const ORDER_GONE_ERRORS: ReadonlySet<string> = new Set(["AGENT_YANDEX_TAXI_ORDER_NOT_FOUND"]);
 
-const errorCode = (error: unknown): string => isAppError(error) ? error.code : "AGENT_ORDER_WATCH_CHECK_FAILED";
+const errorCode = (error: unknown): string =>
+  isAppError(error) ? error.code : "AGENT_ORDER_WATCH_CHECK_FAILED";
 /** The person-facing part of an error: its text without the stable code prefix. */
 const sentence = (text: string): string =>
-  text.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").replace(/\s+/gu, " ").trim().replace(/[.!]+$/u, "").slice(0, 300);
+  text
+    .replace(/^[A-Z][A-Z0-9_]+:\s*/u, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.!]+$/u, "")
+    .slice(0, 300);
 
-function log(code: string, watch: ClaimedOrderWatch | null, extra: Record<string, unknown> = {}): void {
-  console.error(JSON.stringify({ code, ...(watch ? { service: watch.service, watchId: watch.id } : {}), ...extra }));
+function log(
+  code: string,
+  watch: ClaimedOrderWatch | null,
+  extra: Record<string, unknown> = {},
+): void {
+  console.error(
+    JSON.stringify({
+      code,
+      ...(watch ? { service: watch.service, watchId: watch.id } : {}),
+      ...extra,
+    }),
+  );
 }
 
-function decide(watch: ClaimedOrderWatch, observation: OrderObservation, now: Date): OrderWatchDecision {
+function decide(
+  watch: ClaimedOrderWatch,
+  observation: OrderObservation,
+  now: Date,
+): OrderWatchDecision {
   return observation.service === "yandex_taxi"
     ? decideTaxiWatch(watch.lastState, observation.taxi)
-    : decideLavkaWatch(watch.lastState, observation.lavka, { sinceStartMs: now.getTime() - watch.createdAt.getTime() });
+    : decideLavkaWatch(watch.lastState, observation.lavka, {
+        sinceStartMs: now.getTime() - watch.createdAt.getTime(),
+      });
 }
 
 export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDependencies) {
   const { repository } = dependencies;
-  const nextCheck = (watch: ClaimedOrderWatch, now: Date) => new Date(now.getTime() + ORDER_WATCH_INTERVAL_MS[watch.service]);
+  const nextCheck = (watch: ClaimedOrderWatch, now: Date) =>
+    new Date(now.getTime() + ORDER_WATCH_INTERVAL_MS[watch.service]);
   /** The state to keep when a message was refused: as if it had never been decided. */
-  const notTold = (watch: ClaimedOrderWatch): OrderWatchState => watch.lastState ?? { status: null };
+  const notTold = (watch: ClaimedOrderWatch): OrderWatchState =>
+    watch.lastState ?? { status: null };
   /** What was told about the order, without an end of the watch being told. */
   const orderState = (watch: ClaimedOrderWatch): OrderWatchState => {
-    const { endCode: _code, endRetry: _retry, endText: _text, ended: _ended, ...state } = notTold(watch);
+    const {
+      endCode: _code,
+      endRetry: _retry,
+      endText: _text,
+      ended: _ended,
+      ...state
+    } = notTold(watch);
     return state;
   };
 
-  async function tell(watch: ClaimedOrderWatch, text: string): Promise<"refused" | "told" | "unreachable"> {
+  async function tell(
+    watch: ClaimedOrderWatch,
+    text: string,
+  ): Promise<"refused" | "told" | "unreachable"> {
     try {
       const receipt = await dependencies.send(watch, text);
       await dependencies.record(watch, receipt, new Date()).catch((error: unknown) => {
@@ -125,22 +168,42 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
         return "refused";
       }
       // The request may have reached Telegram: a second copy is worse than one maybe lost.
-      log("AGENT_ORDER_WATCH_DELIVERY_AMBIGUOUS", watch, { error: error instanceof Error ? error.name : "unknown" });
+      log("AGENT_ORDER_WATCH_DELIVERY_AMBIGUOUS", watch, {
+        error: error instanceof Error ? error.name : "unknown",
+      });
       return "told";
     }
   }
 
-  async function end(watch: ClaimedOrderWatch, now: Date, ending: Ending, code: string | null, text: string): Promise<void> {
-    const kept: OrderWatchState = { ...orderState(watch), endCode: code, endText: text, ended: ending };
+  async function end(
+    watch: ClaimedOrderWatch,
+    now: Date,
+    ending: Ending,
+    code: string | null,
+    text: string,
+  ): Promise<void> {
+    const kept: OrderWatchState = {
+      ...orderState(watch),
+      endCode: code,
+      endText: text,
+      ended: ending,
+    };
     await repository.saveState(watch, kept);
     const told = await tell(watch, text);
     if (told === "refused") {
-      await repository.reschedule(watch, { errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED", nextCheckAt: nextCheck(watch, now), state: { ...kept, endRetry: true } });
+      await repository.reschedule(watch, {
+        errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED",
+        nextCheckAt: nextCheck(watch, now),
+        state: { ...kept, endRetry: true },
+      });
       return;
     }
-    await repository.finish(watch, told === "unreachable"
-      ? { errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "unreachable", state: null }
-      : { errorCode: code, reason: ending, state: null });
+    await repository.finish(
+      watch,
+      told === "unreachable"
+        ? { errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "unreachable", state: null }
+        : { errorCode: code, reason: ending, state: null },
+    );
   }
 
   /**
@@ -161,11 +224,15 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
     const key = orderCardKey(observation);
     if (shown === undefined) {
       // A Lavka order the site does not show yet has nothing to draw: «closed» would be false.
-      if (observation.service === "yandex_lavka" && observation.lavka === null) return { card: undefined, showsThisLook: false };
+      if (observation.service === "yandex_lavka" && observation.lavka === null)
+        return { card: undefined, showsThisLook: false };
       const reserved = { key, messageId: null };
       await repository.saveState(watch, { ...notTold(watch), card: reserved });
       try {
-        const messageId = await dependencies.card.send(watch, orderCardHtml(watch.service, orderCardData(observation, now)));
+        const messageId = await dependencies.card.send(
+          watch,
+          orderCardHtml(watch.service, orderCardData(observation, now)),
+        );
         return { card: { key, messageId }, showsThisLook: true };
       } catch (error) {
         log("AGENT_ORDER_WATCH_CARD_FAILED", watch, { error: errorCode(error) });
@@ -189,7 +256,8 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
     const kept = watch.lastState;
     if (kept?.ended) {
       // A refused end is told again; a told one only has the watch left to close.
-      if (kept.endRetry && kept.endText) await end(watch, now, kept.ended, kept.endCode ?? null, kept.endText);
+      if (kept.endRetry && kept.endText)
+        await end(watch, now, kept.ended, kept.endCode ?? null, kept.endText);
       else await repository.finish(watch, { errorCode: null, reason: kept.ended, state: null });
       return;
     }
@@ -199,10 +267,16 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
     }
     if (now.getTime() >= watch.deadlineAt.getTime()) {
       const hours = Math.round(ORDER_WATCH_DURATION_MS / 3_600_000);
-      await end(watch, now, "deadline", null, `Перестала следить за заказом ${service}: прошло ${hours} часов. Спросите меня о статусе, если нужно.`);
+      await end(
+        watch,
+        now,
+        "deadline",
+        null,
+        `Перестала следить за заказом ${service}: прошло ${hours} часов. Спросите меня о статусе, если нужно.`,
+      );
       return;
     }
-    if (!await dependencies.isMember(watch)) {
+    if (!(await dependencies.isMember(watch))) {
       await repository.finish(watch, { errorCode: null, reason: "stopped", state: null });
       return;
     }
@@ -213,13 +287,35 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
       const code = errorCode(error);
       log("AGENT_ORDER_WATCH_CHECK_FAILED", watch, { error: code, failures: watch.failures + 1 });
       if (ORDER_GONE_ERRORS.has(code)) {
-        await end(watch, now, "order_ended", code, `Перестала следить за заказом ${service}: сайт больше не находит этот заказ.`);
+        await end(
+          watch,
+          now,
+          "order_ended",
+          code,
+          `Перестала следить за заказом ${service}: сайт больше не находит этот заказ.`,
+        );
       } else if (FINAL_ERRORS.has(code)) {
-        await end(watch, now, "failed", code, `Перестала следить за заказом ${service}: ${sentence(isAppError(error) ? error.message : code)}.`);
+        await end(
+          watch,
+          now,
+          "failed",
+          code,
+          `Перестала следить за заказом ${service}: ${sentence(isAppError(error) ? error.message : code)}.`,
+        );
       } else if (watch.failures + 1 >= ORDER_WATCH_MAX_FAILURES) {
-        await end(watch, now, "failed", code, `Не получается проверить заказ ${service} уже ${ORDER_WATCH_MAX_FAILURES} раз подряд, перестала следить. Спросите меня о статусе или посмотрите в приложении.`);
+        await end(
+          watch,
+          now,
+          "failed",
+          code,
+          `Не получается проверить заказ ${service} уже ${ORDER_WATCH_MAX_FAILURES} раз подряд, перестала следить. Спросите меня о статусе или посмотрите в приложении.`,
+        );
       } else {
-        await repository.reschedule(watch, { errorCode: code, nextCheckAt: nextCheck(watch, now), state: null });
+        await repository.reschedule(watch, {
+          errorCode: code,
+          nextCheckAt: nextCheck(watch, now),
+          state: null,
+        });
       }
       return;
     }
@@ -230,33 +326,54 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
     }
     const decision = decide(watch, observation, now);
     const { card, showsThisLook } = await showCard(watch, observation, now);
-    const keep = (state: OrderWatchState): OrderWatchState => (card === undefined ? state : { ...state, card });
+    const keep = (state: OrderWatchState): OrderWatchState =>
+      card === undefined ? state : { ...state, card };
     // A step the live card now shows stays quiet; a car on the spot or the end is still told.
     const quiet = showsThisLook && !decision.loud;
     if (decision.message !== null && !quiet) {
       await repository.saveState(watch, keep(decision.state));
       const told = await tell(watch, decision.message);
       if (told === "unreachable") {
-        await repository.finish(watch, { errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "unreachable", state: keep(decision.state) });
+        await repository.finish(watch, {
+          errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE",
+          reason: "unreachable",
+          state: keep(decision.state),
+        });
         return;
       }
       if (told === "refused") {
         // Kept as not told: the next tick sees the same change and tells it again.
-        await repository.reschedule(watch, { errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED", nextCheckAt: nextCheck(watch, now), state: keep(notTold(watch)) });
+        await repository.reschedule(watch, {
+          errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED",
+          nextCheckAt: nextCheck(watch, now),
+          state: keep(notTold(watch)),
+        });
         return;
       }
     }
     if (decision.finished) {
-      await repository.finish(watch, { errorCode: null, reason: "order_ended", state: keep(decision.state) });
+      await repository.finish(watch, {
+        errorCode: null,
+        reason: "order_ended",
+        state: keep(decision.state),
+      });
       return;
     }
-    await repository.reschedule(watch, { errorCode: null, nextCheckAt: nextCheck(watch, now), state: keep(decision.state) });
+    await repository.reschedule(watch, {
+      errorCode: null,
+      nextCheckAt: nextCheck(watch, now),
+      state: keep(decision.state),
+    });
   }
 
   return async function dispatchOrderWatches(now = new Date()): Promise<number> {
     let watches: ClaimedOrderWatch[];
     try {
-      watches = await repository.claimDue({ leaseMilliseconds: ORDER_WATCH_LEASE_MS, limit: ORDER_WATCH_BATCH_SIZE, now });
+      watches = await repository.claimDue({
+        leaseMilliseconds: ORDER_WATCH_LEASE_MS,
+        limit: ORDER_WATCH_BATCH_SIZE,
+        now,
+      });
     } catch (error) {
       // Eve settles the tick's promise without reporting it: without this line the watches stop silently.
       log("AGENT_ORDER_WATCH_TICK_FAILED", null, { error: errorCode(error), stage: "claim" });
@@ -267,10 +384,20 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
         await check(watch, now);
       } catch (error) {
         // A stale lease belongs to another tick; anything else leaves the lease to expire and retry.
-        log(errorCode(error) === "AGENT_ORDER_WATCH_LEASE_STALE" ? "AGENT_ORDER_WATCH_LEASE_STALE" : "AGENT_ORDER_WATCH_TICK_FAILED", watch, { error: errorCode(error) });
+        log(
+          errorCode(error) === "AGENT_ORDER_WATCH_LEASE_STALE"
+            ? "AGENT_ORDER_WATCH_LEASE_STALE"
+            : "AGENT_ORDER_WATCH_TICK_FAILED",
+          watch,
+          { error: errorCode(error) },
+        );
       }
     }
-    await repository.purgeFinished(now).catch((error: unknown) => log("AGENT_ORDER_WATCH_PURGE_FAILED", null, { error: errorCode(error) }));
+    await repository
+      .purgeFinished(now)
+      .catch((error: unknown) =>
+        log("AGENT_ORDER_WATCH_PURGE_FAILED", null, { error: errorCode(error) }),
+      );
     return watches.length;
   };
 }

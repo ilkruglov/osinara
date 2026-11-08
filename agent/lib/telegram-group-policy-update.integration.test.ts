@@ -85,14 +85,16 @@ describeWithDatabase("Telegram group policy update repository", () => {
       [fixture.familyId, groupId],
     );
 
-    await expect(telegramGroupAdministrationRepository.updatePolicy({
-      familyId: fixture.familyId,
-      memoryReview: false,
-      messageMode: "owner_only",
-      requestedBy: fixture.ownerId,
-      telegramChatId: "-100-policy",
-      toolAllowlist: ["list_group_history", "search_memories"],
-    })).resolves.toEqual({ groupId });
+    await expect(
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        memoryReview: false,
+        messageMode: "owner_only",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-policy",
+        toolAllowlist: ["list_group_history", "search_memories"],
+      }),
+    ).resolves.toEqual({ groupId });
 
     const persistedGroup = await database().query(
       `SELECT id, title, type::text, message_mode::text, tool_allowlist, memory_review_enabled, created_at
@@ -117,9 +119,11 @@ describeWithDatabase("Telegram group policy update repository", () => {
       telegramChatId: "-100-policy",
       toolAllowlist: [],
     });
-    await expect(database().query(
-      "SELECT memory_review_enabled FROM telegram_groups WHERE id = $1", [groupId],
-    )).resolves.toMatchObject({ rows: [{ memory_review_enabled: false }] });
+    await expect(
+      database().query("SELECT memory_review_enabled FROM telegram_groups WHERE id = $1", [
+        groupId,
+      ]),
+    ).resolves.toMatchObject({ rows: [{ memory_review_enabled: false }] });
 
     // Stable primary keys prove that no scoped row was deleted and recreated behind the update.
     for (const [table, id] of [
@@ -128,7 +132,9 @@ describeWithDatabase("Telegram group policy update repository", () => {
       ["memory_items", memory.rows[0]!.id],
       ["conversation_sessions", session.rows[0]!.id],
     ] as const) {
-      await expect(database().query(`SELECT id FROM ${table} WHERE id = $1`, [id])).resolves.toMatchObject({
+      await expect(
+        database().query(`SELECT id FROM ${table} WHERE id = $1`, [id]),
+      ).resolves.toMatchObject({
         rowCount: 1,
       });
     }
@@ -143,17 +149,21 @@ describeWithDatabase("Telegram group policy update repository", () => {
       [fixture.familyId],
     );
 
-    await expect(telegramGroupAdministrationRepository.updatePolicy({
-      familyId: fixture.familyId,
-      messageMode: "all",
-      requestedBy: fixture.ownerId,
-      telegramChatId: "-100-family-policy",
-      toolAllowlist: ["remember"],
-    })).rejects.toThrowError(/AGENT_GROUP_POLICY_UPDATE_UNSUPPORTED/);
-    await expect(database().query(
-      `SELECT message_mode::text, tool_allowlist
+    await expect(
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        messageMode: "all",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-family-policy",
+        toolAllowlist: ["remember"],
+      }),
+    ).rejects.toThrowError(/AGENT_GROUP_POLICY_UPDATE_UNSUPPORTED/);
+    await expect(
+      database().query(
+        `SELECT message_mode::text, tool_allowlist
        FROM telegram_groups WHERE telegram_chat_id = '-100-family-policy'`,
-    )).resolves.toMatchObject({
+      ),
+    ).resolves.toMatchObject({
       rows: [{ message_mode: "addressed_only", tool_allowlist: [] }],
     });
   });
@@ -168,17 +178,21 @@ describeWithDatabase("Telegram group policy update repository", () => {
       [fixture.familyId],
     );
 
-    await expect(telegramGroupAdministrationRepository.updatePolicy({
-      familyId: fixture.familyId,
-      messageMode: "addressed_only",
-      requestedBy: fixture.ownerId,
-      telegramChatId: "-100-public-policy",
-      toolAllowlist: ["remember"],
-    })).resolves.toEqual({ groupId: group.rows[0]!.id });
-    await expect(database().query(
-      "SELECT message_mode::text, tool_allowlist FROM telegram_groups WHERE id = $1",
-      [group.rows[0]!.id],
-    )).resolves.toMatchObject({
+    await expect(
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        messageMode: "addressed_only",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-public-policy",
+        toolAllowlist: ["remember"],
+      }),
+    ).resolves.toEqual({ groupId: group.rows[0]!.id });
+    await expect(
+      database().query(
+        "SELECT message_mode::text, tool_allowlist FROM telegram_groups WHERE id = $1",
+        [group.rows[0]!.id],
+      ),
+    ).resolves.toMatchObject({
       rows: [{ message_mode: "addressed_only", tool_allowlist: ["remember"] }],
     });
   });
@@ -186,16 +200,20 @@ describeWithDatabase("Telegram group policy update repository", () => {
   it("rejects an absent group instead of registering it", async () => {
     const fixture = await ownedFamily();
 
-    await expect(telegramGroupAdministrationRepository.updatePolicy({
-      familyId: fixture.familyId,
-      messageMode: "all",
-      requestedBy: fixture.ownerId,
-      telegramChatId: "-100-missing-policy",
-      toolAllowlist: [],
-    })).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/);
-    await expect(database().query(
-      "SELECT 1 FROM telegram_groups WHERE telegram_chat_id = '-100-missing-policy'",
-    )).resolves.toMatchObject({ rowCount: 0 });
+    await expect(
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        messageMode: "all",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-missing-policy",
+        toolAllowlist: [],
+      }),
+    ).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/);
+    await expect(
+      database().query(
+        "SELECT 1 FROM telegram_groups WHERE telegram_chat_id = '-100-missing-policy'",
+      ),
+    ).resolves.toMatchObject({ rowCount: 0 });
   });
 
   it("rechecks the current owner role inside the update transaction", async () => {
@@ -211,12 +229,14 @@ describeWithDatabase("Telegram group policy update repository", () => {
       [fixture.familyId, fixture.ownerId],
     );
 
-    await expect(telegramGroupAdministrationRepository.updatePolicy({
-      familyId: fixture.familyId,
-      messageMode: "owner_only",
-      requestedBy: fixture.ownerId,
-      telegramChatId: "-100-revoked-policy",
-      toolAllowlist: [],
-    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+    await expect(
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        messageMode: "owner_only",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-revoked-policy",
+        toolAllowlist: [],
+      }),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
   });
 });

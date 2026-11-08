@@ -83,9 +83,7 @@ async function walkSubdirectories(t, n, r) {
       rootDirectoryPath: t.rootDirectoryPath,
       sources: t.sources,
       subdirectoryRelative:
-        t.subdirectoryRelative === ``
-          ? i.name
-          : join(t.subdirectoryRelative, i.name),
+        t.subdirectoryRelative === `` ? i.name : join(t.subdirectoryRelative, i.name),
       unsupportedEntryCode: t.unsupportedEntryCode,
       unsupportedEntryMessage: t.unsupportedEntryMessage,
       unsupportedFileCode: t.unsupportedFileCode,
@@ -112,11 +110,7 @@ function emitUnsupportedLeafDiagnostics(i, o, s) {
         );
       continue;
     }
-    if (
-      i.unsupportedFileCode === void 0 ||
-      isTypeScriptDeclarationFileName(c.name)
-    )
-      continue;
+    if (i.unsupportedFileCode === void 0 || isTypeScriptDeclarationFileName(c.name)) continue;
     let u = getSupportedModuleBaseName(c.name) !== null,
       d = i.allowMarkdown && c.name.endsWith(`.md`);
     u ||
@@ -137,10 +131,7 @@ async function collectLeafSources(t, n, r) {
     allowMarkdown: t.allowMarkdown,
     allowModules: !0,
   })) {
-    let n =
-        t.subdirectoryRelative === ``
-          ? a.slotName
-          : join(t.subdirectoryRelative, a.slotName),
+    let n = t.subdirectoryRelative === `` ? a.slotName : join(t.subdirectoryRelative, a.slotName),
       l = normalizeLogicalPath(join(t.relativeDirectory, n));
     if (t.validateSegment !== void 0) {
       let n = a.markdownFileName ?? a.moduleFileNames[0] ?? a.slotName,
@@ -152,17 +143,12 @@ async function collectLeafSources(t, n, r) {
     }
     if (a.markdownFileName !== void 0 && a.moduleFileNames.length > 0) {
       t.diagnostics.push(
-        createSlotCollisionDiagnostic(r, l, [
-          a.markdownFileName,
-          ...a.moduleFileNames,
-        ]),
+        createSlotCollisionDiagnostic(r, l, [a.markdownFileName, ...a.moduleFileNames]),
       );
       continue;
     }
     if (a.moduleFileNames.length > 1) {
-      t.diagnostics.push(
-        createModuleSlotCollisionDiagnostic(r, l, a.moduleFileNames),
-      );
+      t.diagnostics.push(createModuleSlotCollisionDiagnostic(r, l, a.moduleFileNames));
       continue;
     }
     if (a.markdownFileName !== void 0) {

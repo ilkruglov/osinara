@@ -39,9 +39,7 @@ function evaluateFilePart(t, n) {
   if (n === `disabled` || !isMediaTypeAllowed(t.mediaType, n)) {
     let e = {
       allowedMediaTypes:
-        n === `disabled` || n.allowedMediaTypes === `*`
-          ? []
-          : [...n.allowedMediaTypes],
+        n === `disabled` || n.allowedMediaTypes === `*` ? [] : [...n.allowedMediaTypes],
       kind: `disallowed-media-type`,
       mediaType: t.mediaType,
     };
@@ -78,10 +76,7 @@ function formatUploadPolicyViolation(e) {
   let t = e.filename ?? e.mediaType;
   if (e.kind === `too-large`)
     return `${t} (${e.byteLength} bytes) exceeds the ${e.limit}-byte upload limit.`;
-  let n =
-    e.allowedMediaTypes.length > 0
-      ? ` Allowed: ${e.allowedMediaTypes.join(`, `)}.`
-      : ``;
+  let n = e.allowedMediaTypes.length > 0 ? ` Allowed: ${e.allowedMediaTypes.join(`, `)}.` : ``;
   return `${t} has media type "${e.mediaType}" which is not allowed by this route.${n}`;
 }
 export {

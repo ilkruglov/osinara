@@ -16,15 +16,10 @@ function createCodexFetch(n = {}) {
 }
 function rewriteCodexEndpoint(e, n = CODEX_API_ENDPOINT) {
   let r = new URL(e);
-  return r.pathname.includes(`/v1/responses`) ||
-    r.pathname.includes(`/chat/completions`)
-    ? n
-    : e;
+  return r.pathname.includes(`/v1/responses`) || r.pathname.includes(`/chat/completions`) ? n : e;
 }
 function authenticatedInit(e, t, n) {
-  let r = cloneHeaders(
-    t?.headers ?? (e instanceof Request ? e.headers : void 0),
-  );
+  let r = cloneHeaders(t?.headers ?? (e instanceof Request ? e.headers : void 0));
   return (
     r.delete(`authorization`),
     r.delete(`Authorization`),

@@ -14,16 +14,10 @@ import type { PoolClient } from "pg";
 import { telegramInboxDirectory } from "../attachments/telegram-inbox-path.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import {
-  createWorkspaceFileRecord,
-  type WorkspaceFileRecord,
-} from "./workspace-file-record.js";
+import { createWorkspaceFileRecord, type WorkspaceFileRecord } from "./workspace-file-record.js";
 import { detectWorkspaceFileMetadata } from "./workspace-file-metadata.js";
 import { validateWorkspacePath } from "./workspace-path.js";
-import type {
-  WorkspaceAuthorization,
-  WorkspaceScope,
-} from "./workspace-repository.js";
+import type { WorkspaceAuthorization, WorkspaceScope } from "./workspace-repository.js";
 import { workspaceRepository } from "./workspace-repository.js";
 import {
   getWorkspaceStoredFile,
@@ -33,10 +27,12 @@ import {
 } from "./workspace-storage.js";
 
 interface WorkspaceResolver {
-  mounts(auth: WorkspaceAuthorization): Promise<Array<{
-    mountPoint: WorkspaceScope;
-    workspaceId: string;
-  }>>;
+  mounts(auth: WorkspaceAuthorization): Promise<
+    Array<{
+      mountPoint: WorkspaceScope;
+      workspaceId: string;
+    }>
+  >;
 }
 
 export interface WorkspaceBinaryFile {
@@ -52,7 +48,10 @@ async function resolveWorkspaceId(
 ): Promise<string> {
   const mount = (await repository.mounts(auth)).find((item) => item.mountPoint === scope);
   if (!mount) {
-    throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Текущий чат не имеет доступа к этой области файлов");
+    throw new AppError(
+      "AGENT_WORKSPACE_ACCESS_DENIED",
+      "Текущий чат не имеет доступа к этой области файлов",
+    );
   }
   return mount.workspaceId;
 }
@@ -90,17 +89,11 @@ async function readCurrentBinary(
 
 export function createWorkspaceBinaryRepository(root: string, resolver: WorkspaceResolver) {
   return {
-    async authorizeScope(
-      auth: WorkspaceAuthorization,
-      scope: WorkspaceScope,
-    ): Promise<void> {
+    async authorizeScope(auth: WorkspaceAuthorization, scope: WorkspaceScope): Promise<void> {
       await resolveWorkspaceId(resolver, auth, scope);
     },
 
-    async workspaceId(
-      auth: WorkspaceAuthorization,
-      scope: WorkspaceScope,
-    ): Promise<string> {
+    async workspaceId(auth: WorkspaceAuthorization, scope: WorkspaceScope): Promise<string> {
       return await resolveWorkspaceId(resolver, auth, scope);
     },
 
@@ -141,11 +134,7 @@ export function createWorkspaceBinaryRepository(root: string, resolver: Workspac
       }
       const inboxDirectory = telegramInboxDirectory(auth, scope, telegramMessageId);
       const workspaceId = await resolveWorkspaceId(resolver, auth, scope);
-      const files = await listWorkspaceStoredFilesUnder(
-        root,
-        workspaceId,
-        inboxDirectory,
-      );
+      const files = await listWorkspaceStoredFilesUnder(root, workspaceId, inboxDirectory);
       if (files.length !== 1) {
         throw new AppError(
           "AGENT_TELEGRAM_INBOX_AMBIGUOUS",
@@ -155,13 +144,16 @@ export function createWorkspaceBinaryRepository(root: string, resolver: Workspac
       return await readCurrentBinary(root, workspaceId, scope, files[0]!.path);
     },
 
-    async writeBinary(auth: WorkspaceAuthorization, input: {
-      bytes: Uint8Array;
-      mediaType: string;
-      operationKey: string;
-      path: string;
-      scope: WorkspaceScope;
-    }): Promise<WorkspaceFileRecord> {
+    async writeBinary(
+      auth: WorkspaceAuthorization,
+      input: {
+        bytes: Uint8Array;
+        mediaType: string;
+        operationKey: string;
+        path: string;
+        scope: WorkspaceScope;
+      },
+    ): Promise<WorkspaceFileRecord> {
       const safePath = validateWorkspacePath(input.path);
       const workspaceId = await resolveWorkspaceId(resolver, auth, input.scope);
       const client = await database().connect();

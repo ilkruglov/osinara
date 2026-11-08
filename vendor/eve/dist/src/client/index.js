@@ -1,17 +1,11 @@
-import {
-  isCurrentTurnBoundaryEvent,
-  isTurnFailureEvent,
-} from "#protocol/message.js";
+import { isCurrentTurnBoundaryEvent, isTurnFailureEvent } from "#protocol/message.js";
 import { AgentInfoResponseError } from "#client/agent-info-error.js";
 import { ClientError } from "#client/client-error.js";
 import { ClientSessions } from "#client/sessions.js";
 import { Client } from "#client/client.js";
 import { EveAgentStore } from "#client/eve-agent-store.js";
 import { defaultMessageReducer } from "#client/message-reducer.js";
-import {
-  createDataUrlFilePart,
-  createTextWithFileContent,
-} from "#client/file-parts.js";
+import { createDataUrlFilePart, createTextWithFileContent } from "#client/file-parts.js";
 import { MessageResponse } from "#client/message-response.js";
 import { ClientSession } from "#client/session.js";
 import {
@@ -22,10 +16,7 @@ import {
   isInputRequest,
   isInputResponse,
 } from "#runtime/input/types.js";
-import {
-  resolveTextToResponse,
-  resolveTextToResponses,
-} from "#channel/resolve-text.js";
+import { resolveTextToResponse, resolveTextToResponses } from "#channel/resolve-text.js";
 export {
   AgentInfoResponseError,
   Client,

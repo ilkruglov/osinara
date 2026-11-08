@@ -9,28 +9,16 @@ const log = createLogger(`execution.subagent-adapter`),
   SUBAGENT_ADAPTER = {
     kind: SUBAGENT_ADAPTER_KIND,
     async "approval.candidate"(e, t) {
-      await forwardSubagentAuthorizationEvent(
-        { data: e, type: `approval.candidate` },
-        t,
-      );
+      await forwardSubagentAuthorizationEvent({ data: e, type: `approval.candidate` }, t);
     },
     async "approval.settled"(e, t) {
-      await forwardSubagentAuthorizationEvent(
-        { data: e, type: `approval.settled` },
-        t,
-      );
+      await forwardSubagentAuthorizationEvent({ data: e, type: `approval.settled` }, t);
     },
     async "authorization.required"(e, t) {
-      await forwardSubagentAuthorizationEvent(
-        { data: e, type: `authorization.required` },
-        t,
-      );
+      await forwardSubagentAuthorizationEvent({ data: e, type: `authorization.required` }, t);
     },
     async "authorization.completed"(e, t) {
-      await forwardSubagentAuthorizationEvent(
-        { data: e, type: `authorization.completed` },
-        t,
-      );
+      await forwardSubagentAuthorizationEvent({ data: e, type: `authorization.completed` }, t);
     },
     async "input.requested"(e, t) {
       let i = t.state;

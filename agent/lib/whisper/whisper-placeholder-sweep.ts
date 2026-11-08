@@ -27,24 +27,46 @@ export async function sweepWhisperPlaceholders(
 ): Promise<void> {
   const stale = await dependencies.placeholders.listStale(SWEEP_BATCH);
   for (const placeholder of stale) {
-    const key = { chatId: placeholder.chatId, placeholderMessageId: placeholder.placeholderMessageId, receiverUserId: placeholder.receiverUserId };
-    await writeWhisperPlaceholder(key, placeholder.reason === "orphan"
-      ? { content: { remove: true }, from: ["open"], to: "closed" }
-      : { content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT }, from: ["open"], to: "failed" }, dependencies);
+    const key = {
+      chatId: placeholder.chatId,
+      placeholderMessageId: placeholder.placeholderMessageId,
+      receiverUserId: placeholder.receiverUserId,
+    };
+    await writeWhisperPlaceholder(
+      key,
+      placeholder.reason === "orphan"
+        ? { content: { remove: true }, from: ["open"], to: "closed" }
+        : {
+            content: { format: "plain", text: WHISPER_EMPTY_ANSWER_TEXT },
+            from: ["open"],
+            to: "failed",
+          },
+      dependencies,
+    );
   }
   const due = await dependencies.placeholders.claimDue(SWEEP_BATCH);
   for (const placeholder of due) {
-    const key = { chatId: placeholder.chatId, placeholderMessageId: placeholder.placeholderMessageId, receiverUserId: placeholder.receiverUserId };
-    await retryWhisperPlaceholder(key, { content: placeholder.content, to: placeholder.status }, dependencies);
+    const key = {
+      chatId: placeholder.chatId,
+      placeholderMessageId: placeholder.placeholderMessageId,
+      receiverUserId: placeholder.receiverUserId,
+    };
+    await retryWhisperPlaceholder(
+      key,
+      { content: placeholder.content, to: placeholder.status },
+      dependencies,
+    );
   }
   const purged = await dependencies.placeholders.purge();
   if (stale.length > 0 || due.length > 0 || purged > 0) {
-    console.info(JSON.stringify({
-      code: "AGENT_TELEGRAM_WHISPER_SWEEP",
-      orphans: stale.filter((placeholder) => placeholder.reason === "orphan").length,
-      purged,
-      retried: due.length,
-      unanswered: stale.filter((placeholder) => placeholder.reason === "unanswered").length,
-    }));
+    console.info(
+      JSON.stringify({
+        code: "AGENT_TELEGRAM_WHISPER_SWEEP",
+        orphans: stale.filter((placeholder) => placeholder.reason === "orphan").length,
+        purged,
+        retried: due.length,
+        unanswered: stale.filter((placeholder) => placeholder.reason === "unanswered").length,
+      }),
+    );
   }
 }

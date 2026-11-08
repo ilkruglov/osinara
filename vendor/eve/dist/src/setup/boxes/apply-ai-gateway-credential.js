@@ -16,9 +16,7 @@ function applyAiGatewayCredential(a) {
     id: `apply-ai-gateway-credential`,
     shouldRun(e) {
       let { aiGateway: t, project: n } = e;
-      return (
-        t.kind === `byok` || (t.kind === `inherit` && isProjectResolved(n))
-      );
+      return t.kind === `byok` || (t.kind === `inherit` && isProjectResolved(n));
     },
     async gather() {
       return null;
@@ -48,17 +46,13 @@ function applyAiGatewayCredential(a) {
           { kind: `unresolved` }
         );
       let u = createPromptCommandOutput(i.log),
-        d = await withSpinner(
-          i,
-          `Pulling Vercel environment variables into .env.local...`,
-          () => o.runVercelEnvPull(s, u, r),
+        d = await withSpinner(i, `Pulling Vercel environment variables into .env.local...`, () =>
+          o.runVercelEnvPull(s, u, r),
         );
       return (
         r?.throwIfAborted(),
         d ||
-          i.log.warning(
-            `Linked the project, but pulling environment variables did not complete.`,
-          ),
+          i.log.warning(`Linked the project, but pulling environment variables did not complete.`),
         o.detectAiGatewayResolution(s)
       );
     },

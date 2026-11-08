@@ -7,10 +7,7 @@ async function verifyTeamsRequest(e, t) {
   let n = await e.text();
   if (t.webhookVerifier !== void 0) {
     let r = await t.webhookVerifier(e, n);
-    if (!r)
-      throw Error(
-        `teamsChannel: inbound webhook verifier rejected the request.`,
-      );
+    if (!r) throw Error(`teamsChannel: inbound webhook verifier rejected the request.`);
     return typeof r == `string` ? r : n;
   }
   let r = readBearerToken(e.headers.get(`authorization`) ?? ``);
@@ -23,8 +20,7 @@ async function verifyTeamsJwt(e, t) {
   return (
     await jwtVerify(
       e,
-      async (e) =>
-        importJWK(selectJwk(o, e), typeof e.alg == `string` ? e.alg : void 0),
+      async (e) => importJWK(selectJwk(o, e), typeof e.alg == `string` ? e.alg : void 0),
       {
         audience: a,
         clockTolerance: t.maxSkewSeconds ?? 300,
@@ -44,18 +40,15 @@ async function loadJwks(e) {
     });
   if (!r.ok) throw Error(`Teams JWKS route returned HTTP ${r.status}.`);
   let i = await r.json();
-  if (!isObject(i) || !Array.isArray(i.keys))
-    throw Error(`Teams JWKS response is malformed.`);
+  if (!isObject(i) || !Array.isArray(i.keys)) throw Error(`Teams JWKS response is malformed.`);
   return i.keys.filter(isObject);
 }
 async function loadJwksUrl(e, n) {
   let r = await n(
-    e.openIdMetadataUrl ??
-      `https://login.botframework.com/v1/.well-known/openidconfiguration`,
+    e.openIdMetadataUrl ?? `https://login.botframework.com/v1/.well-known/openidconfiguration`,
     { headers: { accept: `application/json` } },
   );
-  if (!r.ok)
-    throw Error(`Teams OpenID metadata route returned HTTP ${r.status}.`);
+  if (!r.ok) throw Error(`Teams OpenID metadata route returned HTTP ${r.status}.`);
   let i = await r.json();
   if (!isObject(i) || typeof i.jwks_uri != `string`)
     throw Error(`Teams OpenID metadata response is missing jwks_uri.`);
@@ -65,9 +58,8 @@ function selectJwk(e, t) {
   let n = typeof t.kid == `string` ? t.kid : void 0,
     r = typeof t.x5t == `string` ? t.x5t : void 0,
     i =
-      e.find(
-        (e) => (n !== void 0 && e.kid === n) || (r !== void 0 && e.x5t === r),
-      ) ?? (e.length === 1 ? e[0] : void 0);
+      e.find((e) => (n !== void 0 && e.kid === n) || (r !== void 0 && e.x5t === r)) ??
+      (e.length === 1 ? e[0] : void 0);
   if (i === void 0)
     throw (
       log.debug(`Teams JWT key not found`, { kid: n, x5t: r }),

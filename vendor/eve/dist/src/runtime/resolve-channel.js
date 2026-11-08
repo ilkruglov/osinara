@@ -7,10 +7,7 @@ import {
   loadResolvedModuleExport,
 } from "#runtime/resolve-helpers.js";
 import { HTTP_ADAPTER_KIND } from "#channel/http.js";
-import {
-  isHttpRouteDefinition,
-  isWebSocketRouteDefinition,
-} from "#channel/routes.js";
+import { isHttpRouteDefinition, isWebSocketRouteDefinition } from "#channel/routes.js";
 async function resolveChannelDefinition(r, i, a) {
   try {
     let t = normalizeChannelDefinition(
@@ -28,9 +25,7 @@ async function resolveChannelDefinition(r, i, a) {
         sourceId: r.sourceId,
       }),
       o = t.routes.find(
-        (e) =>
-          e.method.toUpperCase() === r.method.toUpperCase() &&
-          e.path === r.urlPath,
+        (e) => e.method.toUpperCase() === r.method.toUpperCase() && e.path === r.urlPath,
       ),
       s = `channel:${r.name}`;
     setChannelInstrumentationKind(t, s);
@@ -46,10 +41,7 @@ async function resolveChannelDefinition(r, i, a) {
       fetch: async (e, t) =>
         l
           ? l.handler(e, t)
-          : Response.json(
-              { error: `No matching route handler.`, ok: !1 },
-              { status: 404 },
-            ),
+          : Response.json({ error: `No matching route handler.`, ok: !1 }, { status: 404 }),
       handler: l?.handler,
       websocket: u?.handler,
       receive: t.receive,
@@ -68,17 +60,9 @@ async function resolveChannelDefinition(r, i, a) {
   }
 }
 function resolveHttpRoute(e, t) {
-  if (!(t === void 0 || e.method === `WEBSOCKET` || !isHttpRouteDefinition(t)))
-    return t;
+  if (!(t === void 0 || e.method === `WEBSOCKET` || !isHttpRouteDefinition(t))) return t;
 }
 function resolveWebSocketRoute(e, t) {
-  if (
-    !(
-      t === void 0 ||
-      e.method !== `WEBSOCKET` ||
-      !isWebSocketRouteDefinition(t)
-    )
-  )
-    return t;
+  if (!(t === void 0 || e.method !== `WEBSOCKET` || !isWebSocketRouteDefinition(t))) return t;
 }
 export { resolveChannelDefinition };

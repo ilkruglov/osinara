@@ -13,19 +13,14 @@ function otelIntegration(r = {}) {
       recordOutputs: r.recordOutputs === !0,
     },
     o = r.spanProcessors ?? [],
-    s =
-      r.traceExporter === void 0
-        ? o
-        : [...o, batchSpanProcessor(r.traceExporter)];
+    s = r.traceExporter === void 0 ? o : [...o, batchSpanProcessor(r.traceExporter)];
   return {
     [OTEL_INTEGRATION]: !0,
     [PROVIDER]: !0,
     content: i,
     runtimeContext: r.runtimeContext,
     spanProcessors:
-      i.recordInputs && i.recordOutputs
-        ? s
-        : s.map((e) => contentFilteringProcessor(e, i)),
+      i.recordInputs && i.recordOutputs ? s : s.map((e) => contentFilteringProcessor(e, i)),
   };
 }
 function agentRunsIntegration(t = {}) {

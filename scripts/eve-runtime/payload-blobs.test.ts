@@ -15,36 +15,70 @@ import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 import {
-  createPayloadBlobCache, escapePayload, isEscapedPayload, isSplitPayload, joinPayload, PAYLOAD_BLOB_MARKER_KEY,
-  hasLoneSurrogate, payloadBlobHash, payloadBlobHashes, splitPayload, unescapePayload,
+  createPayloadBlobCache,
+  escapePayload,
+  isEscapedPayload,
+  isSplitPayload,
+  joinPayload,
+  PAYLOAD_BLOB_MARKER_KEY,
+  hasLoneSurrogate,
+  payloadBlobHash,
+  payloadBlobHashes,
+  splitPayload,
+  unescapePayload,
 } from "./payload-blobs.ts";
 
 // About 7.8 KB of poorly compressible text, so sizes mean something.
-const big = (seed: string) => Array.from({ length: 120 }, (_, i) => createHash("sha256").update(`${seed}${i}`).digest("hex")).join(" ");
-const devalue = (flat: unknown[]) => Buffer.concat([Buffer.from("devl"), Buffer.from(JSON.stringify(flat))]);
-const compressed = (body: Buffer) => new Uint8Array(Buffer.concat([Buffer.from("zstd"), zstdCompressSync(body)]));
+const big = (seed: string) =>
+  Array.from({ length: 120 }, (_, i) =>
+    createHash("sha256").update(`${seed}${i}`).digest("hex"),
+  ).join(" ");
+const devalue = (flat: unknown[]) =>
+  Buffer.concat([Buffer.from("devl"), Buffer.from(JSON.stringify(flat))]);
+const compressed = (body: Buffer) =>
+  new Uint8Array(Buffer.concat([Buffer.from("zstd"), zstdCompressSync(body)]));
 const unwrap = (bytes: Uint8Array) => {
   const buffer = Buffer.from(bytes);
   const prefix = buffer.subarray(0, 4).toString();
   // `zstd` wraps a prefixed body; `oblz` wraps the marked JSON itself.
-  if (prefix === "zstd") { const body = zstdDecompressSync(buffer.subarray(4)); return { prefix: body.subarray(0, 4).toString(), json: JSON.parse(body.subarray(4).toString()) as unknown[] }; }
-  if (prefix === "oblz") return { prefix, json: JSON.parse(zstdDecompressSync(buffer.subarray(4)).toString()) as unknown[] };
+  if (prefix === "zstd") {
+    const body = zstdDecompressSync(buffer.subarray(4));
+    return {
+      prefix: body.subarray(0, 4).toString(),
+      json: JSON.parse(body.subarray(4).toString()) as unknown[],
+    };
+  }
+  if (prefix === "oblz")
+    return {
+      prefix,
+      json: JSON.parse(zstdDecompressSync(buffer.subarray(4)).toString()) as unknown[],
+    };
   return { prefix, json: JSON.parse(buffer.subarray(4).toString()) as unknown[] };
 };
 
 describe("payload blobs", () => {
   it("lifts large top-level strings into blobs and restores the payload exactly", () => {
-    const flat = [{ system: 1, history: 2, again: 1, small: 3 }, big("system prompt"), big("history"), "short", ["Date", 1]];
+    const flat = [
+      { system: 1, history: 2, again: 1, small: 3 },
+      big("system prompt"),
+      big("history"),
+      "short",
+      ["Date", 1],
+    ];
     const original = compressed(devalue(flat));
     const split = splitPayload(original);
     expect(split).not.toBeNull();
-    expect([...split!.blobs.keys()].sort()).toEqual([payloadBlobHash(big("history")), payloadBlobHash(big("system prompt"))].sort());
+    expect([...split!.blobs.keys()].sort()).toEqual(
+      [payloadBlobHash(big("history")), payloadBlobHash(big("system prompt"))].sort(),
+    );
     expect(split!.stored.length).toBeLessThan(original.length / 4);
     expect(isSplitPayload(split!.stored)).toBe(true);
     expect(payloadBlobHashes(split!.stored).sort()).toEqual([...split!.blobs.keys()].sort());
     const stored = unwrap(split!.stored);
     expect(stored.prefix).toBe("oblz");
-    expect(stored.json[1]).toEqual({ [PAYLOAD_BLOB_MARKER_KEY]: payloadBlobHash(big("system prompt")) });
+    expect(stored.json[1]).toEqual({
+      [PAYLOAD_BLOB_MARKER_KEY]: payloadBlobHash(big("system prompt")),
+    });
     expect(stored.json[3]).toBe("short");
 
     const joined = joinPayload(split!.stored, (hash) => split!.blobs.get(hash));
@@ -65,7 +99,10 @@ describe("payload blobs", () => {
     expect(split).not.toBeNull();
     expect([...split!.blobs.keys()]).toEqual([payloadBlobHash(paired)]);
     expect(unwrap(split!.stored).json[1]).toBe(lone);
-    expect(unwrap(joinPayload(split!.stored, (hash) => split!.blobs.get(hash)))).toEqual({ prefix: "devl", json: flat });
+    expect(unwrap(joinPayload(split!.stored, (hash) => split!.blobs.get(hash)))).toEqual({
+      prefix: "devl",
+      json: flat,
+    });
   });
 
   it("keeps an uncompressed payload uncompressed", () => {
@@ -90,7 +127,9 @@ describe("payload blobs", () => {
 
   it("refuses to restore a payload whose blob is gone", () => {
     const split = splitPayload(compressed(devalue([big("y")])))!;
-    expect(() => joinPayload(split.stored, () => undefined)).toThrow("AGENT_WORKFLOW_PAYLOAD_BLOB_MISSING");
+    expect(() => joinPayload(split.stored, () => undefined)).toThrow(
+      "AGENT_WORKFLOW_PAYLOAD_BLOB_MISSING",
+    );
   });
 
   it("escapes opaque bytes that start like a stored envelope and nothing else", () => {

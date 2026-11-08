@@ -15,16 +15,16 @@ import type { TokenUsage } from "#shared/token-usage.js";
  * subagent's tokens. Error results never carry usage.
  */
 export declare function notifyDelegatedParentStep(input: {
-    readonly result: RuntimeSubagentChildResult | undefined;
-    readonly serializedContext: Record<string, unknown>;
-    readonly usage?: TokenUsage;
+  readonly result: RuntimeSubagentChildResult | undefined;
+  readonly serializedContext: Record<string, unknown>;
+  readonly usage?: TokenUsage;
 }): Promise<void>;
 /** Settled turn payload forwarded from the driver to the caller. */
 export interface SettledTurnNotification {
-    readonly output: unknown;
-    readonly isError?: boolean;
-    /** Usage this turn added; omitted (zero) on crash and expiry paths. */
-    readonly usage?: TokenUsage;
+  readonly output: unknown;
+  readonly isError?: boolean;
+  /** Usage this turn added; omitted (zero) on crash and expiry paths. */
+  readonly usage?: TokenUsage;
 }
 /**
  * Sends a settled conversation turn to the caller that started it.
@@ -36,29 +36,29 @@ export interface SettledTurnNotification {
  * success or error codes.
  */
 export declare function notifyTurnCallerStep(input: {
-    readonly caller: TurnCaller | undefined;
-    readonly lifecycle: AgentTurnOutcome["kind"];
-    readonly sessionId: string;
-    readonly settled: SettledTurnNotification;
+  readonly caller: TurnCaller | undefined;
+  readonly lifecycle: AgentTurnOutcome["kind"];
+  readonly sessionId: string;
+  readonly settled: SettledTurnNotification;
 }): Promise<void>;
 /** Settles a task-owned caller after the child turn is cooperatively cancelled. */
 export declare function notifyCancelledTaskCallerStep(input: {
-    readonly caller: TurnCaller | undefined;
-    readonly sessionId: string;
-    readonly usage?: TokenUsage;
+  readonly caller: TurnCaller | undefined;
+  readonly sessionId: string;
+  readonly usage?: TokenUsage;
 }): Promise<void>;
 /** Binds a durable task to the exact child turn before execution starts. */
 export declare function notifyTaskTurnStartedStep(input: {
-    readonly caller: TurnCaller | undefined;
-    readonly childSessionId: string;
-    readonly childTurnId: string;
+  readonly caller: TurnCaller | undefined;
+  readonly childSessionId: string;
+  readonly childTurnId: string;
 }): Promise<void>;
 /** Resolves the caller that created a delegated conversation session. */
 export declare function resolveInitialTurnCallerStep(input: {
-    readonly serializedContext: Record<string, unknown>;
+  readonly serializedContext: Record<string, unknown>;
 }): Promise<TurnCaller | undefined>;
 /** Rebinds child event forwarding to the task that owns the next accepted turn. */
 export declare function bindTurnCallerContextStep(input: {
-    readonly caller: TurnCaller | undefined;
-    readonly serializedContext: Record<string, unknown>;
+  readonly caller: TurnCaller | undefined;
+  readonly serializedContext: Record<string, unknown>;
 }): Promise<Record<string, unknown>>;

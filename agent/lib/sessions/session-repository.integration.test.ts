@@ -67,13 +67,15 @@ describeWithDatabase("session repository", () => {
     expect(current).toMatchObject({ continuationToken: "101::", generation: 0, rotated: false });
     await sessionRepository.bindEveSession(current.id, "wrun_generation_zero");
     await sessionRepository.registerRouteAlias(current.id, "101:42:900");
-    await expect(database().query<{ continuation_token: string }>(
-      `SELECT s.continuation_token
+    await expect(
+      database().query<{ continuation_token: string }>(
+        `SELECT s.continuation_token
          FROM conversation_session_routes r
          JOIN conversation_sessions s ON s.id = r.session_id
         WHERE r.base_continuation_token = $1`,
-      ["101:42:900"],
-    )).resolves.toMatchObject({ rows: [{ continuation_token: "101::" }] });
+        ["101:42:900"],
+      ),
+    ).resolves.toMatchObject({ rows: [{ continuation_token: "101::" }] });
     await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(true);
     await expect(sessionRepository.hasRoute("101:42:901")).resolves.toBe(false);
   });
@@ -164,11 +166,17 @@ describeWithDatabase("session repository", () => {
       scope: "personal",
       userId: f.userId,
     });
-    expect(rotated).toMatchObject({ continuationToken: "102:::osinara:1", generation: 1, rotated: true });
+    expect(rotated).toMatchObject({
+      continuationToken: "102:::osinara:1",
+      generation: 1,
+      rotated: true,
+    });
     expect(rotated.sandboxSessionId).toBe(current.sandboxSessionId);
     // A requested clean context carries nothing over.
     expect(rotated.handoff).toBeNull();
-    await expect(sessionRepository.isCurrentEveSession(current.id, "wrun_old")).resolves.toBe(false);
+    await expect(sessionRepository.isCurrentEveSession(current.id, "wrun_old")).resolves.toBe(
+      false,
+    );
     await sessionRepository.bindEveSession(rotated.id, "wrun_new");
     await expect(sessionRepository.isCurrentEveSession(rotated.id, "wrun_new")).resolves.toBe(true);
   });
@@ -177,24 +185,46 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const startedAt = new Date("2026-07-12T12:00:00.000Z");
     const current = await sessionRepository.prepareTurn({
-      baseContinuationToken: "103::", familyId: f.familyId, groupId: null, kind: "canonical",
-      now: startedAt, scope: "personal", telegramForumTopicId: null, userId: f.userId,
+      baseContinuationToken: "103::",
+      familyId: f.familyId,
+      groupId: null,
+      kind: "canonical",
+      now: startedAt,
+      scope: "personal",
+      telegramForumTopicId: null,
+      userId: f.userId,
     });
     expect(current.handoff).toBeNull();
-    await database().query("UPDATE conversation_sessions SET completed_turns = 50 WHERE id = $1", [current.id]);
+    await database().query("UPDATE conversation_sessions SET completed_turns = 50 WHERE id = $1", [
+      current.id,
+    ]);
 
     const rotated = await sessionRepository.prepareTurn({
-      baseContinuationToken: "103::", familyId: f.familyId, groupId: null, kind: "canonical",
-      now: new Date("2026-07-13T12:00:00.000Z"), scope: "personal", telegramForumTopicId: null, userId: f.userId,
+      baseContinuationToken: "103::",
+      familyId: f.familyId,
+      groupId: null,
+      kind: "canonical",
+      now: new Date("2026-07-13T12:00:00.000Z"),
+      scope: "personal",
+      telegramForumTopicId: null,
+      userId: f.userId,
     });
     expect(rotated.rotated).toBe(true);
     expect(rotated.handoff).toEqual({ retiredSessionStartedAt: startedAt });
 
     // A month of silence rotates too, but a stale conversation is not worth a summary.
-    await database().query("UPDATE conversation_sessions SET completed_turns = 50 WHERE id = $1", [rotated.id]);
+    await database().query("UPDATE conversation_sessions SET completed_turns = 50 WHERE id = $1", [
+      rotated.id,
+    ]);
     const stale = await sessionRepository.prepareTurn({
-      baseContinuationToken: "103::", familyId: f.familyId, groupId: null, kind: "canonical",
-      now: new Date("2026-09-13T12:00:00.000Z"), scope: "personal", telegramForumTopicId: null, userId: f.userId,
+      baseContinuationToken: "103::",
+      familyId: f.familyId,
+      groupId: null,
+      kind: "canonical",
+      now: new Date("2026-09-13T12:00:00.000Z"),
+      scope: "personal",
+      telegramForumTopicId: null,
+      userId: f.userId,
     });
     expect(stale.rotated).toBe(true);
     expect(stale.handoff).toBeNull();
@@ -265,12 +295,13 @@ describeWithDatabase("session repository", () => {
     await expect(sessionRepository.bindEveSession(current.id, oldRoot)).resolves.toBe("recorded");
     await expect(sessionRepository.bindEveSession(current.id, newRoot)).resolves.toBe("recorded");
     await sessionRepository.markPendingOperation(current.id, true);
-    await expect(sessionRepository.recordTurnCompleted(current.id, oldRoot, false)).resolves.toBe("stale");
+    await expect(sessionRepository.recordTurnCompleted(current.id, oldRoot, false)).resolves.toBe(
+      "stale",
+    );
     await expect(sessionRepository.recordTurnFailed(current.id, oldRoot)).resolves.toBe("stale");
-    await expect(sessionRepository.recordSessionFailedByContinuationToken(
-      current.continuationToken,
-      oldRoot,
-    )).resolves.toBe("stale");
+    await expect(
+      sessionRepository.recordSessionFailedByContinuationToken(current.continuationToken, oldRoot),
+    ).resolves.toBe("stale");
 
     const stored = await database().query<{
       completed_turns: number;
@@ -307,19 +338,23 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.bindEveSession(current.id, previousRoot);
     await sessionRepository.markPendingOperation(current.id, true);
 
-    await expect(sessionRepository.recordSessionFailedByContinuationToken(
-      current.continuationToken,
-      failedRoot,
-    )).resolves.toBe("recorded");
+    await expect(
+      sessionRepository.recordSessionFailedByContinuationToken(
+        current.continuationToken,
+        failedRoot,
+      ),
+    ).resolves.toBe("recorded");
 
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1
           AND eve_session_id = $2
           AND pending_operation = false
           AND rotation_requested_at IS NOT NULL`,
-      [current.id, failedRoot],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [current.id, failedRoot],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("records a terminal failure through an earlier route after Telegram re-keying", async () => {
@@ -338,18 +373,19 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.bindEveSession(current.id, failedRoot);
     await sessionRepository.registerRouteAlias(current.id, "106::437");
 
-    await expect(sessionRepository.recordSessionFailedByContinuationToken(
-      "106::426",
-      failedRoot,
-    )).resolves.toBe("recorded");
+    await expect(
+      sessionRepository.recordSessionFailedByContinuationToken("106::426", failedRoot),
+    ).resolves.toBe("recorded");
 
-    await expect(database().query(
-      `SELECT 1 FROM conversation_sessions
+    await expect(
+      database().query(
+        `SELECT 1 FROM conversation_sessions
         WHERE id = $1
           AND pending_operation = false
           AND rotation_requested_at IS NOT NULL`,
-      [current.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [current.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("leases only retired sessions whose one-day retention has elapsed", async () => {
@@ -376,15 +412,17 @@ describeWithDatabase("session repository", () => {
       scope: "personal",
       userId: f.userId,
     });
-    await expect(database().query(
-      `SELECT retired_at, delete_after FROM conversation_sessions WHERE id = $1
+    await expect(
+      database().query(
+        `SELECT retired_at, delete_after FROM conversation_sessions WHERE id = $1
          AND delete_after = retired_at + interval '1 day'`,
-      [current.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [current.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
 
-    await expect(sessionRepository.claimExpiredForDeletion(
-      new Date("2026-01-02T23:59:59.000Z"),
-    )).resolves.toBeNull();
+    await expect(
+      sessionRepository.claimExpiredForDeletion(new Date("2026-01-02T23:59:59.000Z")),
+    ).resolves.toBeNull();
 
     const claim = await sessionRepository.claimExpiredForDeletion(
       new Date("2026-01-03T00:00:01.000Z"),
@@ -399,18 +437,17 @@ describeWithDatabase("session repository", () => {
       "AGENT_EVE_SESSION_STORAGE_ACTIVE",
       new Date("2026-01-03T00:00:02.000Z"),
     );
-    await expect(sessionRepository.claimExpiredForDeletion(
-      new Date("2026-01-03T00:30:00.000Z"),
-    )).resolves.toBeNull();
+    await expect(
+      sessionRepository.claimExpiredForDeletion(new Date("2026-01-03T00:30:00.000Z")),
+    ).resolves.toBeNull();
     const retried = await sessionRepository.claimExpiredForDeletion(
       new Date("2026-01-03T02:00:00.000Z"),
     );
     expect(retried).toMatchObject({ eveSessionId: "wrun_expired", id: current.id });
     await sessionRepository.completeDeletion(retried!.id, retried!.leaseToken);
-    await expect(database().query(
-      "SELECT id FROM conversation_sessions WHERE id = $1",
-      [current.id],
-    )).resolves.toMatchObject({ rowCount: 0 });
+    await expect(
+      database().query("SELECT id FROM conversation_sessions WHERE id = $1", [current.id]),
+    ).resolves.toMatchObject({ rowCount: 0 });
   });
 
   it("clears active and retired group cursors when a Telegram trust zone is recreated", async () => {

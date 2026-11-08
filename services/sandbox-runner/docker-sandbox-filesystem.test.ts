@@ -27,7 +27,10 @@ const runtime = {
   workspaceVolume: "osinara_workspace-data",
 };
 
-interface ExecCall { cmd: string[]; stdin: Buffer }
+interface ExecCall {
+  cmd: string[];
+  stdin: Buffer;
+}
 type Reply = { exitCode: number; stdout?: Buffer };
 
 /** A running container whose processes answer `reply(cmd)` and record their stdin. */
@@ -81,32 +84,54 @@ function engineFor(container: unknown) {
   const docker = {
     getContainer: vi.fn(() => container),
     listContainers: vi.fn(async () => []),
-    modem: { demuxStream: vi.fn((stream: Duplex, stdout: NodeJS.WritableStream) => stream.on("data", (chunk) => stdout.write(chunk))) },
+    modem: {
+      demuxStream: vi.fn((stream: Duplex, stdout: NodeJS.WritableStream) =>
+        stream.on("data", (chunk) => stdout.write(chunk)),
+      ),
+    },
   } as unknown as Docker;
-  return createDockerSandboxEngine({ docker, roots: { toolsRoot: "/tools", workspaceRoot: "/workspaces" }, runtime });
+  return createDockerSandboxEngine({
+    docker,
+    roots: { toolsRoot: "/tools", workspaceRoot: "/workspaces" },
+    runtime,
+  });
 }
 
 describe("Docker sandbox filesystem bridge", () => {
   it("reads a file through the stdout of a process in the container", async () => {
-    const { calls, container } = containerAnswering(() => ({ exitCode: 0, stdout: Buffer.from("hello") }));
+    const { calls, container } = containerAnswering(() => ({
+      exitCode: 0,
+      stdout: Buffer.from("hello"),
+    }));
     const engine = engineFor(container);
 
-    await expect(engine.readFile(SANDBOX_SESSION_ID, "/tmp/home/report.md")).resolves.toEqual(new Uint8Array(Buffer.from("hello")));
+    await expect(engine.readFile(SANDBOX_SESSION_ID, "/tmp/home/report.md")).resolves.toEqual(
+      new Uint8Array(Buffer.from("hello")),
+    );
     expect(calls[0]!.cmd.slice(-2)).toEqual(["osinara-read", "/tmp/home/report.md"]);
     expect(container.getArchive).not.toHaveBeenCalled();
   });
 
   it("reads a missing file as null", async () => {
     const { container } = containerAnswering(() => ({ exitCode: 44 }));
-    await expect(engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/none")).resolves.toBeNull();
+    await expect(
+      engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/none"),
+    ).resolves.toBeNull();
   });
 
   it("writes a file on the stdin of a process that renames it into place", async () => {
     const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
-    await engineFor(container).writeFile(SANDBOX_SESSION_ID, "/tmp/home/.agents/skills/a/SKILL.md", Buffer.from("skill"));
+    await engineFor(container).writeFile(
+      SANDBOX_SESSION_ID,
+      "/tmp/home/.agents/skills/a/SKILL.md",
+      Buffer.from("skill"),
+    );
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.cmd.slice(-2)).toEqual(["osinara-write", "/tmp/home/.agents/skills/a/SKILL.md"]);
+    expect(calls[0]!.cmd.slice(-2)).toEqual([
+      "osinara-write",
+      "/tmp/home/.agents/skills/a/SKILL.md",
+    ]);
     expect(calls[0]!.cmd.join(" ")).toContain("mv -T");
     expect(calls[0]!.stdin.toString()).toBe("skill");
     expect(container.putArchive).not.toHaveBeenCalled();
@@ -114,8 +139,13 @@ describe("Docker sandbox filesystem bridge", () => {
 
   it("fails a write onto a directory with the commit code", async () => {
     const { container } = containerAnswering(() => ({ exitCode: 1 }));
-    await expect(engineFor(container).writeFile(SANDBOX_SESSION_ID, "/workspace/personal/dir", Buffer.from("x")))
-      .rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED");
+    await expect(
+      engineFor(container).writeFile(
+        SANDBOX_SESSION_ID,
+        "/workspace/personal/dir",
+        Buffer.from("x"),
+      ),
+    ).rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED");
   });
 
   it("writes an unchanged skill package once per container run, again after a restart", async () => {
@@ -139,15 +169,25 @@ describe("Docker sandbox filesystem bridge", () => {
 
   it("refuses a file above the workspace limit before starting a process", async () => {
     const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
-    await expect(engineFor(container).writeFile(SANDBOX_SESSION_ID, "/workspace/personal/big.bin", Buffer.alloc(50 * 1024 * 1024 + 1)))
-      .rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE");
+    await expect(
+      engineFor(container).writeFile(
+        SANDBOX_SESSION_ID,
+        "/workspace/personal/big.bin",
+        Buffer.alloc(50 * 1024 * 1024 + 1),
+      ),
+    ).rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE");
     expect(calls).toHaveLength(0);
   });
 
   it("finishes a read whose stream closes without ending", async () => {
     const { container } = containerAnswering(() => ({ exitCode: 0 }));
     container.exec.mockImplementationOnce(async () => {
-      const stream = new Duplex({ read() {}, write(_chunk, _encoding, done) { done(); } });
+      const stream = new Duplex({
+        read() {},
+        write(_chunk, _encoding, done) {
+          done();
+        },
+      });
       return {
         inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
         start: vi.fn(async () => {
@@ -156,14 +196,24 @@ describe("Docker sandbox filesystem bridge", () => {
         }),
       };
     });
-    await expect(engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/a.txt")).resolves.toEqual(new Uint8Array());
+    await expect(
+      engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/a.txt"),
+    ).resolves.toEqual(new Uint8Array());
   });
 
   it("writes an identical workspace file again, because nothing else restores it", async () => {
     const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
     const engine = engineFor(container);
-    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/personal/report.md", Buffer.from("same"));
-    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/personal/report.md", Buffer.from("same"));
+    await engine.writeFile(
+      SANDBOX_SESSION_ID,
+      "/workspace/personal/report.md",
+      Buffer.from("same"),
+    );
+    await engine.writeFile(
+      SANDBOX_SESSION_ID,
+      "/workspace/personal/report.md",
+      Buffer.from("same"),
+    );
     expect(calls).toHaveLength(2);
   });
 });

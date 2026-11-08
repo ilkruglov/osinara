@@ -19,13 +19,59 @@ const SKIPPED_ELEMENTS = new Set(["noscript", "script", "style", "template"]);
 // SVG carries no text for the model and is often the largest part of a page's markup.
 export const MARKDOWN_SKIPPED_ELEMENTS = new Set([...SKIPPED_ELEMENTS, "svg"]);
 const LINE_BREAK_CLOSERS = new Set([
-  "article", "aside", "blockquote", "details", "div", "figcaption", "figure", "footer", "h1", "h2",
-  "h3", "h4", "h5", "h6", "header", "li", "main", "nav", "p", "pre", "section", "summary", "tr",
+  "article",
+  "aside",
+  "blockquote",
+  "details",
+  "div",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "li",
+  "main",
+  "nav",
+  "p",
+  "pre",
+  "section",
+  "summary",
+  "tr",
 ]);
 // Inline elements join their text to the neighbours; any other tag separates words.
 export const INLINE_ELEMENTS = new Set([
-  "a", "abbr", "b", "bdi", "bdo", "cite", "code", "data", "del", "dfn", "em", "font", "i", "ins",
-  "kbd", "mark", "q", "s", "samp", "small", "span", "strong", "sub", "sup", "time", "u", "var",
+  "a",
+  "abbr",
+  "b",
+  "bdi",
+  "bdo",
+  "cite",
+  "code",
+  "data",
+  "del",
+  "dfn",
+  "em",
+  "font",
+  "i",
+  "ins",
+  "kbd",
+  "mark",
+  "q",
+  "s",
+  "samp",
+  "small",
+  "span",
+  "strong",
+  "sub",
+  "sup",
+  "time",
+  "u",
+  "var",
 ]);
 // `/>` closes an element only in SVG and MathML; `<div/>` or `<script/>` open one, as in a browser.
 const FOREIGN_ELEMENTS = new Set(["math", "svg"]);
@@ -38,8 +84,15 @@ function isNameStart(code        )          {
 // A tag name ends at whitespace, `/` or `>`; anything else belongs to it (`<script-widget>` and
 // `<script@x>` are not scripts).
 function isNameDelimiter(code        )          {
-  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ||
-    code === 0x2f || code === 0x3e;
+  return (
+    code === 0x20 ||
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0c ||
+    code === 0x0d ||
+    code === 0x2f ||
+    code === 0x3e
+  );
 }
 
 const TEXT_ONLY_ELEMENTS = new Set(["textarea", "title"]);
@@ -63,7 +116,8 @@ function forwardFinder(html        , pattern        )                           
   let cacheFrom = -1;
   let cacheAt = -1;
   return (from) => {
-    if (cacheFrom !== -1 && from >= cacheFrom && (cacheAt === -1 || cacheAt >= from)) return cacheAt;
+    if (cacheFrom !== -1 && from >= cacheFrom && (cacheAt === -1 || cacheAt >= from))
+      return cacheAt;
     cacheFrom = from;
     cacheAt = html.indexOf(pattern, from);
     return cacheAt;
@@ -75,7 +129,11 @@ function forwardFinder(html        , pattern        )                           
  * the page ends first. An end tag may carry spaces, `/` or attributes (`</script foo>`), as in a
  * browser.
  */
-function elementEnd(html        , name        , from        )                                               {
+function elementEnd(
+  html        ,
+  name        ,
+  from        ,
+)                                               {
   const endTag = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "giu");
   endTag.lastIndex = from;
   const found = endTag.exec(html);
@@ -101,7 +159,7 @@ export function* tokens(html        , skipped                     )             
     const open = html.indexOf("<", search);
     if (open === -1) break;
     const next = html.charCodeAt(open + 1);
-    const closing = next === 0x2f /* / */;
+    const closing = next === 0x2f; /* / */
     const nameStart = open + (closing ? 2 : 1);
     if (next !== 0x21 && next !== 0x3f && !isNameStart(html.charCodeAt(nameStart))) {
       // `<` not followed by a tag name, `!` or `?` is text in HTML.
@@ -113,7 +171,11 @@ export function* tokens(html        , skipped                     )             
       if (html.startsWith("<!--", open)) {
         // `<!-->` and `<!--->` are empty comments, `--!>` ends one too; an unterminated comment
         // hides the rest of the page, as in a browser.
-        let after = html.startsWith("<!-->", open) ? open + 5 : html.startsWith("<!--->", open) ? open + 6 : -1;
+        let after = html.startsWith("<!-->", open)
+          ? open + 5
+          : html.startsWith("<!--->", open)
+            ? open + 6
+            : -1;
         if (after === -1) {
           const plain = plainCommentEnd(open + 4);
           const bang = bangCommentEnd(open + 4);
@@ -126,7 +188,11 @@ export function* tokens(html        , skipped                     )             
       }
       if (html.startsWith("<![CDATA[", open)) {
         const end = html.indexOf("]]>", open + 9);
-        yield { cdata: true, kind: "text", text: html.slice(open + 9, end === -1 ? html.length : end) };
+        yield {
+          cdata: true,
+          kind: "text",
+          text: html.slice(open + 9, end === -1 ? html.length : end),
+        };
         if (end === -1) return;
         search = textStart = end + 3;
         continue;
@@ -163,7 +229,13 @@ export function* tokens(html        , skipped                     )             
       const found = elementEnd(html, name, search);
       yield { kind: "text", text: html.slice(search, found?.contentEnd ?? html.length) };
       if (!found) return;
-      yield { closing: true, kind: "tag", name, raw: html.slice(found.contentEnd, found.after), selfClosing: false };
+      yield {
+        closing: true,
+        kind: "tag",
+        name,
+        raw: html.slice(found.contentEnd, found.after),
+        selfClosing: false,
+      };
       search = textStart = found.after;
     }
   }
@@ -186,7 +258,7 @@ function tagEnd(html        , from        )         {
     if (code === 0x3e /* > */) return index;
     const space = code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d;
     if (state === "beforeValue" && (code === 0x22 || code === 0x27)) {
-      const close = html.indexOf(code === 0x22 ? "\"" : "'", index + 1);
+      const close = html.indexOf(code === 0x22 ? '"' : "'", index + 1);
       if (close === -1) return -1;
       index = close + 1;
       state = "beforeName";
@@ -220,7 +292,9 @@ export function decodeHtmlEntities(value        )         {
   return value.replace(ENTITY, (entity, decimal, hex, named) => {
     if (decimal !== undefined || hex !== undefined) {
       const codePoint = decimal !== undefined ? Number(decimal) : Number.parseInt(hex, 16);
-      return codePoint > 0 && codePoint <= MAX_CODE_POINT ? String.fromCodePoint(codePoint) : entity;
+      return codePoint > 0 && codePoint <= MAX_CODE_POINT
+        ? String.fromCodePoint(codePoint)
+        : entity;
     }
     return HTML_NAMED_ENTITIES.get(named) ?? entity;
   });
@@ -231,7 +305,8 @@ export function htmlToText(html        )         {
   for (const token of tokens(html, SKIPPED_ELEMENTS)) {
     if (token.kind === "text") parts.push(token.text);
     else if (token.kind === "skip") parts.push(" ");
-    else if (token.name === "br" || (token.closing && LINE_BREAK_CLOSERS.has(token.name))) parts.push("\n");
+    else if (token.name === "br" || (token.closing && LINE_BREAK_CLOSERS.has(token.name)))
+      parts.push("\n");
     else if (!INLINE_ELEMENTS.has(token.name)) parts.push(" ");
   }
   return decodeHtmlEntities(parts.join(""))

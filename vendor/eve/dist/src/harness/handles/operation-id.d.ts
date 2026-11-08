@@ -9,7 +9,7 @@
  * dispatch steps.
  */
 export declare function deriveAgentOperationId(input: {
-    readonly callId: string;
-    readonly parentSessionId: string;
-    readonly parentTurnId: string;
+  readonly callId: string;
+  readonly parentSessionId: string;
+  readonly parentTurnId: string;
 }): string;

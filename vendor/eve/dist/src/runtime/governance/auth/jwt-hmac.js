@@ -6,16 +6,12 @@ import {
 } from "#runtime/governance/auth/token-claims.js";
 async function authenticateJwtHmacStrategy(e) {
   try {
-    let t = await jwtVerify(
-      e.token,
-      createSecretKey(Buffer.from(e.strategy.secret, `utf8`)),
-      {
-        algorithms: [e.strategy.algorithm],
-        audience: [...e.strategy.audiences],
-        clockTolerance: e.strategy.clockSkewSeconds,
-        issuer: e.strategy.issuer,
-      },
-    );
+    let t = await jwtVerify(e.token, createSecretKey(Buffer.from(e.strategy.secret, `utf8`)), {
+      algorithms: [e.strategy.algorithm],
+      audience: [...e.strategy.audiences],
+      clockTolerance: e.strategy.clockSkewSeconds,
+      issuer: e.strategy.issuer,
+    });
     return typeof t.payload.sub != `string` || t.payload.sub.length === 0
       ? { kind: `not-authenticated` }
       : areTokenClaimMatchersSatisfied(t.payload, e.strategy)

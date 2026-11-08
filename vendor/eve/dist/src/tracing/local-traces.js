@@ -11,9 +11,7 @@ function createLocalTracesProcessor(r = {}) {
   let i = r.appRoot ?? process.env.EVE_DEV_WORKER_APP_ROOT;
   if (i === void 0) return inertLocalTracesProcessor();
   let a = resolveLocalTraceRetentionSettings(),
-    o = new AgentTraceSpanProcessor(
-      a.enabled ? [new LocalTraceSpanProcessor(i)] : [],
-    ),
+    o = new AgentTraceSpanProcessor(a.enabled ? [new LocalTraceSpanProcessor(i)] : []),
     requestPrune = () => {
       a.enabled &&
         requestLocalTraceStorePrune({
@@ -31,10 +29,7 @@ function createLocalTracesProcessor(r = {}) {
       onEnd: (e) => o.onEnd(e),
       onStart: (e, t) => o.onStart(e, t),
       async releaseSession(e) {
-        return (
-          await o.forceFlush(),
-          o.releaseSession(e) ? (requestPrune(), !0) : !1
-        );
+        return (await o.forceFlush(), o.releaseSession(e) ? (requestPrune(), !0) : !1);
       },
       shutdown: () => o.shutdown(),
     }
@@ -57,8 +52,4 @@ function inertLocalTracesProcessor() {
     shutdown: async () => void 0,
   };
 }
-export {
-  createLocalTracesProcessor,
-  hasSessionRelease,
-  resolveLocalTracesContent,
-};
+export { createLocalTracesProcessor, hasSessionRelease, resolveLocalTracesContent };

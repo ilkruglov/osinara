@@ -1,5 +1,9 @@
 /** Installed into the pinned Postgres World. Page reads are demand-driven, not whole-history loads. */
-                                                                           
+                              
+             
+                   
+               
+ 
                         
                                                                              
                                                      
@@ -10,49 +14,87 @@
 // seconds (10 000 families, 8 replicas) 19 197 of 20 841 slow stream reads still returned nothing.
 const STREAM_IDLE_POLL_MS = 30_000;
 
-export function createPagedStream(source              , startIndex = 0)                             {
-  if (!Number.isSafeInteger(startIndex)) throw new Error("AGENT_WORKFLOW_STREAM_INDEX_INVALID: Stream index must be a safe integer");
-  let finished = false, initialized = false, revision = 0, skip = 0;
+export function createPagedStream(
+  source              ,
+  startIndex = 0,
+)                             {
+  if (!Number.isSafeInteger(startIndex))
+    throw new Error("AGENT_WORKFLOW_STREAM_INDEX_INVALID: Stream index must be a safe integer");
+  let finished = false,
+    initialized = false,
+    revision = 0,
+    skip = 0;
   let after                = null;
-  let page                = [], offset = 0;
+  let page                = [],
+    offset = 0;
   let releaseWait                          ;
-  const unsubscribe = source.subscribe(() => { revision++; releaseWait?.(); });
+  const unsubscribe = source.subscribe(() => {
+    revision++;
+    releaseWait?.();
+  });
   const cleanup = () => {
     if (finished) return;
-    finished = true; unsubscribe(); releaseWait?.(); page = [];
+    finished = true;
+    unsubscribe();
+    releaseWait?.();
+    page = [];
   };
-  return new ReadableStream            ({
-    async pull(controller) {
-      try {
-        if (!initialized) {
-          const cursor = await source.initialize(startIndex);
-          if (finished) return;
-          after = cursor.after; skip = cursor.skip; initialized = true;
-        }
-        while (!finished) {
-          if (offset < page.length) {
-            const chunk = page[offset++] ; after = chunk.id;
-            if (chunk.eof) { cleanup(); controller.close(); return; }
-            if (skip > 0) { skip--; continue; }
-            // Native abort readers are byte streams and transfer the backing ArrayBuffer.
-            // pg's pooled Buffer is not transferable; keep the upstream copy-on-read contract.
-            if (chunk.data.byteLength > 0) { controller.enqueue(new Uint8Array(chunk.data)); return; }
-            continue;
+  return new ReadableStream            (
+    {
+      async pull(controller) {
+        try {
+          if (!initialized) {
+            const cursor = await source.initialize(startIndex);
+            if (finished) return;
+            after = cursor.after;
+            skip = cursor.skip;
+            initialized = true;
           }
-          const before = revision;
-          const next = await source.page(after);
-          if (finished) return;
-          page = next; offset = 0;
-          if (page.length > 0 || revision !== before) continue;
-          // NOTIFY is a wake-up hint, not the source of truth. Poll also covers lost notifications.
-          await new Promise      ((resolve) => {
-            const timer = setTimeout(wake, STREAM_IDLE_POLL_MS);
-            function wake() { clearTimeout(timer); releaseWait = undefined; resolve(); }
-            releaseWait = wake;
-          });
+          while (!finished) {
+            if (offset < page.length) {
+              const chunk = page[offset++] ;
+              after = chunk.id;
+              if (chunk.eof) {
+                cleanup();
+                controller.close();
+                return;
+              }
+              if (skip > 0) {
+                skip--;
+                continue;
+              }
+              // Native abort readers are byte streams and transfer the backing ArrayBuffer.
+              // pg's pooled Buffer is not transferable; keep the upstream copy-on-read contract.
+              if (chunk.data.byteLength > 0) {
+                controller.enqueue(new Uint8Array(chunk.data));
+                return;
+              }
+              continue;
+            }
+            const before = revision;
+            const next = await source.page(after);
+            if (finished) return;
+            page = next;
+            offset = 0;
+            if (page.length > 0 || revision !== before) continue;
+            // NOTIFY is a wake-up hint, not the source of truth. Poll also covers lost notifications.
+            await new Promise      ((resolve) => {
+              const timer = setTimeout(wake, STREAM_IDLE_POLL_MS);
+              function wake() {
+                clearTimeout(timer);
+                releaseWait = undefined;
+                resolve();
+              }
+              releaseWait = wake;
+            });
+          }
+        } catch (error) {
+          cleanup();
+          controller.error(error);
         }
-      } catch (error) { cleanup(); controller.error(error); }
+      },
+      cancel: cleanup,
     },
-    cancel: cleanup,
-  }, { highWaterMark: 0 });
+    { highWaterMark: 0 },
+  );
 }

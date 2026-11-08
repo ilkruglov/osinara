@@ -11,15 +11,13 @@ function createMockAuthoredToolInput(e, t, n) {
   if (i.includes(`command`)) return { command: resolveShellCommand(t) };
   if (
     i.includes(`topic`) ||
-    (!hasDeclaredInputProperties(e.inputSchema) &&
-      /\btopic\b/u.test(normalizeText(t)))
+    (!hasDeclaredInputProperties(e.inputSchema) && /\btopic\b/u.test(normalizeText(t)))
   )
     return { topic: resolveLookupTopic(t) };
   let a = extractAnchoredInputs(i, t);
   if (Object.keys(a).length > 0) return a;
   if (i.length === 1 && i[0] === `message`) return { message: t };
-  if (i.includes(`city`) || !hasDeclaredInputProperties(e.inputSchema))
-    return { city: n };
+  if (i.includes(`city`) || !hasDeclaredInputProperties(e.inputSchema)) return { city: n };
   let o = createJsonSchemaSample(e.inputSchema);
   return isRecord(o) ? o : {};
 }
@@ -39,9 +37,7 @@ function escapeRegExp(e) {
   return e.replace(/[$()*+.?[\\\]^{|}]/gu, String.raw`\$&`);
 }
 function resolveMockFixtureToken(e) {
-  let n = e
-      .filter((e) => e.role === `system`)
-      .map((e) => getPromptContentText(e.content)).join(`
+  let n = e.filter((e) => e.role === `system`).map((e) => getPromptContentText(e.content)).join(`
 `),
     r = [...getLoadedSkillResultTexts(e), n, getTrailingUserText(e)];
   for (let e of r) {
@@ -55,8 +51,7 @@ function resolveWeatherCity(e) {
   return t?.[1]
     ? t[1].trim()
     : (/\b(?:in|for)\s+([A-Za-z][A-Za-z\s.-]*?)(?:[?.!,]|$)/u.exec(e) ??
-        /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/u.exec(e))?.[1]?.trim() ||
-        `Brooklyn`;
+        /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/u.exec(e))?.[1]?.trim() || `Brooklyn`;
 }
 function formatToolOutput(e) {
   if (typeof e == `string`) return e;
@@ -106,9 +101,7 @@ function resolveExactFixtureReply(e) {
         );
     if (r?.[1]) return cleanExactValue(r[1]);
     if (
-      /\breply\s+with\s+exactly\s+the\s+following\s+text\s+and\s+nothing\s+else:\s*$/iu.test(
-        t,
-      ) ||
+      /\breply\s+with\s+exactly\s+the\s+following\s+text\s+and\s+nothing\s+else:\s*$/iu.test(t) ||
       /\breply\s+with\s+exactly:\s*$/iu.test(t)
     ) {
       let t = n
@@ -125,17 +118,13 @@ function resolveExactFixtureReply(e) {
 }
 function matchExactValue(e, t) {
   let n = e.exec(t);
-  return n === null
-    ? null
-    : cleanExactValue(n[2] ?? n[3] ?? n[4] ?? n[5] ?? n[1] ?? ``);
+  return n === null ? null : cleanExactValue(n[2] ?? n[3] ?? n[4] ?? n[5] ?? n[1] ?? ``);
 }
 function cleanExactValue(e) {
   return e.trim();
 }
 function getToolInputPropertyNames(e) {
-  return !isRecord(e) || !isRecord(e.properties)
-    ? []
-    : Object.keys(e.properties);
+  return !isRecord(e) || !isRecord(e.properties) ? [] : Object.keys(e.properties);
 }
 function hasDeclaredInputProperties(e) {
   return isRecord(e) && isRecord(e.properties);
@@ -148,16 +137,16 @@ function createAskQuestionInput(e) {
     n = { prompt: resolveQuestionPrompt(e) };
   return (
     t.length > 0 && (n.options = t),
-    /\ballow\s*freeform\s+(?:to\s+)?true\b|\ballowfreeform\s+(?:to\s+)?true\b/iu.test(
-      e,
-    ) && (n.allowFreeform = !0),
+    /\ballow\s*freeform\s+(?:to\s+)?true\b|\ballowfreeform\s+(?:to\s+)?true\b/iu.test(e) &&
+      (n.allowFreeform = !0),
     n
   );
 }
 function parseInputOptions(e) {
-  return [
-    ...e.matchAll(/\bid\b\s*:?\s*"([^"]+)"\s*,\s*label\b\s*:?\s*"([^"]+)"/giu),
-  ].map((e) => ({ id: e[1] ?? ``, label: e[2] ?? `` }));
+  return [...e.matchAll(/\bid\b\s*:?\s*"([^"]+)"\s*,\s*label\b\s*:?\s*"([^"]+)"/giu)].map((e) => ({
+    id: e[1] ?? ``,
+    label: e[2] ?? ``,
+  }));
 }
 function resolveQuestionPrompt(e) {
   let t =

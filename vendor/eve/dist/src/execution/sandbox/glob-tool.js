@@ -4,18 +4,13 @@ import { shellQuote } from "#execution/sandbox/shell-quote.js";
 import { resolveAbsoluteFilePath } from "#execution/sandbox/require-sandbox.js";
 import { ripgrepIsAvailable } from "#execution/sandbox/ripgrep-probe.js";
 async function executeGlobOnSandbox(n, a) {
-  let o = normalizeModelPath(
-      await resolveAbsoluteFilePath(n, a.path ?? `/workspace`),
-    ),
+  let o = normalizeModelPath(await resolveAbsoluteFilePath(n, a.path ?? `/workspace`)),
     s = Math.min(Math.max(1, a.limit ?? 100), 1e3),
     c = (await ripgrepIsAvailable(n))
       ? buildRipgrepCommand({ normalizedPath: o, pattern: a.pattern })
       : buildPosixFindCommand({ normalizedPath: o, pattern: a.pattern }),
     l = await n.run({ command: c });
-  if (
-    (l.exitCode !== 0 && l.exitCode !== 1) ||
-    (l.exitCode === 1 && l.stderr.trim().length > 0)
-  )
+  if ((l.exitCode !== 0 && l.exitCode !== 1) || (l.exitCode === 1 && l.stderr.trim().length > 0))
     throw buildGlobExecutionError(c, l.exitCode, l.stderr);
   let u = l.stdout
       .split(
@@ -37,8 +32,7 @@ async function executeGlobOnSandbox(n, a) {
     }
     (p.push(r), (m += i));
   }
-  if (p.length === 0)
-    return { content: `No files found`, count: 0, path: o, truncated: !1 };
+  if (p.length === 0) return { content: `No files found`, count: 0, path: o, truncated: !1 };
   let g = d || h,
     _ = [...p];
   return (
@@ -66,19 +60,12 @@ function buildRipgrepCommand(e) {
 }
 function buildPosixFindCommand(e) {
   let t = translateGlobToFindPattern(e.pattern),
-    r = t.includes(`/`)
-      ? `-path ${shellQuote(`*/${t}`)}`
-      : `-name ${shellQuote(t)}`;
-  return [
-    `find ${shellQuote(e.normalizedPath)}`,
-    `-type f`,
-    `-not -path '*/.git/*'`,
-    r,
-  ].join(` `);
+    r = t.includes(`/`) ? `-path ${shellQuote(`*/${t}`)}` : `-name ${shellQuote(t)}`;
+  return [`find ${shellQuote(e.normalizedPath)}`, `-type f`, `-not -path '*/.git/*'`, r].join(` `);
 }
 function translateGlobToFindPattern(e) {
   let t = e.replaceAll(`**`, `*`);
-  for (; t.startsWith(`*/`); ) t = t.slice(2);
+  for (; t.startsWith(`*/`);) t = t.slice(2);
   return t;
 }
 function buildGlobExecutionError(e, t, n) {

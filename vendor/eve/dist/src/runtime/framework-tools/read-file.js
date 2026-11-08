@@ -4,9 +4,7 @@ import { executeReadFileOnSandbox } from "#execution/sandbox/read-file-tool.js";
 const READ_FILE_INPUT_SCHEMA = z.strictObject({
     filePath: z
       .string()
-      .describe(
-        `The absolute path to the file to read. A leading $HOME is supported.`,
-      ),
+      .describe(`The absolute path to the file to read. A leading $HOME is supported.`),
     limit: z
       .number()
       .int()
@@ -28,10 +26,7 @@ const READ_FILE_INPUT_SCHEMA = z.strictObject({
     truncated: z.boolean(),
   });
 async function executeReadFile(e, t) {
-  return executeReadFileOnSandbox(
-    await requireSandboxSession(t?.abortSignal),
-    e,
-  );
+  return executeReadFileOnSandbox(await requireSandboxSession(t?.abortSignal), e);
 }
 const READ_FILE_TOOL_DEFINITION = {
   description: [
@@ -56,8 +51,4 @@ const READ_FILE_TOOL_DEFINITION = {
   sourceId: `eve:read-file-tool`,
   sourceKind: `module`,
 };
-export {
-  READ_FILE_INPUT_SCHEMA,
-  READ_FILE_OUTPUT_SCHEMA,
-  READ_FILE_TOOL_DEFINITION,
-};
+export { READ_FILE_INPUT_SCHEMA, READ_FILE_OUTPUT_SCHEMA, READ_FILE_TOOL_DEFINITION };

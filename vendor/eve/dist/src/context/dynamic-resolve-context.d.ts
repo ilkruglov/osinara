@@ -8,5 +8,8 @@ type ReadableContext = Pick<AlsContext, "get">;
  * Shared by all three dynamic lifecycle dispatchers (tools, skills,
  * instructions) so resolver handlers receive a consistent context shape.
  */
-export declare function buildResolveContext(ctx: ReadableContext, messages: readonly ModelMessage[]): DynamicResolveContext;
+export declare function buildResolveContext(
+  ctx: ReadableContext,
+  messages: readonly ModelMessage[],
+): DynamicResolveContext;
 export {};

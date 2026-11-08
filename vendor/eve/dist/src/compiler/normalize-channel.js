@@ -10,8 +10,7 @@ async function compileChannelDefinition(n, r, i = {}) {
       source: r,
     }),
     o = stripLogicalPathExtension(r.logicalPath).replace(/^channels\//, ``);
-  if (isDisabledRouteSentinel(a))
-    return { kind: `disabled`, name: o, logicalPath: r.logicalPath };
+  if (isDisabledRouteSentinel(a)) return { kind: `disabled`, name: o, logicalPath: r.logicalPath };
   let s = normalizeChannelDefinition(
     a,
     `Expected the channel export "${r.exportName ?? `default`}" from "${r.logicalPath}" to match the public eve shape.`,

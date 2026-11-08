@@ -17,14 +17,15 @@ import { createConfiguredLanguageModel } from "./model-transport.js";
 const SIGNATURE = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
 function sse(events: readonly { readonly data: unknown; readonly event: string }[]): Response {
-  return new Response(events.map(({ data, event }) => [
-    `event: ${event}`,
-    `data: ${JSON.stringify(data)}`,
-    "",
-  ].join("\n")).join("\n"), {
-    headers: { "content-type": "text/event-stream" },
-    status: 200,
-  });
+  return new Response(
+    events
+      .map(({ data, event }) => [`event: ${event}`, `data: ${JSON.stringify(data)}`, ""].join("\n"))
+      .join("\n"),
+    {
+      headers: { "content-type": "text/event-stream" },
+      status: 200,
+    },
+  );
 }
 
 function jsonResponse(body: unknown): Response {
@@ -55,7 +56,11 @@ function messageStart(id: string) {
 
 const thinkingEvents = [
   {
-    data: { content_block: { thinking: "", type: "thinking" }, index: 0, type: "content_block_start" },
+    data: {
+      content_block: { thinking: "", type: "thinking" },
+      index: 0,
+      type: "content_block_start",
+    },
     event: "content_block_start",
   },
   {
@@ -96,9 +101,11 @@ describe("createConfiguredLanguageModel", () => {
       },
     });
 
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).rejects.toThrow("AGENT_MODEL_API_KEY_INVALID");
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).rejects.toThrow("AGENT_MODEL_API_KEY_INVALID");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -116,13 +123,15 @@ describe("createConfiguredLanguageModel", () => {
           id: "resp_1",
           model: "deepseek-v4-flash",
           object: "response",
-          output: [{
-            content: [{ annotations: [], text: "Готово", type: "output_text" }],
-            id: "msg_1",
-            role: "assistant",
-            status: "completed",
-            type: "message",
-          }],
+          output: [
+            {
+              content: [{ annotations: [], text: "Готово", type: "output_text" }],
+              id: "msg_1",
+              role: "assistant",
+              status: "completed",
+              type: "message",
+            },
+          ],
           status: "completed",
           usage: {
             input_tokens: 20,
@@ -142,9 +151,11 @@ describe("createConfiguredLanguageModel", () => {
       },
     });
 
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).resolves.toMatchObject({
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).resolves.toMatchObject({
       content: [{ text: "Готово", type: "text" }],
     });
     expect(model.provider).toBe("openai.responses");
@@ -164,18 +175,35 @@ describe("createConfiguredLanguageModel", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
-      fetch: async () => new Response(JSON.stringify({ error: { message: "Invalid schema for function 'browser_task': schema must be a JSON Schema of 'type: \"object\"', got 'type: null'.", type: "invalid_request_error" } }), {
-        headers: { "content-type": "application/json" },
-        status: 400,
-      }),
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              message:
+                "Invalid schema for function 'browser_task': schema must be a JSON Schema of 'type: \"object\"', got 'type: null'.",
+              type: "invalid_request_error",
+            },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 400,
+          },
+        ),
       maxOutputTokens: 1_000,
       modelId: "deepseek-flash",
-      transport: { baseUrl: "https://api.deepseek.com", protocol: "deepseek-responses", reasoning: { effort: "low" } },
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "deepseek-responses",
+        reasoning: { effort: "low" },
+      },
     });
 
     // 25 сентября 2026: three hours of «отклонил формат запроса» hid a rejected tool schema.
-    await expect(model.doGenerate({ prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }] } as LanguageModelV4CallOptions))
-      .rejects.toMatchObject({ code: "AGENT_MODEL_REQUEST_INVALID" });
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).rejects.toMatchObject({ code: "AGENT_MODEL_REQUEST_INVALID" });
     expect(error).toHaveBeenCalledWith(expect.stringContaining("schema must be a JSON Schema"));
     error.mockRestore();
   });
@@ -189,16 +217,41 @@ describe("createConfiguredLanguageModel", () => {
         const body = JSON.parse(String(init?.body)) as { model: string };
         bodies.push(body.model);
         if (body.model === "deepseek-v4.1-flash-expires-on-0910") {
-          return new Response(JSON.stringify({ error: { message: "The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed deepseek-v4.1-flash-expires-on-0910.", type: "invalid_request_error" } }), {
-            headers: { "content-type": "application/json" },
-            status: 400,
-          });
+          return new Response(
+            JSON.stringify({
+              error: {
+                message:
+                  "The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed deepseek-v4.1-flash-expires-on-0910.",
+                type: "invalid_request_error",
+              },
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 400,
+            },
+          );
         }
         return jsonResponse({
-          id: "resp_2", model: body.model, object: "response",
-          output: [{ content: [{ annotations: [], text: "Готово", type: "output_text" }], id: "msg_2", role: "assistant", status: "completed", type: "message" }],
+          id: "resp_2",
+          model: body.model,
+          object: "response",
+          output: [
+            {
+              content: [{ annotations: [], text: "Готово", type: "output_text" }],
+              id: "msg_2",
+              role: "assistant",
+              status: "completed",
+              type: "message",
+            },
+          ],
           status: "completed",
-          usage: { input_tokens: 20, input_tokens_details: { cached_tokens: 0 }, output_tokens: 5, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 25 },
+          usage: {
+            input_tokens: 20,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens: 5,
+            output_tokens_details: { reasoning_tokens: 0 },
+            total_tokens: 25,
+          },
         });
       },
       maxOutputTokens: 1_000,
@@ -212,9 +265,11 @@ describe("createConfiguredLanguageModel", () => {
     });
 
     // A preview alias expires on a date; the turn must survive on the stable model, not fail.
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).resolves.toMatchObject({ content: [{ text: "Готово", type: "text" }] });
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).resolves.toMatchObject({ content: [{ text: "Готово", type: "text" }] });
     expect(bodies).toEqual(["deepseek-v4.1-flash-expires-on-0910", "deepseek-v4-flash"]);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_MODEL_ID_RETIRED"));
     error.mockRestore();
@@ -223,10 +278,11 @@ describe("createConfiguredLanguageModel", () => {
   it("turns a documented terminal DeepSeek status into a stable application error", async () => {
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
-      fetch: async () => new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), {
-        headers: { "content-type": "application/json" },
-        status: 402,
-      }),
+      fetch: async () =>
+        new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), {
+          headers: { "content-type": "application/json" },
+          status: 402,
+        }),
       maxOutputTokens: 1_000,
       modelId: "deepseek-v4-flash",
       transport: {
@@ -236,9 +292,11 @@ describe("createConfiguredLanguageModel", () => {
       },
     });
 
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).rejects.toMatchObject({ code: "AGENT_MODEL_BALANCE_EXHAUSTED" });
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).rejects.toMatchObject({ code: "AGENT_MODEL_BALANCE_EXHAUSTED" });
   });
 
   it("sends DeepSeek thinking and reasoning effort over Chat Completions", async () => {
@@ -252,7 +310,9 @@ describe("createConfiguredLanguageModel", () => {
           url: String(input),
         };
         return jsonResponse({
-          choices: [{ finish_reason: "stop", index: 0, message: { content: "Готово", role: "assistant" } }],
+          choices: [
+            { finish_reason: "stop", index: 0, message: { content: "Готово", role: "assistant" } },
+          ],
           created: 1,
           id: "completion-1",
           model: "deepseek-v4-flash",
@@ -270,9 +330,11 @@ describe("createConfiguredLanguageModel", () => {
       },
     });
 
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).resolves.toMatchObject({
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).resolves.toMatchObject({
       content: [{ text: "Готово", type: "text" }],
     });
     expect(model.modelId).toBe("deepseek-v4-flash");
@@ -331,16 +393,17 @@ describe("createConfiguredLanguageModel", () => {
   ])("rejects incomplete Anthropic output with stop reason %s", async (stopReason, code) => {
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
-      fetch: async () => jsonResponse({
-        content: [{ text: "Неполный ответ", type: "text" }],
-        id: "msg_incomplete_001",
-        model: "compatible-model",
-        role: "assistant",
-        stop_reason: stopReason,
-        stop_sequence: null,
-        type: "message",
-        usage: { input_tokens: 1, output_tokens: 1 },
-      }),
+      fetch: async () =>
+        jsonResponse({
+          content: [{ text: "Неполный ответ", type: "text" }],
+          id: "msg_incomplete_001",
+          model: "compatible-model",
+          role: "assistant",
+          stop_reason: stopReason,
+          stop_sequence: null,
+          type: "message",
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
       maxOutputTokens: 8_000,
       modelId: "compatible-model",
       transport: {
@@ -351,34 +414,40 @@ describe("createConfiguredLanguageModel", () => {
       },
     });
 
-    await expect(model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions)).rejects.toThrow(code);
+    await expect(
+      model.doGenerate({
+        prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      } as LanguageModelV4CallOptions),
+    ).rejects.toThrow(code);
   });
 
   it("rejects a truncated streaming response before its finish event reaches Eve", async () => {
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
-      fetch: async () => new Response([
-        `data: ${JSON.stringify({
-          choices: [{ delta: { content: "Оборванный ответ" }, index: 0 }],
-          created: 1,
-          id: "completion-truncated",
-          model: "compatible-model",
-          object: "chat.completion.chunk",
-        })}\n\n`,
-        `data: ${JSON.stringify({
-          choices: [{ delta: {}, finish_reason: "length", index: 0 }],
-          created: 1,
-          id: "completion-truncated",
-          model: "compatible-model",
-          object: "chat.completion.chunk",
-        })}\n\n`,
-        "data: [DONE]\n\n",
-      ].join(""), {
-        headers: { "content-type": "text/event-stream" },
-        status: 200,
-      }),
+      fetch: async () =>
+        new Response(
+          [
+            `data: ${JSON.stringify({
+              choices: [{ delta: { content: "Оборванный ответ" }, index: 0 }],
+              created: 1,
+              id: "completion-truncated",
+              model: "compatible-model",
+              object: "chat.completion.chunk",
+            })}\n\n`,
+            `data: ${JSON.stringify({
+              choices: [{ delta: {}, finish_reason: "length", index: 0 }],
+              created: 1,
+              id: "completion-truncated",
+              model: "compatible-model",
+              object: "chat.completion.chunk",
+            })}\n\n`,
+            "data: [DONE]\n\n",
+          ].join(""),
+          {
+            headers: { "content-type": "text/event-stream" },
+            status: 200,
+          },
+        ),
       maxOutputTokens: 8_000,
       modelId: "compatible-model",
       transport: {
@@ -473,55 +542,62 @@ describe("createConfiguredLanguageModel", () => {
       url: "https://api.deepseek.com/anthropic/messages",
     });
     expect(requests[0]?.headers.get("authorization")).toBe("Bearer model-secret");
-    expect(requests[1]?.body.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        content: expect.arrayContaining([
-          expect.objectContaining({
-            signature: SIGNATURE,
-            thinking: "Нужно вызвать инструмент.",
-            type: "thinking",
-          }),
-        ]),
-        role: "assistant",
-      }),
-      expect.objectContaining({
-        content: expect.arrayContaining([
-          expect.objectContaining({ tool_use_id: "call_weather_001", type: "tool_result" }),
-        ]),
-        role: "user",
-      }),
-    ]));
+    expect(requests[1]?.body.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              signature: SIGNATURE,
+              thinking: "Нужно вызвать инструмент.",
+              type: "thinking",
+            }),
+          ]),
+          role: "assistant",
+        }),
+        expect.objectContaining({
+          content: expect.arrayContaining([
+            expect.objectContaining({ tool_use_id: "call_weather_001", type: "tool_result" }),
+          ]),
+          role: "user",
+        }),
+      ]),
+    );
   });
 
   it("streams thinking separately from the complete visible answer", async () => {
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
-      fetch: async () => sse([
-        messageStart("msg_text_002"),
-        ...thinkingEvents,
-        {
-          data: { content_block: { text: "", type: "text" }, index: 1, type: "content_block_start" },
-          event: "content_block_start",
-        },
-        {
-          data: {
-            delta: { text: "Проверила: всё работает.", type: "text_delta" },
-            index: 1,
-            type: "content_block_delta",
+      fetch: async () =>
+        sse([
+          messageStart("msg_text_002"),
+          ...thinkingEvents,
+          {
+            data: {
+              content_block: { text: "", type: "text" },
+              index: 1,
+              type: "content_block_start",
+            },
+            event: "content_block_start",
           },
-          event: "content_block_delta",
-        },
-        { data: { index: 1, type: "content_block_stop" }, event: "content_block_stop" },
-        {
-          data: {
-            delta: { stop_reason: "end_turn", stop_sequence: null },
-            type: "message_delta",
-            usage: { input_tokens: 20, output_tokens: 12 },
+          {
+            data: {
+              delta: { text: "Проверила: всё работает.", type: "text_delta" },
+              index: 1,
+              type: "content_block_delta",
+            },
+            event: "content_block_delta",
           },
-          event: "message_delta",
-        },
-        { data: { type: "message_stop" }, event: "message_stop" },
-      ]),
+          { data: { index: 1, type: "content_block_stop" }, event: "content_block_stop" },
+          {
+            data: {
+              delta: { stop_reason: "end_turn", stop_sequence: null },
+              type: "message_delta",
+              usage: { input_tokens: 20, output_tokens: 12 },
+            },
+            event: "message_delta",
+          },
+          { data: { type: "message_stop" }, event: "message_stop" },
+        ]),
       maxOutputTokens: 128_000,
       modelId: "deepseek-v4-flash",
       transport: {

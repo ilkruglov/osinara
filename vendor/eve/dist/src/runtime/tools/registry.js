@@ -1,7 +1,4 @@
-import {
-  serializeInputSchema,
-  serializeOutputSchema,
-} from "#shared/tool-schema.js";
+import { serializeInputSchema, serializeOutputSchema } from "#shared/tool-schema.js";
 import { RuntimeRegistry } from "#internal/runtime-registry.js";
 async function createRuntimeToolRegistry(e, t = {}) {
   let r = [],

@@ -1,10 +1,7 @@
 import { expectObjectRecord } from "#internal/authored-module.js";
 import { toErrorMessage } from "#shared/errors.js";
 import { lazyBackend } from "#execution/sandbox/lazy-backend.js";
-import {
-  ResolveAgentError,
-  loadResolvedModuleExport,
-} from "#runtime/resolve-helpers.js";
+import { ResolveAgentError, loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
 import { defaultSandbox } from "#public/sandbox/backends/default.js";
 async function resolveSandboxDefinition(n, a, o) {
   try {
@@ -59,10 +56,9 @@ function resolveBackend(e, t) {
       { logicalPath: t },
     );
   if (typeof i.create != `function`)
-    throw new ResolveAgentError(
-      `Sandbox "${t}" backend is missing a "create" function.`,
-      { logicalPath: t },
-    );
+    throw new ResolveAgentError(`Sandbox "${t}" backend is missing a "create" function.`, {
+      logicalPath: t,
+    });
   return i;
 }
 export { resolveSandboxDefinition };

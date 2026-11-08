@@ -70,10 +70,22 @@ describe("releaseOrphanWorkflowJobs", () => {
   });
 
   it("continues after a full page and starts over after a short one", async () => {
-    const full = client([{ id: "7", data: null }, { id: "9", data: null }], []);
-    expect(await releaseOrphanWorkflowJobs(full, { afterId: "3", limit: 2 })).toEqual({ released: 0, nextAfterId: "9" });
+    const full = client(
+      [
+        { id: "7", data: null },
+        { id: "9", data: null },
+      ],
+      [],
+    );
+    expect(await releaseOrphanWorkflowJobs(full, { afterId: "3", limit: 2 })).toEqual({
+      released: 0,
+      nextAfterId: "9",
+    });
     expect(full.query.mock.calls[0]![1]).toEqual([10, "3", 2]);
     const short = client([{ id: "12", data: null }], []);
-    expect(await releaseOrphanWorkflowJobs(short, { afterId: "9", limit: 2 })).toEqual({ released: 0, nextAfterId: "0" });
+    expect(await releaseOrphanWorkflowJobs(short, { afterId: "9", limit: 2 })).toEqual({
+      released: 0,
+      nextAfterId: "0",
+    });
   });
 });

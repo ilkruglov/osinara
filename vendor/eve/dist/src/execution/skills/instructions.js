@@ -10,9 +10,7 @@ function formatAvailableSkillsSection(e, t = {}) {
         `If activation fails, say so briefly and continue with the best available alternative.`,
         formatSkillLocationLine(t),
         "When a loaded SKILL.md mentions sibling files such as `references/foo.md`, resolve them relative to the directory containing that specific SKILL.md.",
-        ...e.map((e) =>
-          formatAvailableSkillLine({ skill: e, skillRoot: t.skillRoot }),
-        ),
+        ...e.map((e) => formatAvailableSkillLine({ skill: e, skillRoot: t.skillRoot })),
       ].join(`
 `);
 }

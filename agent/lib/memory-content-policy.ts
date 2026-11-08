@@ -11,7 +11,8 @@
 import { AppError } from "./app-error.js";
 
 const PRIVATE_KEY_PATTERN = /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/u;
-const CREDENTIAL_ASSIGNMENT_PATTERN = /(?:api[_ -]?key|access[_ -]?token|secret|password|парол[ья])\s*(?::|=|\s)\s*\S{8,}/iu;
+const CREDENTIAL_ASSIGNMENT_PATTERN =
+  /(?:api[_ -]?key|access[_ -]?token|secret|password|парол[ья])\s*(?::|=|\s)\s*\S{8,}/iu;
 const CVV_PATTERN = /(?:cvv|cvc|код\s+с\s+оборот[а-я]*)\s*[:=]?\s*\d{3,4}(?!\d)/iu;
 const ONE_TIME_CODE_PATTERN = /(?:одноразов(?:ый|ого)\s+код|otp|2fa)\s*[:=]?\s*\d{4,8}(?!\d)/iu;
 const PAYMENT_CARD_CANDIDATE_PATTERN = /(?:\d[ -]?){13,19}/gu;
@@ -20,8 +21,10 @@ const PAYMENT_CARD_CANDIDATE_PATTERN = /(?:\d[ -]?){13,19}/gu;
 // fact to keep. Such a pair counts when it is named as a place, or when both numbers are as precise as
 // a phone's fix (five decimals or more): exchange rates and model weights with four decimals are not
 // places (Codex review, 26 October 2026). Versions (24.8.0) and prices (540.50) never match.
-const COORDINATES_PATTERN = /(?<![\d.])(-?\d{1,2}\.(\d{4,}))\s*[,;\s]\s*(-?\d{1,3}\.(\d{4,}))(?![\d.])/gu;
-const PLACE_WORDS = /(?:геолокац|координат|широт|долгот|местоположен|мест[оау](?![а-яё])|адрес|точк[аеиу](?![а-яё])|\b(?:gps|lat|lng|lon|location)\b)/iu;
+const COORDINATES_PATTERN =
+  /(?<![\d.])(-?\d{1,2}\.(\d{4,}))\s*[,;\s]\s*(-?\d{1,3}\.(\d{4,}))(?![\d.])/gu;
+const PLACE_WORDS =
+  /(?:геолокац|координат|широт|долгот|местоположен|мест[оау](?![а-яё])|адрес|точк[аеиу](?![а-яё])|\b(?:gps|lat|lng|lon|location)\b)/iu;
 const PLACE_CONTEXT_CHARACTERS = 60;
 
 function hasCoordinates(content: string): boolean {
@@ -62,7 +65,10 @@ export function memoryContentRejectionCode(content: string): string | null {
 }
 
 export function memoryWriteRejectionCode(content: string): string | null {
-  return memoryContentRejectionCode(content) ?? (hasCoordinates(content) ? "AGENT_MEMORY_LOCATION_REJECTED" : null);
+  return (
+    memoryContentRejectionCode(content) ??
+    (hasCoordinates(content) ? "AGENT_MEMORY_LOCATION_REJECTED" : null)
+  );
 }
 
 export function requireAllowedMemoryContent(content: string): string {

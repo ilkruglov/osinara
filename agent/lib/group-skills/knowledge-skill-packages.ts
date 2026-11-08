@@ -30,22 +30,32 @@ function loadDefinition(name: KnowledgeSkillName): SkillDefinition {
   // e2e agent, which copies these directories next to `config`), the source tree as a fallback for
   // tools run from elsewhere. `import.meta.url` alone is wrong inside an Eve build bundle.
   const fromCwd = resolve(`agent/skills/${name}`);
-  const root = existsSync(`${fromCwd}/SKILL.md`) ? fromCwd : fileURLToPath(new URL(`../../skills/${name}/`, import.meta.url));
+  const root = existsSync(`${fromCwd}/SKILL.md`)
+    ? fromCwd
+    : fileURLToPath(new URL(`../../skills/${name}/`, import.meta.url));
   const source = readFileSync(`${root}/SKILL.md`, "utf8");
   const frontmatter = FRONTMATTER_PATTERN.exec(source);
-  const description = frontmatter === null ? undefined : DESCRIPTION_PATTERN.exec(frontmatter[1])?.[1];
+  const description =
+    frontmatter === null ? undefined : DESCRIPTION_PATTERN.exec(frontmatter[1])?.[1];
   if (frontmatter === null || !description) {
-    throw new AppError("AGENT_KNOWLEDGE_SKILL_INVALID", `Некорректный пакет навыка-аналитика: ${name}`);
+    throw new AppError(
+      "AGENT_KNOWLEDGE_SKILL_INVALID",
+      `Некорректный пакет навыка-аналитика: ${name}`,
+    );
   }
   const files: Record<string, string> = {};
   for (const entry of readdirSync(`${root}/references`)) {
-    if (entry.endsWith(".md")) files[`references/${entry}`] = readFileSync(`${root}/references/${entry}`, "utf8");
+    if (entry.endsWith(".md"))
+      files[`references/${entry}`] = readFileSync(`${root}/references/${entry}`, "utf8");
   }
   return defineSkill({ description, files, markdown: frontmatter[2].trimStart() });
 }
 
 export const KNOWLEDGE_SKILL_DEFINITIONS: Readonly<Record<KnowledgeSkillName, SkillDefinition>> =
-  Object.fromEntries(KNOWLEDGE_SKILL_NAMES.map((name) => [name, loadDefinition(name)])) as Record<KnowledgeSkillName, SkillDefinition>;
+  Object.fromEntries(KNOWLEDGE_SKILL_NAMES.map((name) => [name, loadDefinition(name)])) as Record<
+    KnowledgeSkillName,
+    SkillDefinition
+  >;
 
 export function knowledgeSkills(): Record<string, SkillDefinition> {
   return { ...KNOWLEDGE_SKILL_DEFINITIONS };

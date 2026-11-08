@@ -15,9 +15,7 @@ function formatTelegramContextBlock(e) {
     `chat_type: ${e.chatType}`,
     ...(e.chatTitle ? [`chat_title: ${e.chatTitle}`] : []),
     `message_id: ${e.messageId}`,
-    ...(e.messageThreadId === void 0
-      ? []
-      : [`message_thread_id: ${e.messageThreadId}`]),
+    ...(e.messageThreadId === void 0 ? [] : [`message_thread_id: ${e.messageThreadId}`]),
     ...(e.userId ? [`user_id: ${e.userId}`] : []),
     ...(e.username ? [`username: ${e.username}`] : []),
     ...(e.botUsername ? [`bot_username: ${e.botUsername}`] : []),
@@ -95,8 +93,7 @@ function parseTelegramUser(e) {
       firstName: typeof e.first_name == `string` ? e.first_name : void 0,
       id: n,
       isBot: e.is_bot === !0,
-      languageCode:
-        typeof e.language_code == `string` ? e.language_code : void 0,
+      languageCode: typeof e.language_code == `string` ? e.language_code : void 0,
       lastName: typeof e.last_name == `string` ? e.last_name : void 0,
       username: typeof e.username == `string` ? e.username : void 0,
     };
@@ -114,8 +111,7 @@ function parseLargestPhoto(e) {
     .filter(isObject)
     .map((e) => ({
       fileId: typeof e.file_id == `string` ? e.file_id : ``,
-      fileUniqueId:
-        typeof e.file_unique_id == `string` ? e.file_unique_id : void 0,
+      fileUniqueId: typeof e.file_unique_id == `string` ? e.file_unique_id : void 0,
       height: typeof e.height == `number` ? e.height : void 0,
       size: typeof e.file_size == `number` ? e.file_size : void 0,
       width: typeof e.width == `number` ? e.width : void 0,
@@ -141,8 +137,7 @@ function parseDocument(e) {
     : {
         fileId: e.file_id,
         fileName: typeof e.file_name == `string` ? e.file_name : void 0,
-        fileUniqueId:
-          typeof e.file_unique_id == `string` ? e.file_unique_id : void 0,
+        fileUniqueId: typeof e.file_unique_id == `string` ? e.file_unique_id : void 0,
         kind: `document`,
         mediaType: typeof e.mime_type == `string` ? e.mime_type : void 0,
         size: typeof e.file_size == `number` ? e.file_size : void 0,
@@ -152,19 +147,10 @@ function scorePhoto(e) {
   return e.size === void 0 ? (e.width ?? 0) * (e.height ?? 0) : e.size;
 }
 function parseTelegramChatType(e) {
-  return e === `channel` ||
-    e === `group` ||
-    e === `private` ||
-    e === `supergroup`
-    ? e
-    : null;
+  return e === `channel` || e === `group` || e === `private` || e === `supergroup` ? e : null;
 }
 function numberLikeToString(e) {
   if (typeof e == `string` && e.length > 0) return e;
   if (typeof e == `number` && Number.isFinite(e)) return String(e);
 }
-export {
-  formatTelegramContextBlock,
-  parseTelegramChatType,
-  parseTelegramUpdate,
-};
+export { formatTelegramContextBlock, parseTelegramChatType, parseTelegramUpdate };

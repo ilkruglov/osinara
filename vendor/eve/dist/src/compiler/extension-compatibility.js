@@ -14,9 +14,7 @@ const EXTENSION_COMPATIBILITY_MANIFEST_KIND = `eve-extension`,
     },
     dynamicTool: {
       current: 18,
-      supported: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-      ],
+      supported: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
       dropped: {},
     },
     channel: { current: 4, supported: [1, 2, 3, 4], dropped: {} },
@@ -54,14 +52,9 @@ const EXTENSION_COMPATIBILITY_MANIFEST_KIND = `eve-extension`,
     state: { current: 3, supported: [1, 2, 3], dropped: {} },
   },
   EXTENSION_CAPABILITY_VERSIONS = Object.fromEntries(
-    Object.entries(EXTENSION_CAPABILITY_CONTRACTS).map(([e, t]) => [
-      e,
-      t.current,
-    ]),
+    Object.entries(EXTENSION_CAPABILITY_CONTRACTS).map(([e, t]) => [e, t.current]),
   ),
-  EXTENSION_CAPABILITY_SUPPORT = Object.keys(
-    EXTENSION_CAPABILITY_CONTRACTS,
-  ).reduce(
+  EXTENSION_CAPABILITY_SUPPORT = Object.keys(EXTENSION_CAPABILITY_CONTRACTS).reduce(
     (e, t) => ((e[t] = EXTENSION_CAPABILITY_CONTRACTS[t].supported), e),
     {},
   ),
@@ -73,14 +66,13 @@ const EXTENSION_COMPATIBILITY_MANIFEST_KIND = `eve-extension`,
       requires: z.record(z.string(), z.number().int().positive()),
     })
     .strict(),
-  extensionCompatibilityManifestV2Schema =
-    extensionCompatibilityManifestV1Schema.extend({
-      formatVersion: z.literal(2),
-      build: z
-        .object({ externalDependencies: z.array(z.string().min(1)).readonly() })
-        .strict()
-        .optional(),
-    }),
+  extensionCompatibilityManifestV2Schema = extensionCompatibilityManifestV1Schema.extend({
+    formatVersion: z.literal(2),
+    build: z
+      .object({ externalDependencies: z.array(z.string().min(1)).readonly() })
+      .strict()
+      .optional(),
+  }),
   extensionCompatibilityManifestSchema = z.union([
     extensionCompatibilityManifestV1Schema,
     extensionCompatibilityManifestV2Schema,
@@ -114,16 +106,11 @@ async function writeExtensionCompatibilityManifest(e, n) {
     `utf8`,
   );
 }
-function findUnsupportedExtensionCapabilities(
-  e,
-  t = EXTENSION_CAPABILITY_SUPPORT,
-) {
+function findUnsupportedExtensionCapabilities(e, t = EXTENSION_CAPABILITY_SUPPORT) {
   return Object.entries(e.requires)
     .flatMap(([e, n]) => {
       let r = Object.hasOwn(t, e) ? (t[e] ?? []) : [];
-      return r.includes(n)
-        ? []
-        : [{ capability: e, requiredVersion: n, supportedVersions: r }];
+      return r.includes(n) ? [] : [{ capability: e, requiredVersion: n, supportedVersions: r }];
     })
     .sort((e, t) => e.capability.localeCompare(t.capability));
 }

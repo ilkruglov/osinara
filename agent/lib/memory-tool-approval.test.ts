@@ -73,26 +73,31 @@ describe("memory tool approvals", () => {
   it("never asks the user to confirm a memory mutation", async () => {
     const memoryRef = "mem_0123456789abcdef0123456789abcdef";
     for (const chatType of ["private", "supergroup"]) {
-      expect(await approvalFor(manageMemory, { action: "delete", memoryRef }, chatType))
-        .toBe("not-applicable");
-      expect(await approvalFor(
-        manageMemory,
-        { action: "edit", content: "Исправлено", memoryRef },
-        chatType,
-      )).toBe("not-applicable");
+      expect(await approvalFor(manageMemory, { action: "delete", memoryRef }, chatType)).toBe(
+        "not-applicable",
+      );
+      expect(
+        await approvalFor(
+          manageMemory,
+          { action: "edit", content: "Исправлено", memoryRef },
+          chatType,
+        ),
+      ).toBe("not-applicable");
     }
   });
 
   it("still refuses an undo without durable provenance", async () => {
     const memoryRef = "mem_0123456789abcdef0123456789abcdef";
     canUndoCreate.mockResolvedValue(true);
-    expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private"))
-      .toBe("not-applicable");
+    expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private")).toBe(
+      "not-applicable",
+    );
 
     // Это проверка прав, а не вопрос пользователю, поэтому она сохраняется.
     canUndoCreate.mockResolvedValue(false);
-    expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private"))
-      .toMatchObject({ type: "denied" });
+    expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private")).toMatchObject(
+      { type: "denied" },
+    );
   });
 
   it("does not gate thread lifecycle behind a confirmation", () => {
@@ -115,10 +120,13 @@ describe("memory tool approvals", () => {
       },
     } as never;
 
-    await manageMemoryThread.execute({
-      action: "reactivate",
-      threadRef: "thread_0123456789abcdef0123456789abcdef",
-    }, context);
+    await manageMemoryThread.execute(
+      {
+        action: "reactivate",
+        threadRef: "thread_0123456789abcdef0123456789abcdef",
+      },
+      context,
+    );
 
     expect(reactivateThread).toHaveBeenCalledOnce();
   });

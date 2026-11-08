@@ -13,7 +13,10 @@ export type DevRebuildPhase = "rebuilding" | "rebuilt" | "reloading";
  * into a `+N more` (combined with `more`, the count the watcher already
  * truncated from its own log line).
  */
-export declare function summarizeChangedFiles(events: readonly WatcherChangeEvent[], more: number): string;
+export declare function summarizeChangedFiles(
+  events: readonly WatcherChangeEvent[],
+  more: number,
+): string;
 /**
  * Renders the status line body for one lifecycle phase, e.g.
  * `tui/setup-panel.ts changed · rebuilding…`.

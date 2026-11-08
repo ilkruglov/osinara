@@ -35,7 +35,7 @@ interface RunnerErrorBody {
 async function runnerError(response: RunnerResponse): Promise<Error> {
   let body: RunnerErrorBody = {};
   try {
-    body = await response.json() as RunnerErrorBody;
+    body = (await response.json()) as RunnerErrorBody;
   } catch {
     // The runner status still provides actionable context when an intermediary returned non-JSON.
   }
@@ -78,16 +78,15 @@ export class SandboxRunnerClient {
   }
 
   async create(request: SandboxRunnerCreateRequest): Promise<SandboxRunnerSessionResponse> {
-    const response = await requireSuccess(await fetch(
-      `${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/sessions`,
-      {
+    const response = await requireSuccess(
+      await fetch(`${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/sessions`, {
         body: JSON.stringify(request),
         dispatcher: runnerDispatcher,
         headers: { "content-type": "application/json" },
         method: "POST",
-      },
-    ));
-    const body = await response.json() as Partial<SandboxRunnerSessionResponse>;
+      }),
+    );
+    const body = (await response.json()) as Partial<SandboxRunnerSessionResponse>;
     if (
       typeof body.created !== "boolean" ||
       typeof body.seedRequired !== "boolean" ||
@@ -103,13 +102,15 @@ export class SandboxRunnerClient {
     request: SandboxRunnerProcessRequest,
     signal?: AbortSignal,
   ): Promise<SandboxRunnerProcessResponse> {
-    const response = await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/processes"), {
-      body: JSON.stringify(request),
-      dispatcher: runnerDispatcher,
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal,
-    }));
+    const response = await requireSuccess(
+      await fetch(this.#sessionUrl(sessionId, "/processes"), {
+        body: JSON.stringify(request),
+        dispatcher: runnerDispatcher,
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        signal,
+      }),
+    );
     return validateProcessResponse(await response.json());
   }
 
@@ -117,20 +118,23 @@ export class SandboxRunnerClient {
     request: GoogleWorkspaceExecutionRequest,
     signal?: AbortSignal,
   ): Promise<SandboxRunnerProcessResponse> {
-    const response = await requireSuccess(await fetch(
-      `${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/google-workspace/executions`,
-      {
+    const response = await requireSuccess(
+      await fetch(`${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/google-workspace/executions`, {
         body: JSON.stringify(request),
         dispatcher: runnerDispatcher,
         headers: { "content-type": "application/json" },
         method: "POST",
         signal,
-      },
-    ));
+      }),
+    );
     return validateProcessResponse(await response.json());
   }
 
-  async readFile(sessionId: string, path: string, signal?: AbortSignal): Promise<Uint8Array | null> {
+  async readFile(
+    sessionId: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array | null> {
     const url = `${this.#sessionUrl(sessionId, "/files")}?path=${encodeURIComponent(path)}`;
     const response = await fetch(url, { dispatcher: runnerDispatcher, signal });
     if (response.status === 404) {
@@ -149,13 +153,15 @@ export class SandboxRunnerClient {
     signal?: AbortSignal,
   ): Promise<void> {
     const url = `${this.#sessionUrl(sessionId, "/files")}?path=${encodeURIComponent(path)}`;
-    await requireSuccess(await fetch(url, {
-      body: Buffer.from(content),
-      dispatcher: runnerDispatcher,
-      headers: { "content-type": "application/octet-stream" },
-      method: "PUT",
-      signal,
-    }));
+    await requireSuccess(
+      await fetch(url, {
+        body: Buffer.from(content),
+        dispatcher: runnerDispatcher,
+        headers: { "content-type": "application/octet-stream" },
+        method: "PUT",
+        signal,
+      }),
+    );
   }
 
   async removePath(
@@ -166,18 +172,22 @@ export class SandboxRunnerClient {
     const search = new URLSearchParams({ path: request.path });
     if (request.force !== undefined) search.set("force", String(request.force));
     if (request.recursive !== undefined) search.set("recursive", String(request.recursive));
-    await requireSuccess(await fetch(`${this.#sessionUrl(sessionId, "/files")}?${search}`, {
-      dispatcher: runnerDispatcher,
-      method: "DELETE",
-      signal,
-    }));
+    await requireSuccess(
+      await fetch(`${this.#sessionUrl(sessionId, "/files")}?${search}`, {
+        dispatcher: runnerDispatcher,
+        method: "DELETE",
+        signal,
+      }),
+    );
   }
 
   async stop(sessionId: string): Promise<void> {
-    await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/stop"), {
-      dispatcher: runnerDispatcher,
-      method: "POST",
-    }));
+    await requireSuccess(
+      await fetch(this.#sessionUrl(sessionId, "/stop"), {
+        dispatcher: runnerDispatcher,
+        method: "POST",
+      }),
+    );
   }
 
   async deleteToolEnvironment(workspaceId: string): Promise<void> {

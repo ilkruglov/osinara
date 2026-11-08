@@ -3,25 +3,19 @@ import { encodeBasicCredentials } from "#internal/http/basic-auth.js";
 function parseDevelopmentHeaderOption(t, n = {}) {
   let r = t.indexOf(`:`);
   if (r < 1)
-    throw new InvalidArgumentError(
-      `Expected header in "Name: value" format, received "${t}".`,
-    );
+    throw new InvalidArgumentError(`Expected header in "Name: value" format, received "${t}".`);
   let i = t.slice(0, r).trim(),
     a = t.slice(r + 1).trim();
   try {
     new Headers([[i, a]]);
   } catch {
-    throw new InvalidArgumentError(
-      `Expected a valid HTTP header, received "${t}".`,
-    );
+    throw new InvalidArgumentError(`Expected a valid HTTP header, received "${t}".`);
   }
   return mergeDevelopmentHeaders(n, { [i]: a }) ?? {};
 }
 function resolveDevelopmentUrlTarget(t, n) {
   if (t.url !== void 0 && n !== void 0)
-    throw new InvalidArgumentError(
-      `Pass either --url or a bare URL, not both.`,
-    );
+    throw new InvalidArgumentError(`Pass either --url or a bare URL, not both.`);
   let r = t.url ?? n;
   if (r === void 0) {
     if (t.header !== void 0)
@@ -31,22 +25,13 @@ function resolveDevelopmentUrlTarget(t, n) {
     return;
   }
   if (t.host !== void 0)
-    throw new InvalidArgumentError(
-      `The --host option cannot be used with --url.`,
-    );
+    throw new InvalidArgumentError(`The --host option cannot be used with --url.`);
   if (t.port !== void 0)
-    throw new InvalidArgumentError(
-      `The --port option cannot be used with --url.`,
-    );
-  if (t.ui === !1)
-    throw new InvalidArgumentError(
-      `The --no-ui option cannot be used with --url.`,
-    );
+    throw new InvalidArgumentError(`The --port option cannot be used with --url.`);
+  if (t.ui === !1) throw new InvalidArgumentError(`The --no-ui option cannot be used with --url.`);
   let i = URL.parse(r);
   if (i === null)
-    throw new InvalidArgumentError(
-      `Expected an absolute http(s) URL, received "${r}".`,
-    );
+    throw new InvalidArgumentError(`Expected an absolute http(s) URL, received "${r}".`);
   let a = mergeDevelopmentHeaders(extractDevelopmentUrlHeaders(i), t.header),
     o = i.toString();
   return a === void 0 ? { serverUrl: o } : { headers: a, serverUrl: o };
@@ -74,9 +59,7 @@ function decodeUrlUserInfo(t, n) {
   try {
     return decodeURIComponent(t);
   } catch {
-    throw new InvalidArgumentError(
-      `Expected a valid URL-encoded ${n} in URL userinfo.`,
-    );
+    throw new InvalidArgumentError(`Expected a valid URL-encoded ${n} in URL userinfo.`);
   }
 }
 export { parseDevelopmentHeaderOption, resolveDevelopmentUrlTarget };

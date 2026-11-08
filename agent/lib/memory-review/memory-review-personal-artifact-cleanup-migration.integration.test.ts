@@ -18,7 +18,9 @@ const integrationDatabaseUrl = process.env.DATABASE_URL;
 
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
-    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+    throw new Error(
+      "AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL",
+    );
   }
   if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
     throw new Error(
@@ -40,10 +42,9 @@ const FIRST_LANE_ID = "5417e534-12cb-466b-b7d0-193c97337307";
 const INCIDENT_LANE_ID = "b6ccb4e0-926b-43c8-8789-fdc8b0a274ad";
 const INCIDENT_BATCH_ID = "173c6d02-b781-4515-9c1f-562c9b1ee415";
 const SOURCE_SEQUENCES = [
-  87, 89, 91, 93, 95, 97, 99, 101, 102, 104, 106, 108, 110, 112, 114, 116, 118,
-  120, 122, 123, 125, 127, 129, 131, 132, 133, 134, 136, 138, 140, 142, 144, 146,
-  147, 149, 151, 153, 155, 157, 158, 159, 161, 163, 165, 166, 168, 170, 172, 174,
-  176,
+  87, 89, 91, 93, 95, 97, 99, 101, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 123, 125,
+  127, 129, 131, 132, 133, 134, 136, 138, 140, 142, 144, 146, 147, 149, 151, 153, 155, 157, 158,
+  159, 161, 163, 165, 166, 168, 170, 172, 174, 176,
 ];
 const MIGRATION_NAME_PATTERN = /^(\d+)_.*\.sql$/u;
 
@@ -78,7 +79,9 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
       await client.query(`SET search_path TO ${TEST_SCHEMA}, public`);
       await applyEarlierMigrations(client);
 
-      await client.query("INSERT INTO families (id, name) VALUES ($1, 'Personal cleanup')", [FAMILY_ID]);
+      await client.query("INSERT INTO families (id, name) VALUES ($1, 'Personal cleanup')", [
+        FAMILY_ID,
+      ]);
       await client.query(
         `INSERT INTO users (id, telegram_user_id, display_name) VALUES
            ($1, 'personal-cleanup-one', 'Первый'),
@@ -102,10 +105,10 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
       await expect(client.query(migration)).rejects.toThrow(
         "AGENT_MEMORY_REVIEW_PERSONAL_CLEANUP_ARTIFACTS_MISSING",
       );
-      await client.query(
-        "DELETE FROM application_conversations WHERE id IN ($1, $2)",
-        [FIRST_CONVERSATION_ID, SECOND_CONVERSATION_ID],
-      );
+      await client.query("DELETE FROM application_conversations WHERE id IN ($1, $2)", [
+        FIRST_CONVERSATION_ID,
+        SECOND_CONVERSATION_ID,
+      ]);
       await expect(client.query(migration)).rejects.toThrow(
         "AGENT_MEMORY_REVIEW_PERSONAL_CLEANUP_ARTIFACTS_MISSING",
       );
@@ -190,8 +193,13 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
                 'Второй', now(), 'Сохранённый personal claim', id, sequence_id,
                 telegram_message_id, jsonb_build_object('content', content_text)
            FROM telegram_group_messages WHERE conversation_id = $4 AND sequence_id = 87`,
-        [claim.rows[0]!.id, FAMILY_ID, SECOND_OWNER_ID, SECOND_CONVERSATION_ID,
-          participant.rows[0]!.id],
+        [
+          claim.rows[0]!.id,
+          FAMILY_ID,
+          SECOND_OWNER_ID,
+          SECOND_CONVERSATION_ID,
+          participant.rows[0]!.id,
+        ],
       );
 
       await client.query(
@@ -201,10 +209,12 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
       await expect(client.query(migration)).rejects.toThrow(
         "AGENT_MEMORY_REVIEW_PERSONAL_CLEANUP_LANES_INVALID",
       );
-      await expect(client.query(
-        "SELECT count(*)::integer AS count FROM memory_review_lanes WHERE id IN ($1, $2)",
-        [FIRST_LANE_ID, INCIDENT_LANE_ID],
-      )).resolves.toMatchObject({ rows: [{ count: 2 }] });
+      await expect(
+        client.query(
+          "SELECT count(*)::integer AS count FROM memory_review_lanes WHERE id IN ($1, $2)",
+          [FIRST_LANE_ID, INCIDENT_LANE_ID],
+        ),
+      ).resolves.toMatchObject({ rows: [{ count: 2 }] });
       await client.query(
         "UPDATE memory_review_lanes SET processed_through_sequence = 85 WHERE id = $1",
         [INCIDENT_LANE_ID],
@@ -227,8 +237,9 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
       await client.query(migration);
       await client.query(migration);
 
-      await expect(client.query(
-        `SELECT
+      await expect(
+        client.query(
+          `SELECT
            (SELECT count(*)::integer FROM memory_review_lanes) AS lane_count,
            (SELECT count(*)::integer FROM memory_review_batches) AS batch_count,
            (SELECT count(*)::integer FROM memory_review_batch_sources) AS source_count,
@@ -240,16 +251,21 @@ describeWithDatabase("078 personal memory-review artifact cleanup", () => {
              WHERE claim_id = $3 AND timeline_entry_id IS NOT NULL) AS evidence_count,
            (SELECT count(*)::integer FROM audit_events
              WHERE event_type = 'memory_review.personal_artifact_removed') AS audit_count`,
-        [SECOND_CONVERSATION_ID, groupLane.rows[0]!.id, claim.rows[0]!.id],
-      )).resolves.toMatchObject({ rows: [{
-        audit_count: 2,
-        batch_count: 0,
-        evidence_count: 1,
-        group_lane_count: 1,
-        lane_count: 1,
-        source_count: 0,
-        timeline_count: 50,
-      }] });
+          [SECOND_CONVERSATION_ID, groupLane.rows[0]!.id, claim.rows[0]!.id],
+        ),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            audit_count: 2,
+            batch_count: 0,
+            evidence_count: 1,
+            group_lane_count: 1,
+            lane_count: 1,
+            source_count: 0,
+            timeline_count: 50,
+          },
+        ],
+      });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query("RESET search_path");

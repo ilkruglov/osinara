@@ -15,9 +15,8 @@ import { memoryRepository } from "./memory-repository.js";
 import { memorySourceRepository } from "./memory-source-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 describeWithDatabase("R3 memory source lookup", () => {
   beforeEach(async () => {
@@ -99,8 +98,9 @@ describeWithDatabase("R3 memory source lookup", () => {
       telegramUserId: "9501",
       userId: user.rows[0]!.id,
     };
-    await expect(memorySourceRepository.lookup(personalAuth, memoryRef))
-      .rejects.toThrowError(/AGENT_MEMORY_SOURCE_NOT_FOUND/u);
+    await expect(memorySourceRepository.lookup(personalAuth, memoryRef)).rejects.toThrowError(
+      /AGENT_MEMORY_SOURCE_NOT_FOUND/u,
+    );
 
     const policy = (await profileProjectionPolicyRepository.list(personalAuth))[0]!;
     await profileProjectionPolicyRepository.update(personalAuth, {
@@ -108,7 +108,9 @@ describeWithDatabase("R3 memory source lookup", () => {
       groupRef: policy.groupRef,
       operationKey: "enable-source-lookup",
     });
-    const notice = await profileProjectionPolicyRepository.claimPendingGroupNotice(group.rows[0]!.id);
+    const notice = await profileProjectionPolicyRepository.claimPendingGroupNotice(
+      group.rows[0]!.id,
+    );
     await profileProjectionPolicyRepository.markGroupNoticePresented({
       deliveryToken: notice!.deliveryToken,
       noticeRef: notice!.noticeRef,
@@ -129,14 +131,17 @@ describeWithDatabase("R3 memory source lookup", () => {
       "UPDATE claim_evidence SET evidence_kind = 'inferred' WHERE claim_id = $1",
       [claim.id],
     );
-    await expect(memorySourceRepository.lookup(personalAuth, memoryRef))
-      .rejects.toThrowError(/AGENT_MEMORY_SOURCE_NOT_FOUND/u);
+    await expect(memorySourceRepository.lookup(personalAuth, memoryRef)).rejects.toThrowError(
+      /AGENT_MEMORY_SOURCE_NOT_FOUND/u,
+    );
     await database().query(
       "UPDATE claim_evidence SET evidence_kind = 'firsthand' WHERE claim_id = $1",
       [claim.id],
     );
 
-    await database().query("DELETE FROM telegram_group_messages WHERE id = $1", [entry.rows[0]!.id]);
+    await database().query("DELETE FROM telegram_group_messages WHERE id = $1", [
+      entry.rows[0]!.id,
+    ]);
     const pruned = await memorySourceRepository.lookup(personalAuth, memoryRef);
     expect(pruned).toMatchObject({
       evidenceSnippet: retained.evidenceSnippet,
@@ -149,7 +154,8 @@ describeWithDatabase("R3 memory source lookup", () => {
       groupRef: policy.groupRef,
       operationKey: "disable-source-lookup",
     });
-    await expect(memorySourceRepository.lookup(personalAuth, memoryRef))
-      .rejects.toThrowError(/AGENT_MEMORY_SOURCE_NOT_FOUND/u);
+    await expect(memorySourceRepository.lookup(personalAuth, memoryRef)).rejects.toThrowError(
+      /AGENT_MEMORY_SOURCE_NOT_FOUND/u,
+    );
   });
 });

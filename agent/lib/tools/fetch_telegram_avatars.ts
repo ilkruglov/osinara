@@ -20,8 +20,14 @@ import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError, isAppError } from "../app-error.js";
-import { telegramAvatarSource, type TelegramAvatarSource } from "../attachments/telegram-avatar-source.js";
-import { conversationRepository, type ConversationParticipant } from "../conversation-repository.js";
+import {
+  telegramAvatarSource,
+  type TelegramAvatarSource,
+} from "../attachments/telegram-avatar-source.js";
+import {
+  conversationRepository,
+  type ConversationParticipant,
+} from "../conversation-repository.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/workspace-repository.js";
@@ -33,31 +39,61 @@ const AVATAR_MEDIA_TYPE = "image/jpeg";
 export const AVATAR_USAGE_NOTE =
   "Аватарка это фото живого человека: используй её только как референс для иллюстрации или дружеской карикатуры, не для фотореалистичного портрета и не для унижения. Кто в missing с причиной no_photo_or_private, у того фото нет или оно скрыто: рисуй по описанию, не выдумывая внешность; telegram_unavailable можно повторить позже один раз.";
 
-const participantSchema = z.object({
-  displayName: z.string().min(1).max(100).optional().describe("Имя участника так, как оно показано в истории чата"),
-  telegramUserId: z.string().regex(/^\d+$/u).optional().describe("Telegram user id, если известен"),
-  username: z.string().min(1).max(64).optional().describe("Username без @"),
-}).strict();
+const participantSchema = z
+  .object({
+    displayName: z
+      .string()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Имя участника так, как оно показано в истории чата"),
+    telegramUserId: z
+      .string()
+      .regex(/^\d+$/u)
+      .optional()
+      .describe("Telegram user id, если известен"),
+    username: z.string().min(1).max(64).optional().describe("Username без @"),
+  })
+  .strict();
 
-const inputSchema = z.object({
-  participants: z.array(participantSchema).min(1).max(4)
-    .describe("До четырёх участников этого чата; у каждого ровно одно из полей"),
-}).strict();
+const inputSchema = z
+  .object({
+    participants: z
+      .array(participantSchema)
+      .min(1)
+      .max(4)
+      .describe("До четырёх участников этого чата; у каждого ровно одно из полей"),
+  })
+  .strict();
 
 type ParticipantHandle = z.infer<typeof participantSchema>;
 
 interface FetchTelegramAvatarsDependencies {
   participants: {
-    findByHandle(conversationId: string, handle: { displayName?: string; telegramUserId?: string; username?: string }): Promise<ConversationParticipant | null>;
+    findByHandle(
+      conversationId: string,
+      handle: { displayName?: string; telegramUserId?: string; username?: string },
+    ): Promise<ConversationParticipant | null>;
   };
   source: TelegramAvatarSource;
   workspaces: {
-    findBinaryWrite(auth: WorkspaceAuthorization, scope: WorkspaceScope, operationKey: string): Promise<WorkspaceFileRecord | null>;
+    findBinaryWrite(
+      auth: WorkspaceAuthorization,
+      scope: WorkspaceScope,
+      operationKey: string,
+    ): Promise<WorkspaceFileRecord | null>;
     readBinary(auth: WorkspaceAuthorization, scope: WorkspaceScope, path: string): Promise<unknown>;
     workspaceId(auth: WorkspaceAuthorization, scope: WorkspaceScope): Promise<string>;
-    writeBinary(auth: WorkspaceAuthorization, input: {
-      bytes: Uint8Array; mediaType: string; operationKey: string; path: string; scope: WorkspaceScope;
-    }): Promise<WorkspaceFileRecord>;
+    writeBinary(
+      auth: WorkspaceAuthorization,
+      input: {
+        bytes: Uint8Array;
+        mediaType: string;
+        operationKey: string;
+        path: string;
+        scope: WorkspaceScope;
+      },
+    ): Promise<WorkspaceFileRecord>;
   };
 }
 
@@ -71,12 +107,20 @@ export interface FetchedAvatar {
   username: string | null;
 }
 
-export type MissingAvatarReason = "no_photo_or_private" | "storage_failed" | "telegram_unavailable" | "unknown_participant";
+export type MissingAvatarReason =
+  "no_photo_or_private" | "storage_failed" | "telegram_unavailable" | "unknown_participant";
 
 function parseInput(input: unknown): z.infer<typeof inputSchema> {
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success || parsed.data.participants.some((participant) =>
-    [participant.displayName, participant.telegramUserId, participant.username].filter((value) => value !== undefined).length !== 1)) {
+  if (
+    !parsed.success ||
+    parsed.data.participants.some(
+      (participant) =>
+        [participant.displayName, participant.telegramUserId, participant.username].filter(
+          (value) => value !== undefined,
+        ).length !== 1,
+    )
+  ) {
     throw new AppError(
       "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
       "Укажи до четырёх участников, у каждого ровно одно из полей: telegramUserId, username или displayName",
@@ -91,7 +135,10 @@ function workspaceScopeOf(auth: WorkspaceAuthorization): WorkspaceScope {
     if (auth.groupType === "family_private") return "family";
     if (auth.groupType === "external") return "group";
   }
-  throw new AppError("AGENT_WORKSPACE_CONTEXT_INVALID", "Не удалось определить область для сохранения аватарок");
+  throw new AppError(
+    "AGENT_WORKSPACE_CONTEXT_INVALID",
+    "Не удалось определить область для сохранения аватарок",
+  );
 }
 
 function requested(handle: ParticipantHandle): string {
@@ -99,7 +146,12 @@ function requested(handle: ParticipantHandle): string {
 }
 
 /** The workspace still holds the file the ledger remembers; a removed file is a cache miss. */
-async function fileStillThere(dependencies: FetchTelegramAvatarsDependencies, auth: WorkspaceAuthorization, scope: WorkspaceScope, path: string): Promise<boolean> {
+async function fileStillThere(
+  dependencies: FetchTelegramAvatarsDependencies,
+  auth: WorkspaceAuthorization,
+  scope: WorkspaceScope,
+  path: string,
+): Promise<boolean> {
   try {
     await dependencies.workspaces.readBinary(auth, scope, path);
     return true;
@@ -109,7 +161,9 @@ async function fileStillThere(dependencies: FetchTelegramAvatarsDependencies, au
   }
 }
 
-export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatarsDependencies): AnyToolDefinition {
+export function createFetchTelegramAvatarsTool(
+  dependencies: FetchTelegramAvatarsDependencies,
+): AnyToolDefinition {
   return defineTool({
     description: [
       "Когда использовать: перед картинкой, на которой должны быть узнаваемы участники этого чата (обложка про события чата, карикатура, сцена с ними), чтобы передать их аватарки в generate_image как images-референсы.",
@@ -127,7 +181,10 @@ export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatar
       // conversation: nobody outside it is reachable, and no conversation means nobody is.
       const conversationId = ctx.session.auth.current?.attributes.telegramConversationId;
       if (typeof conversationId !== "string" || conversationId.length === 0) {
-        throw new AppError("AGENT_TELEGRAM_AVATARS_CONTEXT_INVALID", "Аватарки доступны только внутри проверенного разговора");
+        throw new AppError(
+          "AGENT_TELEGRAM_AVATARS_CONTEXT_INVALID",
+          "Аватарки доступны только внутри проверенного разговора",
+        );
       }
       const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
       const avatars: FetchedAvatar[] = [];
@@ -138,7 +195,11 @@ export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatar
           missing.push({ reason: "unknown_participant", requested: requested(handle) });
           continue;
         }
-        const participant = { displayName: found.displayNameSnapshot, telegramUserId: found.telegramUserId, username: found.usernameSnapshot };
+        const participant = {
+          displayName: found.displayNameSnapshot,
+          telegramUserId: found.telegramUserId,
+          username: found.usernameSnapshot,
+        };
         let stage: "storage" | "telegram" = "telegram";
         try {
           const lookup = await dependencies.source.lookup(participant.telegramUserId);
@@ -150,8 +211,16 @@ export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatar
           const path = `avatars/${participant.telegramUserId}-${lookup.photo.fileUniqueId}.jpg`;
           const operationKey = `avatar:${workspaceId}:${participant.telegramUserId}:${lookup.photo.fileUniqueId}`;
           stage = "storage";
-          const remembered = await dependencies.workspaces.findBinaryWrite(auth, scope, operationKey);
-          const cached = remembered !== null && await fileStillThere(dependencies, auth, scope, remembered.path) ? remembered : null;
+          const remembered = await dependencies.workspaces.findBinaryWrite(
+            auth,
+            scope,
+            operationKey,
+          );
+          const cached =
+            remembered !== null &&
+            (await fileStillThere(dependencies, auth, scope, remembered.path))
+              ? remembered
+              : null;
           let file = cached;
           if (file === null) {
             stage = "telegram";
@@ -162,25 +231,52 @@ export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatar
             // takes the winner's record instead of reporting a failure.
             const key = remembered === null ? operationKey : `${operationKey}:${Date.now()}`;
             try {
-              file = await dependencies.workspaces.writeBinary(auth, { bytes, mediaType: AVATAR_MEDIA_TYPE, operationKey: key, path, scope });
+              file = await dependencies.workspaces.writeBinary(auth, {
+                bytes,
+                mediaType: AVATAR_MEDIA_TYPE,
+                operationKey: key,
+                path,
+                scope,
+              });
             } catch (error) {
               const winner = await dependencies.workspaces.findBinaryWrite(auth, scope, key);
               if (winner === null) throw error;
               file = winner;
             }
           }
-          console.info(JSON.stringify({ code: "AGENT_TELEGRAM_AVATAR_FETCHED", bytes: file.byteSize, cached: cached !== null }));
+          console.info(
+            JSON.stringify({
+              code: "AGENT_TELEGRAM_AVATAR_FETCHED",
+              bytes: file.byteSize,
+              cached: cached !== null,
+            }),
+          );
           avatars.push({
-            displayName: participant.displayName, mediaType: file.mediaType, path: file.path, scope,
-            status: cached === null ? "saved" : "cached", telegramUserId: participant.telegramUserId, username: participant.username,
+            displayName: participant.displayName,
+            mediaType: file.mediaType,
+            path: file.path,
+            scope,
+            status: cached === null ? "saved" : "cached",
+            telegramUserId: participant.telegramUserId,
+            username: participant.username,
           });
         } catch (error) {
           // One person's failure is reported in the result, never thrown over the others.
-          console.warn(JSON.stringify({
-            code: "AGENT_TELEGRAM_AVATAR_FAILED", stage,
-            error: isAppError(error) ? error.code : error instanceof Error ? error.name : "unknown",
-          }));
-          missing.push({ reason: stage === "storage" ? "storage_failed" : "telegram_unavailable", requested: requested(handle) });
+          console.warn(
+            JSON.stringify({
+              code: "AGENT_TELEGRAM_AVATAR_FAILED",
+              stage,
+              error: isAppError(error)
+                ? error.code
+                : error instanceof Error
+                  ? error.name
+                  : "unknown",
+            }),
+          );
+          missing.push({
+            reason: stage === "storage" ? "storage_failed" : "telegram_unavailable",
+            requested: requested(handle),
+          });
         }
       }
       return { avatars, missing, note: AVATAR_USAGE_NOTE, scope };
@@ -189,7 +285,10 @@ export function createFetchTelegramAvatarsTool(dependencies: FetchTelegramAvatar
 }
 
 export default createFetchTelegramAvatarsTool({
-  participants: { findByHandle: (conversationId, handle) => conversationRepository.findParticipantByHandle(conversationId, handle) },
+  participants: {
+    findByHandle: (conversationId, handle) =>
+      conversationRepository.findParticipantByHandle(conversationId, handle),
+  },
   source: telegramAvatarSource,
   workspaces: workspaceBinaryRepository,
 });

@@ -27,7 +27,12 @@ export const TELEGRAM_SERIES_MARKER_KEY = "osinara_series";
 
 export type TelegramSeriesMarker =
   | { role: "context" }
-  | { addressed: boolean; earlierUpdateIds?: string[]; role: "current"; telegramMessageIds: string[] };
+  | {
+      addressed: boolean;
+      earlierUpdateIds?: string[];
+      role: "current";
+      telegramMessageIds: string[];
+    };
 
 // Telegram marks forwarded content with one of these keys; a forward is someone else's words.
 const FORWARD_KEYS = ["forward_origin", "forward_from", "forward_from_chat", "forward_date"];
@@ -59,10 +64,12 @@ export function continuesSeries(
   }
   const first = (head as { message: TelegramMessage }).message;
   const next = (candidate as { message: TelegramMessage }).message;
-  return first.chat.id === next.chat.id &&
+  return (
+    first.chat.id === next.chat.id &&
     (first.messageThreadId ?? null) === (next.messageThreadId ?? null) &&
     first.from?.id === next.from?.id &&
-    first.from?.isBot === next.from?.isBot;
+    first.from?.isBot === next.from?.isBot
+  );
 }
 
 export function withSeriesMarker(
@@ -73,7 +80,9 @@ export function withSeriesMarker(
   return { ...update, message: { ...update.message, raw } };
 }
 
-export function readTelegramSeriesMarker(raw: Record<string, unknown>): TelegramSeriesMarker | null {
+export function readTelegramSeriesMarker(
+  raw: Record<string, unknown>,
+): TelegramSeriesMarker | null {
   const value = raw[TELEGRAM_SERIES_MARKER_KEY];
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const marker = value as Record<string, unknown>;
@@ -84,10 +93,11 @@ export function readTelegramSeriesMarker(raw: Record<string, unknown>): Telegram
     Array.isArray(marker.telegramMessageIds) &&
     marker.telegramMessageIds.every((id) => typeof id === "string" && /^[1-9]\d*$/u.test(id))
   ) {
-    const earlier = Array.isArray(marker.earlierUpdateIds) &&
+    const earlier =
+      Array.isArray(marker.earlierUpdateIds) &&
       marker.earlierUpdateIds.every((id) => typeof id === "string" && /^[1-9]\d*$/u.test(id))
-      ? { earlierUpdateIds: marker.earlierUpdateIds as string[] }
-      : {};
+        ? { earlierUpdateIds: marker.earlierUpdateIds as string[] }
+        : {};
     return {
       addressed: marker.addressed,
       ...earlier,

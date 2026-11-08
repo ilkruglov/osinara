@@ -1,14 +1,6 @@
-import {
-  optionById,
-  optionByValue,
-  requiredOptionId,
-} from "./question-options.js";
+import { optionById, optionByValue, requiredOptionId } from "./question-options.js";
 import { renderEditableQuestion } from "./ask-editable.js";
-import {
-  InteractionRequired,
-  InvalidAnswerError,
-  SkippedSignal,
-} from "./ask-signals.js";
+import { InteractionRequired, InvalidAnswerError, SkippedSignal } from "./ask-signals.js";
 import { SetupPrerequisiteRequired } from "./integrations/shared/prerequisite.js";
 const select = (e) => ({ ...e, kind: `select` }),
   confirm = (e) => ({ ...e, kind: `confirm` });
@@ -34,10 +26,7 @@ function coerceAnswer(t, n) {
   if (t.kind === `confirm`) {
     let e = typeof n == `boolean` ? n : n === `true` || (n !== `false` && null);
     if (e === null)
-      throw new InvalidAnswerError(
-        t,
-        `Invalid answer for "${t.key}": expected a boolean.`,
-      );
+      throw new InvalidAnswerError(t, `Invalid answer for "${t.key}": expected a boolean.`);
     return e;
   }
   let r = String(n),
@@ -64,15 +53,11 @@ function coerceManyAnswer(t, n) {
     }
     if (o.disabled) {
       let e = o.disabledReason === void 0 ? `` : ` (${o.disabledReason})`;
-      throw new InvalidAnswerError(
-        t,
-        `Invalid answer for "${t.key}": ${n} is unavailable${e}.`,
-      );
+      throw new InvalidAnswerError(t, `Invalid answer for "${t.key}": ${n} is unavailable${e}.`);
     }
     r.includes(o.value) || r.push(o.value);
   }
-  for (let e of t.options)
-    e.locked === !0 && !r.includes(e.value) && r.push(e.value);
+  for (let e of t.options) e.locked === !0 && !r.includes(e.value) && r.push(e.value);
   return r;
 }
 async function renderQuestion(e, t) {
@@ -91,11 +76,7 @@ async function renderQuestion(e, t) {
         initialValue:
           r === void 0
             ? void 0
-            : requiredOptionId(
-                t,
-                r,
-                t.detected === void 0 ? `recommendation` : `detected value`,
-              ),
+            : requiredOptionId(t, r, t.detected === void 0 ? `recommendation` : `detected value`),
         search: t.search,
         placeholder: t.placeholder,
       }),
@@ -150,11 +131,7 @@ async function renderManyQuestion(t, r) {
         i === void 0
           ? void 0
           : i.map((e) =>
-              requiredOptionId(
-                r,
-                e,
-                r.detected === void 0 ? `recommendation` : `detected value`,
-              ),
+              requiredOptionId(r, e, r.detected === void 0 ? `recommendation` : `detected value`),
             ),
       required: r.requireSelection,
       search: r.search,
@@ -163,10 +140,7 @@ async function renderManyQuestion(t, r) {
   ).map((t) => {
     let n = optionById(r, t);
     if (!n)
-      throw new InvalidAnswerError(
-        r,
-        `Invalid answer for "${r.key}": ${t} is not an option id.`,
-      );
+      throw new InvalidAnswerError(r, `Invalid answer for "${r.key}": ${t} is not an option id.`);
     return n.value;
   });
 }
@@ -240,8 +214,7 @@ function withAnswers(e, n) {
         select({ key: i.key, message: i.message, options: i.options }),
         e[i.key],
       );
-      if ((announce(n, i.key, o, `answer`), o !== i.editable.value))
-        return { value: o };
+      if ((announce(n, i.key, o, `answer`), o !== i.editable.value)) return { value: o };
       if (!(i.editable.key in e))
         return {
           value: o,
@@ -283,19 +256,13 @@ function withAnswers(e, n) {
 function withRequired(e) {
   return (t) => ({
     async ask(n) {
-      return !n.required && e.includes(n.key)
-        ? t.ask({ ...n, required: !0 })
-        : t.ask(n);
+      return !n.required && e.includes(n.key) ? t.ask({ ...n, required: !0 }) : t.ask(n);
     },
     async askEditable(n) {
-      return t.askEditable(
-        !n.required && e.includes(n.key) ? { ...n, required: !0 } : n,
-      );
+      return t.askEditable(!n.required && e.includes(n.key) ? { ...n, required: !0 } : n);
     },
     async askMany(n) {
-      return !n.required && e.includes(n.key)
-        ? t.askMany({ ...n, required: !0 })
-        : t.askMany(n);
+      return !n.required && e.includes(n.key) ? t.askMany({ ...n, required: !0 }) : t.askMany(n);
     },
   });
 }
@@ -305,21 +272,15 @@ function withPolicy(e, t) {
       if (e === `assume`) {
         if (i.detected !== void 0)
           return (
-            i.kind === `select` &&
-              requiredOptionId(i, i.detected, `detected value`),
+            i.kind === `select` && requiredOptionId(i, i.detected, `detected value`),
             announce(t, i.key, i.detected, `detected`)
           );
         if (i.recommended !== void 0)
           return (
-            i.kind === `select` &&
-              requiredOptionId(i, i.recommended, `recommendation`),
+            i.kind === `select` && requiredOptionId(i, i.recommended, `recommendation`),
             announce(t, i.key, i.recommended, `assumed`)
           );
-        if (!i.required)
-          throw (
-            announce(t, i.key, void 0, `skipped`),
-            new SkippedSignal(i.key)
-          );
+        if (!i.required) throw (announce(t, i.key, void 0, `skipped`), new SkippedSignal(i.key));
         return r.ask(i);
       }
       return i.detected !== void 0 &&
@@ -357,11 +318,7 @@ function withPolicy(e, t) {
           for (let e of i.recommended) requiredOptionId(i, e, `recommendation`);
           return announce(t, i.key, [...i.recommended], `assumed`);
         }
-        if (!i.required)
-          throw (
-            announce(t, i.key, void 0, `skipped`),
-            new SkippedSignal(i.key)
-          );
+        if (!i.required) throw (announce(t, i.key, void 0, `skipped`), new SkippedSignal(i.key));
         return r.askMany(i);
       }
       return i.detected !== void 0 &&

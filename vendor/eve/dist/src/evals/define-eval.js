@@ -16,11 +16,7 @@ function validateEvalInput(e) {
       `input`,
       "Send the prompt inside `test`: `async test(t) { await t.send(...) }`.",
     ),
-    rejectLegacyKey(
-      e,
-      `run`,
-      "Rename `run` to `test`; it receives the same context `t`.",
-    ),
+    rejectLegacyKey(e, `run`, "Rename `run` to `test`; it receives the same context `t`."),
     rejectLegacyKey(
       e,
       `checks`,
@@ -36,22 +32,14 @@ function validateEvalInput(e) {
       `expected`,
       "Pass the reference value to the assertion (e.g. `t.check(t.reply, includes(value))`).",
     ),
-    rejectLegacyKey(
-      e,
-      `thresholds`,
-      "Put the threshold on the assertion: `.atLeast(n)`.",
-    ),
+    rejectLegacyKey(e, `thresholds`, "Put the threshold on the assertion: `.atLeast(n)`."),
     rejectLegacyKey(
       e,
       `parseOutput`,
       "Read the value you want inside `test` and assert on it directly.",
     ),
     rejectLegacyKey(e, `model`, "Rename `model` to `judge: { model }`."),
-    rejectLegacyKey(
-      e,
-      `modelOptions`,
-      "Move it under `judge: { model, modelOptions }`.",
-    ),
+    rejectLegacyKey(e, `modelOptions`, "Move it under `judge: { model, modelOptions }`."),
     rejectLegacyKey(
       e,
       `cases`,
@@ -65,10 +53,7 @@ function validateEvalInput(e) {
     typeof e.test != `function`)
   )
     throw Error("Eval requires a `test(t)` function.");
-  if (
-    e.timeoutMs !== void 0 &&
-    (e.timeoutMs < 0 || !Number.isFinite(e.timeoutMs))
-  )
+  if (e.timeoutMs !== void 0 && (e.timeoutMs < 0 || !Number.isFinite(e.timeoutMs)))
     throw Error("Eval `timeoutMs` must be a non-negative finite number.");
 }
 function rejectLegacyKey(e, t, n) {

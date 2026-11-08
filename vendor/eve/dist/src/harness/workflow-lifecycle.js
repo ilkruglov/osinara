@@ -1,9 +1,6 @@
 import { createLogger } from "#internal/logging.js";
 import { toErrorMessage } from "#shared/errors.js";
-import {
-  createActionResultEvent,
-  createActionsRequestedEvent,
-} from "#protocol/message.js";
+import { createActionResultEvent, createActionsRequestedEvent } from "#protocol/message.js";
 import { createRuntimeActionRequestFromToolCall } from "#harness/runtime-actions.js";
 import { createRuntimeToolResultFromValue } from "#harness/action-result-helpers.js";
 const log = createLogger(`harness.workflow-lifecycle`);
@@ -35,8 +32,7 @@ function createWorkflowLifecycle(e) {
       );
     },
     async onNestedToolResult(r) {
-      if ((e.skipReplayed === !0 && r.replayed) || r.status === `interrupted`)
-        return;
+      if ((e.skipReplayed === !0 && r.replayed) || r.status === `interrupted`) return;
       let i = createRuntimeToolResultFromValue({
         callId: r.toolCallId,
         output: r.status === `rejected` ? toErrorMessage(r.error) : r.output,

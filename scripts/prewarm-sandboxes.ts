@@ -16,10 +16,10 @@ const appRoot = process.cwd();
 const eveModule = (path: string): string =>
   pathToFileURL(resolve(appRoot, "node_modules/eve/dist/src", path)).href;
 
-const { loadDevelopmentEnvironmentFiles } = await import(eveModule("cli/dev/environment.js")) as {
+const { loadDevelopmentEnvironmentFiles } = (await import(eveModule("cli/dev/environment.js"))) as {
   loadDevelopmentEnvironmentFiles(root: string): void;
 };
-const { prewarmBuiltAppSandboxes } = await import(eveModule("execution/sandbox/prewarm.js")) as {
+const { prewarmBuiltAppSandboxes } = (await import(eveModule("execution/sandbox/prewarm.js"))) as {
   prewarmBuiltAppSandboxes(input: { appRoot: string; log: (line: string) => void }): Promise<void>;
 };
 

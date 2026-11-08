@@ -15,9 +15,7 @@ function createCodexTokenBroker(e = {}) {
       return getToken(e.reason);
     },
     async refreshState() {
-      ((i.kind === `signed-out` || i.kind === `reauth-required`) &&
-        t.restart?.(),
-        (a = void 0));
+      ((i.kind === `signed-out` || i.kind === `reauth-required`) && t.restart?.(), (a = void 0));
       try {
         await getToken(`request`);
       } catch {}
@@ -33,9 +31,7 @@ function createCodexTokenBroker(e = {}) {
     if (o !== void 0 && (!t || o.forced)) return o.promise;
     let r = o?.promise,
       i = (
-        r === void 0
-          ? resolveToken(t)
-          : r.catch(() => void 0).then(() => resolveToken(t))
+        r === void 0 ? resolveToken(t) : r.catch(() => void 0).then(() => resolveToken(t))
       ).finally(() => {
         o?.promise === i && (o = void 0);
       });

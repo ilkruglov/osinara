@@ -7,15 +7,8 @@ const UNICODE_ROW_GLYPHS = {
   warning: `⚠`,
 };
 function resolveOptionRowState(e, t) {
-  if (
-    Number(e.disabled === !0) +
-      Number(e.completed === !0) +
-      Number(e.locked === !0) >
-    1
-  )
-    throw Error(
-      `An option row cannot combine disabled, completed, or locked states.`,
-    );
+  if (Number(e.disabled === !0) + Number(e.completed === !0) + Number(e.locked === !0) > 1)
+    throw Error(`An option row cannot combine disabled, completed, or locked states.`);
   if (e.disabled === !0) {
     let t = { kind: `disabled` };
     return (

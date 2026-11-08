@@ -174,9 +174,7 @@ async function listLinearAgentSessionActivities(e) {
       variables: { id: e.agentSessionId, last: e.last ?? 20 },
     })
   ).agentSession?.activities?.nodes;
-  return Array.isArray(t)
-    ? t.map(normalizeAgentActivityRecord).filter(notNull)
-    : [];
+  return Array.isArray(t) ? t.map(normalizeAgentActivityRecord).filter(notNull) : [];
 }
 function normalizeAgentSessionRecord(t) {
   if (!isObject(t) || typeof t.id != `string`)
@@ -204,18 +202,15 @@ function relationId(t) {
   if (isObject(t) && typeof t.id == `string`) return t.id;
 }
 function normalizeAgentActivityRecord(n) {
-  if (!isObject(n) || typeof n.id != `string` || !isObject(n.content))
-    return null;
+  if (!isObject(n) || typeof n.id != `string` || !isObject(n.content)) return null;
   let r = {};
   (typeof n.content.body == `string` && (r.body = n.content.body),
     typeof n.content.type == `string` && (r.type = n.content.type),
-    typeof n.content.__typename == `string` &&
-      (r.__typename = n.content.__typename));
+    typeof n.content.__typename == `string` && (r.__typename = n.content.__typename));
   let i = { content: r, id: n.id };
   return (
     (typeof n.signal == `string` || n.signal === null) && (i.signal = n.signal),
-    isObject(n.signalMetadata) &&
-      (i.signalMetadata = parseJsonObject(n.signalMetadata)),
+    isObject(n.signalMetadata) && (i.signalMetadata = parseJsonObject(n.signalMetadata)),
     n.signalMetadata === null && (i.signalMetadata = null),
     typeof n.updatedAt == `string` && (i.updatedAt = n.updatedAt),
     i

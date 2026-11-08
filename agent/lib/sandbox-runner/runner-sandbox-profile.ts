@@ -7,10 +7,7 @@
  * - `accessForMounts`: fail-closed trusted or restricted access classification.
  * - `sandboxHome`: resolves persistent trusted HOME or ephemeral isolated HOME.
  */
-import type {
-  SandboxAccess,
-  WorkspaceSandboxMount,
-} from "./sandbox-runner-contract.js";
+import type { SandboxAccess, WorkspaceSandboxMount } from "./sandbox-runner-contract.js";
 
 export interface BackendProfile {
   cacheDirectory: string;
@@ -24,9 +21,7 @@ export const ROOT_RUNNER_PROFILE: BackendProfile = {
   stateSchemaVersion: 3,
 };
 
-export function accessForMounts(
-  mounts: readonly WorkspaceSandboxMount[],
-): SandboxAccess {
+export function accessForMounts(mounts: readonly WorkspaceSandboxMount[]): SandboxAccess {
   const hasGroup = mounts.some((mount) => mount.mountPoint === "group");
   const hasTrusted = mounts.some((mount) => mount.mountPoint !== "group");
   if (hasGroup === hasTrusted) {

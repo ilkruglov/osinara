@@ -4,21 +4,15 @@ function parseSlackEventEnvelope(t) {
   let n = JSON.parse(t);
   if (!isObject(n) || n.type !== `event_callback`) return null;
   let r = n.event;
-  return !isObject(r) || typeof r.type != `string` || r.type.length === 0
-    ? null
-    : n;
+  return !isObject(r) || typeof r.type != `string` || r.type.length === 0 ? null : n;
 }
 function parseAppMentionEvent(e) {
   if (e.type !== `event_callback`) return null;
   let t = e.event;
-  return !t || t.type !== `app_mention`
-    ? null
-    : buildSlackMessage(t, e.team_id);
+  return !t || t.type !== `app_mention` ? null : buildSlackMessage(t, e.team_id);
 }
 function slackEventBotUserId(e) {
-  return e.authorizations?.find(
-    (e) => e.is_bot === !0 && typeof e.user_id == `string`,
-  )?.user_id;
+  return e.authorizations?.find((e) => e.is_bot === !0 && typeof e.user_id == `string`)?.user_id;
 }
 function parseMessageEvent(e) {
   if (e.type !== `event_callback`) return null;
@@ -30,22 +24,16 @@ function parseDirectMessageEvent(e) {
   let t = e.event;
   if (!t || t.type !== `message`) return null;
   let n = t;
-  return n.channel_type !== `im` || !isHumanMessage(n)
-    ? null
-    : buildSlackMessage(n, e.team_id);
+  return n.channel_type !== `im` || !isHumanMessage(n) ? null : buildSlackMessage(n, e.team_id);
 }
 function isHumanMessage(e) {
-  return typeof e.subtype == `string` &&
-    e.subtype.length > 0 &&
-    e.subtype !== `file_share`
+  return typeof e.subtype == `string` && e.subtype.length > 0 && e.subtype !== `file_share`
     ? !1
     : !(typeof e.bot_id == `string` && e.bot_id.length > 0);
 }
 function slackMessageFromWebhookPayload(e) {
   return (e.kind === `direct_message` &&
-    ((typeof e.subtype == `string` &&
-      e.subtype.length > 0 &&
-      e.subtype !== `file_share`) ||
+    ((typeof e.subtype == `string` && e.subtype.length > 0 && e.subtype !== `file_share`) ||
       (typeof e.botId == `string` && e.botId.length > 0))) ||
     !e.channelId ||
     !e.ts

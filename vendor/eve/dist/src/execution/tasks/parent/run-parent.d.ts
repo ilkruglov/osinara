@@ -14,9 +14,9 @@ import { type TaskCommand, type TaskRunInboundPayload, type TaskView } from "#ta
 export declare function startTaskRun(input: TaskRunWorkflowInput): Promise<void>;
 /** Resolves the task run that won ownership of one replay-stable command token. */
 export declare function waitForTaskCommandOwner(input: {
-    readonly taskInboxToken: string;
+  readonly taskInboxToken: string;
 }): Promise<{
-    readonly runId: string;
+  readonly runId: string;
 }>;
 /**
  * Submits one command to a task run.
@@ -29,24 +29,27 @@ export declare function waitForTaskCommandOwner(input: {
  * `unreachable` as the terminal signal.
  */
 export declare function sendTaskCommand(input: {
-    readonly command: TaskCommand;
-    readonly taskInboxToken: string;
-    readonly retryUnreachable?: {
-        readonly attempts: number;
-        readonly delayMs: number;
-    };
+  readonly command: TaskCommand;
+  readonly taskInboxToken: string;
+  readonly retryUnreachable?: {
+    readonly attempts: number;
+    readonly delayMs: number;
+  };
 }): Promise<"delivered" | "unreachable">;
 /** Delivers one command and returns the accepting task workflow's run id. */
 export declare function sendTaskCommandToOwner(input: {
-    readonly command: TaskCommand;
-    readonly taskInboxToken: string;
-    readonly retryUnreachable?: {
-        readonly attempts: number;
-        readonly delayMs: number;
-    };
-}): Promise<{
-    readonly runId: string;
-} | undefined>;
+  readonly command: TaskCommand;
+  readonly taskInboxToken: string;
+  readonly retryUnreachable?: {
+    readonly attempts: number;
+    readonly delayMs: number;
+  };
+}): Promise<
+  | {
+      readonly runId: string;
+    }
+  | undefined
+>;
 /**
  * Hands one non-command inbound payload to a task run.
  *
@@ -56,8 +59,8 @@ export declare function sendTaskCommandToOwner(input: {
  * hook, so the payload is stale by definition.
  */
 export declare function sendTaskInboundPayload(input: {
-    readonly taskInboxToken: string;
-    readonly payload: TaskRunInboundPayload;
+  readonly taskInboxToken: string;
+  readonly payload: TaskRunInboundPayload;
 }): Promise<"delivered" | "unreachable">;
 /**
  * Reads the latest view a task run has published, or `undefined`
@@ -68,5 +71,5 @@ export declare function sendTaskInboundPayload(input: {
  * single writer and every write passed the transition function.
  */
 export declare function readLatestTaskView(input: {
-    readonly taskRunId: string;
+  readonly taskRunId: string;
 }): Promise<TaskView | undefined>;

@@ -135,17 +135,13 @@ function isCurrentVercelProjectToken(e) {
   if (!e.issuer.startsWith(`https://oidc.vercel.com`)) return !1;
   let t = e.strategy.currentVercelProject;
   return (
-    t !== void 0 &&
-    typeof e.payload.project_id == `string` &&
-    e.payload.project_id === t.projectId
+    t !== void 0 && typeof e.payload.project_id == `string` && e.payload.project_id === t.projectId
   );
 }
 function currentVercelProjectMatches(e) {
   let t = e.strategy.currentVercelProject;
   return (
-    t !== void 0 &&
-    typeof e.payload.project_id == `string` &&
-    e.payload.project_id === t.projectId
+    t !== void 0 && typeof e.payload.project_id == `string` && e.payload.project_id === t.projectId
   );
 }
 function isCurrentVercelEnvironmentToken(e) {

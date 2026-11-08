@@ -1,8 +1,5 @@
 import { resolveGitHubInstallationToken } from "#public/channels/github/auth.js";
-import {
-  getGitHubPullRequest,
-  getGitHubRepository,
-} from "#public/channels/github/api.js";
+import { getGitHubPullRequest, getGitHubRepository } from "#public/channels/github/api.js";
 async function checkoutGitHubRepository(t, n) {
   let r = await resolveCheckoutDescriptor(n),
     i = t.resolvePath(n.path ?? `/workspace`),
@@ -135,8 +132,7 @@ async function resolveRepositoryDefaultBranch(e, t) {
 function resolveCheckoutRef(e, t) {
   if (e !== void 0 && e.trim().length > 0) return e.trim();
   if (t.headSha !== null) return t.headSha;
-  if (t.pullRequestNumber !== null)
-    return `refs/pull/${t.pullRequestNumber}/head`;
+  if (t.pullRequestNumber !== null) return `refs/pull/${t.pullRequestNumber}/head`;
   if (t.headRef !== null) return t.headRef;
   if (t.defaultBranch !== null) return t.defaultBranch;
   throw Error(`GitHub checkout could not resolve a ref to fetch.`);
@@ -167,8 +163,7 @@ async function runCheckoutCommand(e) {
 }
 function normalizeCheckoutDepth(e) {
   if (e === void 0) return 1;
-  if (!Number.isFinite(e) || e < 1)
-    throw Error(`GitHub checkout depth must be a positive number.`);
+  if (!Number.isFinite(e) || e < 1) throw Error(`GitHub checkout depth must be a positive number.`);
   return Math.floor(e);
 }
 function publicRemoteUrl(e) {

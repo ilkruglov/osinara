@@ -1,14 +1,7 @@
 import { defineSetupIntegration } from "../types.js";
-import {
-  attachLinearConnector,
-  findLinearConnector,
-  provisionLinearConnector,
-} from "./connect.js";
+import { attachLinearConnector, findLinearConnector, provisionLinearConnector } from "./connect.js";
 import { join } from "node:path";
-import {
-  deriveSlackConnectorSlug,
-  normalizeSlackConnectorSlug,
-} from "#setup/scaffold/index.js";
+import { deriveSlackConnectorSlug, normalizeSlackConnectorSlug } from "#setup/scaffold/index.js";
 import { WizardCancelledError } from "#setup/step.js";
 import { select, text } from "#setup/ask.js";
 import { writeTextFile } from "#setup/scaffold/files.js";
@@ -42,8 +35,7 @@ async function prepareLinearSetup(e, t = defaultDeps) {
           key: `linear.connector-name`,
           message: `Name your Linear agent`,
           recommended: r,
-          validate: (e) =>
-            e.trim().length === 0 ? `A Linear agent name is required.` : null,
+          validate: (e) => (e.trim().length === 0 ? `A Linear agent name is required.` : null),
         }),
       ),
     ),
@@ -53,8 +45,7 @@ async function prepareLinearSetup(e, t = defaultDeps) {
       slug: i,
       signal: e.signal,
     });
-  if (a === void 0)
-    return { project: n, connector: { kind: `create`, slug: i } };
+  if (a === void 0) return { project: n, connector: { kind: `create`, slug: i } };
   let o = await e.asker.ask(
     select({
       key: `linear.existing-connector`,
@@ -81,9 +72,7 @@ async function prepareLinearSetup(e, t = defaultDeps) {
                 message: `Name the new Linear agent`,
                 recommended: `${i}-2`,
                 validate: (e) =>
-                  e.trim().length === 0
-                    ? `A Linear agent name is required.`
-                    : null,
+                  e.trim().length === 0 ? `A Linear agent name is required.` : null,
               }),
             ),
           ),
@@ -109,11 +98,9 @@ async function applyLinearSetup(e, t, n = defaultDeps) {
           signal: t.signal,
         });
   return (
-    await n.writeTextFile(
-      join(t.appRoot, `agent/channels/linear.ts`),
-      connectTemplate(r.uid),
-      { force: t.force },
-    ),
+    await n.writeTextFile(join(t.appRoot, `agent/channels/linear.ts`), connectTemplate(r.uid), {
+      force: t.force,
+    }),
     t.presenter.nextSteps([
       `Deploy the agent, then open the Linear app in Vercel Connect and install it in the workspace where you want to delegate issues and comments.`,
       `Delegate an issue or mention the agent in an Agent Session to start a conversation.`,
@@ -128,9 +115,4 @@ const LINEAR_SETUP = defineSetupIntegration({
   prepare: prepareLinearSetup,
   apply: applyLinearSetup,
 });
-export {
-  LINEAR_SETUP,
-  applyLinearSetup,
-  linearSafeConnectorSlug,
-  prepareLinearSetup,
-};
+export { LINEAR_SETUP, applyLinearSetup, linearSafeConnectorSlug, prepareLinearSetup };

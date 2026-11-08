@@ -26,9 +26,9 @@ interface ParsedTargets {
 
 function targetName(content: Buffer): "groq" | "model" | undefined {
   // dotenv accepts optional leading whitespace and `export`; inspect only ASCII syntax, never values.
-  const assignment = content.toString("latin1").match(
-    /^[\t ]*(?:export[\t ]+)?(MODEL_API_KEY|GROQ_API_KEY)[\t ]*=/u,
-  );
+  const assignment = content
+    .toString("latin1")
+    .match(/^[\t ]*(?:export[\t ]+)?(MODEL_API_KEY|GROQ_API_KEY)[\t ]*=/u);
   if (assignment?.[1] === "MODEL_API_KEY") return "model";
   if (assignment?.[1] === "GROQ_API_KEY") return "groq";
   return undefined;
@@ -40,10 +40,14 @@ function splitLines(source: Buffer): EnvironmentLine[] {
   for (let index = 0; index < source.length; index += 1) {
     if (source[index] !== LINE_FEED) continue;
     const contentEnd = index > start && source[index - 1] === CARRIAGE_RETURN ? index - 1 : index;
-    lines.push({ content: source.subarray(start, contentEnd), ending: source.subarray(contentEnd, index + 1) });
+    lines.push({
+      content: source.subarray(start, contentEnd),
+      ending: source.subarray(contentEnd, index + 1),
+    });
     start = index + 1;
   }
-  if (start < source.length) lines.push({ content: source.subarray(start), ending: Buffer.alloc(0) });
+  if (start < source.length)
+    lines.push({ content: source.subarray(start), ending: Buffer.alloc(0) });
   return lines;
 }
 
@@ -80,18 +84,22 @@ function preferredEnding(lines: EnvironmentLine[]): Buffer {
   return lines.find((line) => line.ending.length > 0)?.ending ?? Buffer.from("\n");
 }
 
-export function buildModelEnvironment(source: Buffer, input: {
-  readonly groqApiKey?: string;
-  readonly modelApiKey: string;
-}): Buffer {
+export function buildModelEnvironment(
+  source: Buffer,
+  input: {
+    readonly groqApiKey?: string;
+    readonly modelApiKey: string;
+  },
+): Buffer {
   const parsed = parseTargets(source);
   const modelAssignment = Buffer.concat([
     MODEL_KEY,
     credentialBytes(input.modelApiKey, "MODEL_API_KEY"),
   ]);
-  const groqAssignment = input.groqApiKey === undefined
-    ? undefined
-    : Buffer.concat([GROQ_KEY, credentialBytes(input.groqApiKey, "GROQ_API_KEY")]);
+  const groqAssignment =
+    input.groqApiKey === undefined
+      ? undefined
+      : Buffer.concat([GROQ_KEY, credentialBytes(input.groqApiKey, "GROQ_API_KEY")]);
   const ending = preferredEnding(parsed.lines);
   const output: Buffer[] = [];
 
@@ -109,7 +117,7 @@ export function buildModelEnvironment(source: Buffer, input: {
   });
 
   // Missing assignments are appended without rewriting or decoding any unrelated source bytes.
-  if (parsed.modelIndexes.length === 0 || groqAssignment && parsed.groqIndexes.length === 0) {
+  if (parsed.modelIndexes.length === 0 || (groqAssignment && parsed.groqIndexes.length === 0)) {
     if (output.length > 0 && !output.at(-1)?.equals(ending)) output.push(ending);
     if (parsed.modelIndexes.length === 0) output.push(modelAssignment, ending);
     if (groqAssignment && parsed.groqIndexes.length === 0) output.push(groqAssignment, ending);

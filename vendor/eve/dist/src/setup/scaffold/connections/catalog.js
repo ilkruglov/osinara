@@ -1,7 +1,4 @@
-import {
-  connectionEntries,
-  connectionProtocols,
-} from "../../../packages/eve-catalog/src/index.js";
+import { connectionEntries, connectionProtocols } from "../../../packages/eve-catalog/src/index.js";
 const SUPPORTED_PROTOCOLS = [`mcp`],
   CUSTOM_CONNECTION_SLUG = `custom`,
   CONNECTION_AUTH = {
@@ -21,9 +18,7 @@ const SUPPORTED_PROTOCOLS = [`mcp`],
 function buildCatalogEntry(e, n, r) {
   let i = CONNECTION_AUTH[e];
   if (i === void 0)
-    throw Error(
-      `Connection "${e}" is in the catalog but has no scaffolder auth overlay.`,
-    );
+    throw Error(`Connection "${e}" is in the catalog but has no scaffolder auth overlay.`);
   let a = {
     slug: e,
     label: n,
@@ -33,8 +28,7 @@ function buildCatalogEntry(e, n, r) {
   };
   return (
     r.mcp && (a.mcp = { url: r.mcp.url }),
-    r.openapi &&
-      (a.openapi = { spec: r.openapi.spec, baseUrl: r.openapi.baseUrl }),
+    r.openapi && (a.openapi = { spec: r.openapi.spec, baseUrl: r.openapi.baseUrl }),
     a
   );
 }
@@ -42,9 +36,7 @@ const CONNECTION_CATALOG = connectionEntries()
     .filter((e) => e.surfaces.scaffoldable)
     .map((e) => {
       if (e.connection === void 0)
-        throw Error(
-          `Catalog connection "${e.slug}" is missing its connection identity.`,
-        );
+        throw Error(`Catalog connection "${e.slug}" is missing its connection identity.`);
       return buildCatalogEntry(e.slug, e.name, e.connection);
     }),
   CATALOG_BY_SLUG = new Map(CONNECTION_CATALOG.map((e) => [e.slug, e]));

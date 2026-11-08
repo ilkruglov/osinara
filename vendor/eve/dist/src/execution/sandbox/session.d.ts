@@ -14,4 +14,7 @@ export type { InternalSandboxSession };
  * defaults to a no-op so backends without a firewall (and test doubles)
  * need not supply one; the Vercel backend wires it to `sandbox.update`.
  */
-export declare function buildSandboxSession(primitives: InternalSandboxSession, setNetworkPolicy?: (policy: SandboxNetworkPolicy) => Promise<void>): SandboxSession;
+export declare function buildSandboxSession(
+  primitives: InternalSandboxSession,
+  setNetworkPolicy?: (policy: SandboxNetworkPolicy) => Promise<void>,
+): SandboxSession;

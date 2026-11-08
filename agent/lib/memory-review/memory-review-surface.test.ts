@@ -19,7 +19,10 @@ import {
   MEMORY_REVIEW_DENIED_TOOL_NAMES,
   buildMemoryReviewToolSurface,
 } from "./memory-review-tool-surface.js";
-import { MEMORY_REVIEW_INSTRUCTIONS, formatExistingMemoryForReview } from "./memory-review-prompt.js";
+import {
+  MEMORY_REVIEW_INSTRUCTIONS,
+  formatExistingMemoryForReview,
+} from "./memory-review-prompt.js";
 import { memoryReviewBatchIdFromContinuationToken } from "./memory-review-session.js";
 
 function externalAuth(): SessionAuth {
@@ -49,7 +52,13 @@ function externalAuth(): SessionAuth {
 describe("memory review existing memory block", () => {
   it("renders existing memory for review as untrusted data with refs and slots", () => {
     const block = formatExistingMemoryForReview([
-      { attribute: "работа", content: "Serje пишет книгу", kind: "profile", memoryRef: "mem_1", subjectLabel: "Serje" },
+      {
+        attribute: "работа",
+        content: "Serje пишет книгу",
+        kind: "profile",
+        memoryRef: "mem_1",
+        subjectLabel: "Serje",
+      },
     ]);
     expect(block).toContain("<existing_memory>");
     expect(block).toContain("mem_1");
@@ -61,14 +70,27 @@ describe("memory review existing memory block", () => {
     // On production (6 October 2026) one subject had 157 slots («соцсети» beside «медиапотребление»,
     // «инструменты» beside «использование инструментов»); the block shows forty records, not the slots.
     const block = formatExistingMemoryForReview(
-      [{ attribute: "работа", content: "Serje пишет книгу", kind: "profile", memoryRef: "mem_1", subjectLabel: "Serje" }],
-      [{ attributes: ["работа", "семья", "пиво"], subjectLabel: "Serje" }, { attributes: ["итог обсуждения"], subjectLabel: null }],
+      [
+        {
+          attribute: "работа",
+          content: "Serje пишет книгу",
+          kind: "profile",
+          memoryRef: "mem_1",
+          subjectLabel: "Serje",
+        },
+      ],
+      [
+        { attributes: ["работа", "семья", "пиво"], subjectLabel: "Serje" },
+        { attributes: ["итог обсуждения"], subjectLabel: null },
+      ],
     );
     expect(block).toContain("<existing_slots>");
     expect(block).toContain("Serje: работа, семья, пиво");
     expect(block).toContain("без субъекта: итог обсуждения");
     expect(block.indexOf("<existing_slots>")).toBeLessThan(block.indexOf("<existing_memory>"));
-    expect(formatExistingMemoryForReview([], [{ attributes: ["работа"], subjectLabel: "Serje" }])).toContain("<existing_slots>");
+    expect(
+      formatExistingMemoryForReview([], [{ attributes: ["работа"], subjectLabel: "Serje" }]),
+    ).toContain("<existing_slots>");
   });
 });
 
@@ -87,7 +109,9 @@ describe("memory review instructions", () => {
   it("allows a record only the details the reviewed messages state", () => {
     // 17 October 2026, 50 production batches judged blind: 42–58 % of records carried details
     // taken from <preceding_context> or inferred (whose car, the goals, the previous schedule).
-    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Источник новых сведений только проверяемые сообщения");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain(
+      "Источник новых сведений только проверяемые сообщения",
+    );
     // A slot replace keeps the verified details of the earlier records; only new facts need a source.
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("при slotUpdate.action=replace прежние детали");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("пиши короче, а не додумывай");
@@ -108,15 +132,17 @@ describe("memory review model surface", () => {
   it("contains only memory capabilities plus explicit framework denials", () => {
     const names = Object.keys(buildMemoryReviewToolSurface()).sort();
 
-    expect(names).toEqual([
-      ...MEMORY_REVIEW_DENIED_TOOL_NAMES,
-      "list_memories",
-      "list_memory_threads",
-      "read_memory_thread",
-      "remember",
-      "search_memories",
-      "search_memory_threads",
-    ].sort());
+    expect(names).toEqual(
+      [
+        ...MEMORY_REVIEW_DENIED_TOOL_NAMES,
+        "list_memories",
+        "list_memory_threads",
+        "read_memory_thread",
+        "remember",
+        "search_memories",
+        "search_memory_threads",
+      ].sort(),
+    );
     expect(names).not.toContain("manage_memory");
     expect(names).not.toContain("manage_memory_thread");
   });
@@ -141,9 +167,11 @@ describe("memory review model surface", () => {
       new Error("AGENT_GROUP_TOOL_FORBIDDEN"),
     );
 
-    await expect(surface[toolName]!.execute({}, {
-      session: { auth: externalAuth() },
-    } as never)).rejects.toMatchObject({
+    await expect(
+      surface[toolName]!.execute({}, {
+        session: { auth: externalAuth() },
+      } as never),
+    ).rejects.toMatchObject({
       contract: {
         category: "authorization",
         code: "AGENT_GROUP_TOOL_FORBIDDEN",
@@ -151,10 +179,13 @@ describe("memory review model surface", () => {
         sideEffectStatus: "not_started",
       },
     });
-    expect(authorizeCurrentExternalGroupCapability).toHaveBeenCalledWith({
-      familyId: "family-1",
-      groupId: "group-1",
-    }, toolName);
+    expect(authorizeCurrentExternalGroupCapability).toHaveBeenCalledWith(
+      {
+        familyId: "family-1",
+        groupId: "group-1",
+      },
+      toolName,
+    );
   });
 
   it("states the exact silent and source-backed review contract", () => {

@@ -1,11 +1,11 @@
 import { type AuthorizationChallenge } from "#harness/authorization.js";
 import type { HarnessSession, HarnessToolMap, StepInput } from "#harness/types.js";
 export interface ApprovalDeliveryResult {
-    readonly challenges: readonly AuthorizationChallenge[];
-    readonly feedback: readonly string[];
-    readonly kind: "continue" | "continue-coordination" | "authorization-required" | "park";
-    readonly session: HarnessSession;
-    readonly stepInput?: StepInput;
+  readonly challenges: readonly AuthorizationChallenge[];
+  readonly feedback: readonly string[];
+  readonly kind: "continue" | "continue-coordination" | "authorization-required" | "park";
+  readonly session: HarnessSession;
+  readonly stepInput?: StepInput;
 }
 /**
  * Advances approval state by one durable phase.
@@ -27,13 +27,13 @@ export interface ApprovalDeliveryResult {
  */
 /** Returns whether this invocation should prepare tools for persisted policy work. */
 export declare function shouldPrepareApprovalPolicyTools(input: {
-    readonly now?: number;
-    readonly session: HarnessSession;
-    readonly stepInput?: StepInput;
+  readonly now?: number;
+  readonly session: HarnessSession;
+  readonly stepInput?: StepInput;
 }): boolean;
 export declare function coordinateApprovalDelivery(input: {
-    readonly now?: number;
-    readonly session: HarnessSession;
-    readonly stepInput?: StepInput;
-    readonly tools: HarnessToolMap;
+  readonly now?: number;
+  readonly session: HarnessSession;
+  readonly stepInput?: StepInput;
+  readonly tools: HarnessToolMap;
 }): Promise<ApprovalDeliveryResult>;

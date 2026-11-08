@@ -6,14 +6,14 @@ import type { SetupBox } from "../step.js";
 import { detectAiGatewayResolution } from "./detect-ai-gateway.js";
 /** Injected for tests; defaults to the real env-file and Vercel helpers. */
 export interface ApplyAiGatewayCredentialDeps {
-    appendEnv: typeof appendEnv;
-    runVercelEnvPull: typeof runVercelEnvPull;
-    detectAiGatewayResolution: typeof detectAiGatewayResolution;
+  appendEnv: typeof appendEnv;
+  runVercelEnvPull: typeof runVercelEnvPull;
+  detectAiGatewayResolution: typeof detectAiGatewayResolution;
 }
 export interface ApplyAiGatewayCredentialOptions {
-    /** Reports credential progress and warnings. The box never prompts through it. */
-    prompter: Prompter;
-    deps?: ApplyAiGatewayCredentialDeps;
+  /** Reports credential progress and warnings. The box never prompts through it. */
+  prompter: Prompter;
+  deps?: ApplyAiGatewayCredentialDeps;
 }
 /**
  * THE AI GATEWAY CREDENTIAL BOX. Executes the resolved {@link ResolvedAiGateway}
@@ -25,4 +25,6 @@ export interface ApplyAiGatewayCredentialOptions {
  * linked project's OIDC gateway, and `byop` leaves provider credentials to the
  * scaffolded provider block.
  */
-export declare function applyAiGatewayCredential(options: ApplyAiGatewayCredentialOptions): SetupBox<SetupState, null, ResolvedAiGatewayCredentials>;
+export declare function applyAiGatewayCredential(
+  options: ApplyAiGatewayCredentialOptions,
+): SetupBox<SetupState, null, ResolvedAiGatewayCredentials>;

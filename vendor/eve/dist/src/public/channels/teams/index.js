@@ -44,10 +44,7 @@ import {
   formatConnectionDisplayName,
   teamsMentionUser,
 } from "#public/channels/teams/defaults.js";
-import {
-  verifyTeamsJwt,
-  verifyTeamsRequest,
-} from "#public/channels/teams/verify.js";
+import { verifyTeamsJwt, verifyTeamsRequest } from "#public/channels/teams/verify.js";
 export {
   TEAMS_ADAPTIVE_CARD_CONTENT_TYPE,
   TEAMS_HITL_CHOICE_INPUT_ID,

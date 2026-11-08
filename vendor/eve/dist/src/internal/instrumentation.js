@@ -21,10 +21,7 @@ function resolveInstrumentationProjection(n) {
     return;
   }
   if (isThenable(o)) {
-    (i.warn(
-      `ignoring instrumentation projection because it returned a Promise`,
-      { source: a },
-    ),
+    (i.warn(`ignoring instrumentation projection because it returned a Promise`, { source: a }),
       Promise.resolve(o).catch((t) => {
         i.warn(`ignored instrumentation projection Promise rejected`, {
           error: formatError(t),
@@ -43,10 +40,10 @@ function resolveInstrumentationProjection(n) {
     try {
       return parseJsonObject(o);
     } catch (t) {
-      i.warn(
-        `ignoring instrumentation projection because it is outside the JSON contract`,
-        { error: formatError(t), source: a },
-      );
+      i.warn(`ignoring instrumentation projection because it is outside the JSON contract`, {
+        error: formatError(t),
+        source: a,
+      });
       return;
     }
   }

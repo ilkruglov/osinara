@@ -1,7 +1,4 @@
-import {
-  serializeInputSchema,
-  serializeOutputSchema,
-} from "#shared/tool-schema.js";
+import { serializeInputSchema, serializeOutputSchema } from "#shared/tool-schema.js";
 import { ROOT_COMPILED_AGENT_NODE_ID } from "#compiler/manifest.js";
 import { LOAD_SKILL_TOOL_NAME } from "#runtime/skills/fragment-context.js";
 import { WORKFLOW_TOOL_NAME } from "#shared/workflow-sandbox.js";
@@ -19,9 +16,7 @@ function buildAgentInfoResponse(e, t) {
   let n = e.agent,
     r = n.config;
   if (r === void 0)
-    throw Error(
-      `Cannot inspect unresolved dynamic subagent resources as a root agent.`,
-    );
+    throw Error(`Cannot inspect unresolved dynamic subagent resources as a root agent.`);
   let a = buildToolInfo(n, getRootDelegationToolNames(e.manifest));
   return {
     agent: {
@@ -82,9 +77,7 @@ function buildAgentInfoResponse(e, t) {
     schedules: e.schedules.map(renderSchedule),
     skills: {
       static: n.skills.map(renderSkill),
-      dynamic: n.dynamicSkillResolvers.map((e) =>
-        renderDynamicResolver(e, { origin: `authored` }),
-      ),
+      dynamic: n.dynamicSkillResolvers.map((e) => renderDynamicResolver(e, { origin: `authored` })),
     },
     subagents: {
       local: e.manifest.subagents.map(renderSubagent),
@@ -104,9 +97,7 @@ function buildAgentInfoResponse(e, t) {
 }
 function resolveStaticAgentModelRouting(e) {
   if (e.config.model === void 0)
-    throw Error(
-      `Resolved static agent config does not match its compiled manifest.`,
-    );
+    throw Error(`Resolved static agent config does not match its compiled manifest.`);
   return e.config.model.routing;
 }
 function buildChannelInfo(e) {
@@ -129,10 +120,7 @@ function buildChannelInfo(e) {
     });
   return {
     authored: c,
-    available: [
-      ...s.map((e) => renderChannel(e, { origin: `framework` })),
-      ...c,
-    ],
+    available: [...s.map((e) => renderChannel(e, { origin: `framework` })), ...c],
     disabledFramework: [...e.disabledFrameworkChannels],
     framework: l.filter((e) => r.has(e.name)),
   };
@@ -159,9 +147,7 @@ function buildToolInfo(e, t) {
     disabledFramework: [...e.disabledFrameworkTools],
     dynamic: [
       ...s.map((e) => renderDynamicResolver(e, { origin: `framework` })),
-      ...e.dynamicToolResolvers.map((e) =>
-        renderDynamicResolver(e, { origin: `authored` }),
-      ),
+      ...e.dynamicToolResolvers.map((e) => renderDynamicResolver(e, { origin: `authored` })),
     ],
     framework: d.framework,
     reserved: [WORKFLOW_TOOL_NAME, LOAD_SKILL_TOOL_NAME],
@@ -175,13 +161,7 @@ function buildFrameworkToolInfo(e) {
   for (let a of getAllFrameworkToolDefinitions()) {
     let o = e.disabledFrameworkToolNames.has(a.name),
       s = e.authoredToolNames.has(a.name),
-      c = o
-        ? `disabled`
-        : t.has(a.name)
-          ? `replaced`
-          : i.has(a.name)
-            ? `opt-in`
-            : `active`,
+      c = o ? `disabled` : t.has(a.name) ? `replaced` : i.has(a.name) ? `opt-in` : `active`,
       l = renderTool(a, { origin: `framework`, replacesFrameworkTool: !1 });
     (c === `active` && n.push(l),
       r.push({

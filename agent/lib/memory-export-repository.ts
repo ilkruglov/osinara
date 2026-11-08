@@ -89,7 +89,9 @@ export const memoryExportRepository = {
         [auth.familyId, operationKey, auth.userId],
       );
       if (!result.rowCount) {
-        throw new Error("AGENT_MEMORY_EXPORT_STATE_INVALID: Экспорт не находился в состоянии отправки");
+        throw new Error(
+          "AGENT_MEMORY_EXPORT_STATE_INVALID: Экспорт не находился в состоянии отправки",
+        );
       }
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, metadata)

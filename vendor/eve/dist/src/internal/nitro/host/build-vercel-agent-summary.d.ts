@@ -7,8 +7,8 @@ import { type VercelEveAgentSummary } from "#internal/vercel-agent-summary.js";
  * write-out side.
  */
 export declare function buildVercelAgentSummary(input: {
-    manifest: CompiledAgentManifest;
-    generatorVersion?: string;
+  manifest: CompiledAgentManifest;
+  generatorVersion?: string;
 }): VercelEveAgentSummary;
 /**
  * Writes the agent summary file. Returns the absolute path of the
@@ -28,7 +28,7 @@ export declare function buildVercelAgentSummary(input: {
  * whatever surface they want.
  */
 export declare function emitVercelAgentSummary(input: {
-    manifest: CompiledAgentManifest;
-    generatorVersion?: string;
-    outputPath: string;
+  manifest: CompiledAgentManifest;
+  generatorVersion?: string;
+  outputPath: string;
 }): Promise<string>;

@@ -5,9 +5,9 @@
  * and Windows runners that surface pnpm only through `PNPM_HOME`.
  */
 export interface PnpmInvocation {
-    readonly args: readonly string[];
-    readonly command: string;
-    readonly shell?: boolean;
+  readonly args: readonly string[];
+  readonly command: string;
+  readonly shell?: boolean;
 }
 /**
  * Picks the right pnpm executable for the current host. Resolution order:

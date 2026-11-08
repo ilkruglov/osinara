@@ -95,15 +95,16 @@ export async function searchTelegramGroupHistory(
     sequenceTo: input.sequenceTo ?? null,
     to: optionalDate(input.to),
   };
-  const attachmentReferenceAccess = authorization.groupType === "family_private"
-    ? "all" as const
-    : await loadExternalCapabilities({
-      familyId: authorization.familyId,
-      groupId: authorization.groupId,
-    }).then((capabilities) => ({
-      images: capabilities.has("inspect_workspace_image"),
-      readableText: capabilities.has("import_telegram_attachment"),
-    }));
+  const attachmentReferenceAccess =
+    authorization.groupType === "family_private"
+      ? ("all" as const)
+      : await loadExternalCapabilities({
+          familyId: authorization.familyId,
+          groupId: authorization.groupId,
+        }).then((capabilities) => ({
+          images: capabilities.has("inspect_workspace_image"),
+          readableText: capabilities.has("import_telegram_attachment"),
+        }));
   const result = await repository.search(query);
   // Transport and database identifiers stay behind the tool boundary; sequence IDs are the only
   // model-visible addressing scheme.

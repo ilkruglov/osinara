@@ -1,18 +1,9 @@
 import { callAdapterEventHandler } from "#channel/adapter.js";
 import { ModeKey } from "#context/keys.js";
-import {
-  encodeMessageStreamEvent,
-  stampMessageStreamEvent,
-} from "#protocol/message.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { encodeMessageStreamEvent, stampMessageStreamEvent } from "#protocol/message.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 import { deserializeContext, serializeContext } from "#context/serialize.js";
-import {
-  createDurableSessionState,
-  readDurableSession,
-} from "#execution/durable-session-store.js";
+import { createDurableSessionState, readDurableSession } from "#execution/durable-session-store.js";
 import { hydrateDurableSession } from "#execution/session.js";
 import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
 import { buildAdapterContext } from "#channel/adapter-context.js";
@@ -73,10 +64,7 @@ async function emitProxiedSubagentEvent(i) {
       },
       r = await withContextScope(a, c, async (e) => {
         if (i.hookPayload.kind === `subagent-authorization-event`)
-          return (
-            await emit(i.hookPayload.event),
-            { result: void 0, session: e }
-          );
+          return (await emit(i.hookPayload.event), { result: void 0, session: e });
         let n = await emitProxiedInputRequest({
           emit,
           hookPayload: i.hookPayload,

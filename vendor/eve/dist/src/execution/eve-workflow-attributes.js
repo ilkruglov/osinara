@@ -41,11 +41,7 @@ function collectMessageText(e) {
   if (!Array.isArray(e)) return;
   let t = [];
   for (let n of e)
-    n &&
-      typeof n == `object` &&
-      n.type === `text` &&
-      typeof n.text == `string` &&
-      t.push(n.text);
+    n && typeof n == `object` && n.type === `text` && typeof n.text == `string` && t.push(n.text);
   return t.length > 0 ? t.join(` `) : void 0;
 }
 function buildSessionAttributes(e) {

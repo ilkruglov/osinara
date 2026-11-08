@@ -50,9 +50,7 @@ async function collectAuthoredModules(e) {
       ? n.push(...(await collectAuthoredModules(t)))
       : i.isFile() &&
         !/\.d\.[cm]?ts$/.test(i.name) &&
-        SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS.some((e) =>
-          i.name.endsWith(e),
-        ) &&
+        SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS.some((e) => i.name.endsWith(e)) &&
         n.push(t);
   }
   return n.sort();
@@ -75,8 +73,7 @@ function analyzeModule(e) {
         for (let r of e.specifiers ?? []) {
           let e = moduleName(r.local);
           if (e !== null) {
-            if (r.type === `ImportNamespaceSpecifier`)
-              t.namespaceImports.set(e, n);
+            if (r.type === `ImportNamespaceSpecifier`) t.namespaceImports.set(e, n);
             else if (r.type === `ImportSpecifier`) {
               let i = moduleName(r.imported);
               i !== null && t.imports.set(e, { specifier: n, importedName: i });
@@ -103,10 +100,7 @@ function analyzeModule(e) {
         if (n?.type === `Identifier`) {
           let e = moduleName(n);
           e !== null && t.calledIdentifiers.add(e);
-        } else if (
-          n?.type === `MemberExpression` &&
-          n.object?.type === `Identifier`
-        ) {
+        } else if (n?.type === `MemberExpression` && n.object?.type === `Identifier`) {
           let e = moduleName(n.object),
             r = moduleName(n.property);
           if (e !== null && r !== null) {
@@ -123,7 +117,7 @@ function computeStateExports(e, t) {
   let n = new Map();
   for (let t of e.keys()) n.set(t, new Set());
   let r = !0;
-  for (; r; ) {
+  for (; r;) {
     r = !1;
     for (let [i, a] of e) {
       let e = n.get(i),
@@ -169,8 +163,7 @@ function resolveLocalSpecifier(e, t, o) {
   if (!t.startsWith(`.`)) return null;
   let s = resolve(dirname(e), t),
     c = [s, ...emittedExtensionVariants(s)];
-  for (let e of SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS)
-    c.push(`${s}${e}`, join(s, `index${e}`));
+  for (let e of SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS) c.push(`${s}${e}`, join(s, `index${e}`));
   return c.find((e) => o.has(e)) ?? null;
 }
 function emittedExtensionVariants(e) {
@@ -199,8 +192,7 @@ function walkAst(e, t) {
   t(e);
   for (let n of Object.values(e))
     if (Array.isArray(n))
-      for (let e of n)
-        typeof e == `object` && e && `type` in e && walkAst(e, t);
+      for (let e of n) typeof e == `object` && e && `type` in e && walkAst(e, t);
     else typeof n == `object` && n && `type` in n && walkAst(n, t);
 }
 export { extensionUsesState };

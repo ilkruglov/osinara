@@ -1,13 +1,8 @@
-import {
-  GLOB_INPUT_SCHEMA,
-  GLOB_OUTPUT_SCHEMA,
-} from "#runtime/framework-tools/glob.js";
+import { GLOB_INPUT_SCHEMA, GLOB_OUTPUT_SCHEMA } from "#runtime/framework-tools/glob.js";
 import { executeGlobOnSandbox } from "#execution/sandbox/glob-tool.js";
 function defineGlobTool(n = {}) {
   return {
-    description:
-      n.description ??
-      `Search for files by glob pattern in the workspace sandbox.`,
+    description: n.description ?? `Search for files by glob pattern in the workspace sandbox.`,
     async execute(e, t) {
       return executeGlobOnSandbox(await t.getSandbox(), e);
     },

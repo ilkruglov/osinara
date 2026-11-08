@@ -45,10 +45,18 @@ describe("Google Workspace CLI installer", () => {
   it("keeps the x64 archive in vendor with the pinned digest and nothing for arm64", async () => {
     const x64 = resolveGoogleWorkspaceCliArtifact("linux", "x64");
     const vendored = await resolveGoogleWorkspaceCliVendoredPath(x64);
-    expect(vendored).toMatch(/vendor\/google-workspace-cli\/google-workspace-cli-x86_64-unknown-linux-musl\.tar\.gz$/u);
-    const digest = createHash("sha256").update(await readFile(vendored!)).digest("hex");
+    expect(vendored).toMatch(
+      /vendor\/google-workspace-cli\/google-workspace-cli-x86_64-unknown-linux-musl\.tar\.gz$/u,
+    );
+    const digest = createHash("sha256")
+      .update(await readFile(vendored!))
+      .digest("hex");
     expect(digest).toBe(x64.sha256);
-    expect(await resolveGoogleWorkspaceCliVendoredPath(resolveGoogleWorkspaceCliArtifact("linux", "arm64"))).toBeNull();
+    expect(
+      await resolveGoogleWorkspaceCliVendoredPath(
+        resolveGoogleWorkspaceCliArtifact("linux", "arm64"),
+      ),
+    ).toBeNull();
   });
 
   it("rejects non-Linux and unsupported CPU targets", () => {

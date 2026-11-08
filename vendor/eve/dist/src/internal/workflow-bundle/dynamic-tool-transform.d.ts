@@ -33,7 +33,10 @@
  *
  * Returns null if the file doesn't contain a dynamic tool pattern.
  */
-export declare function transformDynamicToolExecute(filename: string, source: string): Promise<{
-    code: string;
+export declare function transformDynamicToolExecute(
+  filename: string,
+  source: string,
+): Promise<{
+  code: string;
 } | null>;
 export { transformDynamicToolExecute as transformDynamicToolAwait };

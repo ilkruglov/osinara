@@ -68,7 +68,9 @@ function context(): ToolContext {
 
 function dependencies() {
   return {
-    readImage: vi.fn().mockResolvedValue({ bytes: Buffer.from("original"), mediaType: "image/png" }),
+    readImage: vi
+      .fn()
+      .mockResolvedValue({ bytes: Buffer.from("original"), mediaType: "image/png" }),
     client: {
       assertConfigured: vi.fn(),
       assertSupportsEditing: vi.fn(),
@@ -90,50 +92,77 @@ function dependencies() {
     workspaces: {
       findBinaryWrite: vi.fn().mockResolvedValue(null),
       workspaceId: vi.fn().mockResolvedValue("workspace-1"),
-      writeBinary: vi.fn().mockImplementation(async (
-        _auth: unknown,
-        input: { path: string; scope: "family" | "group" | "personal" },
-      ) => ({
-        ...FILE,
-        path: input.path,
-        scope: input.scope,
-      })),
+      writeBinary: vi
+        .fn()
+        .mockImplementation(
+          async (
+            _auth: unknown,
+            input: { path: string; scope: "family" | "group" | "personal" },
+          ) => ({
+            ...FILE,
+            path: input.path,
+            scope: input.scope,
+          }),
+        ),
     },
   };
 }
 
 describe("generate_image", () => {
-  it.each(["AGENT_IMAGE_EDITING_INPUT_INVALID", "AGENT_IMAGE_EDITING_UNAVAILABLE"])("records %s as a definite failure", async (code) => {
-    const deps = dependencies();
-    deps.client.generate.mockRejectedValue(new AppError(code, "Редактирование не началось"));
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
-      images: [{ path: "photo.png", scope: "group" }],
-    }, context())).rejects.toMatchObject({ code });
-    expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-1", code);
-    expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
-  });
+  it.each(["AGENT_IMAGE_EDITING_INPUT_INVALID", "AGENT_IMAGE_EDITING_UNAVAILABLE"])(
+    "records %s as a definite failure",
+    async (code) => {
+      const deps = dependencies();
+      deps.client.generate.mockRejectedValue(new AppError(code, "Редактирование не началось"));
+      await expect(
+        createGenerateImageTool(deps as never).execute(
+          { ...INPUT, images: [{ path: "photo.png", scope: "group" }] },
+          context(),
+        ),
+      ).rejects.toMatchObject({ code });
+      expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-1", code);
+      expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
+    },
+  );
 
   it("records the provider job in the ledger and still delivers when the record fails", async () => {
     const deps = dependencies();
-    const job = { jobId: "cmvbdeekj0073zx013f2euglr", model: "nano-banana-2:white", provider: "plusvibe" };
+    const job = {
+      jobId: "cmvbdeekj0073zx013f2euglr",
+      model: "nano-banana-2:white",
+      provider: "plusvibe",
+    };
     deps.operations.recordProviderJob.mockRejectedValueOnce(new Error("ledger down"));
-    deps.client.generate.mockImplementation(async (input: { onProviderJob?: (job: unknown) => Promise<void> }) => {
-      await input.onProviderJob?.(job);
-      return { bytes: Buffer.from("generated"), mediaType: "image/webp", model: "plusvibe/nano-banana-2:white" };
-    });
+    deps.client.generate.mockImplementation(
+      async (input: { onProviderJob?: (job: unknown) => Promise<void> }) => {
+        await input.onProviderJob?.(job);
+        return {
+          bytes: Buffer.from("generated"),
+          mediaType: "image/webp",
+          model: "plusvibe/nano-banana-2:white",
+        };
+      },
+    );
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(createGenerateImageTool(deps as never).execute(INPUT, context())).resolves.toMatchObject({ generated: true });
+    await expect(
+      createGenerateImageTool(deps as never).execute(INPUT, context()),
+    ).resolves.toMatchObject({ generated: true });
     expect(deps.operations.recordProviderJob).toHaveBeenCalledWith("call-image-1", job);
-    expect(error.mock.calls.map(([line]) => String(line)).join("\n")).toContain("AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED");
+    expect(error.mock.calls.map(([line]) => String(line)).join("\n")).toContain(
+      "AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED",
+    );
     error.mockRestore();
   });
 
   it("returns a completed edit without calling the provider again", async () => {
     const deps = dependencies();
     deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
-      images: [{ telegramMessageId: "42", scope: "group" }],
-    }, context())).resolves.toMatchObject({ generated: false, path: FILE.path });
+    await expect(
+      createGenerateImageTool(deps as never).execute(
+        { ...INPUT, images: [{ telegramMessageId: "42", scope: "group" }] },
+        context(),
+      ),
+    ).resolves.toMatchObject({ generated: false, path: FILE.path });
     expect(deps.readImage).toHaveBeenCalled();
     expect(deps.client.generate).not.toHaveBeenCalled();
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
@@ -141,10 +170,15 @@ describe("generate_image", () => {
 
   it("rejects unavailable editing before reading a source or creating a reservation", async () => {
     const deps = dependencies();
-    deps.client.assertSupportsEditing.mockImplementation(() => { throw new AppError("AGENT_IMAGE_EDITING_UNAVAILABLE", "Недоступно"); });
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
-      images: [{ path: "photo.png", scope: "group" }],
-    }, context())).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    deps.client.assertSupportsEditing.mockImplementation(() => {
+      throw new AppError("AGENT_IMAGE_EDITING_UNAVAILABLE", "Недоступно");
+    });
+    await expect(
+      createGenerateImageTool(deps as never).execute(
+        { ...INPUT, images: [{ path: "photo.png", scope: "group" }] },
+        context(),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
     expect(deps.readImage).not.toHaveBeenCalled();
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
@@ -153,10 +187,15 @@ describe("generate_image", () => {
     const tool = createGenerateImageTool(deps as never);
     const images = [{ path: "photos/source.png", scope: "group" }];
     await tool.execute({ ...INPUT, images }, context());
-    expect(deps.readImage).toHaveBeenCalledWith(expect.objectContaining({ groupId: "group-1" }), images[0]);
-    expect(deps.client.generate).toHaveBeenCalledWith(expect.objectContaining({
-      referenceImages: [{ bytes: Buffer.from("original"), mediaType: "image/png" }],
-    }));
+    expect(deps.readImage).toHaveBeenCalledWith(
+      expect.objectContaining({ groupId: "group-1" }),
+      images[0],
+    );
+    expect(deps.client.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImages: [{ bytes: Buffer.from("original"), mediaType: "image/png" }],
+      }),
+    );
     expect(deps.workspaces.writeBinary.mock.calls[0]![1].path).toBe(GENERATED_PATH);
     const originalHash = deps.operations.begin.mock.calls[0]![0].inputHash;
     deps.readImage.mockResolvedValue({ bytes: Buffer.from("changed"), mediaType: "image/png" });
@@ -167,18 +206,28 @@ describe("generate_image", () => {
   it("stops before reservation and provider access when source authorization fails", async () => {
     const deps = dependencies();
     deps.readImage.mockRejectedValue(new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Нет доступа"));
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
-      images: [{ path: "photo.png", scope: "personal" }],
-    }, context())).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_DENIED" });
+    await expect(
+      createGenerateImageTool(deps as never).execute(
+        { ...INPUT, images: [{ path: "photo.png", scope: "personal" }] },
+        context(),
+      ),
+    ).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_DENIED" });
     expect(deps.operations.begin).not.toHaveBeenCalled();
     expect(deps.client.generate).not.toHaveBeenCalled();
   });
 
-  it.each([[], [{ scope: "group" }], [{ scope: "group", path: "a.png", telegramMessageId: "42" }],
-    Array.from({ length: 5 }, () => ({ scope: "group", path: "a.png" }))].map((images) => ({ images })))("rejects invalid edit sources $images", async ({ images }) => {
+  it.each(
+    [
+      [],
+      [{ scope: "group" }],
+      [{ scope: "group", path: "a.png", telegramMessageId: "42" }],
+      Array.from({ length: 5 }, () => ({ scope: "group", path: "a.png" })),
+    ].map((images) => ({ images })),
+  )("rejects invalid edit sources $images", async ({ images }) => {
     const deps = dependencies();
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT, images }, context()))
-      .rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_INPUT_INVALID" });
+    await expect(
+      createGenerateImageTool(deps as never).execute({ ...INPUT, images }, context()),
+    ).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_INPUT_INVALID" });
     expect(deps.readImage).not.toHaveBeenCalled();
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
@@ -186,8 +235,9 @@ describe("generate_image", () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute({ ...INPUT, scope: "personal" }, context()))
-      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_INPUT_INVALID/u);
+    await expect(tool.execute({ ...INPUT, scope: "personal" }, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_INPUT_INVALID/u,
+    );
     expect(deps.workspaces.workspaceId).not.toHaveBeenCalled();
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
@@ -202,8 +252,9 @@ describe("generate_image", () => {
     });
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context()))
-      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_CONFIG_INVALID/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_CONFIG_INVALID/u,
+    );
     expect(deps.workspaces.workspaceId).not.toHaveBeenCalled();
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
@@ -261,8 +312,9 @@ describe("generate_image", () => {
     });
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context()))
-      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_REPLAY_MISMATCH/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_REPLAY_MISMATCH/u,
+    );
     expect(deps.client.generate).not.toHaveBeenCalled();
   });
 
@@ -282,13 +334,17 @@ describe("generate_image", () => {
 
   it("records a rejected prompt as a definitive failure", async () => {
     const deps = dependencies();
-    deps.client.generate.mockRejectedValue(new AppError(
-      "AGENT_IMAGE_GENERATION_REJECTED",
-      "Сервис генерации изображений отклонил запрос. Измените описание и попробуйте снова",
-    ));
+    deps.client.generate.mockRejectedValue(
+      new AppError(
+        "AGENT_IMAGE_GENERATION_REJECTED",
+        "Сервис генерации изображений отклонил запрос. Измените описание и попробуйте снова",
+      ),
+    );
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context())).rejects.toThrowError(/AGENT_IMAGE_GENERATION_REJECTED/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_REJECTED/u,
+    );
     expect(deps.operations.markFailed).toHaveBeenCalledWith(
       "call-image-1",
       "AGENT_IMAGE_GENERATION_REJECTED",
@@ -298,13 +354,17 @@ describe("generate_image", () => {
 
   it("records uncertain provider completion as ambiguous without retrying", async () => {
     const deps = dependencies();
-    deps.client.generate.mockRejectedValue(new AppError(
-      "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
-      "Не удалось подтвердить результат генерации. Создайте новый запрос позднее",
-    ));
+    deps.client.generate.mockRejectedValue(
+      new AppError(
+        "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
+        "Не удалось подтвердить результат генерации. Создайте новый запрос позднее",
+      ),
+    );
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context())).rejects.toThrowError(/AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u,
+    );
     expect(deps.client.generate).toHaveBeenCalledTimes(1);
     expect(deps.operations.markAmbiguous).toHaveBeenCalledWith(
       "call-image-1",
@@ -318,8 +378,9 @@ describe("generate_image", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context()))
-      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u,
+    );
     expect(deps.operations.markAmbiguous).toHaveBeenCalledWith(
       "call-image-1",
       "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
@@ -333,8 +394,9 @@ describe("generate_image", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context()))
-      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u);
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      /AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u,
+    );
     expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
 
     deps.operations.begin.mockResolvedValue({ state: "started", workspaceId: "workspace-1" });
@@ -363,34 +425,56 @@ describe("generate_image", () => {
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
   });
 
-  const ROBOT = "Вертикальный кадр, стиль ретро-плаката 1950-х, пожелтевшая бумага. Сцена: ретро-робот с ламповыми глазами держит катушку магнитной ленты, за спиной три серверные стойки.";
-  const ECHO = "Обложка журнала в стиле барокко. Центр: ретро-робот с ламповыми глазами на шестерне, в руке катушка магнитной ленты, за спиной три серверные стойки.";
+  const ROBOT =
+    "Вертикальный кадр, стиль ретро-плаката 1950-х, пожелтевшая бумага. Сцена: ретро-робот с ламповыми глазами держит катушку магнитной ленты, за спиной три серверные стойки.";
+  const ECHO =
+    "Обложка журнала в стиле барокко. Центр: ретро-робот с ламповыми глазами на шестерне, в руке катушка магнитной ленты, за спиной три серверные стойки.";
 
   it("refuses a new picture that echoes the series before anything is reserved, and names the repeats", async () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);
-    await expect(tool.execute({ ...INPUT, prompt: ROBOT }, context())).resolves.toMatchObject({ generated: true });
+    await expect(tool.execute({ ...INPUT, prompt: ROBOT }, context())).resolves.toMatchObject({
+      generated: true,
+    });
     expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
 
-    const refusal = await tool.execute({ ...INPUT, prompt: ECHO }, { ...context(), callId: "call-image-2" }).catch((error: unknown) => error);
+    const refusal = await tool
+      .execute({ ...INPUT, prompt: ECHO }, { ...context(), callId: "call-image-2" })
+      .catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(ModelFacingError);
     expect((refusal as ModelFacingError).contract).toMatchObject({
-      category: "input", code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES", field: "prompt", retryable: true, sideEffectStatus: "not_started",
+      category: "input",
+      code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+      field: "prompt",
+      retryable: true,
+      sideEffectStatus: "not_started",
       reason: expect.stringContaining("ламповыми глазами"),
       correction: expect.stringContaining("keep"),
     });
     // The ledger knows the refusal as a definite failure of that call; the provider was not asked.
-    expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-2", "AGENT_IMAGE_PROMPT_REPEATS_SERIES");
+    expect(deps.operations.markFailed).toHaveBeenCalledWith(
+      "call-image-2",
+      "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+    );
     expect(deps.client.generate).toHaveBeenCalledTimes(1);
     expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
   });
 
   it("replays a stored refusal as the same input correction", async () => {
     const deps = dependencies();
-    deps.operations.begin.mockResolvedValue({ errorCode: "AGENT_IMAGE_PROMPT_REPEATS_SERIES", state: "failed" });
-    const replayed = await createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ECHO }, context()).catch((error: unknown) => error);
+    deps.operations.begin.mockResolvedValue({
+      errorCode: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+      state: "failed",
+    });
+    const replayed = await createGenerateImageTool(deps as never)
+      .execute({ ...INPUT, prompt: ECHO }, context())
+      .catch((error: unknown) => error);
     expect(replayed).toBeInstanceOf(ModelFacingError);
-    expect((replayed as ModelFacingError).contract).toMatchObject({ category: "input", retryable: true, sideEffectStatus: "not_started" });
+    expect((replayed as ModelFacingError).contract).toMatchObject({
+      category: "input",
+      retryable: true,
+      sideEffectStatus: "not_started",
+    });
     expect(deps.client.generate).not.toHaveBeenCalled();
   });
 
@@ -398,8 +482,9 @@ describe("generate_image", () => {
     const deps = dependencies();
     deps.series.remember("wrun-image", ROBOT);
     deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
-    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ROBOT }, context()))
-      .resolves.toMatchObject({ generated: false, path: FILE.path });
+    await expect(
+      createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ROBOT }, context()),
+    ).resolves.toMatchObject({ generated: false, path: FILE.path });
     expect(deps.operations.markFailed).not.toHaveBeenCalled();
     expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
   });
@@ -408,18 +493,28 @@ describe("generate_image", () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);
     await tool.execute({ ...INPUT, prompt: ROBOT }, context());
-    await expect(tool.execute(
-      { ...INPUT, keep: ["сюжет: ретро-робот с ламповыми глазами, катушка магнитной ленты, три серверные стойки"], prompt: ECHO },
-      { ...context(), callId: "call-image-2" },
-    )).resolves.toMatchObject({ generated: true });
+    await expect(
+      tool.execute(
+        {
+          ...INPUT,
+          keep: [
+            "сюжет: ретро-робот с ламповыми глазами, катушка магнитной ленты, три серверные стойки",
+          ],
+          prompt: ECHO,
+        },
+        { ...context(), callId: "call-image-2" },
+      ),
+    ).resolves.toMatchObject({ generated: true });
     expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
     // The provider never sees the declaration.
     expect(deps.client.generate.mock.calls[1]![0]).not.toHaveProperty("keep");
 
-    await expect(tool.execute(
-      { ...INPUT, images: [{ path: "photo.png", scope: "group" }], prompt: ECHO },
-      { ...context(), callId: "call-image-3" },
-    )).resolves.toMatchObject({ generated: true });
+    await expect(
+      tool.execute(
+        { ...INPUT, images: [{ path: "photo.png", scope: "group" }], prompt: ECHO },
+        { ...context(), callId: "call-image-3" },
+      ),
+    ).resolves.toMatchObject({ generated: true });
     expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
   });
 });

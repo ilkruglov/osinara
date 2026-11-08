@@ -19,13 +19,15 @@ import { deleteOrphanedWorkspaces } from "../lib/workspaces/workspace-deletion.j
 export default defineSchedule({
   cron: "* * * * *",
   run({ waitUntil }) {
-    waitUntil(Promise.all([
-      dispatchDueReminders(),
-      deleteExpiredSessions(),
-      deleteOrphanedWorkspaces(),
-      sweepTimedOutApprovals(),
-      purgeSoftDeletedMemory(new Date()),
-      purgeCompletedTelegramUpdates(new Date()),
-    ]));
+    waitUntil(
+      Promise.all([
+        dispatchDueReminders(),
+        deleteExpiredSessions(),
+        deleteOrphanedWorkspaces(),
+        sweepTimedOutApprovals(),
+        purgeSoftDeletedMemory(new Date()),
+        purgeCompletedTelegramUpdates(new Date()),
+      ]),
+    );
   },
 });

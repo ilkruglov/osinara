@@ -1,12 +1,5 @@
 import { sep } from "node:path";
-const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS = [
-    `.cts`,
-    `.mts`,
-    `.cjs`,
-    `.mjs`,
-    `.ts`,
-    `.js`,
-  ],
+const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS = [`.cts`, `.mts`, `.cjs`, `.mjs`, `.ts`, `.js`],
   PROJECT_MARKER_FILE_NAMES = [`package.json`, `vercel.json`],
   PROJECT_MARKER_FILE_NAME_SET = new Set(PROJECT_MARKER_FILE_NAMES),
   GENERATED_AGENT_DIRECTORY_NAMES = new Set([
@@ -82,8 +75,7 @@ function classifyLocalSubagentEntry(e, t) {
   return `unknown`;
 }
 function classifySkillPackageEntry(e, t) {
-  if (t === `file`)
-    return e.toLowerCase() === `skill.md` ? `skill-markdown` : `skill-resource`;
+  if (t === `file`) return e.toLowerCase() === `skill.md` ? `skill-markdown` : `skill-resource`;
   if (t === `directory`) {
     if (e === `scripts`) return `skill-scripts-directory`;
     if (e === `references`) return `skill-references-directory`;

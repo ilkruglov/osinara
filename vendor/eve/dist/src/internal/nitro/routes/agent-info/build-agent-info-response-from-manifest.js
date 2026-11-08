@@ -22,8 +22,7 @@ function toChatGptEndpoint(e) {
   if (e !== void 0)
     return {
       state: e.kind,
-      ...(e.kind === `ready` &&
-        e.accountLabel !== void 0 && { accountLabel: e.accountLabel }),
+      ...(e.kind === `ready` && e.accountLabel !== void 0 && { accountLabel: e.accountLabel }),
     };
 }
 function buildAgentInfoResponseFromManifest(i, a) {
@@ -79,9 +78,7 @@ function buildAgentInfoResponseFromManifest(i, a) {
               id: o.config.model.id,
               providerOptions: o.config.model.providerOptions,
               reasoning: o.config.reasoning,
-              source: o.config.model.source
-                ? toSource(o.config.model.source)
-                : void 0,
+              source: o.config.model.source ? toSource(o.config.model.source) : void 0,
               routing: o.config.model.routing,
               endpoint: resolveModelEndpointStatus(
                 o.config.model.routing,
@@ -96,10 +93,7 @@ function buildAgentInfoResponseFromManifest(i, a) {
     capabilities: { devRoutes: a.mode === `development` },
     channels: {
       authored: y,
-      available: [
-        ..._.map((e) => renderChannel(e, { origin: `framework` })),
-        ...y,
-      ],
+      available: [..._.map((e) => renderChannel(e, { origin: `framework` })), ...y],
       disabledFramework: c,
       framework: p
         .filter((e) => f.has(e.name))
@@ -135,9 +129,7 @@ function buildAgentInfoResponseFromManifest(i, a) {
       slug: e.slug,
     })),
     instructions: {
-      dynamic: o.dynamicInstructions.map((e) =>
-        renderDynamicResolver(e, { origin: `authored` }),
-      ),
+      dynamic: o.dynamicInstructions.map((e) => renderDynamicResolver(e, { origin: `authored` })),
       static: o.instructions.map((e) => ({
         ...toSource(e),
         content: e.content,
@@ -168,9 +160,7 @@ function buildAgentInfoResponseFromManifest(i, a) {
         metadata: e.metadata,
         name: e.name,
       })),
-      dynamic: o.dynamicSkills.map((e) =>
-        renderDynamicResolver(e, { origin: `authored` }),
-      ),
+      dynamic: o.dynamicSkills.map((e) => renderDynamicResolver(e, { origin: `authored` })),
     },
     subagents: {
       local: o.subagents.map(renderSubagent),
@@ -184,9 +174,7 @@ function buildAgentInfoResponseFromManifest(i, a) {
         ...getFrameworkDynamicToolResolvers().map((e) =>
           renderDynamicResolver(e, { origin: `framework` }),
         ),
-        ...o.dynamicTools.map((e) =>
-          renderDynamicResolver(e, { origin: `authored` }),
-        ),
+        ...o.dynamicTools.map((e) => renderDynamicResolver(e, { origin: `authored` })),
       ],
       framework: v.framework,
       reserved: [WORKFLOW_TOOL_NAME, LOAD_SKILL_TOOL_NAME],

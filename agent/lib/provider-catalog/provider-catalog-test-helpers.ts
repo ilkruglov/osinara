@@ -23,9 +23,7 @@ export function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** Captures one request while keeping each provider test independent of global fetch state. */
-export function createFetch(
-  response: Response,
-): ProviderCatalogFetch & ReturnType<typeof vi.fn> {
+export function createFetch(response: Response): ProviderCatalogFetch & ReturnType<typeof vi.fn> {
   return vi.fn(async () => response);
 }
 

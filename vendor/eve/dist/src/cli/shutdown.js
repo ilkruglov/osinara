@@ -19,8 +19,7 @@ function installShutdownSignal(e = {}) {
           )));
     },
     handleSignal = (e) => {
-      a > 0 ||
-        ((i += 1), i > 1 && process.exit(e === `SIGINT` ? 130 : 143), stop(e));
+      a > 0 || ((i += 1), i > 1 && process.exit(e === `SIGINT` ? 130 : 143), stop(e));
     },
     onSigint = () => handleSignal(`SIGINT`),
     onSigterm = () => handleSignal(`SIGTERM`);
@@ -58,8 +57,4 @@ async function waitForShutdownSignal(e) {
     t.dispose();
   }
 }
-export {
-  FORCED_EXIT_BACKSTOP_MS,
-  installShutdownSignal,
-  waitForShutdownSignal,
-};
+export { FORCED_EXIT_BACKSTOP_MS, installShutdownSignal, waitForShutdownSignal };

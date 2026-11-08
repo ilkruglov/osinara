@@ -1,7 +1,4 @@
-import {
-  getSupportedModuleBaseName,
-  matchesSupportedModuleBaseName,
-} from "./module-files.js";
+import { getSupportedModuleBaseName, matchesSupportedModuleBaseName } from "./module-files.js";
 import { pathExists, writeTextFile } from "../files.js";
 import { resolveVersionToken } from "../version-tokens.js";
 import { patchPackageJson } from "./package-json.js";
@@ -72,9 +69,7 @@ ${authBlock(n)}});
 `;
 }
 function renderTemplate(e, t, n, r) {
-  return e === `mcp`
-    ? renderMcpTemplate(t, n, r)
-    : renderOpenApiTemplate(t, n, r);
+  return e === `mcp` ? renderMcpTemplate(t, n, r) : renderOpenApiTemplate(t, n, r);
 }
 function isJsonObject(e) {
   return typeof e == `object` && !!e && !Array.isArray(e);
@@ -154,18 +149,9 @@ async function ensureConnection(e) {
       `connectPackageVersion`,
       e.connectPackageVersion ?? DEFAULT_CONNECT_PACKAGE_VERSION,
     );
-    u.push(
-      ...(await ensureConnectDependency(
-        join(e.projectRoot, `package.json`),
-        t,
-      )),
-    );
+    u.push(...(await ensureConnectDependency(join(e.projectRoot, `package.json`), t)));
   }
-  await writeTextFile(
-    s,
-    renderTemplate(e.protocol, o, e.entry.description, a),
-    { force: !0 },
-  );
+  await writeTextFile(s, renderTemplate(e.protocol, o, e.entry.description, a), { force: !0 });
   let d = await seedEnvPlaceholders(join(e.projectRoot, `.env.local`), c),
     f = {
       slug: t,
@@ -205,8 +191,4 @@ async function listAuthoredConnections(n) {
   }
   return a.sort();
 }
-export {
-  ensureConnection,
-  ensureConnectionDependencies,
-  listAuthoredConnections,
-};
+export { ensureConnection, ensureConnectionDependencies, listAuthoredConnections };

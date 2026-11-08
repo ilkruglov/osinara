@@ -17,8 +17,8 @@ export type SandboxSessionState = SandboxBackendSessionState;
  * `initialized` flag and an optional persisted session record.
  */
 export interface SandboxState {
-    readonly initialized: boolean;
-    readonly session: SandboxSessionState | null;
+  readonly initialized: boolean;
+  readonly session: SandboxSessionState | null;
 }
 /**
  * Lazy sandbox accessor bound to one step execution.
@@ -27,7 +27,7 @@ export interface SandboxState {
  * `SandboxKey`) so tools can call `ctx.getSandbox()`.
  */
 export interface SandboxAccess {
-    captureState(): Promise<SandboxState>;
-    get(): Promise<SandboxSession | null>;
-    stop(): Promise<void>;
+  captureState(): Promise<SandboxState>;
+  get(): Promise<SandboxSession | null>;
+  stop(): Promise<void>;
 }

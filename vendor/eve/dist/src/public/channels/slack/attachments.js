@@ -32,8 +32,7 @@ function toSlackFilePart(e, t) {
           filename: e.name ?? `attachment-${t}`,
           data: new URL(e.url),
         }
-      : (log.warn(`dropped attachment — no url available`, { name: e.name }),
-        null);
+      : (log.warn(`dropped attachment — no url available`, { name: e.name }), null);
 }
 async function collectInboundFileParts(e) {
   let t = collectSlackFileParts(e.mention.attachments, e.policy);
@@ -87,19 +86,14 @@ function inferAttachmentType(e) {
           : `file`;
 }
 function buildSlackTurnMessage(e, t) {
-  return t.length === 0
-    ? e
-    : e.trim().length === 0
-      ? [...t]
-      : [{ type: `text`, text: e }, ...t];
+  return t.length === 0 ? e : e.trim().length === 0 ? [...t] : [{ type: `text`, text: e }, ...t];
 }
 function createSlackFetchFile(e) {
   return async (t) => {
     if (!isSlackFileUrl(t)) return null;
     let n = await resolveSlackBotToken(e.botToken),
       r = await fetch(t, { headers: { authorization: `Bearer ${n}` } });
-    if (!r.ok)
-      throw Error(`Slack file fetch returned HTTP ${r.status} for ${t}.`);
+    if (!r.ok) throw Error(`Slack file fetch returned HTTP ${r.status} for ${t}.`);
     let a = r.headers.get(`content-type`) ?? void 0;
     if (a?.split(`;`, 1)[0]?.trim().toLowerCase() === `text/html`)
       throw Error(
@@ -112,8 +106,7 @@ function isSlackFileUrl(e) {
   let t = URL.parse(e);
   return t?.protocol === `https:`
     ? t.hostname === `files.slack.com` ||
-        ((t.hostname === `enterprise.slack.com` ||
-          t.hostname.endsWith(`.enterprise.slack.com`)) &&
+        ((t.hostname === `enterprise.slack.com` || t.hostname.endsWith(`.enterprise.slack.com`)) &&
           t.pathname.startsWith(`/files/`))
     : !1;
 }

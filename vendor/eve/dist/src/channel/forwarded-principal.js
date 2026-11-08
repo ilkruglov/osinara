@@ -31,8 +31,7 @@ async function resolveForwardedPrincipal(e) {
       { status: 403 },
     );
   let r = parseForwardedPrincipal(n);
-  if (!r.ok)
-    return Response.json({ error: r.message, ok: !1 }, { status: 400 });
+  if (!r.ok) return Response.json({ error: r.message, ok: !1 }, { status: 400 });
   let i;
   try {
     i = await e.trustedForwarders(e.forwarder);
@@ -53,20 +52,14 @@ async function resolveForwardedPrincipal(e) {
       },
       { status: 403 },
     );
-  let a = stampForwardedBy(
-    r.forwardedPrincipal.current,
-    e.forwarder.principalId,
-  );
+  let a = stampForwardedBy(r.forwardedPrincipal.current, e.forwarder.principalId);
   return {
     accepted: !0,
     auth: a,
     initiatorAuth:
       r.forwardedPrincipal.initiator === void 0
         ? a
-        : stampForwardedBy(
-            r.forwardedPrincipal.initiator,
-            e.forwarder.principalId,
-          ),
+        : stampForwardedBy(r.forwardedPrincipal.initiator, e.forwarder.principalId),
   };
 }
 function parseForwardedPrincipal(e) {

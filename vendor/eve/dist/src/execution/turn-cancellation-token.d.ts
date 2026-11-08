@@ -5,5 +5,5 @@ export declare function turnCancellationHookToken(controlToken: string): string;
  * benign no-op; omitting it targets whichever turn owns the hook.
  */
 export interface TurnCancelPayload {
-    readonly turnId?: string;
+  readonly turnId?: string;
 }

@@ -4,10 +4,9 @@ var DockerUnavailableError = class extends Error {
     hint =
       "Install and start Docker Desktop, OrbStack, Colima, or another runtime exposing a Docker-compatible `docker` CLI (or point EVE_DOCKER_PATH at one, e.g. Podman). Alternatively use microsandbox(), the dependency-free justbash(), vercel(), or defaultSandbox() to pick by availability.";
     constructor(e) {
-      (super(
-        "The Docker sandbox backend requires Docker, but the `docker` CLI was not found.",
-        { cause: e },
-      ),
+      (super("The Docker sandbox backend requires Docker, but the `docker` CLI was not found.", {
+        cause: e,
+      }),
         (this.name = `DockerUnavailableError`));
     }
   },
@@ -24,9 +23,7 @@ var DockerUnavailableError = class extends Error {
 async function assertDockerDaemonAvailable(e) {
   let t = await e.run([`version`, `--format`, `{{.Server.Version}}`]);
   if (t.exitCode !== 0)
-    throw new DockerDaemonUnavailableError(
-      firstLine(t.stderr) || `exit ${t.exitCode}`,
-    );
+    throw new DockerDaemonUnavailableError(firstLine(t.stderr) || `exit ${t.exitCode}`);
 }
 function resolveDockerExecutable() {
   let e = process.env.EVE_DOCKER_PATH?.trim();
@@ -41,11 +38,11 @@ function isLinuxDockerDaemonAvailableSync() {
 }
 function probeLinuxDockerDaemonSync() {
   try {
-    let e = spawnSync(
-      resolveDockerExecutable(),
-      [`version`, `--format`, `{{.Server.Os}}`],
-      { encoding: `utf8`, stdio: [`ignore`, `pipe`, `ignore`], timeout: 5e3 },
-    );
+    let e = spawnSync(resolveDockerExecutable(), [`version`, `--format`, `{{.Server.Os}}`], {
+      encoding: `utf8`,
+      stdio: [`ignore`, `pipe`, `ignore`],
+      timeout: 5e3,
+    });
     return e.status === 0 && e.stdout.trim().toLowerCase() === `linux`;
   } catch {
     return !1;
@@ -65,8 +62,7 @@ function createDockerCli() {
         r.stderr?.on(`data`, (e) => a.push(e)),
         n.stdin !== void 0 && r.stdin?.end(n.stdin));
       let o = await new Promise((e, t) => {
-          (r.on(`error`, (e) => t(adaptSpawnError(e))),
-            r.on(`close`, (t) => e(t ?? 1)));
+          (r.on(`error`, (e) => t(adaptSpawnError(e))), r.on(`close`, (t) => e(t ?? 1)));
         }),
         s = Buffer.concat(i);
       return {
@@ -83,8 +79,7 @@ function createDockerCli() {
           stdio: [`ignore`, `pipe`, `pipe`],
         }),
         a = new Promise((e, t) => {
-          (i.on(`error`, (e) => t(adaptSpawnError(e))),
-            i.on(`close`, (t) => e(t ?? 1)));
+          (i.on(`error`, (e) => t(adaptSpawnError(e))), i.on(`close`, (t) => e(t ?? 1)));
         });
       return (
         a.catch(() => {}),
@@ -110,8 +105,7 @@ function adaptSpawnError(e) {
       : e;
 }
 function throwIfAborted(e) {
-  if (e?.aborted)
-    throw new DOMException(`The operation was aborted.`, `AbortError`);
+  if (e?.aborted) throw new DOMException(`The operation was aborted.`, `AbortError`);
 }
 function firstLine(e) {
   return (

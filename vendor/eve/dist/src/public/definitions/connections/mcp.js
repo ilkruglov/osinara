@@ -5,10 +5,7 @@ function defineMcpClientConnection(e) {
   return (
     e.auth !== void 0 &&
       typeof e.auth != `function` &&
-      (e.auth = normalizeAuthorizationSpec(
-        e.auth,
-        `defineMcpClientConnection:`,
-      )),
+      (e.auth = normalizeAuthorizationSpec(e.auth, `defineMcpClientConnection:`)),
     stampDefinitionKey(e, `connection:${e.url}`),
     stampConnectionProtocol(e, `mcp`),
     e

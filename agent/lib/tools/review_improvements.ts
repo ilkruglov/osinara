@@ -14,11 +14,18 @@ import { AppError } from "../app-error.js";
 import { requirePrivateTelegramOwner } from "../family-context.js";
 import { improvementBacklogRepository } from "../improvements/improvement-backlog-repository.js";
 
-const inputSchema = z.object({
-  action: z.enum(["dismiss", "done", "list"]).describe("list: открытые пункты; done: сделано; dismiss: не актуально"),
-  id: z.string().uuid().optional().describe("done/dismiss: id пункта из list"),
-  status: z.enum(["dismissed", "done", "open"]).optional().describe("list: какие пункты показать, по умолчанию open"),
-}).strict();
+const inputSchema = z
+  .object({
+    action: z
+      .enum(["dismiss", "done", "list"])
+      .describe("list: открытые пункты; done: сделано; dismiss: не актуально"),
+    id: z.string().uuid().optional().describe("done/dismiss: id пункта из list"),
+    status: z
+      .enum(["dismissed", "done", "open"])
+      .optional()
+      .describe("list: какие пункты показать, по умолчанию open"),
+  })
+  .strict();
 
 export default defineTool({
   description: [

@@ -27,8 +27,4 @@ async function loadAgentInfoDataFromArtifacts(t) {
     schedules: a,
   };
 }
-export {
-  loadAgentInfoData,
-  loadAgentInfoManifestData,
-  resolveAgentInfoCompiledArtifactsSource,
-};
+export { loadAgentInfoData, loadAgentInfoManifestData, resolveAgentInfoCompiledArtifactsSource };

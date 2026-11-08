@@ -13,7 +13,10 @@
  *   the message around it.
  */
 export function flattenDisplayText(value: string): string {
-  return value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return value
+    .replace(/[\p{Cc}\p{Cf}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 export function clipText(value: string, limit: number): string {

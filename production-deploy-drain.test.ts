@@ -23,11 +23,14 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "./agent/lib/database.js";
 
 const scripts = fileURLToPath(new URL("scripts/production-deploy/", import.meta.url));
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
-function controller(body: string, env: Record<string, string> = {}, options: { allowFailure?: boolean } = {}): { status: number; stderr: string; stdout: string } {
+function controller(
+  body: string,
+  env: Record<string, string> = {},
+  options: { allowFailure?: boolean } = {},
+): { status: number; stderr: string; stdout: string } {
   const script = `
     set -euo pipefail
     source "${scripts}common.sh"
@@ -44,12 +47,21 @@ function controller(body: string, env: Record<string, string> = {}, options: { a
     return { status: 0, stderr: "", stdout };
   } catch (error) {
     const failed = error as { status?: number; stderr?: string; stdout?: string };
-    if (options.allowFailure) return { status: failed.status ?? 1, stderr: failed.stderr ?? "", stdout: failed.stdout ?? "" };
+    if (options.allowFailure)
+      return {
+        status: failed.status ?? 1,
+        stderr: failed.stderr ?? "",
+        stdout: failed.stdout ?? "",
+      };
     throw new Error(`controller failed: ${failed.stderr ?? ""}${failed.stdout ?? ""}`);
   }
 }
 
-function runDrain(counts: string[], timeoutSeconds: number, options: { pauseFails?: boolean } = {}) {
+function runDrain(
+  counts: string[],
+  timeoutSeconds: number,
+  options: { pauseFails?: boolean } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "drain-"));
   writeFileSync(join(dir, "counts"), `${counts.join("\n")}\n`);
   const result = controller(`
@@ -98,7 +110,11 @@ describe("deploy turn drain", () => {
     const run = runDrain(["error"], 300);
     expect(run.log).toContain("DEPLOY_TURN_DRAIN_UNAVAILABLE");
     expect(run.stdout).toContain("stopped=1 status=1");
-    expect(run.compose.trim().split("\n")).toEqual(["stop telegram-ingress-worker", "pause", "resume"]);
+    expect(run.compose.trim().split("\n")).toEqual([
+      "stop telegram-ingress-worker",
+      "pause",
+      "resume",
+    ]);
   });
 
   it("cancels the deploy when new turns cannot be paused", () => {
@@ -127,13 +143,20 @@ describe("deploy turn drain", () => {
 
   it("lifts the pause once the release has stopped", () => {
     const dir = mkdtempSync(join(tmpdir(), "drain-stop-"));
-    const run = controller(`
+    const run = controller(
+      `
       compose_current() { if [[ "$1" == "config" ]]; then printf 'agent\npostgres\ntelegram-ingress-worker\n'; else printf '%s\n' "$*" >> "${dir}/compose"; fi; }
       resume_new_turns() { printf 'resume\n' >> "${dir}/compose"; }
       stop_current_services
-    `, {}, LOG_ONLY_STDERR);
+    `,
+      {},
+      LOG_ONLY_STDERR,
+    );
     expect(run.status).toBe(0);
-    expect(readFileSync(join(dir, "compose"), "utf8").trim().split("\n")).toEqual(["stop agent telegram-ingress-worker", "resume"]);
+    expect(readFileSync(join(dir, "compose"), "utf8").trim().split("\n")).toEqual([
+      "stop agent telegram-ingress-worker",
+      "resume",
+    ]);
   });
 
   it("gives up at its ceiling and lets the deploy continue", () => {
@@ -166,8 +189,6 @@ describe("deploy turn drain", () => {
     expect(stdin).toContain("SET lock_timeout = '2s';");
     expect(stdin).toContain("FROM workflow.workflow_runs AS run");
   });
-
-
 });
 
 describeWithDatabase("active workflow run query", () => {
@@ -188,17 +209,62 @@ describeWithDatabase("active workflow run query", () => {
       );
     `);
     const runs: Array<[string, string, Array<[string, string]>]> = [
-      ["step-in-flight", "running", [["hook_created", "2 minutes"], ["step_started", "1 minute"]]],
-      ["fresh-pause", "running", [["step_started", "20 seconds"], ["step_completed", "1 second"]]],
-      ["message-waiting", "running", [["step_completed", "5 minutes"], ["hook_received", "2 minutes"]]],
-      ["mid-step-attribute", "running", [["step_started", "30 seconds"], ["attr_set", "10 seconds"]]],
-      ["parked-session", "running", [["hook_created", "3 minutes"], ["step_completed", "2 minutes"]]],
-      ["approval-wait", "running", [["step_completed", "2 minutes"], ["hook_created", "1 minute"]]],
+      [
+        "step-in-flight",
+        "running",
+        [
+          ["hook_created", "2 minutes"],
+          ["step_started", "1 minute"],
+        ],
+      ],
+      [
+        "fresh-pause",
+        "running",
+        [
+          ["step_started", "20 seconds"],
+          ["step_completed", "1 second"],
+        ],
+      ],
+      [
+        "message-waiting",
+        "running",
+        [
+          ["step_completed", "5 minutes"],
+          ["hook_received", "2 minutes"],
+        ],
+      ],
+      [
+        "mid-step-attribute",
+        "running",
+        [
+          ["step_started", "30 seconds"],
+          ["attr_set", "10 seconds"],
+        ],
+      ],
+      [
+        "parked-session",
+        "running",
+        [
+          ["hook_created", "3 minutes"],
+          ["step_completed", "2 minutes"],
+        ],
+      ],
+      [
+        "approval-wait",
+        "running",
+        [
+          ["step_completed", "2 minutes"],
+          ["hook_created", "1 minute"],
+        ],
+      ],
       ["stuck", "running", [["step_started", "30 minutes"]]],
       ["finished", "completed", [["step_started", "1 minute"]]],
     ];
     for (const [id, status, events] of runs) {
-      await database().query("INSERT INTO workflow.workflow_runs (id, status) VALUES ($1, $2)", [id, status]);
+      await database().query("INSERT INTO workflow.workflow_runs (id, status) VALUES ($1, $2)", [
+        id,
+        status,
+      ]);
       for (const [index, [type, age]] of events.entries()) {
         await database().query(
           `INSERT INTO workflow.workflow_events (id, type, run_id, created_at)

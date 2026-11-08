@@ -59,7 +59,7 @@ function privateAuth(fixture: Fixture, user: "member" | "owner") {
     groupId: null,
     groupType: null,
     messageThreadId: null,
-    role: owner ? "owner" as const : "member" as const,
+    role: owner ? ("owner" as const) : ("member" as const),
     telegramChatId: owner ? "reminder-owner" : "reminder-member",
     telegramChatType: "private" as const,
     userId: owner ? fixture.ownerId : fixture.memberId,
@@ -91,19 +91,23 @@ describeWithDatabase("reminder repositories", () => {
     const fixture = await createFixture();
     const auth = privateAuth(fixture, "member");
 
-    await expect(reminderRepository.create(auth, {
-      content: "Позвонить врачу",
-      firstRunAt: new Date("2026-07-13T06:00:00.000Z"),
-      operationKey: "personal-without-settings",
-      recurrence: null,
-      scope: "personal",
-      timezone: "Europe/Moscow",
-    })).rejects.toThrowError(/AGENT_NOTIFICATION_SETTINGS_REQUIRED/);
-    await expect(reminderRepository.configureNotifications(auth, {
-      quietEnd: "07:00",
-      quietStart: "23:00",
-      timezone: "Not/A-Timezone",
-    })).rejects.toThrowError(/AGENT_TIMEZONE_INVALID/);
+    await expect(
+      reminderRepository.create(auth, {
+        content: "Позвонить врачу",
+        firstRunAt: new Date("2026-07-13T06:00:00.000Z"),
+        operationKey: "personal-without-settings",
+        recurrence: null,
+        scope: "personal",
+        timezone: "Europe/Moscow",
+      }),
+    ).rejects.toThrowError(/AGENT_NOTIFICATION_SETTINGS_REQUIRED/);
+    await expect(
+      reminderRepository.configureNotifications(auth, {
+        quietEnd: "07:00",
+        quietStart: "23:00",
+        timezone: "Not/A-Timezone",
+      }),
+    ).rejects.toThrowError(/AGENT_TIMEZONE_INVALID/);
 
     await reminderRepository.configureNotifications(auth, {
       quietEnd: "07:00",
@@ -119,7 +123,11 @@ describeWithDatabase("reminder repositories", () => {
       timezone: "Europe/Moscow",
     });
 
-    expect(reminder).toMatchObject({ content: "Позвонить врачу", scope: "personal", status: "active" });
+    expect(reminder).toMatchObject({
+      content: "Позвонить врачу",
+      scope: "personal",
+      status: "active",
+    });
     await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toEqual({
       items: [reminder],
       nextCursor: null,
@@ -129,7 +137,11 @@ describeWithDatabase("reminder repositories", () => {
   it("keeps a personal reminder out of the family group's list and mutations", async () => {
     const fixture = await createFixture();
     const auth = privateAuth(fixture, "member");
-    await reminderRepository.configureNotifications(auth, { quietEnd: "07:00", quietStart: "23:00", timezone: "Europe/Moscow" });
+    await reminderRepository.configureNotifications(auth, {
+      quietEnd: "07:00",
+      quietStart: "23:00",
+      timezone: "Europe/Moscow",
+    });
     const personal = await reminderRepository.create(auth, {
       content: "Купить подарок жене втайне",
       firstRunAt: new Date("2026-07-13T06:00:00.000Z"),
@@ -148,16 +160,22 @@ describeWithDatabase("reminder repositories", () => {
     });
 
     // The same member asked from the family group: private text must not enter the shared context.
-    await expect(reminderRepository.list(familyAuth(fixture, "member"), { limit: 100 }))
-      .resolves.toEqual({ items: [family], nextCursor: null });
-    await expect(reminderRepository.update(familyAuth(fixture, "member"), personal.id, {
-      content: "изменено из группы", operationKey: "personal-from-group",
-    })).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
-    await expect(reminderRepository.delete(familyAuth(fixture, "member"), personal.id, "delete-from-group"))
-      .rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+    await expect(
+      reminderRepository.list(familyAuth(fixture, "member"), { limit: 100 }),
+    ).resolves.toEqual({ items: [family], nextCursor: null });
+    await expect(
+      reminderRepository.update(familyAuth(fixture, "member"), personal.id, {
+        content: "изменено из группы",
+        operationKey: "personal-from-group",
+      }),
+    ).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+    await expect(
+      reminderRepository.delete(familyAuth(fixture, "member"), personal.id, "delete-from-group"),
+    ).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
     // The private chat still sees both areas.
-    await expect(reminderRepository.list(auth, { limit: 100 }))
-      .resolves.toMatchObject({ items: [family, personal] });
+    await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [family, personal],
+    });
   });
 
   it("allows a family reminder to be changed only by its author or current owner", async () => {
@@ -178,12 +196,16 @@ describeWithDatabase("reminder repositories", () => {
       timezone: "Europe/Moscow",
     });
 
-    await expect(reminderRepository.update(owner, reminder.id, {
-      content: "Собрать семейные документы",
-      enabled: true,
-      operationKey: "family-owner-update",
-    })).resolves.toMatchObject({ content: "Собрать семейные документы" });
-    await expect(reminderRepository.delete(member, reminder.id, "family-author-delete")).resolves.toBe(true);
+    await expect(
+      reminderRepository.update(owner, reminder.id, {
+        content: "Собрать семейные документы",
+        enabled: true,
+        operationKey: "family-owner-update",
+      }),
+    ).resolves.toMatchObject({ content: "Собрать семейные документы" });
+    await expect(
+      reminderRepository.delete(member, reminder.id, "family-author-delete"),
+    ).resolves.toBe(true);
   });
 
   it("replays an approved recurrence removal without a second mutation", async () => {
@@ -234,24 +256,29 @@ describeWithDatabase("reminder repositories", () => {
       timezone: "Europe/Moscow",
     });
 
-    await expect(reminderDispatchRepository.claimDue({
-      leaseMilliseconds: 300_000,
-      limit: 10,
-      now: new Date("2026-07-12T20:31:00.000Z"),
-    })).resolves.toEqual([]);
+    await expect(
+      reminderDispatchRepository.claimDue({
+        leaseMilliseconds: 300_000,
+        limit: 10,
+        now: new Date("2026-07-12T20:31:00.000Z"),
+      }),
+    ).resolves.toEqual([]);
     const [claimed] = await reminderDispatchRepository.claimDue({
       leaseMilliseconds: 300_000,
       limit: 10,
       now: new Date("2026-07-13T04:00:00.000Z"),
     });
-    expect(claimed).toMatchObject({ delayed: true, id: reminder.id, telegramChatId: "reminder-member" });
+    expect(claimed).toMatchObject({
+      delayed: true,
+      id: reminder.id,
+      telegramChatId: "reminder-member",
+    });
 
     await reminderDispatchRepository.markDispatchStarted(claimed!.id, claimed!.leaseToken);
-    await reminderDispatchRepository.complete(
-      claimed!,
-      new Date("2026-07-13T04:00:01.000Z"),
-      { messageId: "601", text: "Напоминание:\n\nПроверить дверь" },
-    );
+    await reminderDispatchRepository.complete(claimed!, new Date("2026-07-13T04:00:01.000Z"), {
+      messageId: "601",
+      text: "Напоминание:\n\nПроверить дверь",
+    });
     await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
       items: [expect.objectContaining({ id: reminder.id, status: "completed" })],
       nextCursor: null,
@@ -280,14 +307,19 @@ describeWithDatabase("reminder repositories", () => {
       now: new Date("2026-03-28T08:00:00.000Z"),
     });
     await reminderDispatchRepository.markDispatchStarted(claimed!.id, claimed!.leaseToken);
-    await reminderDispatchRepository.complete(
-      claimed!,
-      new Date("2026-03-28T08:01:00.000Z"),
-      { messageId: "602", text: "Напоминание:\n\nУтреннее лекарство" },
-    );
+    await reminderDispatchRepository.complete(claimed!, new Date("2026-03-28T08:01:00.000Z"), {
+      messageId: "602",
+      text: "Напоминание:\n\nУтреннее лекарство",
+    });
 
-    const { items: [stored] } = await reminderRepository.list(auth, { limit: 100 });
-    expect(stored).toMatchObject({ id: reminder.id, nextRunAt: "2026-03-29T07:00:00.000Z", status: "active" });
+    const {
+      items: [stored],
+    } = await reminderRepository.list(auth, { limit: 100 });
+    expect(stored).toMatchObject({
+      id: reminder.id,
+      nextRunAt: "2026-03-29T07:00:00.000Z",
+      status: "active",
+    });
   });
 
   it("does not retry an expired lease after Telegram dispatch may have started", async () => {
@@ -313,14 +345,19 @@ describeWithDatabase("reminder repositories", () => {
     });
     await reminderDispatchRepository.markDispatchStarted(claimed!.id, claimed!.leaseToken);
 
-    await expect(reminderDispatchRepository.claimDue({
-      leaseMilliseconds: 1_000,
-      limit: 1,
-      now: new Date("2026-07-12T10:00:02.000Z"),
-    })).resolves.toEqual([]);
+    await expect(
+      reminderDispatchRepository.claimDue({
+        leaseMilliseconds: 1_000,
+        limit: 1,
+        now: new Date("2026-07-12T10:00:02.000Z"),
+      }),
+    ).resolves.toEqual([]);
     await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
       items: [
-        expect.objectContaining({ lastErrorCode: "AGENT_REMINDER_DELIVERY_AMBIGUOUS", status: "failed" }),
+        expect.objectContaining({
+          lastErrorCode: "AGENT_REMINDER_DELIVERY_AMBIGUOUS",
+          status: "failed",
+        }),
       ],
       nextCursor: null,
     });
@@ -351,7 +388,8 @@ describeWithDatabase("reminder repositories", () => {
     expect(ids).toHaveLength(102);
     expect(new Set(ids)).toHaveLength(102);
     expect(new Set(ids)).toEqual(new Set(inserted.rows.map((row) => row.id)));
-    await expect(reminderRepository.list(auth, { cursor: "invalid", limit: 100 }))
-      .rejects.toMatchObject({ code: "AGENT_REMINDER_CURSOR_INVALID" });
+    await expect(
+      reminderRepository.list(auth, { cursor: "invalid", limit: 100 }),
+    ).rejects.toMatchObject({ code: "AGENT_REMINDER_CURSOR_INVALID" });
   });
 });

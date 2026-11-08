@@ -62,19 +62,29 @@ export type ContainerStartGate = (
 ) => Promise<void>;
 
 /** True when the container was restarted, so everything known about its previous run is stale. */
-async function reapCrowdedContainer(container: Docker.Container, sessionId: string, gate: ContainerStartGate): Promise<boolean> {
+async function reapCrowdedContainer(
+  container: Docker.Container,
+  sessionId: string,
+  gate: ContainerStartGate,
+): Promise<boolean> {
   const tasks = await countContainerTasks(container);
   if (tasks < SANDBOX_PIDS_REAP_THRESHOLD) return false;
   // Workspace and tools are named volumes; the process tree is disposable compute.
-  await gate(async () => {
-    await container.restart({ t: 0 });
-  }, container, "restart");
-  console.error(JSON.stringify({
-    code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
-    sessionId,
-    tasks,
-    threshold: SANDBOX_PIDS_REAP_THRESHOLD,
-  }));
+  await gate(
+    async () => {
+      await container.restart({ t: 0 });
+    },
+    container,
+    "restart",
+  );
+  console.error(
+    JSON.stringify({
+      code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
+      sessionId,
+      tasks,
+      threshold: SANDBOX_PIDS_REAP_THRESHOLD,
+    }),
+  );
   return true;
 }
 
@@ -107,8 +117,15 @@ export async function requireRunningContainer(
   gateStart: ContainerStartGate = (work) => work(),
   containerName: string = sandboxContainerName(sessionId),
   /** Awaited for the run it returns, started now or already running, e.g. its network rules. */
-  ensureReady: (container: Docker.Container, inspection: Docker.ContainerInspectInfo) => Promise<void> = async () => undefined,
-): Promise<{ container: Docker.Container; generation: string | null; inspection: Docker.ContainerInspectInfo }> {
+  ensureReady: (
+    container: Docker.Container,
+    inspection: Docker.ContainerInspectInfo,
+  ) => Promise<void> = async () => undefined,
+): Promise<{
+  container: Docker.Container;
+  generation: string | null;
+  inspection: Docker.ContainerInspectInfo;
+}> {
   const existing = await inspectContainer(docker, sessionId, containerName);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;

@@ -19,10 +19,11 @@ export const MEMORY_REVIEW_DISPATCH_BATCH_SIZE = 10;
 // this many background reviews run at once, and a claim takes only what the cap leaves. On one
 // core a review in flight also takes the core from a live turn, so the cap is tunable: a
 // single-family installation wants one or two, a thousand families the default.
-export const MEMORY_REVIEW_MAX_IN_FLIGHT = integerSetting(
-  "MEMORY_REVIEW_MAX_IN_FLIGHT",
-  { absent: 10, min: 1, max: 100 },
-);
+export const MEMORY_REVIEW_MAX_IN_FLIGHT = integerSetting("MEMORY_REVIEW_MAX_IN_FLIGHT", {
+  absent: 10,
+  min: 1,
+  max: 100,
+});
 // Lanes materialized per minute pass, so one transaction never spans every lane of a large
 // installation; lanes left over qualify again on the next pass.
 export const MEMORY_REVIEW_MATERIALIZE_LANE_LIMIT = integerSetting(

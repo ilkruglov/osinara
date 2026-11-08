@@ -19,10 +19,17 @@ export default defineTool({
     "Постранично показать доступные текущему участнику личные и семейные напоминания.",
     "Результат: {items,nextCursor}; если nextCursor не null, передай его без изменений для следующей страницы.",
   ].join(" "),
-  inputSchema: z.object({
-    cursor: z.string().min(1).optional(),
-    limit: z.number().int().min(1).max(REMINDER_LIST_MAX_LIMIT).default(REMINDER_LIST_DEFAULT_LIMIT),
-  }).strict(),
+  inputSchema: z
+    .object({
+      cursor: z.string().min(1).optional(),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(REMINDER_LIST_MAX_LIMIT)
+        .default(REMINDER_LIST_DEFAULT_LIMIT),
+    })
+    .strict(),
   async execute(input, ctx) {
     return await reminderRepository.list(requireReminderAuthorization(ctx), input);
   },

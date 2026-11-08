@@ -8,11 +8,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  discoverPublicIpv4,
-  normalizeSslipHostname,
-  validateCustomHostname,
-} from "./address.js";
+import { discoverPublicIpv4, normalizeSslipHostname, validateCustomHostname } from "./address.js";
 
 describe("provider installer address", () => {
   it("accepts a public IPv4 observed identically by multiple independent sources", async () => {
@@ -59,9 +55,9 @@ describe("provider installer address", () => {
   it("normalizes a custom hostname and requires every A record to match", async () => {
     const resolveIpv4 = vi.fn().mockResolvedValue(["8.8.8.8", "8.8.8.8"]);
 
-    await expect(
-      validateCustomHostname("Bot.Example.COM.", "8.8.8.8", resolveIpv4),
-    ).resolves.toBe("bot.example.com");
+    await expect(validateCustomHostname("Bot.Example.COM.", "8.8.8.8", resolveIpv4)).resolves.toBe(
+      "bot.example.com",
+    );
     expect(resolveIpv4).toHaveBeenCalledWith("bot.example.com");
   });
 

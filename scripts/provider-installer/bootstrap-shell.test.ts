@@ -35,7 +35,8 @@ describe("provider installer shell bootstrap", () => {
     const assetPath = join(directory, "asset");
     const fakeBin = join(directory, "bin");
     await import("node:fs/promises").then(({ mkdir }) => mkdir(fakeBin));
-    const asset = "#!/bin/sh\nprintf 'asset:%s\\n' \"$*\" >> \"$TEST_EVENTS\"\nprintf 'asset:%s\\n' \"$*\"\n";
+    const asset =
+      '#!/bin/sh\nprintf \'asset:%s\\n\' "$*" >> "$TEST_EVENTS"\nprintf \'asset:%s\\n\' "$*"\n';
     await writeFile(assetPath, asset);
     await chmod(assetPath, 0o755);
     const checksum = createHash("sha256").update(asset).digest("hex");
@@ -44,20 +45,27 @@ describe("provider installer shell bootstrap", () => {
     const fakeCurl = join(fakeBin, "curl");
     await writeFile(
       fakeCurl,
-      "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do if [ \"$1\" = --output ]; then shift; out=$1; fi; shift; done\ncp \"$TEST_ASSET\" \"$out\"\n",
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do if [ "$1" = --output ]; then shift; out=$1; fi; shift; done\ncp "$TEST_ASSET" "$out"\n',
     );
     await chmod(fakeCurl, 0o755);
     const fakeId = join(fakeBin, "id");
     await writeFile(fakeId, "#!/bin/sh\nprintf '0\\n'\n");
     await chmod(fakeId, 0o755);
     const fakeInstall = join(fakeBin, "install");
-    await writeFile(fakeInstall, "#!/bin/sh\nprintf 'persist:%s\\n' \"$*\" >> \"$TEST_EVENTS\"\nexit 0\n");
+    await writeFile(
+      fakeInstall,
+      '#!/bin/sh\nprintf \'persist:%s\\n\' "$*" >> "$TEST_EVENTS"\nexit 0\n',
+    );
     await chmod(fakeInstall, 0o755);
     const eventsPath = join(directory, "events");
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
+      [
+        bootstrapPath,
+        "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64",
+        checksum,
+      ],
       {
         encoding: "utf8",
         env: {
@@ -84,7 +92,7 @@ describe("provider installer shell bootstrap", () => {
     const fakeBin = join(directory, "bin");
     const persistedMarker = join(directory, "persisted-cli");
     await import("node:fs/promises").then(({ mkdir }) => mkdir(fakeBin));
-    const asset = "#!/bin/sh\ntest -f \"$TEST_PERSISTED_MARKER\" || exit 99\nexit 73\n";
+    const asset = '#!/bin/sh\ntest -f "$TEST_PERSISTED_MARKER" || exit 99\nexit 73\n';
     await writeFile(assetPath, asset);
     await chmod(assetPath, 0o755);
     const checksum = createHash("sha256").update(asset).digest("hex");
@@ -92,17 +100,24 @@ describe("provider installer shell bootstrap", () => {
     // Fake host tools prove ordering and retention without writing to /usr/local.
     await writeFile(
       join(fakeBin, "curl"),
-      "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do if [ \"$1\" = --output ]; then shift; out=$1; fi; shift; done\ncp \"$TEST_ASSET\" \"$out\"\n",
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do if [ "$1" = --output ]; then shift; out=$1; fi; shift; done\ncp "$TEST_ASSET" "$out"\n',
     );
     await chmod(join(fakeBin, "curl"), 0o755);
     await writeFile(join(fakeBin, "id"), "#!/bin/sh\nprintf '0\\n'\n");
     await chmod(join(fakeBin, "id"), 0o755);
-    await writeFile(join(fakeBin, "install"), "#!/bin/sh\nprintf installed > \"$TEST_PERSISTED_MARKER\"\n");
+    await writeFile(
+      join(fakeBin, "install"),
+      '#!/bin/sh\nprintf installed > "$TEST_PERSISTED_MARKER"\n',
+    );
     await chmod(join(fakeBin, "install"), 0o755);
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
+      [
+        bootstrapPath,
+        "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64",
+        checksum,
+      ],
       {
         encoding: "utf8",
         env: {
@@ -128,13 +143,17 @@ describe("provider installer shell bootstrap", () => {
     const fakeCurl = join(fakeBin, "curl");
     await writeFile(
       fakeCurl,
-      "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do if [ \"$1\" = --output ]; then shift; out=$1; fi; shift; done\ncp \"$TEST_ASSET\" \"$out\"\n",
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do if [ "$1" = --output ]; then shift; out=$1; fi; shift; done\ncp "$TEST_ASSET" "$out"\n',
     );
     await chmod(fakeCurl, 0o755);
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", "0".repeat(64)],
+      [
+        bootstrapPath,
+        "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64",
+        "0".repeat(64),
+      ],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, TEST_ASSET: assetPath },
@@ -153,8 +172,10 @@ describe("provider installer shell bootstrap", () => {
 
   it("installs the operational CLI before invoking the primary install command", async () => {
     const source = await readFile(bootstrapPath, "utf8");
-    expect(source).toContain('install -o root -g root -m 0755 "$temporary_asset" /usr/local/bin/osinara');
-    expect(source.indexOf('/usr/local/bin/osinara')).toBeLessThan(
+    expect(source).toContain(
+      'install -o root -g root -m 0755 "$temporary_asset" /usr/local/bin/osinara',
+    );
+    expect(source.indexOf("/usr/local/bin/osinara")).toBeLessThan(
       source.indexOf('"$temporary_asset" install'),
     );
   });

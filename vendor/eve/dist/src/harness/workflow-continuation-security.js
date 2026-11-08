@@ -16,21 +16,18 @@ function ensureWorkflowContinuationSecurity(n) {
 }
 function readWorkflowContinuationSecurity(e) {
   let n = e.state?.[WORKFLOW_CONTINUATION_SECURITY_KEY];
-  if (
-    !(
-      typeof n != `object` ||
-      !n ||
-      n.version !== 1 ||
-      typeof n.signingKey != `string` ||
-      !/^[A-Za-z0-9_-]{43}$/.test(n.signingKey)
-    )
-  )
+  if (!(
+    typeof n != `object` ||
+    !n ||
+    n.version !== 1 ||
+    typeof n.signingKey != `string` ||
+    !/^[A-Za-z0-9_-]{43}$/.test(n.signingKey)
+  ))
     return { signingKey: n.signingKey, maxAgeMs: 31536e6 };
 }
 function getWorkflowContinuationSecurity(e) {
   let t = readWorkflowContinuationSecurity(e);
-  if (t === void 0)
-    throw Error(`Workflow continuation security state is missing or invalid.`);
+  if (t === void 0) throw Error(`Workflow continuation security state is missing or invalid.`);
   return t;
 }
 export {

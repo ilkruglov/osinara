@@ -1,7 +1,4 @@
-import {
-  resolveArtifactDirectory,
-  writeArtifacts,
-} from "#evals/runner/artifacts.js";
+import { resolveArtifactDirectory, writeArtifacts } from "#evals/runner/artifacts.js";
 import { executeEval } from "#evals/runner/execute-eval.js";
 async function runEvals(r) {
   let { config: i, target: a, client: o, appRoot: s } = r,
@@ -27,8 +24,8 @@ async function runEvals(r) {
         for (let n of d) n.evalIds.has(e.id) && (await t(n.reporter));
       });
     };
-  for (; p.length > 0 || m.size > 0; ) {
-    for (; p.length > 0 && m.size < c; ) {
+  for (; p.length > 0 || m.size > 0;) {
+    for (; p.length > 0 && m.size < c;) {
       let e = p.shift();
       if (e === void 0) break;
       let t = new Date().toISOString();
@@ -39,8 +36,7 @@ async function runEvals(r) {
         let i = await executeEval({
           client: o,
           evaluation: e,
-          onLog:
-            r.onEvalLog === void 0 ? void 0 : (t) => r.onEvalLog?.(e.id, t),
+          onLog: r.onEvalLog === void 0 ? void 0 : (t) => r.onEvalLog?.(e.id, t),
           onSessionStart: (t) => {
             enqueueReporterCallback(e, async (n) => {
               await n.onSessionStart?.({
@@ -83,8 +79,7 @@ async function runEvals(r) {
 function buildReporterBindings(e) {
   let t = new Set(e.evaluations.map((e) => e.id)),
     n = new Set(e.reporters);
-  if (e.includeEvalReporters !== !1)
-    for (let t of e.config.reporters ?? []) n.add(t);
+  if (e.includeEvalReporters !== !1) for (let t of e.config.reporters ?? []) n.add(t);
   let r = [...n].map((e) => ({ reporter: e, evalIds: t }));
   if (e.includeEvalReporters === !1) return r;
   let i = new Map();
@@ -100,9 +95,7 @@ function buildReporterBindings(e) {
 function applyConfigDefaults(e, t) {
   let n = e.judge ?? t.judge,
     r = e.timeoutMs ?? t.timeoutMs;
-  return n === e.judge && r === e.timeoutMs
-    ? e
-    : { ...e, judge: n, timeoutMs: r };
+  return n === e.judge && r === e.timeoutMs ? e : { ...e, judge: n, timeoutMs: r };
 }
 function buildSummary(e, t, n) {
   return {

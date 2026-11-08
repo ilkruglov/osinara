@@ -27,19 +27,23 @@ describeWithDatabase("Telegram owner-only message mode", () => {
       "INSERT INTO families (name) VALUES ('Owner only') RETURNING id",
     );
 
-    await expect(database().query(
-      `INSERT INTO telegram_groups
+    await expect(
+      database().query(
+        `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode)
        VALUES ($1, '-100-owner-only-external', 'External', 'external', 'owner_only')`,
-      [family.rows[0]!.id],
-    )).resolves.toMatchObject({ rowCount: 1 });
+        [family.rows[0]!.id],
+      ),
+    ).resolves.toMatchObject({ rowCount: 1 });
 
-    await expect(database().query(
-      `INSERT INTO telegram_groups
+    await expect(
+      database().query(
+        `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode)
        VALUES ($1, '-100-owner-only-family', 'Family', 'family_private', 'owner_only')`,
-      [family.rows[0]!.id],
-    )).rejects.toMatchObject({
+        [family.rows[0]!.id],
+      ),
+    ).rejects.toMatchObject({
       constraint: "telegram_groups_owner_only_external",
     });
   });

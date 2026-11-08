@@ -53,10 +53,14 @@ export function requireMemoryAuthorization(ctx: MemoryContext): MemoryAuthorizat
     );
   }
   const groupIdValue = typeof groupId === "string" ? groupId : null;
-  const channelShapeValid = actor.kind !== "telegram_channel" || (
-    caller?.principalType === "service" && role === "external" && groupIdValue !== null &&
-    memoryScopes.length === 1 && memoryScopes[0] === "group" && telegramUserId === undefined
-  );
+  const channelShapeValid =
+    actor.kind !== "telegram_channel" ||
+    (caller?.principalType === "service" &&
+      role === "external" &&
+      groupIdValue !== null &&
+      memoryScopes.length === 1 &&
+      memoryScopes[0] === "group" &&
+      telegramUserId === undefined);
   const userShapeValid = actor.kind !== "telegram_user" || typeof telegramUserId === "string";
   if (!channelShapeValid || !userShapeValid) {
     throw new AppError(
@@ -82,10 +86,7 @@ export function requireWritableScope(
   requestedScope: MemoryScope,
 ): MemoryScope {
   if (!authorization.scopes.includes(requestedScope)) {
-    throw new AppError(
-      "AGENT_MEMORY_SCOPE_DENIED",
-      "Эта область памяти недоступна в текущем чате",
-    );
+    throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта область памяти недоступна в текущем чате");
   }
   if (requestedScope === "group" && !authorization.groupId) {
     throw new AppError(

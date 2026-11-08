@@ -10,8 +10,7 @@ function resolveTuiDisplayOptions(e) {
   return (
     e.subagents !== void 0 && (t.subagents = e.subagents),
     e.connectionAuth !== void 0 && (t.connectionAuth = e.connectionAuth),
-    e.assistantResponseStats !== void 0 &&
-      (t.assistantResponseStats = e.assistantResponseStats),
+    e.assistantResponseStats !== void 0 && (t.assistantResponseStats = e.assistantResponseStats),
     e.contextSize !== void 0 && (t.contextSize = e.contextSize),
     t
   );

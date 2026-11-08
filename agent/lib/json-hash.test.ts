@@ -15,8 +15,11 @@ import { canonicalJson, sha256Json } from "./json-hash.js";
 function legacyCanonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(legacyCanonical);
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => [k, legacyCanonical(v)]));
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, legacyCanonical(v)]),
+    );
   }
   return value;
 }
@@ -25,7 +28,9 @@ const sample = { b: [1, { z: "я", a: null }, undefined], a: { c: true, b: undef
 
 describe("json hashes", () => {
   it("hashes plain JSON.stringify exactly as stored rows were written", () => {
-    expect(sha256Json(sample)).toBe(createHash("sha256").update(JSON.stringify(sample)).digest("hex"));
+    expect(sha256Json(sample)).toBe(
+      createHash("sha256").update(JSON.stringify(sample)).digest("hex"),
+    );
   });
 
   it("ignores key order", () => {

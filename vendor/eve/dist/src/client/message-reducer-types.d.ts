@@ -4,16 +4,16 @@ import type { AuthorizationOutcome } from "#protocol/message.js";
  * UIMessage-compatible eve message projection for chat and agent UIs.
  */
 export interface EveMessageData {
-    readonly messages: readonly EveMessage[];
+  readonly messages: readonly EveMessage[];
 }
 /**
  * eve-owned message shape that follows the AI SDK UIMessage convention.
  */
 export interface EveMessage {
-    readonly id: string;
-    readonly metadata?: EveMessageMetadata;
-    readonly parts: readonly EveMessagePart[];
-    readonly role: "assistant" | "user";
+  readonly id: string;
+  readonly metadata?: EveMessageMetadata;
+  readonly parts: readonly EveMessagePart[];
+  readonly role: "assistant" | "user";
 }
 /**
  * Per-message metadata attached by the default projection.
@@ -26,10 +26,10 @@ export interface EveMessage {
  * once the turn finalizes.
  */
 export interface EveMessageMetadata {
-    readonly optimistic?: true;
-    readonly result?: unknown;
-    readonly status?: "complete" | "failed" | "streaming" | "submitted";
-    readonly turnId?: string;
+  readonly optimistic?: true;
+  readonly result?: unknown;
+  readonly status?: "complete" | "failed" | "streaming" | "submitted";
+  readonly turnId?: string;
 }
 /**
  * One renderable part of an {@link EveMessage}, discriminated by `type`.
@@ -40,39 +40,45 @@ export interface EveMessageMetadata {
  * holds the tool call and its lifecycle state. `stepIndex` ties a part to the
  * agent step that produced it.
  */
-export type EveMessagePart = {
-    readonly providerMetadata?: Record<string, unknown>;
-    readonly state?: "done" | "streaming";
-    readonly stepIndex?: number;
-    readonly text: string;
-    readonly type: "text";
-} | {
-    readonly providerMetadata?: Record<string, unknown>;
-    readonly state?: "done" | "streaming";
-    readonly stepIndex?: number;
-    readonly text: string;
-    readonly type: "reasoning";
-} | {
-    readonly filename?: string;
-    readonly mediaType: string;
-    readonly size?: number;
-    readonly stepIndex?: number;
-    readonly type: "file";
-    readonly url?: string;
-} | {
-    readonly type: "step-start";
-} | EveAuthorizationPart | EveDynamicToolPart;
+export type EveMessagePart =
+  | {
+      readonly providerMetadata?: Record<string, unknown>;
+      readonly state?: "done" | "streaming";
+      readonly stepIndex?: number;
+      readonly text: string;
+      readonly type: "text";
+    }
+  | {
+      readonly providerMetadata?: Record<string, unknown>;
+      readonly state?: "done" | "streaming";
+      readonly stepIndex?: number;
+      readonly text: string;
+      readonly type: "reasoning";
+    }
+  | {
+      readonly filename?: string;
+      readonly mediaType: string;
+      readonly size?: number;
+      readonly stepIndex?: number;
+      readonly type: "file";
+      readonly url?: string;
+    }
+  | {
+      readonly type: "step-start";
+    }
+  | EveAuthorizationPart
+  | EveDynamicToolPart;
 /**
  * User-facing authorization challenge projected from an
  * `authorization.required` stream event. These fields are safe to render in a
  * browser UI; the model-facing tool output never receives the URL or code.
  */
 export interface EveAuthorizationChallenge {
-    readonly displayName?: string;
-    readonly expiresAt?: string;
-    readonly instructions?: string;
-    readonly url?: string;
-    readonly userCode?: string;
+  readonly displayName?: string;
+  readonly expiresAt?: string;
+  readonly instructions?: string;
+  readonly url?: string;
+  readonly userCode?: string;
 }
 /**
  * Outcome of a completed user authorization flow.
@@ -84,22 +90,25 @@ export type EveAuthorizationOutcome = AuthorizationOutcome;
  * sign-in affordance, then updates it when `authorization.completed` arrives.
  */
 export type EveAuthorizationPart = {
-    readonly authorization?: EveAuthorizationChallenge;
-    readonly description: string;
-    readonly displayName: string;
-    readonly name: string;
-    readonly stepIndex: number;
-    readonly turnId: string;
-    readonly type: "authorization";
-} & ({
-    readonly outcome?: never;
-    readonly reason?: never;
-    readonly state: "required";
-} | {
-    readonly outcome: EveAuthorizationOutcome;
-    readonly reason?: string;
-    readonly state: "completed";
-});
+  readonly authorization?: EveAuthorizationChallenge;
+  readonly description: string;
+  readonly displayName: string;
+  readonly name: string;
+  readonly stepIndex: number;
+  readonly turnId: string;
+  readonly type: "authorization";
+} & (
+  | {
+      readonly outcome?: never;
+      readonly reason?: never;
+      readonly state: "required";
+    }
+  | {
+      readonly outcome: EveAuthorizationOutcome;
+      readonly reason?: string;
+      readonly state: "completed";
+    }
+);
 /**
  * A tool-call part of an assistant message, following the AI SDK `dynamic-tool`
  * convention. `state` advances through the lifecycle: `"input-streaming"` and
@@ -113,80 +122,88 @@ export type EveAuthorizationPart = {
  * `toolName` and `toolMetadata.eve` ({@link EveMessageToolMetadata}) record call identity.
  */
 export type EveDynamicToolPart = {
-    readonly stepIndex?: number;
-    readonly toolCallId: string;
-    readonly toolMetadata?: EveMessageToolMetadata;
-    readonly toolName: string;
-    readonly type: "dynamic-tool";
-} & ({
-    readonly approval?: never;
-    readonly errorText?: never;
-    readonly input: unknown | undefined;
-    readonly output?: never;
-    readonly state: "input-streaming";
-} | {
-    readonly approval?: never;
-    readonly errorText?: never;
-    readonly input: unknown;
-    readonly output?: never;
-    readonly state: "input-available";
-} | {
-    readonly approval: {
+  readonly stepIndex?: number;
+  readonly toolCallId: string;
+  readonly toolMetadata?: EveMessageToolMetadata;
+  readonly toolName: string;
+  readonly type: "dynamic-tool";
+} & (
+  | {
+      readonly approval?: never;
+      readonly errorText?: never;
+      readonly input: unknown | undefined;
+      readonly output?: never;
+      readonly state: "input-streaming";
+    }
+  | {
+      readonly approval?: never;
+      readonly errorText?: never;
+      readonly input: unknown;
+      readonly output?: never;
+      readonly state: "input-available";
+    }
+  | {
+      readonly approval: {
         readonly id: string;
         readonly approved?: never;
         readonly reason?: never;
         readonly isAutomatic?: boolean;
-    };
-    readonly errorText?: never;
-    readonly input: unknown;
-    readonly output?: never;
-    readonly state: "approval-requested";
-} | {
-    readonly approval: {
+      };
+      readonly errorText?: never;
+      readonly input: unknown;
+      readonly output?: never;
+      readonly state: "approval-requested";
+    }
+  | {
+      readonly approval: {
         readonly id: string;
         readonly approved?: boolean;
         readonly reason?: string;
         readonly isAutomatic?: boolean;
-    };
-    readonly errorText?: never;
-    readonly input: unknown;
-    readonly output?: never;
-    readonly state: "approval-responded";
-} | {
-    readonly approval?: {
+      };
+      readonly errorText?: never;
+      readonly input: unknown;
+      readonly output?: never;
+      readonly state: "approval-responded";
+    }
+  | {
+      readonly approval?: {
         readonly id: string;
         readonly approved: true;
         readonly reason?: string;
         readonly isAutomatic?: boolean;
-    };
-    readonly errorText?: never;
-    readonly input: unknown;
-    readonly output: unknown;
-    readonly partial?: true;
-    readonly state: "output-available";
-} | {
-    readonly approval?: {
+      };
+      readonly errorText?: never;
+      readonly input: unknown;
+      readonly output: unknown;
+      readonly partial?: true;
+      readonly state: "output-available";
+    }
+  | {
+      readonly approval?: {
         readonly id: string;
         readonly approved: true;
         readonly reason?: string;
         readonly isAutomatic?: boolean;
-    };
-    readonly errorText: string;
-    readonly input: unknown | undefined;
-    readonly output?: never;
-    readonly state: "output-error";
-} | {
-    readonly approval: {
+      };
+      readonly errorText: string;
+      readonly input: unknown | undefined;
+      readonly output?: never;
+      readonly state: "output-error";
+    }
+  | {
+      readonly approval: {
         readonly id: string;
         readonly approved: false;
         readonly reason?: string;
         readonly isAutomatic?: boolean;
-    };
-    readonly errorText?: never;
-    readonly input: unknown;
-    readonly output?: never;
-    readonly state: "output-denied";
-});
+      };
+      readonly errorText?: never;
+      readonly input: unknown;
+      readonly output?: never;
+      readonly state: "output-denied";
+    }
+);
 /**
  * eve-specific metadata attached to an {@link EveDynamicToolPart}. `eve.kind`
  * classifies the action (`"tool-call"`, `"subagent-call"`, `"load-skill"`, or
@@ -195,12 +212,12 @@ export type EveDynamicToolPart = {
  * call required approval.
  */
 export interface EveMessageToolMetadata {
-    readonly eve?: {
-        readonly inputRequest?: EveMessageInputRequest;
-        readonly inputResponse?: InputResponse;
-        readonly kind: "load-skill" | "subagent-call" | "tool-call" | "unknown";
-        readonly name: string;
-    };
+  readonly eve?: {
+    readonly inputRequest?: EveMessageInputRequest;
+    readonly inputResponse?: InputResponse;
+    readonly kind: "load-skill" | "subagent-call" | "tool-call" | "unknown";
+    readonly name: string;
+  };
 }
 /**
  * UI-facing projection of a pending HITL input request on a tool part. `prompt`
@@ -212,15 +229,15 @@ export interface EveMessageToolMetadata {
  * {@link InputResponse}.
  */
 export interface EveMessageInputRequest {
-    readonly allowFreeform?: boolean;
-    readonly display?: "confirmation" | "select" | "text";
-    readonly kind: InputRequest["kind"];
-    readonly options?: readonly {
-        readonly description?: string;
-        readonly id: string;
-        readonly label: string;
-        readonly style?: "danger" | "default" | "primary";
-    }[];
-    readonly prompt: string;
-    readonly requestId: string;
+  readonly allowFreeform?: boolean;
+  readonly display?: "confirmation" | "select" | "text";
+  readonly kind: InputRequest["kind"];
+  readonly options?: readonly {
+    readonly description?: string;
+    readonly id: string;
+    readonly label: string;
+    readonly style?: "danger" | "default" | "primary";
+  }[];
+  readonly prompt: string;
+  readonly requestId: string;
 }

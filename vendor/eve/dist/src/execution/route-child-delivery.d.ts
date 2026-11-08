@@ -12,8 +12,8 @@ import { type RoutedDeliverResult } from "#execution/proxied-deliver-step.js";
  * re-export plain helpers into a workflow body).
  */
 export declare function routeDeliverToChildren(input: {
-    readonly delivery: DeliverHookPayload;
-    readonly parentWritable: WritableStream<Uint8Array>;
-    readonly sessionState: DurableSessionState;
-    readonly serializedContext: Record<string, unknown>;
+  readonly delivery: DeliverHookPayload;
+  readonly parentWritable: WritableStream<Uint8Array>;
+  readonly sessionState: DurableSessionState;
+  readonly serializedContext: Record<string, unknown>;
 }): Promise<RoutedDeliverResult>;

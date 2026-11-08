@@ -15,8 +15,10 @@ const TOOL_DIRECTORY = "agent/lib/tools";
 
 async function schemaRoots(): Promise<Array<{ name: string; root: unknown }>> {
   const roots: Array<{ name: string; root: unknown }> = [];
-  for (const file of readdirSync(TOOL_DIRECTORY).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))) {
-    const module = await import(`../tools/${file}`) as { default?: { inputSchema?: z.ZodType } };
+  for (const file of readdirSync(TOOL_DIRECTORY).filter(
+    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"),
+  )) {
+    const module = (await import(`../tools/${file}`)) as { default?: { inputSchema?: z.ZodType } };
     const schema = module.default?.inputSchema;
     if (schema === undefined) continue;
     const json = z.toJSONSchema(schema, { io: "input", target: "draft-7" }) as { type?: unknown };
@@ -34,7 +36,12 @@ describe("tool input schemas", () => {
   }, 30_000); // imports every tool module; 1.8 s alone, past 5 s under the parallel run
 
   it("would catch a discriminated union at the root", () => {
-    const union = z.discriminatedUnion("action", [z.object({ action: z.literal("a") }), z.object({ action: z.literal("b") })]);
-    expect((z.toJSONSchema(union, { io: "input", target: "draft-7" }) as { type?: unknown }).type).not.toBe("object");
+    const union = z.discriminatedUnion("action", [
+      z.object({ action: z.literal("a") }),
+      z.object({ action: z.literal("b") }),
+    ]);
+    expect(
+      (z.toJSONSchema(union, { io: "input", target: "draft-7" }) as { type?: unknown }).type,
+    ).not.toBe("object");
   });
 });

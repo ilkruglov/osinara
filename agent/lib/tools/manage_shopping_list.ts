@@ -19,6 +19,10 @@ export default defineTool({
   ].join(" "),
   inputSchema: shoppingInput,
   async execute(input, ctx) {
-    return await shoppingRepository.execute(requireMemoryAuthorization(ctx), input, `${ctx.session.id}:${ctx.callId}`);
+    return await shoppingRepository.execute(
+      requireMemoryAuthorization(ctx),
+      input,
+      `${ctx.session.id}:${ctx.callId}`,
+    );
   },
 });

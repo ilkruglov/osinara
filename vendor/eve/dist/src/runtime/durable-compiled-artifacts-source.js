@@ -13,7 +13,4 @@ function resolveDurableCompiledArtifactsSource(t) {
     );
   return n.source;
 }
-export {
-  resolveDurableCompiledArtifactsSource,
-  serializeDurableCompiledArtifactsSource,
-};
+export { resolveDurableCompiledArtifactsSource, serializeDurableCompiledArtifactsSource };

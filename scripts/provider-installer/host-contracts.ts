@@ -13,58 +13,93 @@ import type { InstallationExecutionResult } from "./contracts.js";
 import { InstallerError } from "./errors.js";
 
 const IMAGE_DIGEST = "[0-9a-f]{64}";
-const manifestSchema = z.object({
-  commitSha: z.string().regex(/^[0-9a-f]{40}$/u),
-  composeSha256: z.string().regex(/^[0-9a-f]{64}$/u),
-  images: z.object({
-    app: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`, "u")),
-    edge: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`, "u")),
-    sandboxEgressProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
-    ),
-    sandboxRunner: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`, "u"),
-    ),
-    sandboxRuntime: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`, "u"),
-    ),
-    // The embedder image (BERTA exported to ONNX) joins the manifest with the release after
-    // 1.8.20; until then the public embedder image serves, so the reference is optional.
-    memoryEmbedding: z.string().regex(
-      new RegExp(`^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`, "u"),
-    ).optional(),
-  }).strict(),
-  schemaVersion: z.literal(1),
-  version: z.string().regex(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u),
-}).strict();
+const manifestSchema = z
+  .object({
+    commitSha: z.string().regex(/^[0-9a-f]{40}$/u),
+    composeSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+    images: z
+      .object({
+        app: z
+          .string()
+          .regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`, "u")),
+        edge: z
+          .string()
+          .regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`, "u")),
+        sandboxEgressProxy: z
+          .string()
+          .regex(
+            new RegExp(
+              `^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`,
+              "u",
+            ),
+          ),
+        sandboxRunner: z
+          .string()
+          .regex(
+            new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`, "u"),
+          ),
+        sandboxRuntime: z
+          .string()
+          .regex(
+            new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`, "u"),
+          ),
+        // The embedder image (BERTA exported to ONNX) joins the manifest with the release after
+        // 1.8.20; until then the public embedder image serves, so the reference is optional.
+        memoryEmbedding: z
+          .string()
+          .regex(
+            new RegExp(
+              `^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`,
+              "u",
+            ),
+          )
+          .optional(),
+      })
+      .strict(),
+    schemaVersion: z.literal(1),
+    version: z.string().regex(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u),
+  })
+  .strict();
 
-const bootstrapSchema = z.object({
-  bootstrapCode: z.string().regex(/^[A-Za-z0-9_-]+$/u),
-  bootstrapExpiresAt: z.iso.datetime({ offset: false }),
-}).strict();
+const bootstrapSchema = z
+  .object({
+    bootstrapCode: z.string().regex(/^[A-Za-z0-9_-]+$/u),
+    bootstrapExpiresAt: z.iso.datetime({ offset: false }),
+  })
+  .strict();
 
-export function composeArgs(file: string, envFiles: readonly string[], args: readonly string[]): string[] {
-  return ["compose", ...envFiles.flatMap((envFile) => ["--env-file", envFile]), "--file", file, ...args];
+export function composeArgs(
+  file: string,
+  envFiles: readonly string[],
+  args: readonly string[],
+): string[] {
+  return [
+    "compose",
+    ...envFiles.flatMap((envFile) => ["--env-file", envFile]),
+    "--file",
+    file,
+    ...args,
+  ];
 }
 
-export function releaseEnvironmentFromManifest(
-  bytes: Buffer,
-  expectedVersion: string,
-): Buffer {
+export function releaseEnvironmentFromManifest(bytes: Buffer, expectedVersion: string): Buffer {
   try {
     const manifest = manifestSchema.parse(JSON.parse(bytes.toString("utf8")));
     if (manifest.version !== expectedVersion) throw new Error("release version mismatch");
-    return Buffer.from([
-      `OSINARA_APP_IMAGE=${manifest.images.app}`,
-      `OSINARA_EDGE_IMAGE=${manifest.images.edge}`,
-      `OSINARA_SANDBOX_EGRESS_PROXY_IMAGE=${manifest.images.sandboxEgressProxy}`,
-      `OSINARA_SANDBOX_RUNNER_IMAGE=${manifest.images.sandboxRunner}`,
-      `SANDBOX_RUNTIME_IMAGE=${manifest.images.sandboxRuntime}`,
-      ...(manifest.images.memoryEmbedding === undefined
-        ? []
-        : [`OSINARA_MEMORY_EMBEDDING_IMAGE=${manifest.images.memoryEmbedding}`]),
-      "",
-    ].join("\n"), "utf8");
+    return Buffer.from(
+      [
+        `OSINARA_APP_IMAGE=${manifest.images.app}`,
+        `OSINARA_EDGE_IMAGE=${manifest.images.edge}`,
+        `OSINARA_SANDBOX_EGRESS_PROXY_IMAGE=${manifest.images.sandboxEgressProxy}`,
+        `OSINARA_SANDBOX_RUNNER_IMAGE=${manifest.images.sandboxRunner}`,
+        `SANDBOX_RUNTIME_IMAGE=${manifest.images.sandboxRuntime}`,
+        ...(manifest.images.memoryEmbedding === undefined
+          ? []
+          : [`OSINARA_MEMORY_EMBEDDING_IMAGE=${manifest.images.memoryEmbedding}`]),
+        "",
+      ].join("\n"),
+      "utf8",
+    );
   } catch (error) {
     throw new InstallerError(
       "OSINARA_INSTALL_MANIFEST_INVALID",

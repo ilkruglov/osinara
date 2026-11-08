@@ -50,8 +50,4 @@ function buildUserPrincipalRequiredMessage(e, t, n, r) {
     `Connection "${e}" is user-scoped, but ${i} User-scoped connections require route auth that resolves an authenticated user. If this connection should use credentials shared by the agent instead, configure it as an app-scoped connection.`
   );
 }
-export {
-  principalKey,
-  resolveConnectionPrincipal,
-  resolveConnectionPrincipalFromAuth,
-};
+export { principalKey, resolveConnectionPrincipal, resolveConnectionPrincipalFromAuth };

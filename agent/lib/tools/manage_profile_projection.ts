@@ -16,14 +16,21 @@ import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.j
 const GROUP_REF_PATTERN = /^grp_[0-9a-f]{32}$/u;
 
 export default defineTool({
-  approval: ({ toolInput }) => toolInput?.action === "update" ? "user-approval" : "not-applicable",
+  approval: ({ toolInput }) =>
+    toolInput?.action === "update" ? "user-approval" : "not-applicable",
   description:
-    "В личном чате владельца показать или изменить self-проекцию профиля во внешнюю группу. Сначала вызови {\"action\":\"list\"}: результат policies содержит актуальные opaque groupRef. Для изменения используй только {\"action\":\"update\",\"enabled\":true|false,\"groupRef\":\"grp_...\"}; update требует Eve HITL. Не придумывай groupRef и не используй Telegram chat ID.",
-  inputSchema: z.object({
-    action: z.enum(["list", "update"]).describe("list читает политики; update изменяет одну"),
-    enabled: z.boolean().optional().describe("Обязательно только для action=update"),
-    groupRef: z.string().regex(GROUP_REF_PATTERN).optional().describe("Обязательно для update; только из результата action=list"),
-  }).strict(),
+    'В личном чате владельца показать или изменить self-проекцию профиля во внешнюю группу. Сначала вызови {"action":"list"}: результат policies содержит актуальные opaque groupRef. Для изменения используй только {"action":"update","enabled":true|false,"groupRef":"grp_..."}; update требует Eve HITL. Не придумывай groupRef и не используй Telegram chat ID.',
+  inputSchema: z
+    .object({
+      action: z.enum(["list", "update"]).describe("list читает политики; update изменяет одну"),
+      enabled: z.boolean().optional().describe("Обязательно только для action=update"),
+      groupRef: z
+        .string()
+        .regex(GROUP_REF_PATTERN)
+        .optional()
+        .describe("Обязательно для update; только из результата action=list"),
+    })
+    .strict(),
   async execute(input, ctx) {
     requirePrivateTelegramOwner(ctx);
     const auth = requireMemoryAuthorization(ctx);

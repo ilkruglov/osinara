@@ -27,7 +27,11 @@ import {
   type MemoryTurnContext,
   type MemoryTurnContextOptions,
 } from "./memory-retrieval.js";
-import { formatSkillHint, skillHintRepository, type SkillHint } from "./authored-skills/skill-hint-repository.js";
+import {
+  formatSkillHint,
+  skillHintRepository,
+  type SkillHint,
+} from "./authored-skills/skill-hint-repository.js";
 import { formatProfileViewContext, profileViewRepository } from "./profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "./profile-view.js";
 import type { TelegramActorKind } from "./telegram-inbound-actor.js";
@@ -46,7 +50,11 @@ export interface TelegramMemoryContextInput {
 }
 
 interface ExposureLedger {
-  authorCardShownRecently(applicationSessionId: string, telegramUserId: string, sessionTurn: number): Promise<boolean>;
+  authorCardShownRecently(
+    applicationSessionId: string,
+    telegramUserId: string,
+    sessionTurn: number,
+  ): Promise<boolean>;
   recentlyShownMemoryRefs(applicationSessionId: string, sessionTurn: number): Promise<Set<string>>;
   record(input: {
     applicationSessionId: string;
@@ -58,7 +66,10 @@ interface ExposureLedger {
 }
 
 interface TelegramMemoryContextDependencies {
-  createProfile(auth: MemoryAuthorization, input: CreateProfileViewInput): Promise<ProfileView | null>;
+  createProfile(
+    auth: MemoryAuthorization,
+    input: CreateProfileViewInput,
+  ): Promise<ProfileView | null>;
   /** What this session already showed; absent in tests that do not care about repetition. */
   exposures?: ExposureLedger;
   /** Pending repeat-task hint for this conversation; consumed once shown. */
@@ -95,7 +106,9 @@ function exposureFailure(error: unknown): null {
   return null;
 }
 
-export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryContextDependencies) {
+export function createTelegramMemoryContextBuilder(
+  dependencies: TelegramMemoryContextDependencies,
+) {
   return async function build(input: TelegramMemoryContextInput): Promise<string[]> {
     const query = input.query.trim();
     if (query.length === 0) return [];
@@ -105,111 +118,169 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
       // The same three facts shown fifty times a day read as a stuck record; what this session
       // already showed recently stays out of the automatic block (the model can still search).
       const exposures = dependencies.exposures;
-      const sessionTurn = exposures ? await exposures.sessionTurn(input.applicationSessionId).catch(exposureFailure) : null;
-      const excludeMemoryRefs = exposures && sessionTurn !== null
-        ? await exposures.recentlyShownMemoryRefs(input.applicationSessionId, sessionTurn).catch(() => new Set<string>())
-        : new Set<string>();
+      const sessionTurn = exposures
+        ? await exposures.sessionTurn(input.applicationSessionId).catch(exposureFailure)
+        : null;
+      const excludeMemoryRefs =
+        exposures && sessionTurn !== null
+          ? await exposures
+              .recentlyShownMemoryRefs(input.applicationSessionId, sessionTurn)
+              .catch(() => new Set<string>())
+          : new Set<string>();
       // Skill-derived thread hints came from load_skill calls in history; none are reviewed now.
       let retrievalFailed = false;
-      const context: MemoryTurnContext = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs }).catch((error: unknown) => {
-        retrievalFailed = true;
-        console.error(JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component: "retrieval", error: String(error) }));
-        return { memories: [], retrievedClaimIds: [], threads: { threads: [], totalCharacters: 0 } };
-      });
+      const context: MemoryTurnContext = await dependencies
+        .retrieve(authorization, query, [], { excludeMemoryRefs })
+        .catch((error: unknown) => {
+          retrievalFailed = true;
+          console.error(
+            JSON.stringify({
+              code: "AGENT_MEMORY_UNAVAILABLE",
+              component: "retrieval",
+              error: String(error),
+            }),
+          );
+          return {
+            memories: [],
+            retrievedClaimIds: [],
+            threads: { threads: [], totalCharacters: 0 },
+          };
+        });
       const retrievedAt = performance.now();
       const isUser = input.actor.kind === "telegram_user";
-      const authorIsSubject = input.replyTelegramUserId === input.actor.id ||
+      const authorIsSubject =
+        input.replyTelegramUserId === input.actor.id ||
         input.explicitMentionTelegramUserIds.includes(input.actor.id);
-      const suppressCurrentAuthor = isUser && exposures !== undefined && sessionTurn !== null && !authorIsSubject &&
-        await exposures.authorCardShownRecently(input.applicationSessionId, input.actor.id, sessionTurn).catch(() => false);
+      const suppressCurrentAuthor =
+        isUser &&
+        exposures !== undefined &&
+        sessionTurn !== null &&
+        !authorIsSubject &&
+        (await exposures
+          .authorCardShownRecently(input.applicationSessionId, input.actor.id, sessionTurn)
+          .catch(() => false));
       // A channel post has no human subject to build a profile for.
       const profile = isUser
-        ? await dependencies.createProfile(authorization, {
-          conversationId: input.conversationId,
-          currentTelegramUserId: input.actor.id,
-          explicitMentionTelegramUserIds: [...input.explicitMentionTelegramUserIds],
-          now: input.turnStartedAt,
-          provenance: { sessionId: input.applicationSessionId, turnId: input.timelineEntryId },
-          replyTelegramUserId: input.replyTelegramUserId,
-          ...(input.replyTimelineSequence === null
-            ? {}
-            : { replyTimelineSequence: input.replyTimelineSequence }),
-          retrievalClaimIds: [...context.retrievedClaimIds],
-          suppressCurrentAuthor,
-        }).catch((error: unknown) => {
-          console.error(JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component: "profile", error: String(error) }));
-          return null;
-        })
+        ? await dependencies
+            .createProfile(authorization, {
+              conversationId: input.conversationId,
+              currentTelegramUserId: input.actor.id,
+              explicitMentionTelegramUserIds: [...input.explicitMentionTelegramUserIds],
+              now: input.turnStartedAt,
+              provenance: { sessionId: input.applicationSessionId, turnId: input.timelineEntryId },
+              replyTelegramUserId: input.replyTelegramUserId,
+              ...(input.replyTimelineSequence === null
+                ? {}
+                : { replyTimelineSequence: input.replyTimelineSequence }),
+              retrievalClaimIds: [...context.retrievedClaimIds],
+              suppressCurrentAuthor,
+            })
+            .catch((error: unknown) => {
+              console.error(
+                JSON.stringify({
+                  code: "AGENT_MEMORY_UNAVAILABLE",
+                  component: "profile",
+                  error: String(error),
+                }),
+              );
+              return null;
+            })
         : null;
       // Both versions of an unresolved conflict are shown too; without them in the ledger a version
       // the answer relied on was refused as unknown (Codex review, 6 October 2026).
       const conflictRefs = context.memories.flatMap((memory) =>
-        "type" in memory && memory.type === "unresolved_conflict" ? memory.versions.map((version) => version.memoryRef) : []);
+        "type" in memory && memory.type === "unresolved_conflict"
+          ? memory.versions.map((version) => version.memoryRef)
+          : [],
+      );
       const shownMemoryRefs = [
-        ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
+        ...context.memories.flatMap((memory) =>
+          "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : [],
+        ),
         ...conflictRefs,
-        ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
+        ...(profile?.subjects.flatMap((subject) =>
+          subject.claims.map((claim) => claim.memoryRef),
+        ) ?? []),
       ];
       if (exposures && sessionTurn !== null) {
-        const shownAuthorCard = profile?.subjects.some((subject) => subject.priority === "current_author") === true;
-        await exposures.record({
-          applicationSessionId: input.applicationSessionId,
-          authorTelegramUserId: shownAuthorCard ? input.actor.id : null,
-          memoryRefs: shownMemoryRefs,
-          sessionTurn,
-        }).catch((error: unknown) => {
-          console.error(JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }));
-        });
+        const shownAuthorCard =
+          profile?.subjects.some((subject) => subject.priority === "current_author") === true;
+        await exposures
+          .record({
+            applicationSessionId: input.applicationSessionId,
+            authorTelegramUserId: shownAuthorCard ? input.actor.id : null,
+            memoryRefs: shownMemoryRefs,
+            sessionTurn,
+          })
+          .catch((error: unknown) => {
+            console.error(
+              JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }),
+            );
+          });
       }
       // Per-turn cost of memory on a small server: retrieval (FTS + BERTA + pgvector) and profile view.
-      console.info(JSON.stringify({
-        code: "AGENT_MEMORY_CONTEXT",
-        memories: context.memories.length,
-        profile: profile !== null,
-        profileMs: Math.round(performance.now() - retrievedAt),
-        retrievalMs: Math.round(retrievedAt - startedAt),
-        threads: context.threads.threads.length,
-        // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
-        // steps answer that (most of it was the reranker, removed on 2 October 2026).
-        ...context.timings,
-      }));
+      console.info(
+        JSON.stringify({
+          code: "AGENT_MEMORY_CONTEXT",
+          memories: context.memories.length,
+          profile: profile !== null,
+          profileMs: Math.round(performance.now() - retrievedAt),
+          retrievalMs: Math.round(retrievedAt - startedAt),
+          threads: context.threads.threads.length,
+          // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
+          // steps answer that (most of it was the reranker, removed on 2 October 2026).
+          ...context.timings,
+        }),
+      );
       const profileBlock = profile == null ? null : formatProfileViewContext(profile);
       // The reminder sits right after the records: the rule in the mode block alone was ignored.
-      const memoryBlock = retrievalFailed ? MEMORY_UNAVAILABLE_BLOCK : shownMemoryRefs.length === 0
-        ? formatRetrievedMemoryInstructions(context.memories, context.threads)
-        : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`;
+      const memoryBlock = retrievalFailed
+        ? MEMORY_UNAVAILABLE_BLOCK
+        : shownMemoryRefs.length === 0
+          ? formatRetrievedMemoryInstructions(context.memories, context.threads)
+          : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`;
       // Why a record was or was not shown, joined to AGENT_MEMORY_REINFORCED by the turn's timeline
       // entry (a failed turn leaves the session turn number to the next one; Codex review):
       // shown-to-used precision per kind and the cut that kept a record out (6 October 2026).
       // Opaque refs and numbers only, never record or profile text.
-      console.info(JSON.stringify({
-        applicationSessionId: input.applicationSessionId,
-        candidates: context.trace ?? [],
-        code: "AGENT_MEMORY_RETRIEVAL_TRACE",
-        conflictRefs,
-        memoryChars: memoryBlock.length,
-        profileChars: profileBlock?.length ?? 0,
-        profileRefs: profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? [],
-        sessionTurn,
-        threads: context.threads.threads.length,
-        timelineEntryId: input.timelineEntryId,
-      }));
-      const hint = dependencies.takeSkillHint === undefined
-        ? null
-        : await dependencies.takeSkillHint(input.conversationId).catch((error: unknown) => {
-          console.error(JSON.stringify({ code: "AGENT_SKILL_HINT_FAILED", error: String(error) }));
-          return null;
-        });
+      console.info(
+        JSON.stringify({
+          applicationSessionId: input.applicationSessionId,
+          candidates: context.trace ?? [],
+          code: "AGENT_MEMORY_RETRIEVAL_TRACE",
+          conflictRefs,
+          memoryChars: memoryBlock.length,
+          profileChars: profileBlock?.length ?? 0,
+          profileRefs:
+            profile?.subjects.flatMap((subject) =>
+              subject.claims.map((claim) => claim.memoryRef),
+            ) ?? [],
+          sessionTurn,
+          threads: context.threads.threads.length,
+          timelineEntryId: input.timelineEntryId,
+        }),
+      );
+      const hint =
+        dependencies.takeSkillHint === undefined
+          ? null
+          : await dependencies.takeSkillHint(input.conversationId).catch((error: unknown) => {
+              console.error(
+                JSON.stringify({ code: "AGENT_SKILL_HINT_FAILED", error: String(error) }),
+              );
+              return null;
+            });
       return [
         ...(profileBlock === null ? [] : [profileBlock]),
         memoryBlock,
         ...(hint === null ? [] : [formatSkillHint(hint)]),
       ];
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_MEMORY_UNAVAILABLE",
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_MEMORY_UNAVAILABLE",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       return [MEMORY_UNAVAILABLE_BLOCK];
     }
   };

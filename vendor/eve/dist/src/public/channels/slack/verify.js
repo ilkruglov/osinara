@@ -19,9 +19,7 @@ function normalizeSlackWebhookError(e) {
       : t.includes(`timestamp is invalid`)
         ? Error(`slackChannel: inbound request has malformed timestamp.`)
         : t.includes(`timestamp is too old`)
-          ? Error(
-              `slackChannel: inbound request timestamp outside allowed skew.`,
-            )
+          ? Error(`slackChannel: inbound request timestamp outside allowed skew.`)
           : t.includes(`signature is invalid`)
             ? Error(`slackChannel: inbound request signature mismatch.`)
             : e instanceof Error

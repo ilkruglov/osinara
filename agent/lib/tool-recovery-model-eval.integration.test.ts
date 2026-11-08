@@ -16,9 +16,7 @@ const describeEval = enabled ? describe : describe.skip;
 describeEval("model tool recovery eval v1", () => {
   it("passes correction, ambiguous-side-effect, and policy-diagnosis trajectories", async () => {
     if (!process.env.MODEL_API_KEY) {
-      throw new Error(
-        "AGENT_MODEL_TOOL_EVAL_CONFIG_MISSING: Для model eval нужен MODEL_API_KEY",
-      );
+      throw new Error("AGENT_MODEL_TOOL_EVAL_CONFIG_MISSING: Для model eval нужен MODEL_API_KEY");
     }
     const [{ generateText, isStepCount, tool }, { z }, { primaryModel }, { ModelFacingError }] =
       await Promise.all([
@@ -67,7 +65,8 @@ describeEval("model tool recovery eval v1", () => {
     await generateText({
       maxRetries: 0,
       model: primaryModel,
-      prompt: "Отправь письмо через send_mail. При неоднозначной ошибке действуй строго по correction.",
+      prompt:
+        "Отправь письмо через send_mail. При неоднозначной ошибке действуй строго по correction.",
       stopWhen: isStepCount(5),
       tools: {
         read_mail_state: tool({
@@ -116,7 +115,8 @@ describeEval("model tool recovery eval v1", () => {
           },
         }),
         execute_gws: tool({
-          description: "Выполняет reviewed Gmail argv. Resource и method являются отдельными элементами.",
+          description:
+            "Выполняет reviewed Gmail argv. Resource и method являются отдельными элементами.",
           inputSchema: z.object({ argv: z.array(z.string()) }).strict(),
           execute({ argv }) {
             argvCalls.push(argv);
@@ -124,7 +124,8 @@ describeEval("model tool recovery eval v1", () => {
               throw new ModelFacingError({
                 category: "input",
                 code: "AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN",
-                correction: "Повтори один раз с argv [gmail, users, messages, trash]. Это не read-only OAuth.",
+                correction:
+                  "Повтори один раз с argv [gmail, users, messages, trash]. Это не read-only OAuth.",
                 reason: "Resource и method были объединены в одном аргументе.",
                 retryable: true,
                 sideEffectStatus: "not_started",

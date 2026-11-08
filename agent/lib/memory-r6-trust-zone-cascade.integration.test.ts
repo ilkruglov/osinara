@@ -12,9 +12,8 @@ import { closeDatabase, database } from "./database.js";
 import { MEMORY_EMBEDDING_DIMENSIONS } from "./memory-config.js";
 import { createMemoryThreadBriefRepository } from "./memory-thread-brief-repository.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 
 interface ZoneFixture {
   briefId: string;
@@ -36,8 +35,12 @@ async function createZone(input: {
   const group = await database().query<{ id: string }>(
     `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
      VALUES ($1, $2, $3, $4, 'addressed_only') RETURNING id`,
-    [input.familyId, `-100-r6-all-${input.suffix}`, `${input.scope} all R6`,
-      input.scope === "group" ? "external" : "family_private"],
+    [
+      input.familyId,
+      `-100-r6-all-${input.suffix}`,
+      `${input.scope} all R6`,
+      input.scope === "group" ? "external" : "family_private",
+    ],
   );
   const conversation = await database().query<{ id: string }>(
     "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
@@ -57,14 +60,23 @@ async function createZone(input: {
         telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
      VALUES ($1, $2, $3, 1, 'user', 'telegram:r6-all-owner', 'r6-all-owner', 'Owner', false,
              'text', $4, now()) RETURNING id`,
-    [conversation.rows[0]!.id, group.rows[0]!.id,
-      input.scope === "group" ? 8101 : 8102, `${input.scope} source`],
+    [
+      conversation.rows[0]!.id,
+      group.rows[0]!.id,
+      input.scope === "group" ? 8101 : 8102,
+      `${input.scope} source`,
+    ],
   );
   const project = await database().query<{ id: string }>(
     `INSERT INTO memory_projects (family_id, group_id, scope, scope_partition_key, title)
      VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [input.familyId, input.scope === "group" ? group.rows[0]!.id : null,
-      input.scope, partition, `${input.scope} complete project`],
+    [
+      input.familyId,
+      input.scope === "group" ? group.rows[0]!.id : null,
+      input.scope,
+      partition,
+      `${input.scope} complete project`,
+    ],
   );
   const claim = await database().query<{ id: string }>(
     `INSERT INTO memory_items
@@ -74,9 +86,17 @@ async function createZone(input: {
         profile_eligible)
      VALUES ($1, $2, $3, $4, $5, 'episode', $6, 'test:r6-all', 'user_confirmed', 'normal',
              $7, 'evidenced', $8, $9, true, lower($6), false) RETURNING id`,
-    [input.familyId, input.scope === "group" ? group.rows[0]!.id : null, input.userId,
-      input.scope === "group" ? "r6-all-owner" : null, input.scope, `${input.scope} claim`,
-      `r6-all-claim-${input.suffix}`, conversation.rows[0]!.id, project.rows[0]!.id],
+    [
+      input.familyId,
+      input.scope === "group" ? group.rows[0]!.id : null,
+      input.userId,
+      input.scope === "group" ? "r6-all-owner" : null,
+      input.scope,
+      `${input.scope} claim`,
+      `r6-all-claim-${input.suffix}`,
+      conversation.rows[0]!.id,
+      project.rows[0]!.id,
+    ],
   );
   await database().query(
     `INSERT INTO claim_evidence
@@ -86,9 +106,20 @@ async function createZone(input: {
         timeline_entry_id, timeline_sequence, source_message_id, source_snapshot)
      VALUES ($1, $2, $3, $4, 'primary', 'firsthand', $5, $6, $7, $8, $9, now(), $10,
              $11, 1, $12, '{}'::jsonb)`,
-    [claim.rows[0]!.id, input.familyId, input.scope, partition, conversation.rows[0]!.id,
-      `${input.scope} origin`, group.rows[0]!.id, participant.rows[0]!.id, input.userId,
-      `${input.scope} source`, timeline.rows[0]!.id, input.scope === "group" ? 8101 : 8102],
+    [
+      claim.rows[0]!.id,
+      input.familyId,
+      input.scope,
+      partition,
+      conversation.rows[0]!.id,
+      `${input.scope} origin`,
+      group.rows[0]!.id,
+      participant.rows[0]!.id,
+      input.userId,
+      `${input.scope} source`,
+      timeline.rows[0]!.id,
+      input.scope === "group" ? 8101 : 8102,
+    ],
   );
   const event = await database().query<{ id: string }>(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type)
@@ -102,10 +133,17 @@ async function createZone(input: {
         source_snapshot, summary, occurred_at)
      VALUES ($1, $2, $3, $4, 'completion_episode', $5, $6, $7, $8, '{}'::jsonb, $9, now())
      RETURNING id`,
-    [input.familyId, input.scope, partition, project.rows[0]!.id,
+    [
+      input.familyId,
+      input.scope,
+      partition,
+      project.rows[0]!.id,
       input.scope === "family" ? "verified_user_statement" : "application_event",
-      event.rows[0]!.id, input.scope === "family" ? conversation.rows[0]!.id : null,
-      input.scope === "family" ? timeline.rows[0]!.id : null, `${input.scope} outcome`],
+      event.rows[0]!.id,
+      input.scope === "family" ? conversation.rows[0]!.id : null,
+      input.scope === "family" ? timeline.rows[0]!.id : null,
+      `${input.scope} outcome`,
+    ],
   );
   await database().query(
     `INSERT INTO confirmed_outcome_source_claims
@@ -124,8 +162,14 @@ async function createZone(input: {
        (family_id, scope, scope_partition_key, memory_project_id, title, purpose,
         status, completion_outcome_id, completed_at)
      VALUES ($1, $2, $3, $4, $5, 'Complete cascade', 'completed', $6, now()) RETURNING id`,
-    [input.familyId, input.scope, partition, project.rows[0]!.id,
-      `${input.scope} complete thread`, outcome.rows[0]!.id],
+    [
+      input.familyId,
+      input.scope,
+      partition,
+      project.rows[0]!.id,
+      `${input.scope} complete thread`,
+      outcome.rows[0]!.id,
+    ],
   );
   const entries = await database().query<{ id: string; source: string }>(
     `INSERT INTO memory_thread_entries
@@ -134,8 +178,14 @@ async function createZone(input: {
      VALUES ($1, $2, $3, $4, $5, NULL, 'goal', now()),
             ($1, $2, $3, $4, NULL, $6, 'outcome', now())
      RETURNING id, CASE WHEN source_claim_id IS NULL THEN 'outcome' ELSE 'claim' END AS source`,
-    [thread.rows[0]!.id, input.familyId, input.scope, partition,
-      claim.rows[0]!.id, outcome.rows[0]!.id],
+    [
+      thread.rows[0]!.id,
+      input.familyId,
+      input.scope,
+      partition,
+      claim.rows[0]!.id,
+      outcome.rows[0]!.id,
+    ],
   );
   const claimEntry = entries.rows.find((row) => row.source === "claim")!;
   const brief = await database().query<{ id: string }>(
@@ -168,9 +218,14 @@ async function createZone(input: {
        (family_id, scope, scope_partition_key, memory_project_id, discovery_path,
         candidate_key, input_hash)
      VALUES ($1, $2, $3, $4, 'online', $5, $6) RETURNING id`,
-    [input.familyId, input.scope, partition, project.rows[0]!.id,
+    [
+      input.familyId,
+      input.scope,
+      partition,
+      project.rows[0]!.id,
       input.scope === "group" ? "1".repeat(64) : "2".repeat(64),
-      input.scope === "group" ? "3".repeat(64) : "4".repeat(64)],
+      input.scope === "group" ? "3".repeat(64) : "4".repeat(64),
+    ],
   );
   await database().query(
     `INSERT INTO memory_thread_discovery_sources
@@ -239,8 +294,9 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
     });
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [external.groupId]);
-    await expect(database().query(
-      `SELECT
+    await expect(
+      database().query(
+        `SELECT
          EXISTS (SELECT 1 FROM memory_projects WHERE id = $1) AS project,
          EXISTS (SELECT 1 FROM confirmed_outcomes WHERE id = $2) AS outcome,
          EXISTS (SELECT 1 FROM memory_threads WHERE id = $3) AS thread,
@@ -267,32 +323,42 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
           WHERE source_claim_id = $6) AS discovery_coverage,
          (SELECT count(*)::integer FROM memory_thread_lifecycle_operations
           WHERE thread_id = $3) AS lifecycle_operations`,
-      [external.projectId, external.outcomeId, external.threadId, external.briefId,
-        external.jobId, external.claimId],
-    )).resolves.toMatchObject({
-      rows: [{
-        brief: false,
-        brief_block_sources: 0,
-        brief_blocks: 0,
-        claim: false,
-        creation_notices: 0,
-        discovery_coverage: 0,
-        discovery_existing: 0,
-        discovery_sources: 0,
-        job: false,
-        lifecycle_operations: 0,
-        outcome: false,
-        outcome_operations: 0,
-        outcome_sources: 0,
-        project: false,
-        thread: false,
-        thread_entries: 0,
-      }],
+        [
+          external.projectId,
+          external.outcomeId,
+          external.threadId,
+          external.briefId,
+          external.jobId,
+          external.claimId,
+        ],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          brief: false,
+          brief_block_sources: 0,
+          brief_blocks: 0,
+          claim: false,
+          creation_notices: 0,
+          discovery_coverage: 0,
+          discovery_existing: 0,
+          discovery_sources: 0,
+          job: false,
+          lifecycle_operations: 0,
+          outcome: false,
+          outcome_operations: 0,
+          outcome_sources: 0,
+          project: false,
+          thread: false,
+          thread_entries: 0,
+        },
+      ],
     });
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [familyZone.groupId]);
-    await expect(database().query(
-      `SELECT outcome.status::text, outcome.source_conversation_id, outcome.source_erased_at,
+    await expect(
+      database().query(
+        `SELECT outcome.status::text, outcome.source_conversation_id, outcome.source_erased_at,
               thread.status::text AS thread_status, thread.completion_outcome_id,
               claim.provenance_state::text,
               EXISTS (SELECT 1 FROM memory_thread_briefs WHERE id = $4) AS brief_survives,
@@ -324,49 +390,60 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
        JOIN memory_threads AS thread ON thread.id = $2
        JOIN memory_items AS claim ON claim.id = $3
        WHERE outcome.id = $1`,
-      [familyZone.outcomeId, familyZone.threadId, familyZone.claimId, familyZone.briefId,
-        familyZone.jobId, familyZone.projectId],
-    )).resolves.toMatchObject({
-      rows: [{
-        brief_block_sources: 0,
-        brief_blocks: 0,
-        brief_survives: false,
-        claim_entries: 0,
-        completion_outcome_id: null,
-        creation_notices: 0,
-        discovery_coverage: 1,
-        discovery_existing: 1,
-        discovery_sources: 1,
-        job_survives: true,
-        lifecycle_operations: 1,
-        outcome_entries: 0,
-        outcome_operations: 1,
-        outcome_sources: 1,
-        project_survives: true,
-        provenance_state: "legacy_unresolved",
-        source_conversation_id: null,
-        source_erased_at: expect.any(Date),
-        status: "retracted",
-        thread_status: "active",
-      }],
+        [
+          familyZone.outcomeId,
+          familyZone.threadId,
+          familyZone.claimId,
+          familyZone.briefId,
+          familyZone.jobId,
+          familyZone.projectId,
+        ],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          brief_block_sources: 0,
+          brief_blocks: 0,
+          brief_survives: false,
+          claim_entries: 0,
+          completion_outcome_id: null,
+          creation_notices: 0,
+          discovery_coverage: 1,
+          discovery_existing: 1,
+          discovery_sources: 1,
+          job_survives: true,
+          lifecycle_operations: 1,
+          outcome_entries: 0,
+          outcome_operations: 1,
+          outcome_sources: 1,
+          project_survives: true,
+          provenance_state: "legacy_unresolved",
+          source_conversation_id: null,
+          source_erased_at: expect.any(Date),
+          status: "retracted",
+          thread_status: "active",
+        },
+      ],
     });
 
     // Erased provenance may remain as family audit history, but must never regenerate model context.
     const briefs = createMemoryThreadBriefRepository();
-    await expect(briefs.activate({
-      auth: {
-        familyId: family.rows[0]!.id,
-        groupId: null,
-        role: "owner",
-        scopes: ["family"],
-        telegramActorId: "r6-all-owner",
-        telegramActorKind: "telegram_user",
-        telegramUserId: "r6-all-owner",
-        userId: user.rows[0]!.id,
-      },
-      queryEmbedding: Array<number>(MEMORY_EMBEDDING_DIMENSIONS).fill(0),
-      retrievedClaimIds: [familyZone.claimId],
-      skillHints: [],
-    })).resolves.toEqual({ threads: [], totalCharacters: 0 });
+    await expect(
+      briefs.activate({
+        auth: {
+          familyId: family.rows[0]!.id,
+          groupId: null,
+          role: "owner",
+          scopes: ["family"],
+          telegramActorId: "r6-all-owner",
+          telegramActorKind: "telegram_user",
+          telegramUserId: "r6-all-owner",
+          userId: user.rows[0]!.id,
+        },
+        queryEmbedding: Array<number>(MEMORY_EMBEDDING_DIMENSIONS).fill(0),
+        retrievedClaimIds: [familyZone.claimId],
+        skillHints: [],
+      }),
+    ).resolves.toEqual({ threads: [], totalCharacters: 0 });
   });
 });

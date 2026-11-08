@@ -23,8 +23,7 @@ async function prewarmSandboxes(t) {
   if (n.length === 0) return;
   let i = createPrewarmSignature(n);
   if (t.shouldPrewarmSignature?.(i) === !1) return;
-  let a =
-    t.dispatch ?? (async ({ backend: e, input: t }) => await e.prewarm(t));
+  let a = t.dispatch ?? (async ({ backend: e, input: t }) => await e.prewarm(t));
   t.log?.(`eve: initializing ${formatSandboxTemplateCount(n.length)}...`);
   let o = (
     await Promise.all(
@@ -73,8 +72,7 @@ async function prewarmSandboxes(t) {
 }
 async function prewarmAppSandboxes(e) {
   let t =
-    e.compiledArtifactsSource ??
-    createAuthoredSourceRuntimeCompiledArtifactsSource(e.appRoot);
+    e.compiledArtifactsSource ?? createAuthoredSourceRuntimeCompiledArtifactsSource(e.appRoot);
   if (t.kind !== `disk`)
     throw Error(`prewarmAppSandboxes requires disk-backed compiled artifacts.`);
   let n = await (e.loadAgentGraph ?? loadGraphFromArtifacts)({
@@ -82,8 +80,7 @@ async function prewarmAppSandboxes(e) {
   });
   await prewarmSandboxes({
     appRoot: getRuntimeCompiledArtifactsSandboxAppRoot(t) ?? e.appRoot,
-    compileDirectoryPath: resolveRuntimeCompilerArtifactPaths(t.appRoot)
-      .compileDirectoryPath,
+    compileDirectoryPath: resolveRuntimeCompilerArtifactPaths(t.appRoot).compileDirectoryPath,
     compiledArtifactsSource: t,
     dispatch: e.dispatch,
     graph: n,
@@ -117,8 +114,7 @@ async function prewarmBuiltAppSandboxes(e) {
         n = await resolveRuntimeAgentGraph({ manifest: l, moduleMap: u });
       await prewarmSandboxes({
         appRoot: e.appRoot,
-        compileDirectoryPath:
-          resolveRuntimeCompilerArtifactPaths(r).compileDirectoryPath,
+        compileDirectoryPath: resolveRuntimeCompilerArtifactPaths(r).compileDirectoryPath,
         compiledArtifactsSource: t,
         dispatch: e.dispatch,
         graph: n,

@@ -5,8 +5,7 @@ const log = createLogger(`github.auth`),
   installationTokenCache = new Map();
 async function resolveGitHubAppId(e) {
   let t = e ?? process.env.GITHUB_APP_ID;
-  if (t === void 0 || t === ``)
-    throw Error(`githubChannel: GITHUB_APP_ID is required.`);
+  if (t === void 0 || t === ``) throw Error(`githubChannel: GITHUB_APP_ID is required.`);
   let n = typeof t == `function` ? await t() : t;
   return String(n);
 }
@@ -30,10 +29,9 @@ function createGitHubBotNameResolver(e) {
       try {
         return ((t = normalizeBotName(await n())), t);
       } catch (e) {
-        log.warn(
-          `githubChannel: botName resolver failed; retrying on the next event`,
-          { error: e },
-        );
+        log.warn(`githubChannel: botName resolver failed; retrying on the next event`, {
+          error: e,
+        });
         return;
       }
     }
@@ -63,9 +61,7 @@ async function resolveGitHubInstallationToken(e) {
   let t = e.credentials?.installationToken;
   if (t !== void 0) return typeof t == `function` ? await t() : t;
   if (e.installationId === void 0)
-    throw Error(
-      `githubChannel: installationId is required for authenticated GitHub API calls.`,
-    );
+    throw Error(`githubChannel: installationId is required for authenticated GitHub API calls.`);
   return createGitHubInstallationToken({
     api: e.api,
     appId: e.credentials?.appId,
@@ -80,31 +76,20 @@ async function createGitHubInstallationToken(e) {
     o = installationTokenCache.get(a);
   if (o !== void 0 && Date.now() < o.expiresAtMs - 6e4) return o.token;
   let s = await createGitHubAppJwt({ appId: t, privateKey: e.privateKey }),
-    c = await (e.api?.fetch ?? fetch)(
-      `${r}/app/installations/${e.installationId}/access_tokens`,
-      {
-        headers: {
-          accept: `application/vnd.github+json`,
-          authorization: `Bearer ${s}`,
-          "x-github-api-version": `2022-11-28`,
-        },
-        method: `POST`,
+    c = await (e.api?.fetch ?? fetch)(`${r}/app/installations/${e.installationId}/access_tokens`, {
+      headers: {
+        accept: `application/vnd.github+json`,
+        authorization: `Bearer ${s}`,
+        "x-github-api-version": `2022-11-28`,
       },
-    ),
+      method: `POST`,
+    }),
     l = await parseJsonBody(c);
-  if (!c.ok)
-    throw Error(
-      `githubChannel: create installation token failed with HTTP ${c.status}.`,
-    );
+  if (!c.ok) throw Error(`githubChannel: create installation token failed with HTTP ${c.status}.`);
   if (!isObject(l) || typeof l.token != `string`)
-    throw Error(
-      `githubChannel: installation token response did not include a token.`,
-    );
+    throw Error(`githubChannel: installation token response did not include a token.`);
   let u = parseExpiryMs(l.expires_at);
-  return (
-    installationTokenCache.set(a, { expiresAtMs: u, token: l.token }),
-    l.token
-  );
+  return (installationTokenCache.set(a, { expiresAtMs: u, token: l.token }), l.token);
 }
 function clearGitHubInstallationTokenCache() {
   installationTokenCache.clear();

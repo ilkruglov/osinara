@@ -15,5 +15,10 @@
  * inline in this step, which holds the session ownership index and world
  * access they need.
  */
-import { type RuntimeActionDispatchInput, type RuntimeActionDispatchResult } from "#execution/dispatch-runtime-actions-shared.js";
-export declare function dispatchTaskStep(input: RuntimeActionDispatchInput): Promise<RuntimeActionDispatchResult>;
+import {
+  type RuntimeActionDispatchInput,
+  type RuntimeActionDispatchResult,
+} from "#execution/dispatch-runtime-actions-shared.js";
+export declare function dispatchTaskStep(
+  input: RuntimeActionDispatchInput,
+): Promise<RuntimeActionDispatchResult>;

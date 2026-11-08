@@ -24,7 +24,11 @@ const plain = `<style>.c{display:flex;gap:8px;color:var(--tg-theme-text-color,#1
 
 describe("lintTelegramWidget", () => {
   it("lets a plain card through with nothing to report", () => {
-    expect(lintTelegramWidget(plain, { allowLinks: true })).toEqual({ errors: [], links: [], warnings: [] });
+    expect(lintTelegramWidget(plain, { allowLinks: true })).toEqual({
+      errors: [],
+      links: [],
+      warnings: [],
+    });
   });
 
   it("refuses what breaks the card: network resources, @import, SVG images, network calls", () => {
@@ -48,7 +52,11 @@ describe("lintTelegramWidget", () => {
 <button onclick="TelegramWidget.openTelegramLink('https://t.me/somechannel')">канал</button>`;
     const trusted = lintTelegramWidget(html, { allowLinks: true });
     expect(trusted.errors).toEqual([]);
-    expect(trusted.links).toEqual(["https://maps.yandex.ru/?ll=37,55", "https://example.com/x", "https://t.me/somechannel"]);
+    expect(trusted.links).toEqual([
+      "https://maps.yandex.ru/?ll=37,55",
+      "https://example.com/x",
+      "https://t.me/somechannel",
+    ]);
     expect(lintTelegramWidget(html, { allowLinks: false }).errors.join("\n")).toMatch(/ссылк/u);
   });
 
@@ -60,7 +68,10 @@ describe("lintTelegramWidget", () => {
     ["an SVG link", `<svg><a xlink:href="https://example.com/"><text>x</text></a></svg>`],
     ["a javascript: link", `<a href="javascript:void(0)">x</a>`],
     ["a meta refresh", `<meta http-equiv="refresh" content="0;url=https://example.com/">`],
-    ["an openLink call with a computed address", `<button onclick="var u='https://example.com/';TelegramWidget.openLink(u)">x</button>`],
+    [
+      "an openLink call with a computed address",
+      `<button onclick="var u='https://example.com/';TelegramWidget.openLink(u)">x</button>`,
+    ],
     ["window.open", `<script>window.open("https://example.com/")</script>`],
   ])("refuses %s where links are not allowed", (_name, html) => {
     expect(lintTelegramWidget(html, { allowLinks: false }).errors.join("\n")).toMatch(/ссылк/u);
@@ -68,7 +79,10 @@ describe("lintTelegramWidget", () => {
 
   // Second Codex pass on the lint fix, 6 November 2026.
   it.each([
-    ["an entity inside a script attribute", `<button onclick="TelegramWidget.open&#76;ink('https://example.com')">x</button>`],
+    [
+      "an entity inside a script attribute",
+      `<button onclick="TelegramWidget.open&#76;ink('https://example.com')">x</button>`,
+    ],
     ["a second href the browser ignores", `<a href="https://example.com/" href="#">x</a>`],
   ])("still refuses %s where links are not allowed", (_name, html) => {
     expect(lintTelegramWidget(html, { allowLinks: false }).errors.join("\n")).toMatch(/ссылк/u);
@@ -77,11 +91,18 @@ describe("lintTelegramWidget", () => {
   it("does not take a field named location for navigation", () => {
     const html = `<script>var item={location:"Москва"};if (item.location==="Москва") draw();</script>`;
     expect(lintTelegramWidget(html, { allowLinks: false }).errors).toEqual([]);
-    expect(lintTelegramWidget(`<script>window.location = "https://example.com"</script>`, { allowLinks: false }).errors.join("\n")).toMatch(/ссылк/u);
+    expect(
+      lintTelegramWidget(`<script>window.location = "https://example.com"</script>`, {
+        allowLinks: false,
+      }).errors.join("\n"),
+    ).toMatch(/ссылк/u);
   });
 
   it("still refuses an external stylesheet, which is a resource and not a link", () => {
-    const lint = lintTelegramWidget(`<link rel="stylesheet" href="https://example.com/a.css"><p>x</p>`, { allowLinks: true });
+    const lint = lintTelegramWidget(
+      `<link rel="stylesheet" href="https://example.com/a.css"><p>x</p>`,
+      { allowLinks: true },
+    );
     expect(lint.errors.join("\n")).toMatch(/не загрузится/u);
     expect(lint.links).toEqual([]);
   });
@@ -91,7 +112,9 @@ describe("lintTelegramWidget", () => {
     ["a CSS-escaped url()", `<style>.a{background:url(h\\74tps://example.com/a.png)}</style>`],
     ["poster", `<video poster="https://example.com/p.png"></video>`],
   ])("refuses a network resource hidden in %s", (_name, html) => {
-    expect(lintTelegramWidget(html, { allowLinks: true }).errors.join("\n")).toMatch(/не загрузится/u);
+    expect(lintTelegramWidget(html, { allowLinks: true }).errors.join("\n")).toMatch(
+      /не загрузится/u,
+    );
   });
 
   it("warns about what profile v1 drops silently", () => {
@@ -100,7 +123,20 @@ display:grid;text-shadow:0 0 1px #000;transform:translate3d(0,0,0);overflow:auto
 <form><input value="1"><select></select></form><img src="data:image/png;base64,${"A".repeat(3_000)}">`;
     const { errors, warnings } = lintTelegramWidget(html, { allowLinks: true });
     expect(errors).toEqual([]);
-    for (const pattern of [/<input>/u, /<select>/u, /<form>/u, /@font-face/u, /Roboto/u, /vh/u, /sticky/u, /grid/u, /text-shadow/u, /3D/u, /прокрут/iu, /картинк/u]) {
+    for (const pattern of [
+      /<input>/u,
+      /<select>/u,
+      /<form>/u,
+      /@font-face/u,
+      /Roboto/u,
+      /vh/u,
+      /sticky/u,
+      /grid/u,
+      /text-shadow/u,
+      /3D/u,
+      /прокрут/iu,
+      /картинк/u,
+    ]) {
       expect(warnings.join("\n"), String(pattern)).toMatch(pattern);
     }
   });

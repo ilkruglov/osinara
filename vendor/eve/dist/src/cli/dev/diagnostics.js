@@ -50,8 +50,7 @@ var DevDiagnosticsRecorder = class {
         namespace: t.namespace,
         message: t.message,
       };
-      (this.#e.append(t.fields === void 0 ? n : { ...n, fields: t.fields }),
-        e(t));
+      (this.#e.append(t.fields === void 0 ? n : { ...n, fields: t.fields }), e(t));
     });
   }
   unsubscribeLogRecords() {

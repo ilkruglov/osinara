@@ -51,10 +51,7 @@ async function discoverSkills(r) {
       skillsLogicalPath: c,
       source: i,
     });
-    if (
-      (u.push(...n.diagnostics),
-      n.skill === null || n.skillId === null || d.has(n.skillId))
-    )
+    if ((u.push(...n.diagnostics), n.skill === null || n.skillId === null || d.has(n.skillId)))
       continue;
     let r = f.get(n.skillId);
     if (r !== void 0) {
@@ -98,9 +95,7 @@ async function discoverOneSkill(t) {
     case `ignored-declaration`:
       return {
         diagnostics: [],
-        logicalPath: normalizeLogicalPath(
-          join(t.skillsLogicalPath, t.entryName),
-        ),
+        logicalPath: normalizeLogicalPath(join(t.skillsLogicalPath, t.entryName)),
         skill: null,
         skillId: null,
       };
@@ -113,9 +108,7 @@ async function discoverOneSkill(t) {
             sourcePath: n,
           }),
         ],
-        logicalPath: normalizeLogicalPath(
-          join(t.skillsLogicalPath, t.entryName),
-        ),
+        logicalPath: normalizeLogicalPath(join(t.skillsLogicalPath, t.entryName)),
         skill: null,
         skillId: null,
       };
@@ -126,9 +119,7 @@ async function discoverPackagedSkill(t) {
       (e) => e.isFile() && e.name.toLowerCase() === `skill.md`,
     )?.name,
     r = join(t.skillRootPath, n ?? `SKILL.md`),
-    i = normalizeLogicalPath(
-      join(t.logicalSkillsPath, t.skillId, n ?? `SKILL.md`),
-    );
+    i = normalizeLogicalPath(join(t.logicalSkillsPath, t.skillId, n ?? `SKILL.md`));
   if (n === void 0)
     return {
       diagnostics: [

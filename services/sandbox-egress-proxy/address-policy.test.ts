@@ -10,9 +10,8 @@ import { describe, expect, it } from "vitest";
 import { isPublicInternetAddress } from "./address-policy.js";
 
 describe("isPublicInternetAddress", () => {
-  it.each(["1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"])(
-    "accepts public address %s",
-    (address) => expect(isPublicInternetAddress(address)).toBe(true),
+  it.each(["1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"])("accepts public address %s", (address) =>
+    expect(isPublicInternetAddress(address)).toBe(true),
   );
 
   it.each([

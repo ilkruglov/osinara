@@ -31,7 +31,9 @@ describe("Telegram rich block limits", () => {
 
     const chunks = splitTelegramRichBlockByCount(table, 6);
     expect(chunks.length).toBeGreaterThan(1);
-    expect(chunks.every((chunk) => chunk.startsWith("Параметр | Значение\n--- | ---\n"))).toBe(true);
+    expect(chunks.every((chunk) => chunk.startsWith("Параметр | Значение\n--- | ---\n"))).toBe(
+      true,
+    );
     expect(chunks.join("\n")).toContain("ключ 12 | 12");
   });
 });

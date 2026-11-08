@@ -3,26 +3,26 @@ import type { NodeEngineOverride } from "../../node-engine.js";
 import type { AgentReasoningDefinition } from "../../../shared/agent-definition.js";
 import { type EvePackageContract } from "./project.js";
 export interface AddAgentToProjectOptions {
-    projectRoot: string;
-    model: string;
-    reasoning?: AgentReasoningDefinition;
-    /**
-     * The host project's package manager, which owns any manager-specific
-     * generated project configuration. Defaults to pnpm.
-     */
-    packageManager?: PackageManagerKind;
-    evePackage?: EvePackageContract;
-    aiPackageVersion?: string;
-    connectPackageVersion?: string;
-    zodPackageVersion?: string;
+  projectRoot: string;
+  model: string;
+  reasoning?: AgentReasoningDefinition;
+  /**
+   * The host project's package manager, which owns any manager-specific
+   * generated project configuration. Defaults to pnpm.
+   */
+  packageManager?: PackageManagerKind;
+  evePackage?: EvePackageContract;
+  aiPackageVersion?: string;
+  connectPackageVersion?: string;
+  zodPackageVersion?: string;
 }
 export interface AddAgentToProjectResult {
-    filesWritten: string[];
-    configurationFilesChanged: string[];
-    /** Dependencies added to package.json; ones the project already declares anywhere are left untouched. */
-    dependenciesAdded: string[];
-    /** Present when an incompatible package.json engines.node value was replaced. */
-    nodeEngineOverride?: NodeEngineOverride;
+  filesWritten: string[];
+  configurationFilesChanged: string[];
+  /** Dependencies added to package.json; ones the project already declares anywhere are left untouched. */
+  dependenciesAdded: string[];
+  /** Present when an incompatible package.json engines.node value was replaced. */
+  nodeEngineOverride?: NodeEngineOverride;
 }
 /**
  * Adds an eve agent to an existing package: writes the `agent/` files, adds
@@ -32,4 +32,6 @@ export interface AddAgentToProjectResult {
  * remains untouched. All conflicts are gathered and reported before anything
  * is written.
  */
-export declare function addAgentToProject(options: AddAgentToProjectOptions): Promise<AddAgentToProjectResult>;
+export declare function addAgentToProject(
+  options: AddAgentToProjectOptions,
+): Promise<AddAgentToProjectResult>;

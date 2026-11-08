@@ -90,10 +90,14 @@ interface ConflictClosureRow {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  return memoryVectorLiteral(vector, () => new AppError(
-    "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
-    "Не удалось выполнить смысловой поиск по памяти",
-  ));
+  return memoryVectorLiteral(
+    vector,
+    () =>
+      new AppError(
+        "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+        "Не удалось выполнить смысловой поиск по памяти",
+      ),
+  );
 }
 
 function authorizedClaimPredicate(alias: "a" | "b" | "item" | "partner"): string {
@@ -178,8 +182,12 @@ interface SemanticWindowRow {
 
 /** The nearest-chunk window was full and every record in it passed, short of the branch's take. */
 function semanticWindowStarved(row: SemanticWindowRow | undefined, chunkLimit: number): boolean {
-  return row !== undefined && row.window_chunks >= chunkLimit &&
-    row.window_passing === row.window_records && row.window_records < MEMORY_RETRIEVAL_CANDIDATE_LIMIT;
+  return (
+    row !== undefined &&
+    row.window_chunks >= chunkLimit &&
+    row.window_passing === row.window_records &&
+    row.window_records < MEMORY_RETRIEVAL_CANDIDATE_LIMIT
+  );
 }
 
 export const memoryRetrievalRepository = {
@@ -204,8 +212,9 @@ export const memoryRetrievalRepository = {
     // than a page (Codex review, 6 November 2026: 200 chunks gave 7 records of 12). The window
     // widens while it was full, every record in it passed the similarity floor (a farther record
     // cannot pass if a nearer one failed) and it held fewer records than the branch takes.
-    const run = (chunkLimit: number) => database().query<RetrievalRow & SemanticWindowRow>(
-      `WITH authorized AS NOT MATERIALIZED (
+    const run = (chunkLimit: number) =>
+      database().query<RetrievalRow & SemanticWindowRow>(
+        `WITH authorized AS NOT MATERIALIZED (
           SELECT item.*, ref.memory_ref
           FROM memory_items AS item
           JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
@@ -338,34 +347,38 @@ export const memoryRetrievalRepository = {
          ORDER BY observed_at, id LIMIT 1
        ) AS source_evidence ON true
        ORDER BY fused_score DESC, authorized.updated_at DESC, authorized.id DESC`,
-      [
-        auth.familyId,
-        auth.scopes,
-        auth.userId,
-        auth.groupId,
-        normalizedQuery,
-        MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
-        MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
-        MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
-        queryEmbedding === null ? null : vectorLiteral(queryEmbedding),
-        MEMORY_EMBEDDING_MODEL_VERSION,
-        window.includeWeakMatches
-          ? MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY : MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
-        MEMORY_RETRIEVAL_RRF_RANK_OFFSET,
-        MEMORY_RETRIEVAL_CONFIRMATION_BOOST,
-        MEMORY_RETENTION_RANK_FLOOR,
-        MEMORY_STABILITY_DAYS_EPISODE,
-        MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY,
-        MEMORY_STABILITY_DAYS_SEMANTIC,
-        MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
-        window.occurredAfter ?? null,
-        window.occurredBefore ?? null,
-        chunkLimit,
-      ],
-    );
+        [
+          auth.familyId,
+          auth.scopes,
+          auth.userId,
+          auth.groupId,
+          normalizedQuery,
+          MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
+          MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
+          MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
+          queryEmbedding === null ? null : vectorLiteral(queryEmbedding),
+          MEMORY_EMBEDDING_MODEL_VERSION,
+          window.includeWeakMatches
+            ? MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY
+            : MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+          MEMORY_RETRIEVAL_RRF_RANK_OFFSET,
+          MEMORY_RETRIEVAL_CONFIRMATION_BOOST,
+          MEMORY_RETENTION_RANK_FLOOR,
+          MEMORY_STABILITY_DAYS_EPISODE,
+          MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY,
+          MEMORY_STABILITY_DAYS_SEMANTIC,
+          MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
+          window.occurredAfter ?? null,
+          window.occurredBefore ?? null,
+          chunkLimit,
+        ],
+      );
     let chunkLimit = MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES;
     let result = await run(chunkLimit);
-    while (chunkLimit < MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING && semanticWindowStarved(result.rows[0], chunkLimit)) {
+    while (
+      chunkLimit < MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING &&
+      semanticWindowStarved(result.rows[0], chunkLimit)
+    ) {
       chunkLimit = Math.min(chunkLimit * 4, MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING);
       result = await run(chunkLimit);
     }
@@ -387,7 +400,13 @@ export const memoryRetrievalRepository = {
     if (!Number.isInteger(limit) || limit < 1 || limit > MEMORY_RETRIEVAL_CANDIDATE_LIMIT) {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный лимит поиска памяти");
     }
-    const results = await memoryRetrievalRepository.search(auth, query, queryEmbedding, limit, window);
+    const results = await memoryRetrievalRepository.search(
+      auth,
+      query,
+      queryEmbedding,
+      limit,
+      window,
+    );
     const selectedIds = results.map((result) => result.memory.id);
     if (selectedIds.length === 0) return { conflicts: [], relatedClaimIds: [], results };
 
@@ -450,16 +469,15 @@ export const memoryRetrievalRepository = {
        ORDER BY conflict.conflict_ref`,
       [auth.familyId, auth.scopes, auth.userId, auth.groupId, selectedIds],
     );
-    const completeClosure = closure.rows.filter((row) =>
-      !blockedIds.has(row.a_id) && !blockedIds.has(row.b_id)
+    const completeClosure = closure.rows.filter(
+      (row) => !blockedIds.has(row.a_id) && !blockedIds.has(row.b_id),
     );
 
     // Reauthorize every possible output claim after all closure reads. This final barrier removes
     // unrelated base candidates too, while retaining a conflict only when both versions survive.
-    const outputClaimIds = [...new Set([
-      ...selectedIds,
-      ...completeClosure.flatMap((row) => [row.a_id, row.b_id]),
-    ])];
+    const outputClaimIds = [
+      ...new Set([...selectedIds, ...completeClosure.flatMap((row) => [row.a_id, row.b_id])]),
+    ];
     const finalAuthorization = await database().query<{
       has_unresolved_conflict: boolean;
       id: string;
@@ -492,39 +510,45 @@ export const memoryRetrievalRepository = {
       [auth.familyId, auth.scopes, auth.userId, auth.groupId, outputClaimIds],
     );
     const finalAuthorizedIds = new Set(finalAuthorization.rows.map((row) => row.id));
-    const finalOrdinaryIds = new Set(finalAuthorization.rows
-      .filter((row) => !row.has_unresolved_conflict)
-      .map((row) => row.id));
-    const finalClosure = completeClosure.filter((row) =>
-      finalAuthorizedIds.has(row.a_id) && finalAuthorizedIds.has(row.b_id)
+    const finalOrdinaryIds = new Set(
+      finalAuthorization.rows.filter((row) => !row.has_unresolved_conflict).map((row) => row.id),
+    );
+    const finalClosure = completeClosure.filter(
+      (row) => finalAuthorizedIds.has(row.a_id) && finalAuthorizedIds.has(row.b_id),
     );
     const conflicts = finalClosure.map((row): MemoryConflictGroup => ({
       conflictRef: row.conflict_ref,
       instruction: "Не выбирать версию самостоятельно",
-      versions: [{
-        content: row.a_content,
-        evidenceKind: row.a_evidence_kind,
-        memoryRef: row.a_memory_ref,
-        observedAt: row.a_observed_at.toISOString(),
-        sourceLabel: row.a_source_label,
-      }, {
-        content: row.b_content,
-        evidenceKind: row.b_evidence_kind,
-        memoryRef: row.b_memory_ref,
-        observedAt: row.b_observed_at.toISOString(),
-        sourceLabel: row.b_source_label,
-      }],
+      versions: [
+        {
+          content: row.a_content,
+          evidenceKind: row.a_evidence_kind,
+          memoryRef: row.a_memory_ref,
+          observedAt: row.a_observed_at.toISOString(),
+          sourceLabel: row.a_source_label,
+        },
+        {
+          content: row.b_content,
+          evidenceKind: row.b_evidence_kind,
+          memoryRef: row.b_memory_ref,
+          observedAt: row.b_observed_at.toISOString(),
+          sourceLabel: row.b_source_label,
+        },
+      ],
     }));
     return {
       conflicts,
-      relatedClaimIds: [...new Set([
-        ...results.filter((result) => !blockedIds.has(result.memory.id))
-          .filter((result) => finalOrdinaryIds.has(result.memory.id))
-          .map((result) => result.memory.id),
-        ...finalClosure.flatMap((row) => [row.a_id, row.b_id]),
-      ])],
-      results: results.filter((result) =>
-        finalOrdinaryIds.has(result.memory.id) && !blockedIds.has(result.memory.id)
+      relatedClaimIds: [
+        ...new Set([
+          ...results
+            .filter((result) => !blockedIds.has(result.memory.id))
+            .filter((result) => finalOrdinaryIds.has(result.memory.id))
+            .map((result) => result.memory.id),
+          ...finalClosure.flatMap((row) => [row.a_id, row.b_id]),
+        ]),
+      ],
+      results: results.filter(
+        (result) => finalOrdinaryIds.has(result.memory.id) && !blockedIds.has(result.memory.id),
       ),
     };
   },

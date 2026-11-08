@@ -5,8 +5,7 @@ import {
 } from "./slack-connect-lifecycle.js";
 import { performance } from "node:perf_hooks";
 import { setTimeout } from "node:timers/promises";
-const CREATED_CONNECTOR_PROGRESS =
-    /\bConnector created:\s*(scl_[A-Za-z0-9]+)\b/,
+const CREATED_CONNECTOR_PROGRESS = /\bConnector created:\s*(scl_[A-Za-z0-9]+)\b/,
   realDelay = (e, t) => setTimeout(e, void 0, { signal: t }),
   monotonicNow = () => performance.now();
 async function pollCreatedSlackConnector(e, r, i, a, o, s) {
@@ -64,32 +63,18 @@ async function createSlackConnector(t) {
       let n = e.text.match(CREATED_CONNECTOR_PROGRESS)?.[1];
       n === void 0 ||
         p !== void 0 ||
-        ((p = pollCreatedSlackConnector(
-          t.deps,
-          t.projectRoot,
-          n,
-          t.orgId,
-          t.onOutput,
-          s,
-        ).catch((e) => {
-          if (!(r.signal.aborted && t.signal?.aborted !== !0)) throw e;
-        })),
+        ((p = pollCreatedSlackConnector(t.deps, t.projectRoot, n, t.orgId, t.onOutput, s).catch(
+          (e) => {
+            if (!(r.signal.aborted && t.signal?.aborted !== !0)) throw e;
+          },
+        )),
         p.then((e) => {
           e !== void 0 && (reportCreated(e), startWorkspaceLookup(e));
         }, d));
     },
     h = t.phase(`Waiting for Slack setup to finish...`, () =>
       t.deps.runVercelCaptureStdout(
-        [
-          `connect`,
-          `create`,
-          `slack`,
-          `--triggers`,
-          `--name`,
-          t.slug,
-          `-F`,
-          `json`,
-        ],
+        [`connect`, `create`, `slack`, `--triggers`, `--name`, t.slug, `-F`, `json`],
         {
           cwd: t.projectRoot,
           nonInteractive: !0,
@@ -106,12 +91,7 @@ async function createSlackConnector(t) {
       f.then((e) => ({ via: `workspace`, ...e })),
     ]);
   } catch (e) {
-    throw (
-      r.abort(),
-      i.abort(),
-      await Promise.allSettled([p, m].filter((e) => e !== void 0)),
-      e
-    );
+    throw (r.abort(), i.abort(), await Promise.allSettled([p, m].filter((e) => e !== void 0)), e);
   }
   if (g.via === `workspace`)
     return (
@@ -144,9 +124,7 @@ async function createSlackConnector(t) {
     i.abort(),
     m !== void 0 && (await m),
     t.signal?.throwIfAborted(),
-    v === void 0
-      ? { state: `unresolved` }
-      : { state: `created`, via: `cli`, ref: v }
+    v === void 0 ? { state: `unresolved` } : { state: `created`, via: `cli`, ref: v }
   );
 }
 export { createSlackConnector };

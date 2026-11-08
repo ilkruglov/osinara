@@ -1,12 +1,5 @@
-import {
-  ROOT_CONTEXT,
-  SpanStatusCode,
-  trace,
-} from "#compiled/@opentelemetry/api/index.js";
-import {
-  actionIdempotencyKey,
-  attemptIdempotencyKey,
-} from "#harness/instrumentation/lifecycle.js";
+import { ROOT_CONTEXT, SpanStatusCode, trace } from "#compiled/@opentelemetry/api/index.js";
+import { actionIdempotencyKey, attemptIdempotencyKey } from "#harness/instrumentation/lifecycle.js";
 import { contentAttribute } from "#tracing/agent-otel-content.js";
 import { setAgentUsage } from "#tracing/agent-otel-usage.js";
 function createAgentActionInstrumentation(e) {
@@ -41,25 +34,19 @@ function createAgentActionInstrumentation(e) {
       if (n !== void 0)
         try {
           let r = startSpan(n);
-          if (
-            (r.setAttribute(`agent.action.outcome`, t.outcome),
-            t.type === `action.failed`)
-          )
+          if ((r.setAttribute(`agent.action.outcome`, t.outcome), t.type === `action.failed`))
             (t.errorCode !== void 0 &&
               (r.setAttribute(`agent.action.error.code`, t.errorCode),
               r.setAttribute(`error.type`, t.errorCode)),
               recordError(r, t.error));
           else if (t.output.type === `error`) recordError(r, t.output.error);
-          else if (
-            (t.usage !== void 0 && setAgentUsage(r, t.usage), e.recordOutputs)
-          ) {
+          else if ((t.usage !== void 0 && setAgentUsage(r, t.usage), e.recordOutputs)) {
             let e = contentAttribute(t.output.output, !1);
             e !== void 0 && r.setAttribute(`gen_ai.tool.call.result`, e);
           }
           r.end(t.acceptedAtMs);
         } finally {
-          (await e.stateStore.deleteAction(t.idempotencyKey),
-            forget(t.idempotencyKey));
+          (await e.stateStore.deleteAction(t.idempotencyKey), forget(t.idempotencyKey));
         }
     },
     startSpan = (t) => {
@@ -135,15 +122,11 @@ function actionContext(t) {
   };
 }
 function contextFromActionState(t) {
-  return trace.setSpan(
-    ROOT_CONTEXT,
-    trace.wrapSpanContext({ ...t.parent, isRemote: !1 }),
-  );
+  return trace.setSpan(ROOT_CONTEXT, trace.wrapSpanContext({ ...t.parent, isRemote: !1 }));
 }
 function recordError(e, n) {
   n instanceof Error
-    ? (e.recordException(n),
-      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    ? (e.recordException(n), e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
     : e.setStatus({ code: SpanStatusCode.ERROR });
 }
 export { createAgentActionInstrumentation };

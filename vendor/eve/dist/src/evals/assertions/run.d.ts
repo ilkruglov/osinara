@@ -1,14 +1,18 @@
 import type { StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
 import type { MessageStreamEvent } from "#protocol/message.js";
-import { type EveEvalSkillLoadMatchOptions, type EveEvalSubagentCallMatchOptions, type EveEvalToolCallMatchOptions } from "#evals/match.js";
+import {
+  type EveEvalSkillLoadMatchOptions,
+  type EveEvalSubagentCallMatchOptions,
+  type EveEvalToolCallMatchOptions,
+} from "#evals/match.js";
 import type { EveEvalEventMatch } from "#evals/match.js";
 import type { RunAssertion } from "#evals/assertions/collector.js";
 /** Minimal captured scope consumed by deterministic eval assertions. */
 export interface EveEvalAssertionSubject {
-    readonly derived: import("#evals/types.js").EveEvalDerivedFacts;
-    readonly events: readonly MessageStreamEvent[];
-    readonly output: unknown;
-    readonly status: "completed" | "failed" | "waiting";
+  readonly derived: import("#evals/types.js").EveEvalDerivedFacts;
+  readonly events: readonly MessageStreamEvent[];
+  readonly output: unknown;
+  readonly status: "completed" | "failed" | "waiting";
 }
 /**
  * Asserts the run finished successfully: it did not fail and did not park on an
@@ -30,13 +34,19 @@ export declare function messageIncludes(token: string | RegExp): RunAssertion;
  * `status` overrides the lifecycle state, and `count` constrains the number of
  * matches with either an exact number or a predicate.
  */
-export declare function calledTool(name: string, options?: EveEvalToolCallMatchOptions): RunAssertion;
+export declare function calledTool(
+  name: string,
+  options?: EveEvalToolCallMatchOptions,
+): RunAssertion;
 /**
  * Sugar over {@link calledTool} for the framework `load_skill` tool: asserts a
  * skill with id `skill` was loaded. `output`/`status`/`count` constrain the
  * matching call exactly as for `calledTool`.
  */
-export declare function loadedSkill(skill: string, options?: EveEvalSkillLoadMatchOptions): RunAssertion;
+export declare function loadedSkill(
+  skill: string,
+  options?: EveEvalSkillLoadMatchOptions,
+): RunAssertion;
 /**
  * Asserts no tool call with `name` happened.
  */
@@ -63,12 +73,18 @@ export declare function noFailedActions(): RunAssertion;
  * metadata come from `subagent.called`; `output` comes from
  * `subagent.completed`.
  */
-export declare function calledSubagent(name: string, options?: EveEvalSubagentCallMatchOptions): RunAssertion;
+export declare function calledSubagent(
+  name: string,
+  options?: EveEvalSubagentCallMatchOptions,
+): RunAssertion;
 /**
  * Escape hatch: asserts an arbitrary predicate over the full typed event
  * stream. `label` names the assertion in reports.
  */
-export declare function eventsSatisfy(label: string, predicate: (events: readonly MessageStreamEvent[]) => boolean): RunAssertion;
+export declare function eventsSatisfy(
+  label: string,
+  predicate: (events: readonly MessageStreamEvent[]) => boolean,
+): RunAssertion;
 /** Asserts a typed stream event exists, optionally constraining its count. */
 export declare function typedEvent(matcher: EveEvalEventMatch): RunAssertion;
 /** Asserts no typed stream event matches. */

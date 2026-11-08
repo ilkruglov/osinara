@@ -43,7 +43,7 @@ function parseArguments(argumentsList: string[]): CliArguments {
     if (!value || value.startsWith("--")) {
       throw new Error(`AGENT_GOOGLE_SETUP_ARGUMENT_MISSING: Не задано значение ${argument}`);
     }
-    values.set(argument, [...values.get(argument) ?? [], value]);
+    values.set(argument, [...(values.get(argument) ?? []), value]);
     index += 1;
   }
 
@@ -76,9 +76,7 @@ function parseArguments(argumentsList: string[]): CliArguments {
     };
   }
   if (!requiredRedirectUris?.length) {
-    throw new Error(
-      "AGENT_GOOGLE_SETUP_ARGUMENT_MISSING: Требуется --required-redirect-uri",
-    );
+    throw new Error("AGENT_GOOGLE_SETUP_ARGUMENT_MISSING: Требуется --required-redirect-uri");
   }
   return {
     mode: "configure",

@@ -10,7 +10,7 @@ export type TodoItem = z.infer<typeof TODO_ITEM_SCHEMA>;
  * Durable state for the framework todo tool.
  */
 export interface TodoState {
-    readonly items: readonly TodoItem[];
+  readonly items: readonly TodoItem[];
 }
 export declare const TodoStateKey: ContextKey<TodoState>;
 /**
@@ -36,58 +36,82 @@ export declare function getTodoCompactionMessage(): ModelMessage | undefined;
  * the full current state.
  */
 export declare function executeTodoTool(input: TodoToolInput): unknown;
-declare const TODO_ITEM_SCHEMA: z.ZodObject<{
+declare const TODO_ITEM_SCHEMA: z.ZodObject<
+  {
     content: z.ZodString;
     priority: z.ZodEnum<{
-        high: "high";
-        low: "low";
-        medium: "medium";
+      high: "high";
+      low: "low";
+      medium: "medium";
     }>;
     status: z.ZodEnum<{
-        cancelled: "cancelled";
-        completed: "completed";
-        in_progress: "in_progress";
-        pending: "pending";
+      cancelled: "cancelled";
+      completed: "completed";
+      in_progress: "in_progress";
+      pending: "pending";
     }>;
-}, z.core.$strict>;
-export declare const TODO_INPUT_SCHEMA: z.ZodObject<{
-    todos: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        content: z.ZodString;
-        priority: z.ZodEnum<{
-            high: "high";
-            low: "low";
-            medium: "medium";
-        }>;
-        status: z.ZodEnum<{
-            cancelled: "cancelled";
-            completed: "completed";
-            in_progress: "in_progress";
-            pending: "pending";
-        }>;
-    }, z.core.$strict>>>;
-}, z.core.$strict>;
-export declare const TODO_OUTPUT_SCHEMA: z.ZodObject<{
-    counts: z.ZodObject<{
+  },
+  z.core.$strict
+>;
+export declare const TODO_INPUT_SCHEMA: z.ZodObject<
+  {
+    todos: z.ZodOptional<
+      z.ZodArray<
+        z.ZodObject<
+          {
+            content: z.ZodString;
+            priority: z.ZodEnum<{
+              high: "high";
+              low: "low";
+              medium: "medium";
+            }>;
+            status: z.ZodEnum<{
+              cancelled: "cancelled";
+              completed: "completed";
+              in_progress: "in_progress";
+              pending: "pending";
+            }>;
+          },
+          z.core.$strict
+        >
+      >
+    >;
+  },
+  z.core.$strict
+>;
+export declare const TODO_OUTPUT_SCHEMA: z.ZodObject<
+  {
+    counts: z.ZodObject<
+      {
         cancelled: z.ZodNumber;
         completed: z.ZodNumber;
         in_progress: z.ZodNumber;
         pending: z.ZodNumber;
         total: z.ZodNumber;
-    }, z.core.$strict>;
-    todos: z.ZodArray<z.ZodObject<{
-        content: z.ZodString;
-        priority: z.ZodEnum<{
+      },
+      z.core.$strict
+    >;
+    todos: z.ZodArray<
+      z.ZodObject<
+        {
+          content: z.ZodString;
+          priority: z.ZodEnum<{
             high: "high";
             low: "low";
             medium: "medium";
-        }>;
-        status: z.ZodEnum<{
+          }>;
+          status: z.ZodEnum<{
             cancelled: "cancelled";
             completed: "completed";
             in_progress: "in_progress";
             pending: "pending";
-        }>;
-    }, z.core.$strict>>;
-}, z.core.$strict>;
+          }>;
+        },
+        z.core.$strict
+      >
+    >;
+  },
+  z.core.$strict
+>;
 export declare const TODO_TOOL_DEFINITION: ResolvedToolDefinition;
 export {};

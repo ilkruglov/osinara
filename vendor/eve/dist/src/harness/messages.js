@@ -55,11 +55,7 @@ function coalesceContext(e) {
 function coalesceMessage(e) {
   let t = normalizeUserContent(e.a),
     n = normalizeUserContent(e.b);
-  return t === void 0
-    ? n
-    : n === void 0
-      ? t
-      : appendUserContent({ appended: n, existing: t });
+  return t === void 0 ? n : n === void 0 ? t : appendUserContent({ appended: n, existing: t });
 }
 function appendUserContent(e) {
   return typeof e.existing == `string` && typeof e.appended == `string`
@@ -85,8 +81,7 @@ function coalesceDeliveries(e) {
   for (let e of n) {
     let t = a.length;
     if ((e.auth !== void 0 && (r = e.auth), e.caller !== void 0)) {
-      if (i !== void 0)
-        throw Error(`Cannot coalesce deliveries from different turns.`);
+      if (i !== void 0) throw Error(`Cannot coalesce deliveries from different turns.`);
       i = e.caller;
     }
     (a.push(...e.payloads),

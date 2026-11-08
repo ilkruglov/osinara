@@ -1,7 +1,4 @@
-import {
-  AI_GATEWAY_API_KEY_ENV_FILE,
-  AI_GATEWAY_API_KEY_ENV_VAR,
-} from "../ai-gateway-api-key.js";
+import { AI_GATEWAY_API_KEY_ENV_FILE, AI_GATEWAY_API_KEY_ENV_VAR } from "../ai-gateway-api-key.js";
 import { requireProjectPath } from "../state.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -11,8 +8,7 @@ function readEnvValue(e, t) {
   if (n.length === 0 || n.startsWith(`#`) || !n.startsWith(`${t}=`)) return;
   let r = n.slice(t.length + 1);
   if (r.length === 0) return;
-  let i =
-    r.length >= 2 && r.startsWith(`"`) && r.endsWith(`"`) ? r.slice(1, -1) : r;
+  let i = r.length >= 2 && r.startsWith(`"`) && r.endsWith(`"`) ? r.slice(1, -1) : r;
   return i.length === 0 ? void 0 : i;
 }
 async function hasApiKeyInFile(e, t) {
@@ -28,14 +24,11 @@ async function hasApiKeyInFile(e, t) {
   return !1;
 }
 async function findEnvFileWithKey(e, t) {
-  for (let n of ENV_FILE_CANDIDATES)
-    if (await hasApiKeyInFile(join(e, n), t)) return n;
+  for (let n of ENV_FILE_CANDIDATES) if (await hasApiKeyInFile(join(e, n), t)) return n;
 }
 async function detectAiGatewayResolution(e) {
   let n = await findEnvFileWithKey(e, AI_GATEWAY_API_KEY_ENV_VAR);
-  return n === void 0
-    ? { kind: `unresolved` }
-    : { kind: `api-key`, envFile: n };
+  return n === void 0 ? { kind: `unresolved` } : { kind: `api-key`, envFile: n };
 }
 function detectAiGateway() {
   return {

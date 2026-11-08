@@ -242,8 +242,7 @@ async function storePayloadBlobs(db, runId, blobs) {
  * this release reads both forms, the next one sets the flag (two releases, as
  * for every contract change). Read per call so a test can switch it.
  */
-const payloadBlobWritesEnabled = () =>
-  process.env.OSINARA_WORKFLOW_PAYLOAD_BLOBS === "1";
+const payloadBlobWritesEnabled = () => process.env.OSINARA_WORKFLOW_PAYLOAD_BLOBS === "1";
 /** Test hook: forget every cached blob, as a fresh process would. */
 export function resetPayloadBlobCacheForTest() {
   payloadBlobCache.clear();
@@ -351,12 +350,9 @@ async function insertEventRow(db, values) {
     if (attempt >= SLOT_INSERT_IMMEDIATE_ATTEMPTS) {
       const delay = Math.min(
         SLOT_INSERT_MAX_DELAY_MS,
-        SLOT_INSERT_BASE_DELAY_MS *
-          2 ** (attempt - SLOT_INSERT_IMMEDIATE_ATTEMPTS),
+        SLOT_INSERT_BASE_DELAY_MS * 2 ** (attempt - SLOT_INSERT_IMMEDIATE_ATTEMPTS),
       );
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.random() * delay),
-      );
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * delay));
     }
   }
 }
@@ -430,19 +426,9 @@ async function insertRunWithCreatedEvent(drizzle, runValues, eventValues) {
  * lower bound for now rather than a permanent one, and it is advisory either
  * way: the caller's ordinary incremental read still runs.
  */
-async function reportSkippedSlots(
-  db,
-  runId,
-  committedEventId,
-  askedFor,
-  resolveData,
-) {
+async function reportSkippedSlots(db, runId, committedEventId, askedFor, resolveData) {
   const committedSlot = eventIdToSlot(committedEventId);
-  if (
-    committedSlot === null ||
-    askedFor < FIRST_EVENT_SLOT ||
-    committedSlot <= askedFor + 1
-  ) {
+  if (committedSlot === null || askedFor < FIRST_EVENT_SLOT || committedSlot <= askedFor + 1) {
     return undefined;
   }
   const rows = await db
@@ -468,9 +454,7 @@ async function reportSkippedSlots(
   };
 }
 function getHookRetentionLimitMs() {
-  const days = Number(
-    process.env.WORKFLOW_POSTGRES_HOOK_RETENTION_LIMIT_DAYS ?? 30,
-  );
+  const days = Number(process.env.WORKFLOW_POSTGRES_HOOK_RETENTION_LIMIT_DAYS ?? 30);
   if (!Number.isFinite(days) || days <= 0) {
     throw new WorkflowWorldError(
       "WORKFLOW_POSTGRES_HOOK_RETENTION_LIMIT_DAYS must be a positive number",
@@ -544,10 +528,7 @@ export function createRunsStorage(drizzle) {
       if (uniqueIds.length === 0) {
         return [];
       }
-      const values = await drizzle
-        .select()
-        .from(runs)
-        .where(inArray(runs.runId, uniqueIds));
+      const values = await drizzle.select().from(runs).where(inArray(runs.runId, uniqueIds));
       const resolveData = params?.resolveData ?? "all";
       const runsById = new Map(
         values.map((value) => {
@@ -555,9 +536,7 @@ export function createRunsStorage(drizzle) {
           value.input ||= value.inputJson;
           value.executionContext ||= value.executionContextJson;
           value.error ||= parseErrorJson(value.errorJson);
-          const parsed = WorkflowRunSchema.parse(
-            deserializeRunError(compact(value)),
-          );
+          const parsed = WorkflowRunSchema.parse(deserializeRunError(compact(value)));
           return [value.runId, filterRunData(parsed, resolveData)];
         }),
       );
@@ -680,14 +659,7 @@ function map(obj, fn) {
  * - hook_received: Store event only (hooks exist via old system, no entity mutation)
  * - Other events: Throw error (not supported for legacy runs)
  */
-async function handleLegacyEventPostgres(
-  drizzle,
-  runId,
-  eventId,
-  data,
-  currentRun,
-  params,
-) {
+async function handleLegacyEventPostgres(drizzle, runId, eventId, data, currentRun, params) {
   const resolveData = params?.resolveData ?? "all";
   switch (data.eventType) {
     case "run_cancelled": {
@@ -829,10 +801,7 @@ export function createEventsStorage(drizzle) {
     .where(
       and(
         eq(Schema.hooks.token, sql.placeholder("token")),
-        or(
-          gt(Schema.hooks.tokenRetentionUntil, sql`now()`),
-          notExists(ownerRunIsTerminal),
-        ),
+        or(gt(Schema.hooks.tokenRetentionUntil, sql`now()`), notExists(ownerRunIsTerminal)),
       ),
     )
     .limit(1)
@@ -866,8 +835,7 @@ export function createEventsStorage(drizzle) {
       if (
         data.eventType === "hook_created" &&
         data.eventData.tokenRetentionUntil !== undefined &&
-        data.eventData.tokenRetentionUntil.getTime() >
-          Date.now() + hookRetentionLimitMs
+        data.eventData.tokenRetentionUntil.getTime() > Date.now() + hookRetentionLimitMs
       ) {
         throw new WorkflowWorldError(
           `Hook minimum retention cannot exceed ${hookRetentionLimitMs / DAY_MS} days in the Postgres World.`,
@@ -925,10 +893,7 @@ export function createEventsStorage(drizzle) {
       // of run state. This optimization saves database queries per step event.
       let currentRun = null;
       const skipRunValidationEvents = ["step_completed", "step_retrying"];
-      if (
-        data.eventType !== "run_created" &&
-        !skipRunValidationEvents.includes(data.eventType)
-      ) {
+      if (data.eventType !== "run_created" && !skipRunValidationEvents.includes(data.eventType)) {
         // Use prepared statement for better performance
         const [runValue] = await getRunForValidation.execute({
           runId: effectiveRunId,
@@ -950,12 +915,9 @@ export function createEventsStorage(drizzle) {
             runInputData.input !== undefined
           ) {
             validateAttributeChanges(
-              Object.entries(runInputData.attributes ?? {}).map(
-                ([key, value]) => ({ key, value }),
-              ),
+              Object.entries(runInputData.attributes ?? {}).map(([key, value]) => ({ key, value })),
               {
-                allowReservedAttributes:
-                  runInputData.allowReservedAttributes === true,
+                allowReservedAttributes: runInputData.allowReservedAttributes === true,
               },
             );
             // Create run + run_created event atomically. The
@@ -1015,10 +977,7 @@ export function createEventsStorage(drizzle) {
       if (currentRun) {
         // Check if run requires a newer world version
         if (requiresNewerWorld(currentRun.specVersion)) {
-          throw new RunNotSupportedError(
-            currentRun.specVersion,
-            SPEC_VERSION_CURRENT,
-          );
+          throw new RunNotSupportedError(currentRun.specVersion, SPEC_VERSION_CURRENT);
         }
         // Route to legacy handler for pre-event-sourcing runs. A run this old
         // is ULID-numbered by definition, so the id is minted here rather than
@@ -1034,10 +993,7 @@ export function createEventsStorage(drizzle) {
           );
         }
       }
-      if (
-        !currentRun &&
-        (data.eventType === "attr_set" || data.eventType === "run_started")
-      ) {
+      if (!currentRun && (data.eventType === "attr_set" || data.eventType === "run_started")) {
         throw new WorkflowRunNotFoundError(effectiveRunId);
       }
       // Lazy step start: a step_started carrying step-creation data
@@ -1047,15 +1003,11 @@ export function createEventsStorage(drizzle) {
       // entity-creation terminal-run guard treats it like a creation and the
       // "step must exist" ordering guard below doesn't reject it.
       const createsChildEntity = isChildEntityCreationEvent(data);
-      const lazyStepStart =
-        createsChildEntity && data.eventType === "step_started";
+      const lazyStepStart = createsChildEntity && data.eventType === "step_started";
       // Run terminal state validation
       if (currentRun && isTerminalWorkflowRunStatus(currentRun.status)) {
         // Idempotent operation: run_cancelled on already cancelled run is allowed
-        if (
-          data.eventType === "run_cancelled" &&
-          currentRun.status === "cancelled"
-        ) {
+        if (data.eventType === "run_cancelled" && currentRun.status === "cancelled") {
           // Get full run for return value
           const [fullRun] = await drizzle
             .select()
@@ -1121,10 +1073,7 @@ export function createEventsStorage(drizzle) {
       // Skip validation for step_completed/step_failed - use conditional UPDATE instead
       let validatedStep = null;
       const stepEventsNeedingValidation = ["step_started", "step_retrying"];
-      if (
-        stepEventsNeedingValidation.includes(data.eventType) &&
-        data.correlationId
-      ) {
+      if (stepEventsNeedingValidation.includes(data.eventType) && data.correlationId) {
         // Use prepared statement for better performance
         const [existingStep] = await getStepForValidation.execute({
           runId: effectiveRunId,
@@ -1134,9 +1083,7 @@ export function createEventsStorage(drizzle) {
         // Event ordering: step must exist before these events — except on the
         // lazy-start path, where step_started creates the step itself.
         if (!validatedStep && !lazyStepStart) {
-          throw new WorkflowWorldError(
-            `Step "${data.correlationId}" not found`,
-          );
+          throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
         }
         // Lazy start exactly-once gate: a lazy step_started always CREATES the
         // step (the owned-inline path only sends one for a step whose
@@ -1149,9 +1096,7 @@ export function createEventsStorage(drizzle) {
         // second time. (A concurrent create that lands after this read is also
         // caught by the onConflictDoNothing()+returning() claim below.)
         if (lazyStepStart && validatedStep) {
-          throw new EntityConflictError(
-            `Step "${data.correlationId}" already created`,
-          );
+          throw new EntityConflictError(`Step "${data.correlationId}" already created`);
         }
         // Terminal-state checks only apply when the step already exists.
         // validatedStep is null only on the lazy-start path (no step yet),
@@ -1235,9 +1180,7 @@ export function createEventsStorage(drizzle) {
         // — start() already treats EntityConflictError as benign, and falling
         // through would append a duplicate run_created event to the log.
         if (!created) {
-          throw new EntityConflictError(
-            `Workflow run "${effectiveRunId}" already exists`,
-          );
+          throw new EntityConflictError(`Workflow run "${effectiveRunId}" already exists`);
         }
         eventId = created.event.eventId;
         runCreatedValue = { createdAt: created.event.createdAt };
@@ -1389,12 +1332,8 @@ export function createEventsStorage(drizzle) {
         await Promise.all([
           drizzle
             .delete(Schema.hooks)
-            .where(
-              and(eq(Schema.hooks.runId, effectiveRunId), hookRetentionEnded),
-            ),
-          drizzle
-            .delete(Schema.waits)
-            .where(eq(Schema.waits.runId, effectiveRunId)),
+            .where(and(eq(Schema.hooks.runId, effectiveRunId), hookRetentionEnded)),
+          drizzle.delete(Schema.waits).where(eq(Schema.waits.runId, effectiveRunId)),
         ]);
       }
       if (data.eventType === "attr_set") {
@@ -1547,9 +1486,7 @@ export function createEventsStorage(drizzle) {
               .onConflictDoNothing()
               .returning({ stepId: Schema.steps.stepId });
             if (!inserted) {
-              throw new EntityConflictError(
-                `Step "${data.correlationId}" already created`,
-              );
+              throw new EntityConflictError(`Step "${data.correlationId}" already created`);
             }
             // Replay still needs to observe step_created before
             // step_started. Because this synthetic event is in the same
@@ -1571,10 +1508,7 @@ export function createEventsStorage(drizzle) {
               // A concurrent writer already published this run's
               // step_created for the same step. The event exists either way,
               // which is all this synthetic write was for.
-              if (
-                pgErrorOf(err).constraint !==
-                "workflow_events_entity_creation_unique"
-              ) {
+              if (pgErrorOf(err).constraint !== "workflow_events_entity_creation_unique") {
                 throw err;
               }
             }
@@ -1582,16 +1516,11 @@ export function createEventsStorage(drizzle) {
           }
           // Retried steps may be scheduled for later. Keep this check inside
           // the transaction so the step_started write cannot slip past it.
-          if (
-            validatedStep?.retryAfter &&
-            validatedStep.retryAfter.getTime() > Date.now()
-          ) {
+          if (validatedStep?.retryAfter && validatedStep.retryAfter.getTime() > Date.now()) {
             throw new TooEarlyError(
               `Cannot start step "${data.correlationId}": retryAfter timestamp has not been reached yet`,
               {
-                retryAfter: Math.ceil(
-                  (validatedStep.retryAfter.getTime() - Date.now()) / 1000,
-                ),
+                retryAfter: Math.ceil((validatedStep.retryAfter.getTime() - Date.now()) / 1000),
               },
             );
           }
@@ -1620,7 +1549,8 @@ export function createEventsStorage(drizzle) {
             // The runtime runs a queued step from the entity reported here,
             // so the input comes back with it: from the lazy start in hand,
             // otherwise from the step_created event (the row no longer has it).
-            const input = stepValue.input ??
+            const input =
+              stepValue.input ??
               (lazyStepStart && !validatedStep
                 ? data.eventData.input
                 : await stepInputFromEvent(tx, effectiveRunId, data.correlationId));
@@ -1637,9 +1567,7 @@ export function createEventsStorage(drizzle) {
               )
               .limit(1);
             if (!existing) {
-              throw new WorkflowWorldError(
-                `Step "${data.correlationId}" not found`,
-              );
+              throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
             }
             if (isTerminalStepStatus(existing.status)) {
               throw new EntityConflictError(
@@ -1711,18 +1639,14 @@ export function createEventsStorage(drizzle) {
               )
               .limit(1);
             if (!existing) {
-              throw new WorkflowWorldError(
-                `Step "${data.correlationId}" not found`,
-              );
+              throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
             }
             if (isTerminalStepStatus(existing.status)) {
               throw new EntityConflictError(
                 `Cannot modify step in terminal state "${existing.status}"`,
               );
             }
-            throw new EntityConflictError(
-              `Step "${data.correlationId}" could not be completed`,
-            );
+            throw new EntityConflictError(`Step "${data.correlationId}" could not be completed`);
           }
           // The entity reported back carries the result it was just given.
           step = deserializeStepError(compact({ ...stepValue, output: eventData.result }));
@@ -1774,9 +1698,7 @@ export function createEventsStorage(drizzle) {
             stepId: data.correlationId,
           });
           if (!existing) {
-            throw new WorkflowWorldError(
-              `Step "${data.correlationId}" not found`,
-            );
+            throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
           }
           if (isTerminalStepStatus(existing.status)) {
             throw new EntityConflictError(
@@ -1813,9 +1735,7 @@ export function createEventsStorage(drizzle) {
             stepId: data.correlationId,
           });
           if (!existing) {
-            throw new WorkflowWorldError(
-              `Step "${data.correlationId}" not found`,
-            );
+            throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
           }
           if (isTerminalStepStatus(existing.status)) {
             throw new EntityConflictError(
@@ -1851,19 +1771,14 @@ export function createEventsStorage(drizzle) {
           //     and events INSERT): skip the hook insert (the existing
           //     row already has the desired state) and fall through to
           //     the events INSERT below, completing the partial write.
-          if (
-            existingHook.runId === effectiveRunId &&
-            existingHook.hookId === data.correlationId
-          ) {
+          if (existingHook.runId === effectiveRunId && existingHook.hookId === data.correlationId) {
             const [existingEvent] = await getHookCreatedEvent.execute({
               runId: effectiveRunId,
               correlationId: data.correlationId,
               eventType: "hook_created",
             });
             if (existingEvent) {
-              throw new EntityConflictError(
-                `Hook "${data.correlationId}" already created`,
-              );
+              throw new EntityConflictError(`Hook "${data.correlationId}" already created`);
             }
             // Orphaned hook row: hook row exists but no hook_created
             // event in the log. Skip the hook insert below (the row
@@ -1979,9 +1894,7 @@ export function createEventsStorage(drizzle) {
             .where(eq(Schema.hooks.hookId, disposedHookId))
             .returning({ hookId: Schema.hooks.hookId });
           if (!deleted) {
-            throw new EntityConflictError(
-              `Hook "${disposedHookId}" already disposed`,
-            );
+            throw new EntityConflictError(`Hook "${disposedHookId}" already disposed`);
           }
           // Allocated only after the lock is held, matching hook_received's
           // ordering guarantee: a writer that had to wait must not carry an
@@ -2107,9 +2020,7 @@ export function createEventsStorage(drizzle) {
             specVersion: waitValue.specVersion ?? undefined,
           };
         } else {
-          throw new EntityConflictError(
-            `Wait "${data.correlationId}" already exists`,
-          );
+          throw new EntityConflictError(`Wait "${data.correlationId}" already exists`);
         }
       }
       // Handle wait_completed event: transition wait to 'completed'
@@ -2122,12 +2033,7 @@ export function createEventsStorage(drizzle) {
             status: "completed",
             completedAt: now,
           })
-          .where(
-            and(
-              eq(Schema.waits.waitId, waitId),
-              eq(Schema.waits.status, "waiting"),
-            ),
-          )
+          .where(and(eq(Schema.waits.waitId, waitId), eq(Schema.waits.status, "waiting")))
           .returning();
         if (waitValue) {
           wait = {
@@ -2146,14 +2052,10 @@ export function createEventsStorage(drizzle) {
             waitId,
           });
           if (!existing) {
-            throw new WorkflowWorldError(
-              `Wait "${data.correlationId}" not found`,
-            );
+            throw new WorkflowWorldError(`Wait "${data.correlationId}" not found`);
           }
           if (existing.status === "completed") {
-            throw new EntityConflictError(
-              `Wait "${data.correlationId}" already completed`,
-            );
+            throw new EntityConflictError(`Wait "${data.correlationId}" already completed`);
           }
         }
       }
@@ -2187,8 +2089,7 @@ export function createEventsStorage(drizzle) {
         // correlationId conflict.
         const isDeduplicatedCorrelatedEvent =
           isChildEntityCreationEventType(data.eventType) ||
-          (data.eventType === "attr_set" &&
-            data.eventData.writer.type === "workflow");
+          (data.eventType === "attr_set" && data.eventData.writer.type === "workflow");
         const pgErr = pgErrorOf(err);
         const pgCode = pgErr.code;
         const pgConstraint = pgErr.constraint;
@@ -2213,9 +2114,7 @@ export function createEventsStorage(drizzle) {
         ...value,
         runId: effectiveRunId,
         eventId,
-        ...(storedEventData !== undefined
-          ? { eventData: storedEventData }
-          : {}),
+        ...(storedEventData !== undefined ? { eventData: storedEventData } : {}),
       };
       // Strip eventData leaked by ...data spread for run_started events.
       // The eventData (run input for resilient start) belongs on
@@ -2234,10 +2133,7 @@ export function createEventsStorage(drizzle) {
       // it is a strict superset, and it is the only one of the two that
       // advances `cursor`. Running the report anyway would cost a query whose
       // result the delta overwrites.
-      if (
-        params?.eventCount !== undefined &&
-        typeof params.sinceCursor !== "string"
-      ) {
+      if (params?.eventCount !== undefined && typeof params.sinceCursor !== "string") {
         const report = await reportSkippedSlots(
           drizzle,
           effectiveRunId,
@@ -2365,12 +2261,7 @@ export function createEventsStorage(drizzle) {
             dropEventLogCache(cacheKey);
             cached = undefined;
           } else if (total === cached.data.length) {
-            traceEventLogRead(
-              params.runId,
-              total,
-              0,
-              performance.now() - readStartedAt,
-            );
+            traceEventLogRead(params.runId, total, 0, performance.now() - readStartedAt);
             return {
               data: [...cached.data],
               cursor: cached.cursor ?? null,
@@ -2381,14 +2272,11 @@ export function createEventsStorage(drizzle) {
       }
       const data = cached === undefined ? [] : [...cached.data];
       const reusedEvents = data.length;
-      let cursor =
-        cached === undefined ? params.pagination?.cursor : cached.cursor;
+      let cursor = cached === undefined ? params.pagination?.cursor : cached.cursor;
       let hasMore = false;
       do {
         const pageLimit =
-          params.pagination?.limit === undefined
-            ? Math.min(500, limit - data.length)
-            : limit;
+          params.pagination?.limit === undefined ? Math.min(500, limit - data.length) : limit;
         const rows = await drizzle
           .select()
           .from(events)
@@ -2409,11 +2297,7 @@ export function createEventsStorage(drizzle) {
         }
         cursor = page.at(-1)?.eventId;
         hasMore = rows.length > pageLimit;
-      } while (
-        params.pagination?.limit === undefined &&
-        hasMore &&
-        data.length < limit
-      );
+      } while (params.pagination?.limit === undefined && hasMore && data.length < limit);
       // Only a listing that reached the end of the log may be reused as a prefix.
       if (cacheKey !== null) {
         traceEventLogRead(
@@ -2448,9 +2332,7 @@ export function createEventsStorage(drizzle) {
             // id — and the cursor, an event id, cannot tell two such rows
             // apart. Scoped, `(run_id, id)` is the primary key, so it can.
             eq(events.runId, params.runId),
-            map(params.pagination?.cursor, (c) =>
-              order.compare(events.eventId, c),
-            ),
+            map(params.pagination?.cursor, (c) => order.compare(events.eventId, c)),
           ),
         )
         .orderBy(order.by)
@@ -2477,16 +2359,8 @@ export function createHooksStorage(drizzle) {
   const ownerRunIsTerminal = drizzle
     .select({ runId: runs.runId })
     .from(runs)
-    .where(
-      and(
-        eq(runs.runId, hooks.runId),
-        inArray(runs.status, TERMINAL_WORKFLOW_RUN_STATUSES),
-      ),
-    );
-  const available = or(
-    gt(hooks.tokenRetentionUntil, sql`now()`),
-    notExists(ownerRunIsTerminal),
-  );
+    .where(and(eq(runs.runId, hooks.runId), inArray(runs.status, TERMINAL_WORKFLOW_RUN_STATUSES)));
+  const available = or(gt(hooks.tokenRetentionUntil, sql`now()`), notExists(ownerRunIsTerminal));
   const getByToken = drizzle
     .select()
     .from(hooks)
@@ -2595,7 +2469,10 @@ async function attachStepPayloads(db, runId, rows) {
     .where(
       and(
         eq(events.runId, runId),
-        inArray(events.correlationId, missing.map((row) => row.stepId)),
+        inArray(
+          events.correlationId,
+          missing.map((row) => row.stepId),
+        ),
         inArray(events.eventType, ["step_created", "step_completed"]),
       ),
     )

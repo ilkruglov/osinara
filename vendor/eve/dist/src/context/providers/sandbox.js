@@ -1,10 +1,7 @@
 import { getAdapterKind } from "#channel/adapter.js";
 import { SandboxKey, SessionIdKey } from "#context/keys.js";
 import { contextStorage } from "#context/container.js";
-import {
-  BundleKey,
-  ChannelKey,
-} from "#runtime/sessions/runtime-context-keys.js";
+import { BundleKey, ChannelKey } from "#runtime/sessions/runtime-context-keys.js";
 import { getActiveRuntimeNode } from "#context/node.js";
 import { ensureSandboxAccess } from "#execution/sandbox/ensure.js";
 const sandboxProvider = {
@@ -46,12 +43,7 @@ const sandboxProvider = {
 function resolveTagAgentName(e) {
   let t = e.node,
     n = e.bundle;
-  return (
-    t.agent?.config?.name ??
-    n.resolvedAgent?.config?.name ??
-    t.nodeId ??
-    `unknown`
-  );
+  return t.agent?.config?.name ?? n.resolvedAgent?.config?.name ?? t.nodeId ?? `unknown`;
 }
 function resolveTagChannelKind(t) {
   return t === void 0 ? `unknown` : getAdapterKind(t);

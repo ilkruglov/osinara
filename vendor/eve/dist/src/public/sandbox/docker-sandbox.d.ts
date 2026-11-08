@@ -20,26 +20,26 @@ export type DockerSandboxNetworkPolicy = "allow-all" | "deny-all";
  * Options accepted by `docker(opts)`.
  */
 export interface DockerSandboxCreateOptions {
-    /**
-     * Base container image for templates and sessions. Defaults to
-     * `ghcr.io/vercel/eve:latest` — eve's published sandbox runtime image.
-     * Framework setup creates `/workspace` and verifies Bash. Install any
-     * authored runtime tools in sandbox bootstrap or provide them through a
-     * custom image.
-     */
-    readonly image?: string;
-    /**
-     * Environment variables baked into every container the backend
-     * creates (template builds and sessions).
-     */
-    readonly env?: Readonly<Record<string, string>>;
-    /**
-     * Base image pull behavior. Defaults to `"if-not-present"`.
-     */
-    readonly pullPolicy?: DockerSandboxPullPolicy;
-    /**
-     * Initial network policy for created containers. Defaults to
-     * `"allow-all"`.
-     */
-    readonly networkPolicy?: DockerSandboxNetworkPolicy;
+  /**
+   * Base container image for templates and sessions. Defaults to
+   * `ghcr.io/vercel/eve:latest` — eve's published sandbox runtime image.
+   * Framework setup creates `/workspace` and verifies Bash. Install any
+   * authored runtime tools in sandbox bootstrap or provide them through a
+   * custom image.
+   */
+  readonly image?: string;
+  /**
+   * Environment variables baked into every container the backend
+   * creates (template builds and sessions).
+   */
+  readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Base image pull behavior. Defaults to `"if-not-present"`.
+   */
+  readonly pullPolicy?: DockerSandboxPullPolicy;
+  /**
+   * Initial network policy for created containers. Defaults to
+   * `"allow-all"`.
+   */
+  readonly networkPolicy?: DockerSandboxNetworkPolicy;
 }

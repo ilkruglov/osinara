@@ -3,8 +3,8 @@ import type { DevelopmentNitroArtifactsConfig } from "#internal/nitro/routes/run
  * Result of dispatching one authored schedule via the dev-only HTTP route.
  */
 export interface DispatchScheduleInDevResult {
-    readonly scheduleId: string;
-    readonly sessionIds: readonly string[];
+  readonly scheduleId: string;
+  readonly sessionIds: readonly string[];
 }
 /**
  * Error raised when the dev-only schedule dispatch route is given a
@@ -15,9 +15,9 @@ export interface DispatchScheduleInDevResult {
  * server's logs.
  */
 export declare class UnknownDevScheduleError extends Error {
-    readonly availableScheduleIds: readonly string[];
-    readonly scheduleId: string;
-    constructor(scheduleId: string, availableScheduleIds: readonly string[]);
+  readonly availableScheduleIds: readonly string[];
+  readonly scheduleId: string;
+  constructor(scheduleId: string, availableScheduleIds: readonly string[]);
 }
 /**
  * Dispatches one compiled authored schedule in-process inside the running
@@ -41,6 +41,6 @@ export declare class UnknownDevScheduleError extends Error {
  * resolve relative to the app instead of the installed eve package.
  */
 export declare function dispatchScheduleInDev(input: {
-    readonly artifactsConfig: DevelopmentNitroArtifactsConfig;
-    readonly scheduleId: string;
+  readonly artifactsConfig: DevelopmentNitroArtifactsConfig;
+  readonly scheduleId: string;
 }): Promise<DispatchScheduleInDevResult>;

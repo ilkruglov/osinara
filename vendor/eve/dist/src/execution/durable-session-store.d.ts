@@ -39,12 +39,12 @@ export declare const DURABLE_SESSION_VERSION = 1;
  * from the legacy `eve.session` fallback.
  */
 export interface DurableSessionState {
-    readonly version: typeof DURABLE_SESSION_VERSION;
-    readonly sessionId: string;
-    readonly continuationToken: string;
-    readonly hasProxyInputRequests: boolean;
-    readonly emissionState: HarnessEmissionState;
-    readonly snapshot?: DurableSessionSnapshot;
+  readonly version: typeof DURABLE_SESSION_VERSION;
+  readonly sessionId: string;
+  readonly continuationToken: string;
+  readonly hasProxyInputRequests: boolean;
+  readonly emissionState: HarnessEmissionState;
+  readonly snapshot?: DurableSessionSnapshot;
 }
 /**
  * Durable projection of {@link HarnessSession} embedded in state
@@ -59,38 +59,38 @@ export interface DurableSessionState {
  * `bundle.turnAgent`.
  */
 export interface DurableSession {
-    readonly sessionId: string;
-    /**
-     * Top user-facing session id in the dispatch chain. Optional because
-     * a top-level session is its own root. Persisted so a rehydrated
-     * subagent session still knows its root after a workflow step
-     * boundary.
-     */
-    readonly rootSessionId?: string;
-    readonly continuationToken: string;
-    readonly history: ModelMessage[];
-    readonly limits?: HarnessSession["limits"];
-    readonly outputSchema?: JsonObject;
-    readonly state?: SessionStateMap;
-    readonly sandboxState?: SandboxState;
-    readonly subagentDepth?: number;
-    readonly workflowMaxSubagents?: number;
-    readonly agent: {
-        readonly system: string;
-    };
-    readonly compaction?: {
-        readonly lastKnownInputTokens?: number;
-        readonly lastKnownPromptMessageCount?: number;
-    };
+  readonly sessionId: string;
+  /**
+   * Top user-facing session id in the dispatch chain. Optional because
+   * a top-level session is its own root. Persisted so a rehydrated
+   * subagent session still knows its root after a workflow step
+   * boundary.
+   */
+  readonly rootSessionId?: string;
+  readonly continuationToken: string;
+  readonly history: ModelMessage[];
+  readonly limits?: HarnessSession["limits"];
+  readonly outputSchema?: JsonObject;
+  readonly state?: SessionStateMap;
+  readonly sandboxState?: SandboxState;
+  readonly subagentDepth?: number;
+  readonly workflowMaxSubagents?: number;
+  readonly agent: {
+    readonly system: string;
+  };
+  readonly compaction?: {
+    readonly lastKnownInputTokens?: number;
+    readonly lastKnownPromptMessageCount?: number;
+  };
 }
 /** Versioned wrapper around a {@link DurableSession} on the wire. */
 export interface DurableSessionSnapshot {
-    readonly version: typeof DURABLE_SESSION_VERSION;
-    readonly session: DurableSession;
+  readonly version: typeof DURABLE_SESSION_VERSION;
+  readonly session: DurableSession;
 }
 /** Projects a {@link HarnessSession} into the boundary-safe state value. */
 export declare function projectSessionState(input: {
-    readonly session: HarnessSession;
+  readonly session: HarnessSession;
 }): DurableSessionState;
 /**
  * Reads the latest durable session snapshot and returns the
@@ -113,10 +113,10 @@ export declare function readDurableSession(state: DurableSessionState): Promise<
  * snapshot embedded in the Workflow step result.
  */
 export declare function createDurableSessionState(input: {
-    readonly session: HarnessSession;
+  readonly session: HarnessSession;
 }): DurableSessionState;
 /** Replaces the embedded session while preserving additive snapshot fields. */
 export declare function replaceDurableSessionSnapshot(input: {
-    readonly session: DurableSession;
-    readonly state: DurableSessionState;
+  readonly session: DurableSession;
+  readonly state: DurableSessionState;
 }): DurableSessionState;

@@ -27,13 +27,29 @@ export type ActAction =
  * and `n` identify the field within one look: re-filling it replaces the entry, a field of the
  * same label in another look is another entry, since numbers change with every look.
  */
-export interface EnteredField { epoch?: string; field: string; label: string; n: number; value?: string; }
+export interface EnteredField {
+  epoch?: string;
+  field: string;
+  label: string;
+  n: number;
+  value?: string;
+}
 export type GateReason = "after-entry" | "form-submit" | "transaction";
 
-const words = (list: readonly string[]) => new RegExp(`(?:^|[^\\p{L}])(?:${list.join("|")})(?:[^\\p{L}]|$)`, "iu");
+const words = (list: readonly string[]) =>
+  new RegExp(`(?:^|[^\\p{L}])(?:${list.join("|")})(?:[^\\p{L}]|$)`, "iu");
 const TRANSACTION = words(TRANSACTION_WORDS);
 const FORM_SUBMIT = words(FORM_SUBMIT_WORDS);
-const FIELD_ROLES = new Set(["checkbox", "combobox", "date", "file", "radio", "spinbutton", "textbox", "time"]);
+const FIELD_ROLES = new Set([
+  "checkbox",
+  "combobox",
+  "date",
+  "file",
+  "radio",
+  "spinbutton",
+  "textbox",
+  "time",
+]);
 const SUBMIT_ROLES = new Set(["button", "link", "menuitem", "submit"]);
 const CLICKABLE_ROLES = new Set([...SUBMIT_ROLES, "generic", "tab", "option", "treeitem"]);
 /** Picking a tab or an option changes what is shown, not what is sent. */
@@ -66,11 +82,16 @@ export function gateDecision(input: {
   if (element.role === "submit") return { gated: true, reason: "form-submit" };
   const entered = input.entered.length > 0;
   // A booking word on a button, in a form or after entered data: a link on a home page only leads to the form.
-  if (FORM_SUBMIT.test(element.text) && (entered || element.role === "button" || hasFormContext(input.view))) return { gated: true, reason: "form-submit" };
+  if (
+    FORM_SUBMIT.test(element.text) &&
+    (entered || element.role === "button" || hasFormContext(input.view))
+  )
+    return { gated: true, reason: "form-submit" };
   // A cookie banner sends nothing: closing it after typing is not the form going out. A button
   // inside the form is not a banner whatever it says (review, 28 September 2026).
   if (entered && !element.inForm && COOKIE_CONSENT.test(element.text)) return { gated: false };
   // A custom button is a generic element with a label; after entered data no click is proven safe.
-  if (entered && !SAFE_AFTER_ENTRY_ROLES.has(element.role)) return { gated: true, reason: "after-entry" };
+  if (entered && !SAFE_AFTER_ENTRY_ROLES.has(element.role))
+    return { gated: true, reason: "after-entry" };
   return { gated: false };
 }

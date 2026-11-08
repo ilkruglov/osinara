@@ -9,10 +9,7 @@ function serializeContext(e) {
     try {
       t[n.name] = n.codec ? n.codec.serialize(r) : r;
     } catch (e) {
-      throw (
-        logError(log, `failed to serialize context key`, e, { key: n.name }),
-        e
-      );
+      throw (logError(log, `failed to serialize context key`, e, { key: n.name }), e);
     }
   return t;
 }
@@ -21,8 +18,7 @@ async function deserializeContext(e) {
     a = e[BundleKey.name];
   if (a !== void 0) {
     let e = BundleKey.codec;
-    if (e === void 0)
-      throw Error(`Context key "eve.bundle" is missing a codec.`);
+    if (e === void 0) throw Error(`Context key "eve.bundle" is missing a codec.`);
     i.set(BundleKey, await e.deserialize(a, i));
   }
   for (let [t, a] of Object.entries(e)) {
@@ -37,10 +33,7 @@ async function deserializeContext(e) {
     try {
       i.set(e, e.codec ? await e.codec.deserialize(a, i) : a);
     } catch (e) {
-      throw (
-        logError(log, `failed to deserialize context key`, e, { key: t }),
-        e
-      );
+      throw (logError(log, `failed to deserialize context key`, e, { key: t }), e);
     }
   }
   return i;

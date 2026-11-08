@@ -13,9 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "./database.js";
 import { verifyR6CascadeDeletion } from "./r6-r7-memory-thread-migration.integration-scenarios.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const describeWithDatabase =
+  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
 const TEST_SCHEMA = "test_r6_r7_memory_threads";
 const MIGRATION_NAME = "054_r6_r7_memory_threads.sql";
 
@@ -99,14 +98,24 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
          VALUES ($1, $2, 'family', $2, 'primary', 'firsthand', $3, 'Family source', $4,
                  $5, $6, 'Owner', now(), 'Буду регулярно тренироваться', $7, 1, 650,
                  '{"content":"Буду регулярно тренироваться"}'::jsonb)`,
-        [claims.rows[0]!.id, family.rows[0]!.id, conversation.rows[0]!.id, group.rows[0]!.id,
-          participant.rows[0]!.id, users.rows[0]!.id, timeline.rows[0]!.id],
+        [
+          claims.rows[0]!.id,
+          family.rows[0]!.id,
+          conversation.rows[0]!.id,
+          group.rows[0]!.id,
+          participant.rows[0]!.id,
+          users.rows[0]!.id,
+          timeline.rows[0]!.id,
+        ],
       );
-      const before = await client.query("SELECT id, content FROM memory_items ORDER BY operation_key");
+      const before = await client.query(
+        "SELECT id, content FROM memory_items ORDER BY operation_key",
+      );
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));
-      expect((await client.query("SELECT id, content FROM memory_items ORDER BY operation_key")).rows)
-        .toEqual(before.rows);
+      expect(
+        (await client.query("SELECT id, content FROM memory_items ORDER BY operation_key")).rows,
+      ).toEqual(before.rows);
 
       // Same subject/scope claims may attach to multiple broad or focused threads without copying.
       const roots = await client.query<{ id: string }>(
@@ -123,12 +132,14 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
                 ($2, $3, 'family', $3, $4, 'constraint', now())`,
         [roots.rows[0]!.id, roots.rows[1]!.id, family.rows[0]!.id, claims.rows[0]!.id],
       );
-      await expect(client.query(
-        `INSERT INTO memory_thread_entries
+      await expect(
+        client.query(
+          `INSERT INTO memory_thread_entries
            (thread_id, family_id, scope, scope_partition_key, source_claim_id, role, occurred_at)
          VALUES ($1, $2, 'family', $2, $3, 'goal', now())`,
-        [roots.rows[0]!.id, family.rows[0]!.id, claims.rows[1]!.id],
-      )).rejects.toThrow(/AGENT_MEMORY_THREAD_SOURCE_REQUIRED/u);
+          [roots.rows[0]!.id, family.rows[0]!.id, claims.rows[1]!.id],
+        ),
+      ).rejects.toThrow(/AGENT_MEMORY_THREAD_SOURCE_REQUIRED/u);
 
       // Root plus one subthread is accepted; a grandchild is rejected by the hierarchy trigger.
       const child = await client.query<{ id: string }>(
@@ -137,12 +148,14 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
          VALUES ($1, 'family', $1, $2, $3, 'Марафон 2027', 'Подготовка к забегу') RETURNING id`,
         [family.rows[0]!.id, users.rows[0]!.id, roots.rows[0]!.id],
       );
-      await expect(client.query(
-        `INSERT INTO memory_threads
+      await expect(
+        client.query(
+          `INSERT INTO memory_threads
            (family_id, scope, scope_partition_key, subject_user_id, parent_thread_id, title, purpose)
          VALUES ($1, 'family', $1, $2, $3, 'Глубже', 'Запрещённый третий уровень')`,
-        [family.rows[0]!.id, users.rows[0]!.id, child.rows[0]!.id],
-      )).rejects.toThrow(/AGENT_MEMORY_THREAD_DEPTH_INVALID/u);
+          [family.rows[0]!.id, users.rows[0]!.id, child.rows[0]!.id],
+        ),
+      ).rejects.toThrow(/AGENT_MEMORY_THREAD_DEPTH_INVALID/u);
 
       // A cached brief is deleted and every linked thread generation advances in the same mutation.
       const brief = await client.query<{ id: string }>(
@@ -172,15 +185,20 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
         "SELECT id, generation FROM memory_threads WHERE id = ANY($1::uuid[]) ORDER BY id",
         [roots.rows.map((row) => row.id)],
       );
-      await client.query("UPDATE memory_items SET content = 'Тренироваться дважды в неделю' WHERE id = $1", [claims.rows[0]!.id]);
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows)
-        .toEqual([{ count: 0 }]);
+      await client.query(
+        "UPDATE memory_items SET content = 'Тренироваться дважды в неделю' WHERE id = $1",
+        [claims.rows[0]!.id],
+      );
+      expect(
+        (await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows,
+      ).toEqual([{ count: 0 }]);
       const generationsAfter = await client.query<{ generation: number; id: string }>(
         "SELECT id, generation FROM memory_threads WHERE id = ANY($1::uuid[]) ORDER BY id",
         [roots.rows.map((row) => row.id)],
       );
-      expect(generationsAfter.rows.map((row) => row.generation))
-        .toEqual(generationsBefore.rows.map((row) => row.generation + 1));
+      expect(generationsAfter.rows.map((row) => row.generation)).toEqual(
+        generationsBefore.rows.map((row) => row.generation + 1),
+      );
 
       // Relation, conflict, lifecycle, and deletion mutations share the same synchronous invalidation path.
       const cacheRootBrief = async (modelVersion: string) => {
@@ -204,10 +222,15 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
           [cached.rows[0]!.id, roots.rows[0]!.id, entry.rows[0]!.id],
         );
       };
-      const rootGeneration = async () => Number((await client.query<{ generation: number }>(
-        "SELECT generation FROM memory_threads WHERE id = $1",
-        [roots.rows[0]!.id],
-      )).rows[0]!.generation);
+      const rootGeneration = async () =>
+        Number(
+          (
+            await client.query<{ generation: number }>(
+              "SELECT generation FROM memory_threads WHERE id = $1",
+              [roots.rows[0]!.id],
+            )
+          ).rows[0]!.generation,
+        );
 
       await cacheRootBrief("model-relation");
       let previousGeneration = await rootGeneration();
@@ -219,8 +242,9 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
         [claims.rows[0]!.id, claims.rows[1]!.id, family.rows[0]!.id],
       );
       expect(await rootGeneration()).toBe(previousGeneration + 1);
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows)
-        .toEqual([{ count: 0 }]);
+      expect(
+        (await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows,
+      ).toEqual([{ count: 0 }]);
 
       await cacheRootBrief("model-conflict");
       previousGeneration = await rootGeneration();
@@ -232,8 +256,9 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
         [claims.rows[0]!.id, claims.rows[1]!.id, family.rows[0]!.id],
       );
       expect(await rootGeneration()).toBe(previousGeneration + 1);
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows)
-        .toEqual([{ count: 0 }]);
+      expect(
+        (await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows,
+      ).toEqual([{ count: 0 }]);
 
       await cacheRootBrief("model-lifecycle");
       previousGeneration = await rootGeneration();
@@ -243,16 +268,21 @@ describeWithDatabase("054 R6/R7 memory threads migration", () => {
         [claims.rows[0]!.id, claims.rows[1]!.id],
       );
       expect(await rootGeneration()).toBe(previousGeneration + 1);
-      expect((await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows)
-        .toEqual([{ count: 0 }]);
+      expect(
+        (await client.query("SELECT count(*)::integer AS count FROM memory_thread_briefs")).rows,
+      ).toEqual([{ count: 0 }]);
       previousGeneration = await rootGeneration();
       await client.query("DELETE FROM memory_items WHERE id = $1", [claims.rows[0]!.id]);
       // Deleting an already detached inactive claim must not invalidate the thread a second time.
       expect(await rootGeneration()).toBe(previousGeneration);
-      expect((await client.query(
-        "SELECT count(*)::integer AS count FROM memory_thread_entries WHERE thread_id = $1",
-        [roots.rows[0]!.id],
-      )).rows).toEqual([{ count: 0 }]);
+      expect(
+        (
+          await client.query(
+            "SELECT count(*)::integer AS count FROM memory_thread_entries WHERE thread_id = $1",
+            [roots.rows[0]!.id],
+          )
+        ).rows,
+      ).toEqual([{ count: 0 }]);
     } finally {
       try {
         await client.query("RESET search_path");

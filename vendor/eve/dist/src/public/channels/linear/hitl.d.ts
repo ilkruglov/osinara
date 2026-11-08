@@ -4,6 +4,6 @@ import type { JsonObject } from "#shared/json.js";
 export declare function renderLinearInputRequests(requests: readonly InputRequest[]): string;
 /** Builds native Linear select metadata for a single input request with options. */
 export declare function linearInputRequestSignal(requests: readonly InputRequest[]): {
-    readonly signal?: "select";
-    readonly signalMetadata?: JsonObject;
+  readonly signal?: "select";
+  readonly signalMetadata?: JsonObject;
 };

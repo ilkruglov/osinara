@@ -1,10 +1,7 @@
 import { select } from "../ask.js";
 import { z } from "#compiled/zod/index.js";
 import { DEFAULT_AGENT_MODEL_ID } from "#shared/default-agent-model.js";
-import {
-  AI_GATEWAY_MODELS_URL,
-  vercelGatewayFetch,
-} from "#internal/gateway.js";
+import { AI_GATEWAY_MODELS_URL, vercelGatewayFetch } from "#internal/gateway.js";
 const gatewayCatalogModelSchema = z.object({
     id: z.string(),
     name: z.string(),
@@ -29,22 +26,16 @@ const gatewayCatalogModelSchema = z.object({
       .optional()
       .catch(void 0),
   }),
-  gatewayCatalogSchema = z
-    .object({ data: z.array(z.unknown()) })
-    .transform(({ data: e }) =>
-      e.flatMap((e) => {
-        let t = gatewayCatalogModelSchema.safeParse(e);
-        return t.success ? [t.data] : [];
-      }),
-    );
+  gatewayCatalogSchema = z.object({ data: z.array(z.unknown()) }).transform(({ data: e }) =>
+    e.flatMap((e) => {
+      let t = gatewayCatalogModelSchema.safeParse(e);
+      return t.success ? [t.data] : [];
+    }),
+  );
 function modelOption(e, t, n, r = !0) {
   return { id: e, label: t, value: e, hint: n, featured: r || void 0 };
 }
-const FEATURED_MODEL_IDS = [
-    DEFAULT_AGENT_MODEL_ID,
-    `anthropic/claude-opus-4.8`,
-    `openai/gpt-5.5`,
-  ],
+const FEATURED_MODEL_IDS = [DEFAULT_AGENT_MODEL_ID, `anthropic/claude-opus-4.8`, `openai/gpt-5.5`],
   FALLBACK_MODELS = [
     modelOption(DEFAULT_AGENT_MODEL_ID, `GLM 5.2`, `Z.AI`),
     modelOption(`anthropic/claude-opus-4.8`, `Claude Opus 4.8`, `Anthropic`),
@@ -59,9 +50,7 @@ const FEATURED_MODEL_IDS = [
     moonshotai: `Moonshot AI`,
   };
 function providerLabel(e) {
-  return e.length === 0
-    ? ``
-    : (PROVIDER_BRANDS[e] ?? e.charAt(0).toUpperCase() + e.slice(1));
+  return e.length === 0 ? `` : (PROVIDER_BRANDS[e] ?? e.charAt(0).toUpperCase() + e.slice(1));
 }
 async function fetchGatewayCatalog(e) {
   let t = new AbortController(),
@@ -70,8 +59,7 @@ async function fetchGatewayCatalog(e) {
     let n = await vercelGatewayFetch(AI_GATEWAY_MODELS_URL, {
       signal: e === void 0 ? t.signal : AbortSignal.any([e, t.signal]),
     });
-    if (!n.ok)
-      throw Error(`AI Gateway model catalog request failed (${n.status}).`);
+    if (!n.ok) throw Error(`AI Gateway model catalog request failed (${n.status}).`);
     return parseGatewayCatalog(await n.json());
   } finally {
     clearTimeout(n);
@@ -92,8 +80,7 @@ function modelOptionsFromCatalog(e) {
     .filter(
       (e) =>
         e.type === `language` &&
-        (e.id === DEFAULT_AGENT_MODEL_ID ||
-          (e.tags ?? []).includes(`web-search`)),
+        (e.id === DEFAULT_AGENT_MODEL_ID || (e.tags ?? []).includes(`web-search`)),
     )
     .map((e) => {
       let t = e.id.split(`/`)[0] ?? ``;
@@ -164,9 +151,4 @@ function selectModel(t) {
     },
   };
 }
-export {
-  fetchGatewayCatalog,
-  modelOptionsFromCatalog,
-  parseGatewayCatalog,
-  selectModel,
-};
+export { fetchGatewayCatalog, modelOptionsFromCatalog, parseGatewayCatalog, selectModel };

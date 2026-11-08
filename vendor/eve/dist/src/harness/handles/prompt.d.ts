@@ -8,17 +8,20 @@ import type { AgentHandle, AgentHandleStore } from "#harness/handles/store.js";
 export declare const AGENTS_SNIPPET_LABEL = "[Agents]";
 /** Model-safe projection of one persistent task-mode agent. */
 export interface AgentView {
-    readonly availability: "available" | "busy";
-    readonly id: string;
-    readonly name: string;
-    readonly statusLine?: string;
-    readonly taskId?: string;
-    readonly taskStatus?: "working" | "input_required";
+  readonly availability: "available" | "busy";
+  readonly id: string;
+  readonly name: string;
+  readonly statusLine?: string;
+  readonly taskId?: string;
+  readonly taskStatus?: "working" | "input_required";
 }
 /** Returns the resumable handles: the only phase the model may continue. */
-export declare function projectParkedAgentHandles(store: AgentHandleStore): readonly Extract<AgentHandle, {
+export declare function projectParkedAgentHandles(store: AgentHandleStore): readonly Extract<
+  AgentHandle,
+  {
     phase: "parked";
-}>[];
+  }
+>[];
 /**
  * Renders the model-visible agent listing. Only parked handles appear:
  * starting and running children cannot accept a continuation, and private
@@ -46,7 +49,7 @@ export declare function renderAgentViewsSnippet(views: readonly AgentView[]): st
  * eve-injected so the model does not attribute it to the user.
  */
 export declare function resolveAgentsAnnouncement(input: {
-    readonly agentViews?: readonly AgentView[];
-    readonly messages: readonly ModelMessage[];
-    readonly store: AgentHandleStore | undefined;
+  readonly agentViews?: readonly AgentView[];
+  readonly messages: readonly ModelMessage[];
+  readonly store: AgentHandleStore | undefined;
 }): string | undefined;

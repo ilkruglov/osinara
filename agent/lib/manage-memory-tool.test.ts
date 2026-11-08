@@ -11,12 +11,7 @@ import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const {
-  canUndoMemory,
-  deleteMemoryByRef,
-  undoMemory,
-  updateMemoryByRef,
-} = vi.hoisted(() => ({
+const { canUndoMemory, deleteMemoryByRef, undoMemory, updateMemoryByRef } = vi.hoisted(() => ({
   canUndoMemory: vi.fn(),
   deleteMemoryByRef: vi.fn(),
   undoMemory: vi.fn(),
@@ -100,7 +95,9 @@ describe("manage_memory", () => {
 
   it("tells the model that edit is a complete integrity-preserving replacement", () => {
     expect(manageMemory.description).toContain("Edit передаёт полную новую версию");
-    expect(manageMemory.description).toContain("сохрани актуальные детали, даты, условия и ограничения");
+    expect(manageMemory.description).toContain(
+      "сохрани актуальные детали, даты, условия и ограничения",
+    );
     expect(manageMemory.description).toContain("не редактируй без содержательного улучшения");
     expect(manageMemory.description).toContain("Сначала прочитай точную активную запись");
   });
@@ -113,9 +110,10 @@ describe("manage_memory", () => {
   });
 
   it.each(["edit", "delete"] as const)("does not confirm %s with the user", async (action) => {
-    const input = action === "edit"
-      ? { action, content: "Исправлено", memoryRef: MEMORY_REF }
-      : { action, memoryRef: MEMORY_REF };
+    const input =
+      action === "edit"
+        ? { action, content: "Исправлено", memoryRef: MEMORY_REF }
+        : { action, memoryRef: MEMORY_REF };
 
     // Решение о фактах принимает агент; страховкой служит мягкое удаление, а не окно подтверждения.
     await expect(approvalFor(input)).resolves.toBe("not-applicable");
@@ -124,8 +122,9 @@ describe("manage_memory", () => {
   it("allows undo without HITL only when repository proves immediate provenance", async () => {
     canUndoMemory.mockResolvedValue(true);
 
-    await expect(approvalFor({ action: "undo", memoryRef: MEMORY_REF }))
-      .resolves.toBe("not-applicable");
+    await expect(approvalFor({ action: "undo", memoryRef: MEMORY_REF })).resolves.toBe(
+      "not-applicable",
+    );
     expect(canUndoMemory).toHaveBeenCalledWith(
       { familyId: "family-1", scopes: ["personal"] },
       MEMORY_REF,
@@ -136,8 +135,9 @@ describe("manage_memory", () => {
   it("explicitly denies undo when durable provenance is not proven", async () => {
     canUndoMemory.mockResolvedValue(false);
 
-    await expect(approvalFor({ action: "undo", memoryRef: MEMORY_REF }, "supergroup"))
-      .resolves.toMatchObject({
+    await expect(
+      approvalFor({ action: "undo", memoryRef: MEMORY_REF }, "supergroup"),
+    ).resolves.toMatchObject({
       type: "denied",
       reason: expect.stringMatching(/^AGENT_MEMORY_UNDO_DENIED:/u),
     });

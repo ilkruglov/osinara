@@ -41,14 +41,15 @@ export interface ProviderAdapterDependencies {
 
 /** Required fields remain nullable at the provider boundary and are copied only when proven. */
 function normalizeInstallerReadyModel(model: ProviderCatalogModel): NormalizedModel | null {
-  const complete = Number.isInteger(model.contextWindowTokens)
-    && model.contextWindowTokens !== null
-    && model.contextWindowTokens > 0
-    && Number.isInteger(model.maxOutputTokens)
-    && model.maxOutputTokens !== null
-    && model.maxOutputTokens > 0
-    && typeof model.supportsImageInput === "boolean"
-    && model.supportsTools === true;
+  const complete =
+    Number.isInteger(model.contextWindowTokens) &&
+    model.contextWindowTokens !== null &&
+    model.contextWindowTokens > 0 &&
+    Number.isInteger(model.maxOutputTokens) &&
+    model.maxOutputTokens !== null &&
+    model.maxOutputTokens > 0 &&
+    typeof model.supportsImageInput === "boolean" &&
+    model.supportsTools === true;
   if (!complete) return null;
 
   return {
@@ -89,33 +90,39 @@ export function createProviderAdapters(dependencies: ProviderAdapterDependencies
   const loadCatalog = dependencies.fetchProviderCatalog ?? fetchProviderCatalog;
   const runSmoke = dependencies.validateModelProviderSmoke ?? validateModelProviderSmoke;
 
-  const listModels: ListModels = async (provider, apiKey) => translateProviderError(
-    async () => {
-      const models = await loadCatalog({
-        apiKey,
-        fetch: dependencies.fetch,
-        providerId: provider,
-        timeoutMs: dependencies.catalogTimeoutMs,
-      });
-      return models.flatMap((model) => {
-        const normalized = normalizeInstallerReadyModel(model);
-        return normalized ? [normalized] : [];
-      });
-    },
-    {
-      code: "OSINARA_INSTALL_MODEL_CATALOG_FAILED",
-      message: "Не удалось загрузить каталог моделей. Проверьте сеть и API-ключ поставщика",
-    },
-  );
+  const listModels: ListModels = async (provider, apiKey) =>
+    translateProviderError(
+      async () => {
+        const models = await loadCatalog({
+          apiKey,
+          fetch: dependencies.fetch,
+          providerId: provider,
+          timeoutMs: dependencies.catalogTimeoutMs,
+        });
+        return models.flatMap((model) => {
+          const normalized = normalizeInstallerReadyModel(model);
+          return normalized ? [normalized] : [];
+        });
+      },
+      {
+        code: "OSINARA_INSTALL_MODEL_CATALOG_FAILED",
+        message: "Не удалось загрузить каталог моделей. Проверьте сеть и API-ключ поставщика",
+      },
+    );
 
   const validateModel: ValidateModel = async (provider, apiKey, model, reasoning) => {
     await translateProviderError(
       async () => {
         // Voice is chosen after model validation, so the smoke config intentionally disables it.
-        const config = buildModelProviderConfig(provider, {
-          ...model,
-          reasoningOptions: [...model.reasoningOptions],
-        }, reasoning, false);
+        const config = buildModelProviderConfig(
+          provider,
+          {
+            ...model,
+            reasoningOptions: [...model.reasoningOptions],
+          },
+          reasoning,
+          false,
+        );
         await runSmoke({
           apiKey,
           config,
@@ -125,7 +132,8 @@ export function createProviderAdapters(dependencies: ProviderAdapterDependencies
       },
       {
         code: "OSINARA_INSTALL_MODEL_SMOKE_FAILED",
-        message: "Не удалось проверить выбранную модель. Проверьте сеть, API-ключ и доступ к модели",
+        message:
+          "Не удалось проверить выбранную модель. Проверьте сеть, API-ключ и доступ к модели",
       },
     );
   };

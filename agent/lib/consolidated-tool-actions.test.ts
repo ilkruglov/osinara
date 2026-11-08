@@ -54,8 +54,9 @@ describe("consolidated tool action schemas", () => {
   it("accepts every memory mutation shape through the model-facing schema", () => {
     const schema = schemaOf(manageMemory);
 
-    expect(schema.safeParse({ action: "edit", content: "Исправлено", memoryRef: MEMORY_REF }).success)
-      .toBe(true);
+    expect(
+      schema.safeParse({ action: "edit", content: "Исправлено", memoryRef: MEMORY_REF }).success,
+    ).toBe(true);
     expect(schema.safeParse({ action: "delete", memoryRef: MEMORY_REF }).success).toBe(true);
     expect(schema.safeParse({ action: "undo", memoryRef: MEMORY_REF }).success).toBe(true);
     expect(schema.safeParse({ action: "edit", memoryRef: MEMORY_REF }).success).toBe(true);
@@ -64,43 +65,51 @@ describe("consolidated tool action schemas", () => {
   it("accepts explicit reminder mutation shapes through the model-facing schema", () => {
     const schema = schemaOf(manageReminder);
 
-    expect(schema.safeParse({
-      action: "create",
-      content: "Позвонить",
-      firstRunAt: "2026-08-01T10:00:00+03:00",
-      recurrence: null,
-      scope: "personal",
-      timezone: "Europe/Moscow",
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        action: "create",
+        content: "Позвонить",
+        firstRunAt: "2026-08-01T10:00:00+03:00",
+        recurrence: null,
+        scope: "personal",
+        timezone: "Europe/Moscow",
+      }).success,
+    ).toBe(true);
     expect(schema.safeParse({ action: "pause", id: ID }).success).toBe(true);
     expect(schema.safeParse({ action: "resume", id: ID }).success).toBe(true);
     expect(schema.safeParse({ action: "delete", id: ID }).success).toBe(true);
     expect(schema.safeParse({ action: "toggle", id: ID }).success).toBe(false);
     expect(schema.safeParse({ id: ID }).success).toBe(false);
     expect(schema.safeParse({ action: "update", id: ID, recurrence: null }).success).toBe(true);
-    expect(schema.safeParse({
-      action: "update",
-      id: ID,
-      recurrence: { interval: 1, unit: "daily" },
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        action: "update",
+        id: ID,
+        recurrence: { interval: 1, unit: "daily" },
+      }).success,
+    ).toBe(true);
     expect(schema.safeParse({ action: "update", id: ID, recurrence: {} }).success).toBe(false);
-    expect(schema.safeParse({
-      action: "update",
-      id: ID,
-      recurrence: { interval: 1 },
-    }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        action: "update",
+        id: ID,
+        recurrence: { interval: 1 },
+      }).success,
+    ).toBe(false);
   });
 
   it("publishes the complete external-group policy update fields in the model-facing schema", () => {
     const schema = schemaOf(manageTelegramGroup);
     const jsonSchema = jsonSchemaOf(manageTelegramGroup);
 
-    expect(schema.safeParse({
-      action: "update_policy",
-      messageMode: "all",
-      telegramChatId: "-1001234567890",
-      toolAllowlist: ["search_memories"],
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        action: "update_policy",
+        messageMode: "all",
+        telegramChatId: "-1001234567890",
+        toolAllowlist: ["search_memories"],
+      }).success,
+    ).toBe(true);
     const properties = jsonSchema.properties as Record<string, { description?: string }>;
     expect(properties.action?.description).toContain("Сначала выберите ровно один action");
     expect(properties.action?.description).not.toContain("update_skills");
@@ -116,47 +125,57 @@ describe("consolidated tool action schemas", () => {
 
     expect(jsonSchema).toMatchObject({ type: "object" });
     expect(jsonSchema).not.toHaveProperty("oneOf");
-    expect(schema.safeParse({
-      action: "create",
-      firstRunAt: "2026-07-15T23:33:00+03:00",
-      recurrence: { interval: 1, kind: "daily" },
-      scenarioPrompt: "Собери сводку по новым моделям ИИ.",
-      scope: "personal",
-      timezone: "Europe/Moscow",
-      title: "Дайджест: новые модели ИИ",
-      userRequest: "ежедневно в 23:33 МСК получать сводку про новые модели ИИ",
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        action: "create",
+        firstRunAt: "2026-07-15T23:33:00+03:00",
+        recurrence: { interval: 1, kind: "daily" },
+        scenarioPrompt: "Собери сводку по новым моделям ИИ.",
+        scope: "personal",
+        timezone: "Europe/Moscow",
+        title: "Дайджест: новые модели ИИ",
+        userRequest: "ежедневно в 23:33 МСК получать сводку про новые модели ИИ",
+      }).success,
+    ).toBe(true);
   });
 
   it("separates notification reads from approved writes", () => {
     const schema = schemaOf(notificationSettings);
 
     expect(schema.safeParse({ action: "get" }).success).toBe(true);
-    expect(schema.safeParse({
-      action: "set",
-      quietEnd: "08:00",
-      quietStart: "22:00",
-      timezone: "Europe/Moscow",
-    }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        action: "set",
+        quietEnd: "08:00",
+        quietStart: "22:00",
+        timezone: "Europe/Moscow",
+      }).success,
+    ).toBe(true);
     expect(schema.safeParse({ action: "set", timezone: "Europe/Moscow" }).success).toBe(true);
   });
 
   it("accepts behavior, invitation, and group management actions", () => {
-    expect(schemaOf(manageBehaviorPreference).safeParse({
-      action: "replace",
-      content: "Отвечай без шуток.",
-      expectedRevision: 0,
-    }).success).toBe(true);
+    expect(
+      schemaOf(manageBehaviorPreference).safeParse({
+        action: "replace",
+        content: "Отвечай без шуток.",
+        expectedRevision: 0,
+      }).success,
+    ).toBe(true);
     expect(schemaOf(manageFamilyInvitation).safeParse({ action: "create" }).success).toBe(true);
-    expect(schemaOf(manageFamilyInvitation).safeParse({
-      action: "approve",
-      candidateDisplayName: "Анна",
-      candidateTelegramUserId: "123",
-      invitationId: ID,
-    }).success).toBe(true);
-    expect(schemaOf(manageTelegramGroup).safeParse({
-      action: "remove",
-      telegramChatId: "-1001234567890",
-    }).success).toBe(true);
+    expect(
+      schemaOf(manageFamilyInvitation).safeParse({
+        action: "approve",
+        candidateDisplayName: "Анна",
+        candidateTelegramUserId: "123",
+        invitationId: ID,
+      }).success,
+    ).toBe(true);
+    expect(
+      schemaOf(manageTelegramGroup).safeParse({
+        action: "remove",
+        telegramChatId: "-1001234567890",
+      }).success,
+    ).toBe(true);
   });
 });

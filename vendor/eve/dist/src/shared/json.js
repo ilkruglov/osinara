@@ -1,26 +1,22 @@
 const INVALID_JSON_VALUE_CANDIDATE = Symbol(`invalid-json-value-candidate`);
 function parseJsonValue(t) {
   let n = normalizeJsonValueCandidate(t);
-  if (n === INVALID_JSON_VALUE_CANDIDATE)
-    throw TypeError(`Expected a JSON-serializable value.`);
+  if (n === INVALID_JSON_VALUE_CANDIDATE) throw TypeError(`Expected a JSON-serializable value.`);
   return n;
 }
 function parseJsonObject(e) {
   let t = parseJsonValue(e);
-  if (!isJsonObjectValue(t))
-    throw TypeError(`Expected a JSON-serializable object.`);
+  if (!isJsonObjectValue(t)) throw TypeError(`Expected a JSON-serializable object.`);
   return t;
 }
 function normalizeJsonValueCandidate(t, n = new WeakSet()) {
   if (t === null || typeof t == `boolean` || typeof t == `string`) return t;
-  if (typeof t == `number`)
-    return Number.isFinite(t) ? t : INVALID_JSON_VALUE_CANDIDATE;
+  if (typeof t == `number`) return Number.isFinite(t) ? t : INVALID_JSON_VALUE_CANDIDATE;
   if (Array.isArray(t)) {
     let r = [];
     for (let i of t) {
       let t = normalizeJsonValueCandidate(i, n);
-      if (t === INVALID_JSON_VALUE_CANDIDATE)
-        return INVALID_JSON_VALUE_CANDIDATE;
+      if (t === INVALID_JSON_VALUE_CANDIDATE) return INVALID_JSON_VALUE_CANDIDATE;
       r.push(t);
     }
     return r;

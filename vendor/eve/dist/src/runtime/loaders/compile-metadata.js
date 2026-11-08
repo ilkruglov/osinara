@@ -1,14 +1,9 @@
 import { z } from "#compiled/zod/index.js";
-import {
-  COMPILE_METADATA_KIND,
-  COMPILE_METADATA_VERSION,
-} from "#compiler/artifacts.js";
+import { COMPILE_METADATA_KIND, COMPILE_METADATA_VERSION } from "#compiler/artifacts.js";
 import { formatValidationError } from "#runtime/validation.js";
 import { readBundledCompiledArtifacts } from "#runtime/loaders/bundled-artifacts.js";
 import { resolveRuntimeCompilerArtifactPaths } from "#runtime/loaders/artifact-paths.js";
-const compileArtifactDigestSchema = z
-    .object({ path: z.string(), sha256: z.string() })
-    .strict(),
+const compileArtifactDigestSchema = z.object({ path: z.string(), sha256: z.string() }).strict(),
   compileMetadataSchema = z
     .object({
       compile: z.object({ moduleMap: compileArtifactDigestSchema }).strict(),
@@ -34,16 +29,13 @@ const compileArtifactDigestSchema = z
 var LoadCompileMetadataError = class extends Error {
   metadataPath;
   constructor(e, t) {
-    (super(e),
-      (this.name = `LoadCompileMetadataError`),
-      t !== void 0 && (this.metadataPath = t));
+    (super(e), (this.name = `LoadCompileMetadataError`), t !== void 0 && (this.metadataPath = t));
   }
 };
 async function loadCompileMetadata(e) {
   let t =
     e.compiledArtifactsSource.kind === `disk`
-      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot)
-          .compileMetadataPath
+      ? resolveRuntimeCompilerArtifactPaths(e.compiledArtifactsSource.appRoot).compileMetadataPath
       : void 0;
   if (t !== void 0) {
     let { readFile: e } = await import(`node:fs/promises`),
@@ -56,9 +48,7 @@ async function loadCompileMetadata(e) {
     return parseCompileMetadata(n, t);
   }
   let n = readBundledCompiledArtifacts()?.metadata;
-  return n === void 0
-    ? null
-    : parseCompileMetadata(n, `bundled compile metadata`);
+  return n === void 0 ? null : parseCompileMetadata(n, `bundled compile metadata`);
 }
 function parseCompileMetadata(e, t) {
   let n = compileMetadataSchema.safeParse(e);
@@ -70,8 +60,6 @@ function parseCompileMetadata(e, t) {
   return n.data;
 }
 function formatLoadErrorMessage(e) {
-  return e instanceof Error
-    ? e.message
-    : `Unknown compile metadata load failure.`;
+  return e instanceof Error ? e.message : `Unknown compile metadata load failure.`;
 }
 export { loadCompileMetadata };

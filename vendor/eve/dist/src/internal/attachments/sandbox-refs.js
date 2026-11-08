@@ -25,9 +25,7 @@ function encodeSandboxRef(t) {
 function decodeSandboxRef(t) {
   let n = t instanceof URL ? t : new URL(t);
   if (n.protocol !== `eve-sandbox:`)
-    throw Error(
-      `SandboxRef URL must use scheme "${SANDBOX_URL_SCHEME}". Got: "${n.protocol}".`,
-    );
+    throw Error(`SandboxRef URL must use scheme "${SANDBOX_URL_SCHEME}". Got: "${n.protocol}".`);
   let r = n.searchParams.get(PATH_QUERY_KEY);
   if (r === null || r === ``)
     throw Error(`SandboxRef URL is missing the required "path" query param.`);
@@ -36,9 +34,7 @@ function decodeSandboxRef(t) {
     throw Error(`SandboxRef URL is missing the required "size" query param.`);
   let a = Number(i);
   if (!isValidSize(a))
-    throw Error(
-      `SandboxRef URL "size" must be a non-negative integer. Got: ${JSON.stringify(i)}.`,
-    );
+    throw Error(`SandboxRef URL "size" must be a non-negative integer. Got: ${JSON.stringify(i)}.`);
   let o = n.searchParams.get(TYPE_QUERY_KEY);
   if (o === null || o === ``)
     throw Error(`SandboxRef URL is missing the required "type" query param.`);
@@ -47,9 +43,4 @@ function decodeSandboxRef(t) {
 function isSandboxRefUrl(e) {
   return e instanceof URL && e.protocol === `eve-sandbox:`;
 }
-export {
-  SANDBOX_URL_SCHEME,
-  decodeSandboxRef,
-  encodeSandboxRef,
-  isSandboxRefUrl,
-};
+export { SANDBOX_URL_SCHEME, decodeSandboxRef, encodeSandboxRef, isSandboxRefUrl };

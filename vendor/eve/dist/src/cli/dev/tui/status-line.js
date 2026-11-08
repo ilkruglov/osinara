@@ -1,9 +1,5 @@
 import { remoteHost } from "./target.js";
-import {
-  clipVisible,
-  stripAnsi,
-  visibleLength,
-} from "#cli/ui/terminal-text.js";
+import { clipVisible, stripAnsi, visibleLength } from "#cli/ui/terminal-text.js";
 import { formatModelSummary } from "#shared/model-summary.js";
 function renderModel(e) {
   if (e.model === void 0) return;
@@ -32,9 +28,7 @@ function renderEndpoint(e) {
     n = e.theme.glyph,
     clause = (e, n) => `${t.dim(`via `)}${e}${t.dim(n)}`;
   if (e.endpoint.kind === `external`) {
-    let r =
-      EXTERNAL_PROVIDER_DISPLAY_NAMES[e.endpoint.provider] ??
-      e.endpoint.provider;
+    let r = EXTERNAL_PROVIDER_DISPLAY_NAMES[e.endpoint.provider] ?? e.endpoint.provider;
     return { text: `${t.dim(`via ${r}`)}${n.external}`, standalone: !1 };
   }
   if (e.endpoint.kind === `chatgpt`)
@@ -58,8 +52,7 @@ function renderEndpoint(e) {
           standalone: !0,
         };
     }
-  if (!e.endpoint.connected)
-    return { text: t.yellow(`${n.warning} ai-gateway`), standalone: !0 };
+  if (!e.endpoint.connected) return { text: t.yellow(`${n.warning} ai-gateway`), standalone: !0 };
   if (e.endpoint.credential === `api-key`)
     return { text: clause(`ai-gateway`, `(api-key)`), standalone: !1 };
   let r = e.vercel?.identity?.projectName;
@@ -107,11 +100,7 @@ function formatRemoteStatus(t, n) {
       t.deployment === void 0
         ? remoteHost(t.target)
         : `${t.deployment.projectName} (${t.deployment.environment})`,
-    a = formatRemoteBadge(
-      ` ${n.unicode ? `↗` : `->`} ${i} `,
-      t.connection.state,
-      n,
-    ),
+    a = formatRemoteBadge(` ${n.unicode ? `↗` : `->`} ${i} `, t.connection.state, n),
     o;
   switch (t.connection.state) {
     case `checking`:

@@ -18,17 +18,14 @@ function toError(t) {
   return isObject(t)
     ? (typeof t.name == `string` && t.name.length > 0 && (n.name = t.name),
       typeof t.stack == `string` && t.stack.length > 0 && (n.stack = t.stack),
-      `cause` in t &&
-        t.cause !== void 0 &&
-        t.cause !== t &&
-        (n.cause = t.cause),
+      `cause` in t && t.cause !== void 0 && t.cause !== t && (n.cause = t.cause),
       n)
     : n;
 }
 function* walkCauseChain(t) {
   let n = new Set(),
     r = t;
-  for (; isObject(r) && !n.has(r); ) (n.add(r), yield r, (r = r.cause));
+  for (; isObject(r) && !n.has(r);) (n.add(r), yield r, (r = r.cause));
 }
 function safeJsonStringify(e) {
   try {

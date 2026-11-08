@@ -28,12 +28,9 @@ function removeScheduleTaskHandlers(e) {
   for (let n of Object.keys(e.options.tasks))
     n.startsWith(EVE_SCHEDULE_TASK_NAME_PREFIX) && delete e.options.tasks[n];
   for (let t of Object.keys(e.options.virtual))
-    t.startsWith(EVE_SCHEDULE_TASK_VIRTUAL_ID_PREFIX) &&
-      delete e.options.virtual[t];
+    t.startsWith(EVE_SCHEDULE_TASK_VIRTUAL_ID_PREFIX) && delete e.options.virtual[t];
   for (let [n, r] of Object.entries(e.options.scheduledTasks)) {
-    let i = normalizeScheduledTasks(r).filter(
-      (e) => !e.startsWith(EVE_SCHEDULE_TASK_NAME_PREFIX),
-    );
+    let i = normalizeScheduledTasks(r).filter((e) => !e.startsWith(EVE_SCHEDULE_TASK_NAME_PREFIX));
     if (i.length === 0) {
       delete e.options.scheduledTasks[n];
       continue;
@@ -100,8 +97,4 @@ function areScheduleRegistrationsEqual(e, t) {
   }
   return !0;
 }
-export {
-  registerScheduleTaskHandlers,
-  removeScheduleTaskHandlers,
-  syncScheduleTaskHandlers,
-};
+export { registerScheduleTaskHandlers, removeScheduleTaskHandlers, syncScheduleTaskHandlers };

@@ -7,10 +7,7 @@ import {
   getTurnUsageState,
   setTurnUsageState,
 } from "#harness/turn-tag-state.js";
-import {
-  findRunningAgentHandle,
-  isResultBoundToRunningHandle,
-} from "#harness/handles/query.js";
+import { findRunningAgentHandle, isResultBoundToRunningHandle } from "#harness/handles/query.js";
 import { getRuntimeActionRequestKey } from "#runtime/actions/keys.js";
 import { resolveRuntimeActionResultsForKeys } from "#runtime/actions/results.js";
 const PENDING_RUNTIME_ACTION_BATCH_KEY = `eve.runtime.pendingActionBatch`;
@@ -21,14 +18,12 @@ function getPendingRuntimeActionBatch(e) {
   let t = e?.[PENDING_RUNTIME_ACTION_BATCH_KEY];
   if (typeof t != `object` || !t) return;
   let n = t;
-  if (
-    !(
-      !Array.isArray(n.actions) ||
-      !Array.isArray(n.responseMessages) ||
-      typeof n.event != `object` ||
-      n.event === null
-    )
-  )
+  if (!(
+    !Array.isArray(n.actions) ||
+    !Array.isArray(n.responseMessages) ||
+    typeof n.event != `object` ||
+    n.event === null
+  ))
     return n;
 }
 function hasPendingRuntimeActionBatch(e) {
@@ -58,9 +53,7 @@ function assertUniqueRuntimeActionCallIds(e) {
   let t = new Set();
   for (let n of e) {
     if (t.has(n.callId))
-      throw Error(
-        `Runtime action batch contains duplicate callId "${n.callId}".`,
-      );
+      throw Error(`Runtime action batch contains duplicate callId "${n.callId}".`);
     t.add(n.callId);
   }
 }
@@ -103,8 +96,7 @@ async function resolvePendingRuntimeActions(t) {
         let e = readBackgroundTaskReceipt(n),
           r = {
             callId: n.callId,
-            output:
-              typeof n.output == `string` ? n.output : JSON.stringify(n.output),
+            output: typeof n.output == `string` ? n.output : JSON.stringify(n.output),
             subagentName: n.subagentName,
           };
         await t.emit({
@@ -242,10 +234,9 @@ function resolveToolCallInputObject(e, n) {
     return parseJsonObject(typeof e == `string` ? parseJsonStringInput(e) : e);
   } catch (e) {
     let t = e instanceof Error ? e.message : String(e);
-    throw TypeError(
-      `Failed to parse tool-call arguments for "${n.toolName}" (${n.callId}): ${t}`,
-      { cause: e },
-    );
+    throw TypeError(`Failed to parse tool-call arguments for "${n.toolName}" (${n.callId}): ${t}`, {
+      cause: e,
+    });
   }
 }
 function parseJsonStringInput(e) {
@@ -261,13 +252,7 @@ function toToolResultOutput(e) {
       : { type: `json`, value: toMutableJsonValue(e.output) };
 }
 function toMutableJsonValue(e) {
-  if (
-    e === null ||
-    typeof e == `string` ||
-    typeof e == `number` ||
-    typeof e == `boolean`
-  )
-    return e;
+  if (e === null || typeof e == `string` || typeof e == `number` || typeof e == `boolean`) return e;
   if (Array.isArray(e)) return e.map((e) => toMutableJsonValue(e));
   let t = {};
   for (let [n, r] of Object.entries(e)) t[n] = toMutableJsonValue(r);

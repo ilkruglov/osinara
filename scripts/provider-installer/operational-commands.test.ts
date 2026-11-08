@@ -24,11 +24,11 @@ describe("createOperationalCommands", () => {
   it("returns secret-free status", async () => {
     const ops = operations();
     ops.status.mockResolvedValue({
-        address: "https://bot.example.com",
-        healthy: true,
-        model: "deepseek-reasoner",
-        provider: "deepseek",
-        version: "0.15.3",
+      address: "https://bot.example.com",
+      healthy: true,
+      model: "deepseek-reasoner",
+      provider: "deepseek",
+      version: "0.15.3",
     });
     const commands = createOperationalCommands(ops);
 
@@ -40,7 +40,9 @@ describe("createOperationalCommands", () => {
     const commands = createOperationalCommands(ops);
 
     await expect(commands.logs([])).rejects.toMatchObject({ code: "OSINARA_CLI_ARGUMENT_INVALID" });
-    await expect(commands.logs(["201"])).rejects.toMatchObject({ code: "OSINARA_CLI_ARGUMENT_INVALID" });
+    await expect(commands.logs(["201"])).rejects.toMatchObject({
+      code: "OSINARA_CLI_ARGUMENT_INVALID",
+    });
     await commands.logs(["100"]);
     expect(ops.logs).toHaveBeenCalledWith(100);
   });

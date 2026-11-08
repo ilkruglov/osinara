@@ -10,17 +10,14 @@ var ClientError = class extends Error {
     try {
       let e = JSON.parse(t);
       isObject(e) &&
-        (typeof e.error == `string` && (r = e.error),
-        typeof e.code == `string` && (i = e.code));
+        (typeof e.error == `string` && (r = e.error), typeof e.code == `string` && (i = e.code));
     } catch {}
     (super(r),
       (this.name = `ClientError`),
       (this.code = i),
       (this.status = e),
       (this.body = t),
-      (this.headers = Object.freeze(
-        Object.fromEntries(new Headers(n).entries()),
-      )));
+      (this.headers = Object.freeze(Object.fromEntries(new Headers(n).entries()))));
   }
 };
 export { ClientError };

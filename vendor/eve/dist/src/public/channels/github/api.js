@@ -27,8 +27,7 @@ async function callGitHubApi(e) {
     i &&
       (a.authorization = `Bearer ${await resolveGitHubInstallationToken({ api: e.api, credentials: e.credentials, installationId: e.options?.installationId ?? e.installationId })}`));
   let o = await r(`${e.api?.apiBaseUrl ?? `https://api.github.com`}${e.path}`, {
-      body:
-        e.body === void 0 ? void 0 : JSON.stringify(parseJsonObject(e.body)),
+      body: e.body === void 0 ? void 0 : JSON.stringify(parseJsonObject(e.body)),
       headers: a,
       method: e.method,
     }),
@@ -184,8 +183,7 @@ async function getGitHubRepository(t) {
     r = isObject(n.body) ? n.body : {},
     i = typeof r.id == `number` ? r.id : 0;
   return {
-    defaultBranch:
-      typeof r.default_branch == `string` ? r.default_branch : void 0,
+    defaultBranch: typeof r.default_branch == `string` ? r.default_branch : void 0,
     id: i,
   };
 }
@@ -226,10 +224,7 @@ function toPullRequestDetails(t) {
     draft: n.draft === !0,
     head: toPullRequestRefDetails(n.head),
     htmlUrl: typeof n.html_url == `string` ? n.html_url : void 0,
-    mergeable:
-      typeof n.mergeable == `boolean` || n.mergeable === null
-        ? n.mergeable
-        : void 0,
+    mergeable: typeof n.mergeable == `boolean` || n.mergeable === null ? n.mergeable : void 0,
     number: typeof n.number == `number` ? n.number : 0,
     raw: t,
     state: typeof n.state == `string` ? n.state : void 0,

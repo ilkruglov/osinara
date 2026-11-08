@@ -32,8 +32,8 @@ export declare function formatConnectionDisplayName(connectionName: string): str
  * "Connect with" call-to-action since there's no one to act on it.
  */
 export declare function buildAuthRequiredPublicText(input: {
-    readonly displayName: string;
-    readonly hasUser: boolean;
+  readonly displayName: string;
+  readonly hasUser: boolean;
 }): string;
 /**
  * Final-state markdown for the public status message. Edited in place by
@@ -41,9 +41,9 @@ export declare function buildAuthRequiredPublicText(input: {
  * scrolling.
  */
 export declare function buildAuthCompletedText(input: {
-    readonly displayName: string;
-    readonly outcome: ConnectionAuthorizationOutcome;
-    readonly reason?: string;
+  readonly displayName: string;
+  readonly outcome: ConnectionAuthorizationOutcome;
+  readonly reason?: string;
 }): string;
 /**
  * Block Kit blocks for the ephemeral "Sign in with X" link button.
@@ -53,7 +53,7 @@ export declare function buildAuthCompletedText(input: {
  * helper returns blocks directly.
  */
 export declare function buildAuthEphemeralBlocks(input: {
-    readonly displayName: string;
-    readonly url: string;
-    readonly userCode?: string;
+  readonly displayName: string;
+  readonly url: string;
+  readonly userCode?: string;
 }): unknown[];

@@ -14,11 +14,20 @@ import { codeText } from "./vendored-code.js";
 
 describe("Workflow Postgres settings", () => {
   it("reads the pool cap and the worker count through the strict reader only", async () => {
-    const code = codeText(await readFile(new URL("../../vendor/workflow-world-postgres/dist/index.js", import.meta.url), "utf8"));
+    const code = codeText(
+      await readFile(
+        new URL("../../vendor/workflow-world-postgres/dist/index.js", import.meta.url),
+        "utf8",
+      ),
+    );
 
-    expect(code).toContain(codeText('import { workflowPostgresSettings } from "./osinara-workflow-settings.js";'));
+    expect(code).toContain(
+      codeText('import { workflowPostgresSettings } from "./osinara-workflow-settings.js";'),
+    );
     expect(code).toContain(codeText("return workflowPostgresSettings().maxPoolSize;"));
-    expect(code).toContain(codeText("queueConcurrency: workflowPostgresSettings().queueConcurrency,"));
+    expect(code).toContain(
+      codeText("queueConcurrency: workflowPostgresSettings().queueConcurrency,"),
+    );
     expect(code).not.toContain("parseInt(");
   });
 });

@@ -28,7 +28,7 @@ async function requireCurrentOwner(client: PoolClient, auth: MemoryAuthorization
       "Изменять проекцию профиля может только владелец семьи",
     );
   }
-  if (!await lockCurrentOwner(client, auth.familyId, auth.userId)) {
+  if (!(await lockCurrentOwner(client, auth.familyId, auth.userId))) {
     throw new AppError(
       "AGENT_PROFILE_PROJECTION_OWNER_REQUIRED",
       "Права владельца больше не действуют. Обновите чат и повторите действие",
@@ -113,11 +113,13 @@ export const profileProjectionPolicyRepository = {
       );
       await client.query("COMMIT");
       const row = result.rows[0];
-      return row ? {
-        deliveryToken: row.delivery_token,
-        noticeRef: row.notice_ref,
-        text: row.notice_text,
-      } : null;
+      return row
+        ? {
+            deliveryToken: row.delivery_token,
+            noticeRef: row.notice_ref,
+            text: row.notice_text,
+          }
+        : null;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -251,15 +253,28 @@ export const profileProjectionPolicyRepository = {
           `INSERT INTO external_profile_projection_notices
              (group_id, family_id, policy_version, enabled, notice_text, created_by_user_id)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [policy.group_id, auth.familyId, policyVersion, input.enabled,
-            policyNotice(input.enabled), auth.userId],
+          [
+            policy.group_id,
+            auth.familyId,
+            policyVersion,
+            input.enabled,
+            policyNotice(input.enabled),
+            auth.userId,
+          ],
         );
       }
       await client.query(
         `INSERT INTO external_profile_projection_policy_operations
            (family_id, operation_key, input_hash, group_id, policy_version, enabled)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [auth.familyId, input.operationKey, inputHash, policy.group_id, policyVersion, input.enabled],
+        [
+          auth.familyId,
+          input.operationKey,
+          inputHash,
+          policy.group_id,
+          policyVersion,
+          input.enabled,
+        ],
       );
       if (changed) {
         await client.query(

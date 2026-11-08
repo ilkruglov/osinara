@@ -30,10 +30,12 @@ export declare function isVercelAuthChallenge(error: unknown): boolean;
  * challenge surface, including a structured local OIDC failure when known.
  */
 export declare function formatVercelAuthChallengeMessage(input: {
-    readonly serverUrl: string;
-    readonly oidcTokenFailure?: DevelopmentOidcTokenFailure;
+  readonly serverUrl: string;
+  readonly oidcTokenFailure?: DevelopmentOidcTokenFailure;
 }): string;
-export declare function formatDevelopmentOidcTokenFailure(failure: DevelopmentOidcTokenFailure): string;
+export declare function formatDevelopmentOidcTokenFailure(
+  failure: DevelopmentOidcTokenFailure,
+): string;
 /**
  * Keeps the actionable Trusted Sources reason and stable error code while
  * dropping Vercel's per-request id. The id is useful in platform logs but is

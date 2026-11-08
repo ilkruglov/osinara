@@ -13,8 +13,7 @@ function defaultTelegramAuth(e) {
     user_id: t.id,
   };
   (e.chat.title !== void 0 && (n.chat_title = e.chat.title),
-    e.messageThreadId !== void 0 &&
-      (n.message_thread_id = String(e.messageThreadId)),
+    e.messageThreadId !== void 0 && (n.message_thread_id = String(e.messageThreadId)),
     t.username !== void 0 && (n.username = t.username));
   let r = e.chat.type === `group` || e.chat.type === `supergroup`,
     i = r ? `telegram:${e.chat.id}:${t.id}` : `telegram:${t.id}`;
@@ -57,9 +56,7 @@ const defaultEvents = {
     }
   },
   async "message.completed"(e, t, n) {
-    e.finishReason === `tool-calls` ||
-      !e.message ||
-      (await t.telegram.post(e.message));
+    e.finishReason === `tool-calls` || !e.message || (await t.telegram.post(e.message));
   },
   async "turn.failed"(n, r, i) {
     let a = formatErrorHint(n),
@@ -101,10 +98,7 @@ function shouldDispatchTelegramMessage(e, t) {
     : !1;
 }
 function isBotCommand(e, t) {
-  let n =
-    /^\/(?<command>[A-Za-z0-9_]+)(?:@(?<target>[A-Za-z0-9_]+))?(?:\s|$)/u.exec(
-      e,
-    );
+  let n = /^\/(?<command>[A-Za-z0-9_]+)(?:@(?<target>[A-Za-z0-9_]+))?(?:\s|$)/u.exec(e);
   if (!n) return !1;
   let r = n.groups?.target;
   return r === void 0 || (t !== void 0 && r.toLowerCase() === t.toLowerCase());

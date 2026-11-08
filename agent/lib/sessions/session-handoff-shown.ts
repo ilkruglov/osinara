@@ -24,16 +24,23 @@ export const SESSION_HANDOFF_CARRIED_VALUE = "true";
 
 export async function markSessionHandoffShown(
   ctx: Pick<SessionContext, "session">,
-  markShown: (applicationSessionId: string) => Promise<void> = (id) => sessionHandoffRepository.markShown(id),
+  markShown: (applicationSessionId: string) => Promise<void> = (id) =>
+    sessionHandoffRepository.markShown(id),
 ): Promise<void> {
-  if (ctx.session.auth.current?.attributes[SESSION_HANDOFF_CARRIED_ATTRIBUTE] !== SESSION_HANDOFF_CARRIED_VALUE) return;
+  if (
+    ctx.session.auth.current?.attributes[SESSION_HANDOFF_CARRIED_ATTRIBUTE] !==
+    SESSION_HANDOFF_CARRIED_VALUE
+  )
+    return;
   try {
     await markShown(applicationSessionId(ctx));
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_SESSION_HANDOFF_MARK_FAILED",
-      error: isAppError(error) ? error.code : error instanceof Error ? error.name : "unknown",
-      eveSessionId: ctx.session.id,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_SESSION_HANDOFF_MARK_FAILED",
+        error: isAppError(error) ? error.code : error instanceof Error ? error.name : "unknown",
+        eveSessionId: ctx.session.id,
+      }),
+    );
   }
 }

@@ -8,4 +8,6 @@ export declare function appendPackageUserAgent(headers: Headers): Headers;
  * an explicit `inner`, `globalThis.fetch` is resolved per request rather than
  * captured at wrap time, so globally installed instrumentation still applies.
  */
-export declare function withPackageUserAgent(inner?: typeof globalThis.fetch): typeof globalThis.fetch;
+export declare function withPackageUserAgent(
+  inner?: typeof globalThis.fetch,
+): typeof globalThis.fetch;

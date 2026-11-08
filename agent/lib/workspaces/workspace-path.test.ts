@@ -16,11 +16,14 @@ describe("validateWorkspacePath", () => {
 
   it("accepts a segment of 255 bytes and refuses one of 256", () => {
     expect(validateWorkspacePath(`docs/${"я".repeat(127)}a`)).toBe(`docs/${"я".repeat(127)}a`);
-    expect(() => validateWorkspacePath(`docs/${"я".repeat(128)}`)).toThrowError(/AGENT_WORKSPACE_PATH_INVALID/);
+    expect(() => validateWorkspacePath(`docs/${"я".repeat(128)}`)).toThrowError(
+      /AGENT_WORKSPACE_PATH_INVALID/,
+    );
   });
 
   it.each(["", "/etc/passwd", "../secret", "a/../secret", "a//b", "a\\b", ".hidden/./x"])(
     "rejects unsafe or non-canonical path %s",
-    (path) => expect(() => validateWorkspacePath(path)).toThrowError(/AGENT_WORKSPACE_PATH_INVALID/),
+    (path) =>
+      expect(() => validateWorkspacePath(path)).toThrowError(/AGENT_WORKSPACE_PATH_INVALID/),
   );
 });

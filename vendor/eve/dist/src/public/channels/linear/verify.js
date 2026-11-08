@@ -7,16 +7,12 @@ async function verifyLinearRequest(e, t) {
   let n = await e.text();
   if (t.webhookVerifier !== void 0) {
     let r = await t.webhookVerifier(e, n);
-    if (!r)
-      throw Error(
-        `linearChannel: inbound webhook verifier rejected the request.`,
-      );
+    if (!r) throw Error(`linearChannel: inbound webhook verifier rejected the request.`);
     return typeof r == `string` ? r : n;
   }
   let r = await resolveLinearWebhookSecret(t.webhookSecret),
     a = e.headers.get(`linear-signature`) ?? ``;
-  if (!a)
-    throw Error(`linearChannel: inbound request missing Linear-Signature.`);
+  if (!a) throw Error(`linearChannel: inbound request missing Linear-Signature.`);
   if (!constantTimeCompare(signLinearWebhookBody(n, r), a))
     throw Error(`linearChannel: inbound request signature mismatch.`);
   return (verifyWebhookTimestamp(n, t.maxSkewMs ?? 6e4), n);
@@ -26,9 +22,7 @@ function signLinearWebhookBody(t, n) {
 }
 function verifyWebhookTimestamp(e, t) {
   if (!Number.isFinite(t) || t < 0)
-    throw Error(
-      `linearChannel: maxSkewMs must be a non-negative finite number.`,
-    );
+    throw Error(`linearChannel: maxSkewMs must be a non-negative finite number.`);
   let n;
   try {
     n = JSON.parse(e);
@@ -39,9 +33,7 @@ function verifyWebhookTimestamp(e, t) {
   if (typeof i != `number` || !Number.isFinite(i))
     throw Error(`linearChannel: inbound request missing webhookTimestamp.`);
   if (Math.abs(Date.now() - i) > t)
-    throw Error(
-      `linearChannel: inbound request timestamp outside allowed skew.`,
-    );
+    throw Error(`linearChannel: inbound request timestamp outside allowed skew.`);
 }
 function constantTimeCompare(e, n) {
   if (e.length !== n.length) return !1;

@@ -27,9 +27,7 @@ function defaultOnVoiceTranscription(e, t) {
 }
 const defaultEvents = {
   async "message.completed"(e, t, n) {
-    e.finishReason === `tool-calls` ||
-      !e.message ||
-      (await t.twilio.sendMessage(e.message));
+    e.finishReason === `tool-calls` || !e.message || (await t.twilio.sendMessage(e.message));
   },
   async "turn.failed"(n, r, i) {
     let a = formatErrorHint(n),

@@ -14,7 +14,8 @@ import { InstallerError } from "./errors.js";
 const TELEGRAM_API_ORIGIN = "https://api.telegram.org";
 const MAX_TIMEOUT_MS = 120_000;
 const BOT_TOKEN_PATTERN = /^[0-9]+:[A-Za-z0-9_-]+$/u;
-const HOSTNAME_PATTERN = /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+const HOSTNAME_PATTERN =
+  /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{1,256}$/u;
 
 export interface ConfigureTelegramWebhookOptions {
@@ -68,13 +69,13 @@ export async function configureTelegramWebhook(
   options: ConfigureTelegramWebhookOptions,
 ): Promise<void> {
   if (
-    !BOT_TOKEN_PATTERN.test(options.token)
-    || !HOSTNAME_PATTERN.test(options.hostname)
-    || !SECRET_PATTERN.test(options.secretToken)
-    || !Number.isInteger(options.timeoutMs)
-    || options.timeoutMs < 1
-    || options.timeoutMs > MAX_TIMEOUT_MS
-    || (options.ipAddress != null && isIP(options.ipAddress) === 0)
+    !BOT_TOKEN_PATTERN.test(options.token) ||
+    !HOSTNAME_PATTERN.test(options.hostname) ||
+    !SECRET_PATTERN.test(options.secretToken) ||
+    !Number.isInteger(options.timeoutMs) ||
+    options.timeoutMs < 1 ||
+    options.timeoutMs > MAX_TIMEOUT_MS ||
+    (options.ipAddress != null && isIP(options.ipAddress) === 0)
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_TELEGRAM_WEBHOOK_INPUT_INVALID",
@@ -101,11 +102,11 @@ export async function configureTelegramWebhook(
   const status = await telegramJson(options, "getWebhookInfo");
   const result = status.result;
   if (
-    status.ok !== true
-    || typeof result !== "object"
-    || result === null
-    || !("url" in result)
-    || result.url !== targetUrl
+    status.ok !== true ||
+    typeof result !== "object" ||
+    result === null ||
+    !("url" in result) ||
+    result.url !== targetUrl
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_TELEGRAM_WEBHOOK_VERIFY_FAILED",

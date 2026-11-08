@@ -68,40 +68,86 @@ const TOP_LEVEL_FIELDS = [
   "telegramChatId",
   "toolAllowlist",
 ] as const;
-const REGISTRATION_FIELDS = ["messageMode", "telegramChatId", "title", "toolAllowlist", "type"] as const;
+const REGISTRATION_FIELDS = [
+  "messageMode",
+  "telegramChatId",
+  "title",
+  "toolAllowlist",
+  "type",
+] as const;
 
-const registrationSchema = z.object({
-  messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe("Обязательно внутри registration: addressed_only, all или owner_only для external."),
-  telegramChatId: z.string().optional().describe("Обязательный точный отрицательный Telegram chat ID регистрируемой группы."),
-  title: z.string().optional().describe("Обязательное отображаемое название регистрируемой группы."),
-  toolAllowlist: z.array(z.enum(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES)).optional().describe("Только для registration.type=external; для family_private поле не передавайте."),
-  type: z.enum(GROUP_TYPES).optional().describe("Обязательный тип trust zone: family_private или external."),
-}).strict();
+const registrationSchema = z
+  .object({
+    messageMode: z
+      .enum(EXTERNAL_MESSAGE_MODES)
+      .optional()
+      .describe(
+        "Обязательно внутри registration: addressed_only, all или owner_only для external.",
+      ),
+    telegramChatId: z
+      .string()
+      .optional()
+      .describe("Обязательный точный отрицательный Telegram chat ID регистрируемой группы."),
+    title: z
+      .string()
+      .optional()
+      .describe("Обязательное отображаемое название регистрируемой группы."),
+    toolAllowlist: z
+      .array(z.enum(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES))
+      .optional()
+      .describe("Только для registration.type=external; для family_private поле не передавайте."),
+    type: z
+      .enum(GROUP_TYPES)
+      .optional()
+      .describe("Обязательный тип trust zone: family_private или external."),
+  })
+  .strict();
 
-const manageTelegramGroupSchema = z.object({
-  action: z.enum(TOOL_ACTIONS).describe(
-    "Сначала выберите ровно один action: register, remove, start_new_context, status или update_policy.",
-  ),
-  memoryReview: z.enum(MEMORY_REVIEW_MODES).optional().describe(
-    "Только при action=update_policy внешней группы: enabled или disabled включает или выключает тихую проверку памяти по сообщениям этой группы. Без поля текущее значение не меняется.",
-  ),
-  messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe(
-    "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
-  ),
-  registration: registrationSchema.optional().describe(
-    "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
-  ),
-  telegramChatId: z.string().optional().describe(
-    "Точный отрицательный ID обязателен для start_new_context, update_policy и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
-  ),
-  toolAllowlist: z.array(z.enum(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES)).optional().describe(
-    "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
-  ),
-}).strict();
+const manageTelegramGroupSchema = z
+  .object({
+    action: z
+      .enum(TOOL_ACTIONS)
+      .describe(
+        "Сначала выберите ровно один action: register, remove, start_new_context, status или update_policy.",
+      ),
+    memoryReview: z
+      .enum(MEMORY_REVIEW_MODES)
+      .optional()
+      .describe(
+        "Только при action=update_policy внешней группы: enabled или disabled включает или выключает тихую проверку памяти по сообщениям этой группы. Без поля текущее значение не меняется.",
+      ),
+    messageMode: z
+      .enum(EXTERNAL_MESSAGE_MODES)
+      .optional()
+      .describe(
+        "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
+      ),
+    registration: registrationSchema
+      .optional()
+      .describe(
+        "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
+      ),
+    telegramChatId: z
+      .string()
+      .optional()
+      .describe(
+        "Точный отрицательный ID обязателен для start_new_context, update_policy и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
+      ),
+    toolAllowlist: z
+      .array(z.enum(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES))
+      .optional()
+      .describe(
+        "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
+      ),
+  })
+  .strict();
 
 function requireTelegramGroupId(raw: unknown, label: string): string {
   if (typeof raw !== "string" || !TELEGRAM_GROUP_ID_PATTERN.test(raw)) {
-    toolInputError(INPUT_ERROR_CODE, `${label} должен быть строкой отрицательного Telegram chat ID группы, например -1001234567890`);
+    toolInputError(
+      INPUT_ERROR_CODE,
+      `${label} должен быть строкой отрицательного Telegram chat ID группы, например -1001234567890`,
+    );
   }
   return raw;
 }
@@ -111,9 +157,9 @@ function requireContextRotationGroupId(raw: unknown): string {
     toolInputError(
       INPUT_ERROR_CODE,
       "Для action=start_new_context обязателен точный отрицательный telegramChatId. " +
-        "Не угадывайте ID: сначала вызовите ровно {\"action\":\"status\"}, выберите нужную группу " +
+        'Не угадывайте ID: сначала вызовите ровно {"action":"status"}, выберите нужную группу ' +
         "и скопируйте её startNewContextInput вида " +
-        "{\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}",
+        '{"action":"start_new_context","telegramChatId":"-1001234567890"}',
     );
   }
   return raw;
@@ -127,7 +173,10 @@ function requireExternalToolAllowlist(raw: unknown, policyLabel: string): string
     );
   }
   if (raw.length > TOOL_ALLOWLIST_MAX_SIZE) {
-    toolInputError(INPUT_ERROR_CODE, `toolAllowlist должен содержать не больше ${TOOL_ALLOWLIST_MAX_SIZE} tools`);
+    toolInputError(
+      INPUT_ERROR_CODE,
+      `toolAllowlist должен содержать не больше ${TOOL_ALLOWLIST_MAX_SIZE} tools`,
+    );
   }
   const names = raw.map((name) => {
     // A catalog capability that the active model provider cannot serve gets its own diagnosis, so
@@ -179,27 +228,48 @@ function requireRegistration(input: Record<string, unknown>) {
     "Для action=register передайте registration с type, telegramChatId, title, messageMode и при необходимости toolAllowlist",
   );
   requireOnlyFields(registration, REGISTRATION_FIELDS, "registration", INPUT_ERROR_CODE);
-  const type = requiredEnum(registration, "type", GROUP_TYPES, INPUT_ERROR_CODE) as RegisteredGroupType;
+  const type = requiredEnum(
+    registration,
+    "type",
+    GROUP_TYPES,
+    INPUT_ERROR_CODE,
+  ) as RegisteredGroupType;
   const common = {
-    telegramChatId: requireTelegramGroupId(registration.telegramChatId, "registration.telegramChatId"),
+    telegramChatId: requireTelegramGroupId(
+      registration.telegramChatId,
+      "registration.telegramChatId",
+    ),
     title: requiredString(registration, "title", INPUT_ERROR_CODE, "Семейный чат", {
       maxLength: GROUP_TITLE_MAX_LENGTH,
     }),
   };
   if (TELEGRAM_GROUP_TITLE_CONTROL_PATTERN.test(common.title)) {
-    toolInputError(INPUT_ERROR_CODE, "registration.title должен состоять из одной строки без управляющих символов");
+    toolInputError(
+      INPUT_ERROR_CODE,
+      "registration.title должен состоять из одной строки без управляющих символов",
+    );
   }
   if (type === "family_private") {
     return {
       ...common,
-      messageMode: requiredEnum(registration, "messageMode", STANDARD_MESSAGE_MODES, INPUT_ERROR_CODE),
+      messageMode: requiredEnum(
+        registration,
+        "messageMode",
+        STANDARD_MESSAGE_MODES,
+        INPUT_ERROR_CODE,
+      ),
       toolAllowlist: requireToolAllowlist(registration.toolAllowlist, type),
       type,
     };
   }
   return {
     ...common,
-    messageMode: requiredEnum(registration, "messageMode", EXTERNAL_MESSAGE_MODES, INPUT_ERROR_CODE),
+    messageMode: requiredEnum(
+      registration,
+      "messageMode",
+      EXTERNAL_MESSAGE_MODES,
+      INPUT_ERROR_CODE,
+    ),
     toolAllowlist: requireToolAllowlist(registration.toolAllowlist, type),
     type,
   };
@@ -214,7 +284,10 @@ function requireManageTelegramGroupInput(input: unknown) {
   // complete contract, while the global guard rejects every unpublished field before HITL.
   if (action === "status") return { action } as const;
   if (action === "start_new_context") {
-    return { action, telegramChatId: requireContextRotationGroupId(payload.telegramChatId) } as const;
+    return {
+      action,
+      telegramChatId: requireContextRotationGroupId(payload.telegramChatId),
+    } as const;
   }
   if (action === "remove") {
     return {
@@ -253,12 +326,12 @@ function requireOwnerTelegramUserId(ctx: SessionContext): string {
 
 const TOOL_DESCRIPTION = [
   "Управлять Telegram-группами семьи из личного чата владельца: status, register, update_policy, start_new_context, remove.",
-  "Выбери один action и передавай только его payload; лишние поля других actions не заполняй, telegramChatId бери из status, не угадывай. Status не требует подтверждения: {\"action\":\"status\"}.",
+  'Выбери один action и передавай только его payload; лишние поля других actions не заполняй, telegramChatId бери из status, не угадывай. Status не требует подтверждения: {"action":"status"}.',
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для смены прав используй update_policy: он сохраняет ID, название, тип и все данные. Register сработает, только если владелец создатель или администратор этой группы в Telegram, а бот уже состоит в ней. Remove не выводит бота из чата. Start_new_context не удаляет timeline, память, файлы и pending tasks: следующая реплика в main-чате и каждой теме начнёт новую canonical generation.",
   "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют. memoryReview=disabled в update_policy выключает тихую проверку памяти по сообщениям внешней группы (сообщения всё равно пишутся в журнал), enabled включает обратно; без поля не меняется.",
   "Enums: action=register | remove | start_new_context | status | update_policy; type=family_private | external; messageMode=addressed_only | all | owner_only.",
-  "Register: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}; для external добавь в registration \"toolAllowlist\":[\"search_memories\"].",
-  "Update_policy: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]} без type и title. Start_new_context: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}. Remove: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
+  'Register: {"action":"register","registration":{"type":"family_private","telegramChatId":"-1001234567890","title":"Семейный чат","messageMode":"addressed_only"}}; для external добавь в registration "toolAllowlist":["search_memories"].',
+  'Update_policy: {"action":"update_policy","telegramChatId":"-1001234567890","messageMode":"all","toolAllowlist":["search_memories"]} без type и title. Start_new_context: {"action":"start_new_context","telegramChatId":"-1001234567890"}. Remove: {"action":"remove","telegramChatId":"-1001234567890"}.',
 ].join(" ");
 
 export default defineTool({
@@ -310,12 +383,13 @@ export default defineTool({
             ...visibleGroup,
             builtInWorkspaceTools,
             effectiveConfiguredTools: [...builtInWorkspaceTools, ...effective],
-            memoryReview: group.memoryReview ? "enabled" as const : "disabled" as const,
-            policySummary: unavailable.length === 0
-              ? "Базовые workspace tools плюс полный настроенный allowlist внешней группы."
-              : "Базовые workspace tools плюс действующий allowlist внешней группы; " +
-                "перечисленные unavailableConfiguredTools сейчас не действуют и не могут быть " +
-                "выданы заново в текущей конфигурации агента.",
+            memoryReview: group.memoryReview ? ("enabled" as const) : ("disabled" as const),
+            policySummary:
+              unavailable.length === 0
+                ? "Базовые workspace tools плюс полный настроенный allowlist внешней группы."
+                : "Базовые workspace tools плюс действующий allowlist внешней группы; " +
+                  "перечисленные unavailableConfiguredTools сейчас не действуют и не могут быть " +
+                  "выданы заново в текущей конфигурации агента.",
             startNewContextInput: {
               action: "start_new_context" as const,
               telegramChatId: group.telegramChatId,

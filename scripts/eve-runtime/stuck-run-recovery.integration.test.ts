@@ -3,11 +3,18 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 
-import { findInFlightRuns, findStuckRuns, releaseDeadWorkerLocks, requeueInFlightRuns } from "./stuck-run-recovery.ts";
+import {
+  findInFlightRuns,
+  findStuckRuns,
+  releaseDeadWorkerLocks,
+  requeueInFlightRuns,
+} from "./stuck-run-recovery.ts";
 
 const LIMITS = { retryAfterMs: 10 * 60 * 1000, stepStartedAfterMs: 25 * 60 * 1000 };
 
-describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !process.env.WORKFLOW_POSTGRES_URL)("stuck run recovery", () => {
+describe.skipIf(
+  process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !process.env.WORKFLOW_POSTGRES_URL,
+)("stuck run recovery", () => {
   // 1 October 2026: the turn run's last event was a retry from 20:32, no job existed for it, and
   // the private chat stayed silent until a restart re-enqueued every active run.
   it("finds runs whose retry or step start was never followed up, and nothing else", async () => {
@@ -21,7 +28,13 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       longStart: { last: "step_started", minutesAgo: 15, status: "running" },
       parked: { last: "hook_created", minutesAgo: 600, status: "running" },
       // A session resting on its hook ends its last turn on step_completed; the hook row says so.
-      resting: { last: "step_completed", minutesAgo: 90, status: "running", hook: true, workflow: "workflow//eve//workflowEntry" },
+      resting: {
+        last: "step_completed",
+        minutesAgo: 90,
+        status: "running",
+        hook: true,
+        workflow: "workflow//eve//workflowEntry",
+      },
       // The same last event without a hook is a run whose next job was lost (Codex review).
       abandoned: { last: "step_completed", minutesAgo: 90, status: "running" },
       // A turn holds its inbox hook from its first step on, so a hook proves nothing for a turn: one
@@ -51,12 +64,21 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
         }
       }
 
-      const found = (await findStuckRuns(pool, LIMITS)).filter((run) => run.runId.startsWith(prefix));
-      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort()).toEqual(["abandoned", "lostRetry", "lostStart", "turnWithInbox"]);
+      const found = (await findStuckRuns(pool, LIMITS)).filter((run) =>
+        run.runId.startsWith(prefix),
+      );
+      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort()).toEqual([
+        "abandoned",
+        "lostRetry",
+        "lostStart",
+        "turnWithInbox",
+      ]);
       expect(found.every((run) => run.workflowName === "workflow//eve//turnWorkflow")).toBe(true);
     } finally {
       await pool.query("DELETE FROM workflow.workflow_hooks WHERE run_id LIKE $1", [`${prefix}-%`]);
-      await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [`${prefix}-%`]);
+      await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [
+        `${prefix}-%`,
+      ]);
       await pool.query("DELETE FROM workflow.workflow_runs WHERE id LIKE $1", [`${prefix}-%`]);
       await pool.end();
     }
@@ -78,7 +100,13 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       sleeping: { last: "wait_created", minutesAgo: 1, status: "running" },
       // An active session waits on a hook created turns ago, so its last event is the completed
       // turn step: production, 4 October 2026, nine such runs replayed on every start.
-      restingOnHook: { last: "step_completed", minutesAgo: 30, status: "running", hook: true, workflow: "workflow//eve//workflowEntry" },
+      restingOnHook: {
+        last: "step_completed",
+        minutesAgo: 30,
+        status: "running",
+        hook: true,
+        workflow: "workflow//eve//workflowEntry",
+      },
       // The same without a hook has nothing to wake it: interrupted, however old.
       abandoned: { last: "step_completed", minutesAgo: 30, status: "running" },
       // A turn's own inbox hook does not make it a resting session.
@@ -107,19 +135,39 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       }
 
       const found = (await findInFlightRuns(pool, 3)).filter((run) => run.runId.startsWith(prefix));
-      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort())
-        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying", "turnWithInbox"]);
+      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort()).toEqual([
+        "abandoned",
+        "betweenSteps",
+        "created",
+        "hookArrived",
+        "justStarted",
+        "retrying",
+        "turnWithInbox",
+      ]);
       const enqueued: string[] = [];
       await requeueInFlightRuns({
-        enqueue: async (queueName, message) => { enqueued.push(`${queueName}|${message.runId}`); },
+        enqueue: async (queueName, message) => {
+          enqueued.push(`${queueName}|${message.runId}`);
+        },
         pool,
         queuePrefix: "test//",
       });
-      expect(enqueued.filter((entry) => entry.includes(prefix)).sort())
-        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying", "turnWithInbox"].map((name) => `test//workflow//eve//turnWorkflow|${prefix}-${name}`));
+      expect(enqueued.filter((entry) => entry.includes(prefix)).sort()).toEqual(
+        [
+          "abandoned",
+          "betweenSteps",
+          "created",
+          "hookArrived",
+          "justStarted",
+          "retrying",
+          "turnWithInbox",
+        ].map((name) => `test//workflow//eve//turnWorkflow|${prefix}-${name}`),
+      );
     } finally {
       await pool.query("DELETE FROM workflow.workflow_hooks WHERE run_id LIKE $1", [`${prefix}-%`]);
-      await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [`${prefix}-%`]);
+      await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [
+        `${prefix}-%`,
+      ]);
       await pool.query("DELETE FROM workflow.workflow_runs WHERE id LIKE $1", [`${prefix}-%`]);
       await pool.end();
     }
@@ -130,10 +178,22 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
     const pool = new Pool({ connectionString: process.env.WORKFLOW_POSTGRES_URL, max: 2 });
     const marker = `osinara-test-${randomUUID()}`;
     try {
-      const dead = await pool.query<{ id: string }>("SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id", [marker]);
-      const live = await pool.query<{ id: string }>("SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id", [marker]);
-      await pool.query("UPDATE graphile_worker._private_jobs SET locked_by = 'worker-dead', locked_at = now() - interval '10 minutes' WHERE id = $1::bigint", [dead.rows[0]!.id]);
-      await pool.query("UPDATE graphile_worker._private_jobs SET locked_by = 'worker-live', locked_at = now() WHERE id = $1::bigint", [live.rows[0]!.id]);
+      const dead = await pool.query<{ id: string }>(
+        "SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id",
+        [marker],
+      );
+      const live = await pool.query<{ id: string }>(
+        "SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id",
+        [marker],
+      );
+      await pool.query(
+        "UPDATE graphile_worker._private_jobs SET locked_by = 'worker-dead', locked_at = now() - interval '10 minutes' WHERE id = $1::bigint",
+        [dead.rows[0]!.id],
+      );
+      await pool.query(
+        "UPDATE graphile_worker._private_jobs SET locked_by = 'worker-live', locked_at = now() WHERE id = $1::bigint",
+        [live.rows[0]!.id],
+      );
 
       await releaseDeadWorkerLocks(pool, new Date(Date.now() - 60_000));
       const rows = await pool.query<{ id: string; locked_by: string | null }>(
@@ -145,7 +205,10 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
         { id: live.rows[0]!.id, locked_by: "worker-live" },
       ]);
     } finally {
-      await pool.query("DELETE FROM graphile_worker._private_jobs WHERE task_id IN (SELECT id FROM graphile_worker._private_tasks WHERE identifier = $1)", [marker]);
+      await pool.query(
+        "DELETE FROM graphile_worker._private_jobs WHERE task_id IN (SELECT id FROM graphile_worker._private_tasks WHERE identifier = $1)",
+        [marker],
+      );
       await pool.end();
     }
   });

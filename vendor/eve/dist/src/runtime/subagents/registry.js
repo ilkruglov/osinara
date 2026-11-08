@@ -1,9 +1,6 @@
 import { z } from "#compiled/zod/index.js";
 import { serializeInputSchema } from "#shared/tool-schema.js";
-import {
-  RuntimeRegistry,
-  RuntimeRegistryError,
-} from "#internal/runtime-registry.js";
+import { RuntimeRegistry, RuntimeRegistryError } from "#internal/runtime-registry.js";
 const SUBAGENT_TOOL_INPUT_SCHEMA = z.strictObject({
     message: z
       .string()
@@ -26,16 +23,12 @@ const SUBAGENT_TOOL_INPUT_SCHEMA = z.strictObject({
       )
       .optional(),
   }),
-  SUBAGENT_TOOL_INPUT_JSON_SCHEMA = serializeInputSchema(
-    SUBAGENT_TOOL_INPUT_SCHEMA,
-  ),
+  SUBAGENT_TOOL_INPUT_JSON_SCHEMA = serializeInputSchema(SUBAGENT_TOOL_INPUT_SCHEMA),
   PERSISTENT_SUBAGENT_TOOL_INPUT_JSON_SCHEMA = serializeInputSchema(
     PERSISTENT_SUBAGENT_TOOL_INPUT_SCHEMA,
   );
 function getSubagentToolInputJsonSchema(e) {
-  return e
-    ? PERSISTENT_SUBAGENT_TOOL_INPUT_JSON_SCHEMA
-    : SUBAGENT_TOOL_INPUT_JSON_SCHEMA;
+  return e ? PERSISTENT_SUBAGENT_TOOL_INPUT_JSON_SCHEMA : SUBAGENT_TOOL_INPUT_JSON_SCHEMA;
 }
 function createRuntimeSubagentRegistry(e) {
   let t = getSubagentToolInputJsonSchema(e.persistentSessions === !0),
@@ -85,10 +78,7 @@ function createRuntimeSubagentRegistry(e) {
     subagentsByNodeId: c,
   };
 }
-function createPreparedRuntimeSubagentTool(
-  e,
-  t = SUBAGENT_TOOL_INPUT_JSON_SCHEMA,
-) {
+function createPreparedRuntimeSubagentTool(e, t = SUBAGENT_TOOL_INPUT_JSON_SCHEMA) {
   if (e.description === void 0)
     throw Error(`Static subagent "${e.name}" is missing a description.`);
   return {

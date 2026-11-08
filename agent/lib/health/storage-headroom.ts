@@ -42,7 +42,8 @@ export function formatStorageHeadroom(headroom: StorageHeadroom): string | null 
   if (freeBytes === null || totalBytes === null || totalBytes === 0) return null;
   const fraction = freeBytes / totalBytes;
   const tight = fraction < STORAGE_HEADROOM_WARNING_FRACTION;
-  const updateDoesNotFit = databaseBytes !== null && updateRequirementBytes(databaseBytes) > freeBytes;
+  const updateDoesNotFit =
+    databaseBytes !== null && updateRequirementBytes(databaseBytes) > freeBytes;
   if (!tight && !updateDoesNotFit) return null;
   const percent = Math.round(fraction * 100);
   const database = databaseBytes === null ? "" : `, базы ${gigabytes(databaseBytes)}`;
@@ -60,14 +61,27 @@ export async function readStorageHeadroom(
 ): Promise<StorageHeadroom> {
   const [space, databaseBytes] = await Promise.all([
     statfs(path).then(
-      (stats) => ({ freeBytes: Number(stats.bavail) * Number(stats.bsize), totalBytes: Number(stats.blocks) * Number(stats.bsize) }),
+      (stats) => ({
+        freeBytes: Number(stats.bavail) * Number(stats.bsize),
+        totalBytes: Number(stats.blocks) * Number(stats.bsize),
+      }),
       (error: unknown) => {
-        console.error(JSON.stringify({ code: "AGENT_STORAGE_HEADROOM_UNREADABLE", error: error instanceof Error ? error.message : String(error) }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_STORAGE_HEADROOM_UNREADABLE",
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
         return { freeBytes: null, totalBytes: null };
       },
     ),
     databaseSize().catch((error: unknown) => {
-      console.error(JSON.stringify({ code: "AGENT_DATABASE_SIZE_UNREADABLE", error: error instanceof Error ? error.message : String(error) }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_DATABASE_SIZE_UNREADABLE",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       return null;
     }),
   ]);

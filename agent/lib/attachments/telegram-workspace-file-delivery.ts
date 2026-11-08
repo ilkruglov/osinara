@@ -25,12 +25,14 @@ interface TelegramSendResponse {
 
 async function parseTelegramSendResponse(response: Response): Promise<TelegramSendResponse> {
   try {
-    return await response.json() as TelegramSendResponse;
+    return (await response.json()) as TelegramSendResponse;
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     throw new AppError(
       "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
       "Telegram не подтвердил отправку файла. Проверьте чат перед повторным запросом",
@@ -51,7 +53,10 @@ export async function deliverWorkspaceFile(
   fetchImplementation: typeof fetch = fetch,
 ): Promise<{ telegramMessageId: string }> {
   if (input.bytes.byteLength > TELEGRAM_MAX_OUTBOUND_DOCUMENT_BYTES) {
-    throw new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл превышает лимит отправки Telegram 50 МБ");
+    throw new AppError(
+      "AGENT_WORKSPACE_FILE_TOO_LARGE",
+      "Файл превышает лимит отправки Telegram 50 МБ",
+    );
   }
   if (input.presentation === "photo") {
     if (!TELEGRAM_PHOTO_MEDIA_TYPES.has(input.mediaType)) {
@@ -101,20 +106,24 @@ export async function deliverWorkspaceFile(
       token,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     throw new AppError(
       "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
       "Не удалось подтвердить отправку файла. Проверьте чат перед повторным запросом",
     );
   }
   if (!response.ok) {
-    console.error(JSON.stringify({
-      code: "AGENT_WORKSPACE_FILE_DELIVERY_FAILED",
-      providerStatus: response.status,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_WORKSPACE_FILE_DELIVERY_FAILED",
+        providerStatus: response.status,
+      }),
+    );
     throw new AppError(
       "AGENT_WORKSPACE_FILE_DELIVERY_FAILED",
       "Telegram не принял файл. Попробуйте отправить его как документ или повторите позже",
@@ -123,10 +132,12 @@ export async function deliverWorkspaceFile(
   const payload = await parseTelegramSendResponse(response);
   const messageId = payload.result?.message_id;
   if (payload.ok !== true || !Number.isSafeInteger(messageId)) {
-    console.error(JSON.stringify({
-      code: "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
-      providerAcknowledged: payload.ok === true,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
+        providerAcknowledged: payload.ok === true,
+      }),
+    );
     throw new AppError(
       "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
       "Telegram не подтвердил отправку файла. Проверьте чат перед повторным запросом",

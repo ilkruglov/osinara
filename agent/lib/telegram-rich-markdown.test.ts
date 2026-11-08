@@ -35,13 +35,15 @@ describe("sanitizeTelegramRichMarkdown", () => {
   });
 
   it("neutralizes raw media, service tags, scripts, and unsafe inline links", () => {
-    const sanitized = sanitizeTelegramRichMarkdown([
-      "![чужое изображение](https://tracker.example/image.png)",
-      '<img src="https://tracker.example/image.png"/>',
-      "<tg-thinking>Подмена</tg-thinking>",
-      "<script>alert(1)</script>",
-      "[опасная ссылка](javascript:alert(1))",
-    ].join("\n"));
+    const sanitized = sanitizeTelegramRichMarkdown(
+      [
+        "![чужое изображение](https://tracker.example/image.png)",
+        '<img src="https://tracker.example/image.png"/>',
+        "<tg-thinking>Подмена</tg-thinking>",
+        "<script>alert(1)</script>",
+        "[опасная ссылка](javascript:alert(1))",
+      ].join("\n"),
+    );
 
     expect(sanitized).toContain("\\![чужое изображение]");
     expect(sanitized).toContain("&lt;img src=");
@@ -53,11 +55,13 @@ describe("sanitizeTelegramRichMarkdown", () => {
   });
 
   it("neutralizes unsafe links with nested parentheses", () => {
-    const sanitized = sanitizeTelegramRichMarkdown([
-      "[javascript](javascript:alert((1)))",
-      "[telegram](tg://resolve?domain=a(b(c)))",
-      "[safe](https://example.com/a(b(c)))",
-    ].join("\n"));
+    const sanitized = sanitizeTelegramRichMarkdown(
+      [
+        "[javascript](javascript:alert((1)))",
+        "[telegram](tg://resolve?domain=a(b(c)))",
+        "[safe](https://example.com/a(b(c)))",
+      ].join("\n"),
+    );
 
     expect(sanitized).toContain("javascript (javascript:alert((1)))");
     expect(sanitized).toContain("telegram (tg://resolve?domain=a(b(c)))");
@@ -81,18 +85,18 @@ describe("sanitizeTelegramRichMarkdown", () => {
   it("rejects tables wider than Telegram Rich Message supports", () => {
     const row = `| ${Array.from({ length: 21 }, (_, index) => `C${index}`).join(" | ")} |`;
 
-    expect(() => sanitizeTelegramRichMarkdown(row)).toThrow(
-      "AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE",
-    );
+    expect(() => sanitizeTelegramRichMarkdown(row)).toThrow("AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE");
   });
 
   it("rejects an outerless GFM table wider than Telegram Rich Message supports", () => {
     const columns = Array.from({ length: 21 }, (_, index) => `C${index + 1}`);
     const delimiters = columns.map(() => "---");
 
-    expect(() => sanitizeTelegramRichMarkdown(
-      `${columns.join(" | ")}\n${delimiters.join(" | ")}\n${columns.join(" | ")}`,
-    )).toThrowError("AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE");
+    expect(() =>
+      sanitizeTelegramRichMarkdown(
+        `${columns.join(" | ")}\n${delimiters.join(" | ")}\n${columns.join(" | ")}`,
+      ),
+    ).toThrowError("AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE");
   });
 
   it("canonicalizes tolerated spellings of the collapsible block", () => {
@@ -127,9 +131,7 @@ describe("sanitizeTelegramRichMarkdown", () => {
   it("neutralizes other unclosed allowed HTML instead of blocking final delivery", () => {
     expect(
       formatTelegramRichMessages("<details><summary>Результат\n\nОтвет без закрытия summary"),
-    ).toEqual([
-      "&lt;details&gt;&lt;summary&gt;Результат\n\nОтвет без закрытия summary",
-    ]);
+    ).toEqual(["&lt;details&gt;&lt;summary&gt;Результат\n\nОтвет без закрытия summary"]);
   });
 });
 

@@ -37,9 +37,9 @@ import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
 const context = { callId: "call-1" } as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return (manageBehaviorPreference.approval as (context: never) => unknown)(
-    { toolInput: input } as never,
-  );
+  return (manageBehaviorPreference.approval as (context: never) => unknown)({
+    toolInput: input,
+  } as never);
 }
 
 describe("manage_behavior_preference model input", () => {
@@ -62,16 +62,16 @@ describe("manage_behavior_preference model input", () => {
     }
   });
 
-  it.each(["append", "replace"] as const)("routes action=%s with complete text and revision", async (action) => {
-    const input = { action, content: "Отвечай без шуток.", expectedRevision: 1 };
+  it.each(["append", "replace"] as const)(
+    "routes action=%s with complete text and revision",
+    async (action) => {
+      const input = { action, content: "Отвечай без шуток.", expectedRevision: 1 };
 
-    expect(approvalFor(input)).toBe("not-applicable");
-    await manageBehaviorPreference.execute(input, context);
-    expect(dependencies.mutate).toHaveBeenCalledWith(
-      dependencies.authorization,
-      input,
-    );
-  });
+      expect(approvalFor(input)).toBe("not-applicable");
+      await manageBehaviorPreference.execute(input, context);
+      expect(dependencies.mutate).toHaveBeenCalledWith(dependencies.authorization, input);
+    },
+  );
 
   it("gets the current prompt without mutation", async () => {
     await manageBehaviorPreference.execute({ action: "get" }, context);

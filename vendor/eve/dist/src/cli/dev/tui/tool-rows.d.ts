@@ -7,7 +7,12 @@
  */
 import type { DisplayBlock, RenderBlockContext } from "./blocks.js";
 import type { Theme } from "./theme.js";
-export declare function renderTool(block: DisplayBlock, width: number, theme: Theme, context: RenderBlockContext): string[];
+export declare function renderTool(
+  block: DisplayBlock,
+  width: number,
+  theme: Theme,
+  context: RenderBlockContext,
+): string[];
 /**
  * An aggregated tool row lists at most this many member items; the rest
  * collapse into a single `… (N more)` line above the closing corner.

@@ -1,9 +1,6 @@
 import { ConnectionRegistryKey } from "#context/providers/connection-key.js";
 import { ReadFileStateKey } from "#runtime/framework-tools/file-state.js";
-import {
-  TODO_TOOL_DEFINITION,
-  TodoStateKey,
-} from "#runtime/framework-tools/todo.js";
+import { TODO_TOOL_DEFINITION, TodoStateKey } from "#runtime/framework-tools/todo.js";
 import { TASK_TOOL_DEFINITIONS } from "#runtime/framework-tools/tasks.js";
 import { AGENT_TOOL_DEFINITION } from "#runtime/framework-tools/agent.js";
 import { ASK_QUESTION_TOOL_DEFINITION } from "#runtime/framework-tools/ask-question.js";
@@ -50,9 +47,7 @@ function getFrameworkToolDefinitions(e) {
   return t === void 0
     ? REGISTERED_FRAMEWORK_TOOLS
     : REGISTERED_FRAMEWORK_TOOLS.map((e) =>
-        e.name === SKILL_TOOL_DEFINITION.name
-          ? createSkillToolDefinition(t)
-          : e,
+        e.name === SKILL_TOOL_DEFINITION.name ? createSkillToolDefinition(t) : e,
       );
 }
 function getFrameworkDynamicToolResolvers() {

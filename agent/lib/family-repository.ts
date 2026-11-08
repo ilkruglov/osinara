@@ -56,10 +56,7 @@ export interface FamilyRepository {
     expiresAt: string;
     invitationId: string;
   }>;
-  listPendingInvitations(
-    familyId: string,
-    requestedBy: string,
-  ): Promise<PendingFamilyInvitation[]>;
+  listPendingInvitations(familyId: string, requestedBy: string): Promise<PendingFamilyInvitation[]>;
   markInvitationDelivered(input: {
     createdBy: string;
     familyId: string;
@@ -208,10 +205,7 @@ export const familyRepository: FamilyRepository = {
       if (invitation.delivery_started_at !== null && invitation.delivery_completed_at === null) {
         throw invitationDeliveryAmbiguousError();
       }
-      if (
-        invitation.status === "open" &&
-        invitation.expires_at.getTime() <= Date.now()
-      ) {
+      if (invitation.status === "open" && invitation.expires_at.getTime() <= Date.now()) {
         throw new AppError(
           "AGENT_INVITATION_EXPIRED",
           "Срок приглашения истек. Создайте новое приглашение",
@@ -221,8 +215,7 @@ export const familyRepository: FamilyRepository = {
       await client.query("COMMIT");
       return {
         code: generated.code,
-        deliveryRequired:
-          invitation.status === "open" && invitation.delivery_completed_at === null,
+        deliveryRequired: invitation.status === "open" && invitation.delivery_completed_at === null,
         expiresAt: invitation.expires_at.toISOString(),
         invitationId: invitation.id,
       };

@@ -188,11 +188,7 @@ describeWithDatabase("familyRepository invitations", () => {
       operationKey: "durable-create-call",
     });
     await expect(
-      familyRepository.createInvitation(
-        owner.familyId,
-        owner.ownerId,
-        "durable-create-call",
-      ),
+      familyRepository.createInvitation(owner.familyId, owner.ownerId, "durable-create-call"),
     ).resolves.toMatchObject({ deliveryRequired: false });
     const count = await database().query<{ count: string }>(
       "SELECT count(*)::text AS count FROM invitations WHERE family_id = $1",
@@ -206,12 +202,14 @@ describeWithDatabase("familyRepository invitations", () => {
       "revoked-before-delivery-call",
     );
     await database().query("DELETE FROM family_memberships WHERE user_id = $1", [owner.ownerId]);
-    await expect(familyRepository.markInvitationDeliveryStarted({
-      createdBy: owner.ownerId,
-      familyId: owner.familyId,
-      invitationId: unsent.invitationId,
-      operationKey: "revoked-before-delivery-call",
-    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/u);
+    await expect(
+      familyRepository.markInvitationDeliveryStarted({
+        createdBy: owner.ownerId,
+        familyId: owner.familyId,
+        invitationId: unsent.invitationId,
+        operationKey: "revoked-before-delivery-call",
+      }),
+    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/u);
     await expect(
       familyRepository.createInvitation(owner.familyId, owner.ownerId, "stale-owner-call"),
     ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
@@ -235,17 +233,17 @@ describeWithDatabase("familyRepository invitations", () => {
     });
 
     // Telegram is considered sent at this point; emulate the following completion write missing its row.
-    await expect(familyRepository.markInvitationDelivered({
-      createdBy: owner.ownerId,
-      familyId: owner.familyId,
-      invitationId: "00000000-0000-4000-8000-000000000099",
-      operationKey: "ambiguous-create-call",
-    })).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
-    await expect(familyRepository.createInvitation(
-      owner.familyId,
-      owner.ownerId,
-      "ambiguous-create-call",
-    )).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      familyRepository.markInvitationDelivered({
+        createdBy: owner.ownerId,
+        familyId: owner.familyId,
+        invitationId: "00000000-0000-4000-8000-000000000099",
+        operationKey: "ambiguous-create-call",
+      }),
+    ).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+    await expect(
+      familyRepository.createInvitation(owner.familyId, owner.ownerId, "ambiguous-create-call"),
+    ).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
 
     const persisted = await database().query<{
       count: string;
@@ -264,10 +262,12 @@ describeWithDatabase("familyRepository invitations", () => {
       status: "open",
     });
     expect(persisted.rows[0]?.delivery_started_at).toBeInstanceOf(Date);
-    await expect(familyRepository.claimInvitation(invitation.code, {
-      displayName: "Получатель ссылки",
-      telegramUserId: "ambiguity-candidate",
-    })).resolves.toBe("pending");
+    await expect(
+      familyRepository.claimInvitation(invitation.code, {
+        displayName: "Получатель ссылки",
+        telegramUserId: "ambiguity-candidate",
+      }),
+    ).resolves.toBe("pending");
   });
 
   it("allows only one pending claim per candidate and supports candidate deletion", async () => {
@@ -345,12 +345,7 @@ describeWithDatabase("familyRepository invitations", () => {
     );
 
     await expect(
-      familyRepository.createInvitation(
-        owner.familyId,
-        owner.ownerId,
-        "expired-replay-create",
-      ),
+      familyRepository.createInvitation(owner.familyId, owner.ownerId, "expired-replay-create"),
     ).rejects.toThrowError(/AGENT_INVITATION_EXPIRED/);
   });
-
 });

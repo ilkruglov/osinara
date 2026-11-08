@@ -46,17 +46,13 @@ function createMcpConnectionStatusTracker(t) {
     Promise.all(
       CONNECTION_CATALOG.flatMap((e) => {
         let t = e.mcp?.url;
-        return t === void 0
-          ? []
-          : [n({ url: t, signal: r.signal }).then((t) => [e.slug, t])];
+        return t === void 0 ? [] : [n({ url: t, signal: r.signal }).then((t) => [e.slug, t])];
       }),
     )
       .then((e) => {
         a ||
           c !== o ||
-          ((i = Object.fromEntries(
-            e.flatMap(([e, t]) => (t === void 0 ? [] : [[e, t]])),
-          )),
+          ((i = Object.fromEntries(e.flatMap(([e, t]) => (t === void 0 ? [] : [[e, t]])))),
           t.onChange(i));
       })
       .catch(() => {

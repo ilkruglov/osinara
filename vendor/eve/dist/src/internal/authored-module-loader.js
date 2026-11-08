@@ -29,12 +29,7 @@ import {
 import { createNodeEsmCompatBannerPlugin } from "#internal/node-esm-compat-banner.js";
 import { createDynamicCapabilityTransformPlugin } from "#internal/workflow-bundle/dynamic-capability-transform-plugin.js";
 const AUTHORED_BUNDLED_MODULE_EXTENSION = /\.[cm]?[jt]sx?$/,
-  AUTHORED_MODULE_BUNDLE_DIRECTORY_PATH = join(
-    `node_modules`,
-    `.cache`,
-    `eve`,
-    `authored-modules`,
-  ),
+  AUTHORED_MODULE_BUNDLE_DIRECTORY_PATH = join(`node_modules`, `.cache`, `eve`, `authored-modules`),
   CHANNEL_MODULE_CACHE_KEY = `__eveChannelModuleCache__`;
 function getChannelModuleCache() {
   return globalThis[CHANNEL_MODULE_CACHE_KEY];
@@ -73,9 +68,7 @@ async function bundleAuthoredModuleCode(e, t = {}) {
   return await buildAuthoredModuleBundle(e, t, {
     channelIdentity: !0,
     packageBoundaryPlugin: createRuntimeLoaderPackageBoundaryPlugin({
-      externalDependencies: normalizeExternalDependencies(
-        t.externalDependencies,
-      ),
+      externalDependencies: normalizeExternalDependencies(t.externalDependencies),
       packageRoot: resolveAuthoredPackageRoot(e),
     }),
     plugins: [],
@@ -87,9 +80,7 @@ async function bundleAuthoredModuleForGeneration(e, t = {}) {
     await buildAuthoredModuleBundle(e, t, {
       channelIdentity: !1,
       packageBoundaryPlugin: createGenerationPackageBoundaryPlugin({
-        externalDependencies: normalizeExternalDependencies(
-          t.externalDependencies,
-        ),
+        externalDependencies: normalizeExternalDependencies(t.externalDependencies),
         packageRoot: resolveAuthoredPackageRoot(e),
       }),
       plugins: [createAuthoredDirectiveGuardPlugin()],
@@ -134,8 +125,7 @@ async function bundleExtensionDistributionGraph(e) {
       }),
       r = new Map();
     for (let e of n.output)
-      e.type === `chunk` &&
-        r.set(e.fileName, removeRolldownModuleRegionComments(e.code));
+      e.type === `chunk` && r.set(e.fileName, removeRolldownModuleRegionComments(e.code));
     return r;
   } catch (t) {
     throw createAuthoredModuleBundleError(e.packageRoot, t);
@@ -226,8 +216,7 @@ async function buildAuthoredModuleBundle(e, t, n) {
         ? {
             name: `eve-channel-identity`,
             async resolveId(e, t, n) {
-              if (!/channels[/\\]/.test(e) || n.kind !== `import-statement`)
-                return;
+              if (!/channels[/\\]/.test(e) || n.kind !== `import-statement`) return;
               let a = await this.resolve(e, t, { kind: n.kind, skipSelf: !0 });
               if (a === null || typeof a.id != `string`) return;
               let o = resolve(a.id);
@@ -312,10 +301,7 @@ async function loadBundledAuthoredModule(t, n) {
       .update(`\0`)
       .update(i)
       .digest(`hex`),
-    l = join(
-      resolveAuthoredPackageRoot(t),
-      AUTHORED_MODULE_BUNDLE_DIRECTORY_PATH,
-    ),
+    l = join(resolveAuthoredPackageRoot(t), AUTHORED_MODULE_BUNDLE_DIRECTORY_PATH),
     u = join(l, `${c}.mjs`);
   existsSync(u) || (mkdirSync(l, { recursive: !0 }), writeFileSync(u, i));
   try {
@@ -339,8 +325,7 @@ function resolveAuthoredPackageRoot(e) {
   for (;;) {
     if (existsSync(join(t, `package.json`))) return realpathSync(t);
     let i = dirname(t);
-    if (i === t)
-      throw Error(`Failed to resolve the authored package root for "${e}".`);
+    if (i === t) throw Error(`Failed to resolve the authored package root for "${e}".`);
     t = i;
   }
 }

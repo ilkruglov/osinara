@@ -70,8 +70,7 @@ function twilioChannel(e) {
     ],
     async receive(n, { from: r }) {
       let i = readNonEmptyString(n.target.phoneNumber);
-      if (!i)
-        throw Error(`twilioChannel().receive requires target.phoneNumber.`);
+      if (!i) throw Error(`twilioChannel().receive requires target.phoneNumber.`);
       let a = readNonEmptyString(n.target.from) ?? e.messaging?.from ?? null;
       return r(twilioContinuationToken(i, a ?? void 0)).send(n.message, {
         auth: n.auth,
@@ -117,18 +116,11 @@ function handleTwilioVoice(e) {
     if (i === null) return new Response(`forbidden`, { status: 403 });
     let a = i ?? {};
     return gatherSpeechTwilioResponse({
-      actionUrl: await buildTwilioActionUrl(
-        t,
-        e.config,
-        e.routes.transcription,
-      ),
+      actionUrl: await buildTwilioActionUrl(t, e.config, e.routes.transcription),
       hints: a.hints ?? e.config.voice?.hints,
       language: a.language ?? e.config.voice?.language,
       profanityFilter: a.profanityFilter ?? e.config.voice?.profanityFilter,
-      prompt:
-        a.prompt ??
-        e.config.voice?.prompt ??
-        `Please say your message after the tone.`,
+      prompt: a.prompt ?? e.config.voice?.prompt ?? `Please say your message after the tone.`,
       speechModel: a.speechModel ?? e.config.voice?.speechModel,
       speechTimeout: a.speechTimeout ?? e.config.voice?.speechTimeout ?? `auto`,
       timeoutSeconds: a.timeoutSeconds ?? e.config.voice?.timeoutSeconds,
@@ -151,20 +143,12 @@ function handleTwilioTranscription(e) {
               transcription: a,
             }),
           ),
-          sayTwilioResponse(
-            e.config.voice?.acknowledgement ??
-              `Thanks. I'll follow up by text.`,
-          ))
+          sayTwilioResponse(e.config.voice?.acknowledgement ?? `Thanks. I'll follow up by text.`))
         : new Response(`forbidden`, { status: 403 })
       : gatherSpeechTwilioResponse({
-          actionUrl: await buildTwilioActionUrl(
-            t,
-            e.config,
-            e.routes.transcription,
-          ),
+          actionUrl: await buildTwilioActionUrl(t, e.config, e.routes.transcription),
           language: e.config.voice?.language,
-          prompt:
-            e.config.voice?.prompt ?? `Please say your message after the tone.`,
+          prompt: e.config.voice?.prompt ?? `Please say your message after the tone.`,
           speechTimeout: e.config.voice?.speechTimeout ?? `auto`,
           timeoutSeconds: e.config.voice?.timeoutSeconds,
         });
@@ -225,9 +209,7 @@ function buildTwilioHandle(e) {
 }
 function assertAllowFromConfigured(e) {
   if (e?.allowFrom === void 0)
-    throw Error(
-      `twilioChannel requires allowFrom. Use allowFrom: "*" to allow all numbers.`,
-    );
+    throw Error(`twilioChannel requires allowFrom. Use allowFrom: "*" to allow all numbers.`);
 }
 async function dispatchText(e) {
   let { message: t } = e,
@@ -254,19 +236,17 @@ async function dispatchText(e) {
     to: t.to,
   });
   try {
-    await e
-      .from(twilioContinuationToken(t.from, t.to))
-      .send(t.body, {
-        auth: r.auth,
-        context: [i],
-        state: {
-          from: t.from,
-          lastCallSid: null,
-          lastMessageSid: t.messageSid ?? null,
-          to: t.to ?? null,
-        },
-        title: r.title,
-      });
+    await e.from(twilioContinuationToken(t.from, t.to)).send(t.body, {
+      auth: r.auth,
+      context: [i],
+      state: {
+        from: t.from,
+        lastCallSid: null,
+        lastMessageSid: t.messageSid ?? null,
+        to: t.to ?? null,
+      },
+      title: r.title,
+    });
   } catch (e) {
     log.error(`text delivery failed`, { error: e });
   }
@@ -312,19 +292,17 @@ async function dispatchVoiceTranscription(e) {
     to: t.to,
   });
   try {
-    await e
-      .from(twilioContinuationToken(t.from, t.to))
-      .send(t.text, {
-        auth: r.auth,
-        context: [i],
-        state: {
-          from: t.from,
-          lastCallSid: t.callSid ?? null,
-          lastMessageSid: null,
-          to: t.to ?? null,
-        },
-        title: r.title,
-      });
+    await e.from(twilioContinuationToken(t.from, t.to)).send(t.text, {
+      auth: r.auth,
+      context: [i],
+      state: {
+        from: t.from,
+        lastCallSid: t.callSid ?? null,
+        lastMessageSid: null,
+        to: t.to ?? null,
+      },
+      title: r.title,
+    });
   } catch (e) {
     log.error(`voice transcription delivery failed`, { error: e });
   }

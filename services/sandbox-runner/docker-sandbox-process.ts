@@ -143,13 +143,16 @@ export async function executeSandboxProcess(
   }
 
   // GNU timeout returns 137 when an uncooperative process reaches the KILL grace boundary.
-  const timedOut = inspection.ExitCode === 124 ||
+  const timedOut =
+    inspection.ExitCode === 124 ||
     (inspection.ExitCode === 137 && Date.now() - startedAt >= timeoutMs);
   const stderrText = timedOut
     ? [
         stderrBytes.toString("utf8").trimEnd(),
         `${PROCESS_TIMED_OUT_MARKER}: Command exceeded ${timeoutMs} ms`,
-      ].filter(Boolean).join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n")
     : stderrBytes.toString("utf8");
   return {
     exitCode: inspection.ExitCode,

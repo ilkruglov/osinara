@@ -58,4 +58,9 @@ export const YANDEX_TAXI_COMMIT_RETRY_MS = 5_000;
  */
 export const YANDEX_TAXI_PRICE_RISE_PERCENT = 5;
 /** Order statuses after which nothing goes on (site module 30818). */
-export const YANDEX_TAXI_FINISHED_STATUSES: ReadonlySet<string> = new Set(["cancelled", "complete", "expired", "failed"]);
+export const YANDEX_TAXI_FINISHED_STATUSES: ReadonlySet<string> = new Set([
+  "cancelled",
+  "complete",
+  "expired",
+  "failed",
+]);

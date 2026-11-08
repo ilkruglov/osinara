@@ -38,18 +38,10 @@ const TELEGRAM_CHAT_TYPES = new Set<TelegramChatType>([
   "supergroup",
 ]);
 
-type TelegramRichTarget = Pick<
-  TelegramHandle,
-  "chatId" | "chatType" | "messageThreadId"
->;
+type TelegramRichTarget = Pick<TelegramHandle, "chatId" | "chatType" | "messageThreadId">;
 
-type TelegramRichAnchorState = Pick<
-  TelegramChannelState,
-  "chatType" | "conversationId"
->;
-type TelegramApiBody = NonNullable<
-  Parameters<typeof callTelegramApi>[0]["body"]
->;
+type TelegramRichAnchorState = Pick<TelegramChannelState, "chatType" | "conversationId">;
+type TelegramApiBody = NonNullable<Parameters<typeof callTelegramApi>[0]["body"]>;
 
 export interface SentTelegramMessage {
   readonly chatType: TelegramChatType;
@@ -57,8 +49,7 @@ export interface SentTelegramMessage {
 }
 
 function draftId(target: TelegramRichTarget, turnId: string): number {
-  const thread =
-    target.messageThreadId === undefined ? "" : String(target.messageThreadId);
+  const thread = target.messageThreadId === undefined ? "" : String(target.messageThreadId);
   const digest = createHash("sha256")
     .update(target.chatId)
     .update(":")
@@ -80,16 +71,9 @@ function requireTelegramBotToken(): string {
   return botToken;
 }
 
-function numericChatId(
-  target: TelegramRichTarget,
-  privateOnly: boolean,
-): number | string {
+function numericChatId(target: TelegramRichTarget, privateOnly: boolean): number | string {
   const numeric = Number(target.chatId);
-  if (
-    Number.isSafeInteger(numeric) &&
-    numeric !== 0 &&
-    (!privateOnly || numeric > 0)
-  ) {
+  if (Number.isSafeInteger(numeric) && numeric !== 0 && (!privateOnly || numeric > 0)) {
     return numeric;
   }
   if (!privateOnly && /^@[A-Za-z][A-Za-z0-9_]{3,}$/u.test(target.chatId)) {
@@ -102,7 +86,10 @@ function numericChatId(
 }
 
 // Resolved per call, so a fetch replaced after import (tests, instrumentation) is the one used.
-const telegramRichFetch = withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS);
+const telegramRichFetch = withRequestTimeout(
+  (request, init) => fetch(request, init),
+  TELEGRAM_API_REQUEST_TIMEOUT_MS,
+);
 
 function addStableErrorCode(error: Error, code: string): void {
   // DOMException exposes a getter-only message, so attach diagnostics without replacing the cause.
@@ -186,9 +173,7 @@ function requireDraftSuccess(response: TelegramApiResponse): void {
   );
 }
 
-function requireSentMessage(
-  response: TelegramApiResponse,
-): SentTelegramMessage {
+function requireSentMessage(response: TelegramApiResponse): SentTelegramMessage {
   const body = response.body as {
     result?: {
       chat?: { type?: unknown };
@@ -229,12 +214,8 @@ function richBody(
 ): TelegramApiBody {
   return {
     chat_id: numericChatId(target, privateOnly),
-    ...(target.messageThreadId === undefined
-      ? {}
-      : { message_thread_id: target.messageThreadId }),
-    ...(replyParameters === undefined
-      ? {}
-      : { reply_parameters: replyParameters }),
+    ...(target.messageThreadId === undefined ? {} : { message_thread_id: target.messageThreadId }),
+    ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
     rich_message: richMessage,
   };
 }

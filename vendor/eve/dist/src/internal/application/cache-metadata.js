@@ -16,9 +16,7 @@ async function writeEveVersionedCacheMetadata(t) {
 }
 async function readEveCacheVersion(e) {
   try {
-    let n = JSON.parse(
-      await readFile(join(e, EVE_CACHE_METADATA_FILE), `utf8`),
-    );
+    let n = JSON.parse(await readFile(join(e, EVE_CACHE_METADATA_FILE), `utf8`));
     return typeof n.eveVersion == `string` ? n.eveVersion : null;
   } catch (e) {
     return (e instanceof Error && `code` in e && e.code, null);

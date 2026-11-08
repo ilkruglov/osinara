@@ -31,8 +31,7 @@ async function transformWorkflowDirectives(e) {
       } else
         (o.push({ end: t.directiveEnd, start: t.directiveStart, text: `` }),
           e.mode === `step`
-            ? ((c = !0),
-              s.push(`registerStepFunction(${JSON.stringify(n)}, ${t.name});`))
+            ? ((c = !0), s.push(`registerStepFunction(${JSON.stringify(n)}, ${t.name});`))
             : s.push(`${t.name}.stepId = ${JSON.stringify(n)};`));
       continue;
     }
@@ -43,9 +42,7 @@ async function transformWorkflowDirectives(e) {
       e.mode === `workflow`
         ? (o.push({ end: t.directiveEnd, start: t.directiveStart, text: `` }),
           s.push(`${t.name}.workflowId = ${JSON.stringify(n)};`),
-          s.push(
-            `globalThis.__private_workflows.set(${JSON.stringify(n)}, ${t.name});`,
-          ))
+          s.push(`globalThis.__private_workflows.set(${JSON.stringify(n)}, ${t.name});`))
         : (o.push({
             end: t.directiveEnd,
             start: t.directiveStart,
@@ -61,8 +58,7 @@ async function transformWorkflowDirectives(e) {
       workflowManifest: a,
     };
   let d = applySourceReplacements(e.source, o),
-    f =
-      e.mode === `workflow` ? await stripUnusedValueImports(e.filename, d) : d;
+    f = e.mode === `workflow` ? await stripUnusedValueImports(e.filename, d) : d;
   return {
     code: `${c ? `import { registerStepFunction } from "workflow/internal/private";\n${l}\n` : `${l}\n`}${f}${
       s.length > 0
@@ -133,16 +129,12 @@ function collectLocalNamesReExportedAtModuleLevel(e) {
 function readTopLevelFunctionDeclaration(e) {
   return e.type === `FunctionDeclaration`
     ? readFunctionDeclarationRange(e, !1, e)
-    : e.type !== `ExportNamedDeclaration` ||
-        e.declaration?.type !== `FunctionDeclaration`
+    : e.type !== `ExportNamedDeclaration` || e.declaration?.type !== `FunctionDeclaration`
       ? null
       : readFunctionDeclarationRange(e.declaration, !0, e);
 }
 function readFunctionDeclarationRange(e, t, n) {
-  return e.start === void 0 ||
-    e.end === void 0 ||
-    n.start === void 0 ||
-    n.end === void 0
+  return e.start === void 0 || e.end === void 0 || n.start === void 0 || n.end === void 0
     ? null
     : { end: n.end, exported: t, fn: e, start: n.start };
 }
@@ -155,9 +147,7 @@ function readFunctionDirective(e) {
     (e?.type === `ExpressionStatement` && e.expression?.type === `Literal`
       ? e.expression.value
       : void 0);
-  return (t !== `use workflow` && t !== `use step`) ||
-    e?.start === void 0 ||
-    e.end === void 0
+  return (t !== `use workflow` && t !== `use step`) || e?.start === void 0 || e.end === void 0
     ? null
     : { end: e.end, start: e.start, value: t };
 }
@@ -173,12 +163,7 @@ async function stripUnusedValueImports(e, t) {
     r = collectReferencedIdentifiers(n),
     i = [];
   for (let e of n.body ?? []) {
-    if (
-      e.type !== `ImportDeclaration` ||
-      e.start === void 0 ||
-      e.end === void 0
-    )
-      continue;
+    if (e.type !== `ImportDeclaration` || e.start === void 0 || e.end === void 0) continue;
     let n = readValueImportBindings(e);
     n.length > 0 &&
       n.every((e) => !r.has(e)) &&
@@ -206,12 +191,7 @@ function findExportedLiteralValueDeclarations(e, t) {
       (i.kind === `const` || i.kind === `var` || i.kind === `let`)
     )
       for (let t of i.declarations ?? []) {
-        if (
-          !isLiteralValueDeclarator(t) ||
-          t.start === void 0 ||
-          t.end === void 0
-        )
-          continue;
+        if (!isLiteralValueDeclarator(t) || t.start === void 0 || t.end === void 0) continue;
         let a = t.id?.name;
         if (a === void 0) continue;
         let o = r.get(a);
@@ -293,7 +273,7 @@ function isAstNode(e) {
 }
 function extendRemovalEnd(e, t) {
   let n = t;
-  for (; n < e.length && (e[n] === ` ` || e[n] === `	`); ) n += 1;
+  for (; n < e.length && (e[n] === ` ` || e[n] === `	`);) n += 1;
   return e[n] === `\r` &&
     e[n + 1] ===
       `

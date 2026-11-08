@@ -90,8 +90,7 @@ function hasMissingProcessCallback(e) {
   return (
     (e.executeStepFnName?.startsWith(`eve:framework-dynamic:`) === !0 &&
       lookupStepFunction(e.executeStepFnName) === null) ||
-    (e.approvalStepFnName !== void 0 &&
-      lookupStepFunction(e.approvalStepFnName) === null) ||
+    (e.approvalStepFnName !== void 0 && lookupStepFunction(e.approvalStepFnName) === null) ||
     (e.approvalResponseStepFnName !== void 0 &&
       lookupStepFunction(e.approvalResponseStepFnName) === null)
   );
@@ -109,7 +108,7 @@ function registerProcessCallbacks(e, t) {
   let i = { id: e, callbackIds: new Set(t.keys()) };
   (processCallbackGroups.set(e, i), processCallbackQueue.push(i));
   for (let [e, r] of t) n.set(e, r);
-  for (; processCallbackQueue.length > 256; ) {
+  for (; processCallbackQueue.length > 256;) {
     let e = processCallbackQueue.shift();
     if (processCallbackGroups.get(e.id) === e) {
       processCallbackGroups.delete(e.id);
@@ -181,11 +180,7 @@ async function resolveToolsFromEvent(e, t, n, r) {
         throw Error(
           `Dynamic tool "${t}" from resolver "${r.slug}" collides with dynamic resolver "${f}". Namespace the map key manually, e.g. "${r.slug}__${t}".`,
         );
-      if (
-        (d.set(t, r.slug),
-        u.push(toHarnessToolDefinition(t, o)),
-        n.type === `step.started`)
-      )
+      if ((d.set(t, r.slug), u.push(toHarnessToolDefinition(t, o)), n.type === `step.started`))
         continue;
       let p = `__executeStepFn` in o ? o.__executeStepFn : void 0,
         h = `__closureVars` in o ? o.__closureVars : void 0,
@@ -204,8 +199,7 @@ async function resolveToolsFromEvent(e, t, n, r) {
         m.set(y, (t, n) => e(n));
         let t = typeof o.approval == `function` ? void 0 : o.approval.response;
         t !== void 0 &&
-          ((b = `eve:dynamic-tool-approval-response:${v}${r.slug}:${a}`),
-          m.set(b, (e, n) => t(n)));
+          ((b = `eve:dynamic-tool-approval-response:${v}${r.slug}:${a}`), m.set(b, (e, n) => t(n)));
       }
       l.push({
         name: t,
@@ -270,8 +264,7 @@ async function dispatchDynamicToolEvent(e) {
   t.set(c, [...u, ...s]);
 }
 async function refreshDynamicSessionToolsForRuntimeRevision(e) {
-  if (e.ctx.get(SessionDynamicToolRuntimeRevisionKey) === e.runtimeRevision)
-    return;
+  if (e.ctx.get(SessionDynamicToolRuntimeRevisionKey) === e.runtimeRevision) return;
   let t = e.resolvers.filter((e) => e.eventNames.includes(`session.started`)),
     { metadata: i } =
       t.length === 0
@@ -285,9 +278,7 @@ async function hydrateDynamicSessionTools(e) {
     r = t.filter(hasMissingProcessCallback);
   if (r.length === 0) return;
   let i = new Set(r.map((e) => e.resolverSlug)),
-    a = e.resolvers.filter(
-      (e) => e.eventNames.includes(`session.started`) && i.has(e.slug),
-    ),
+    a = e.resolvers.filter((e) => e.eventNames.includes(`session.started`) && i.has(e.slug)),
     { metadata: o } =
       a.length === 0
         ? { metadata: [] }
@@ -295,15 +286,9 @@ async function hydrateDynamicSessionTools(e) {
     s = new Map(t.map((e) => [e.name, e.resolverSlug])),
     c = new Map(o.map((e) => [e.name, e.resolverSlug]));
   if (o.some((e) => s.get(e.name) !== e.resolverSlug))
-    throw Error(
-      `Dynamic session tool callback hydration changed durable ownership.`,
-    );
-  r.some(
-    (e) => c.get(e.name) !== e.resolverSlug || hasMissingProcessCallback(e),
-  ) &&
-    log.warn(
-      `Dynamic session tool callback hydration did not reproduce durable ownership.`,
-    );
+    throw Error(`Dynamic session tool callback hydration changed durable ownership.`);
+  r.some((e) => c.get(e.name) !== e.resolverSlug || hasMissingProcessCallback(e)) &&
+    log.warn(`Dynamic session tool callback hydration did not reproduce durable ownership.`);
 }
 export {
   dispatchDynamicToolEvent,

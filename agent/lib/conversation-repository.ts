@@ -236,7 +236,7 @@ export const conversationRepository = {
         );
       }
 
-       // Every requested entry must belong to this conversation. Agent entries are valid selections
+      // Every requested entry must belong to this conversation. Agent entries are valid selections
       // but never become human participants.
       const selected = await client.query<{
         actor_kind: "agent_self" | "telegram_bot" | "telegram_channel" | "user";
@@ -258,8 +258,8 @@ export const conversationRepository = {
         );
       }
       // A bot has a Telegram user id of its own; it becomes a participant without an account link.
-      const users = selected.rows.filter((row) =>
-        row.actor_kind === "user" || row.actor_kind === "telegram_bot"
+      const users = selected.rows.filter(
+        (row) => row.actor_kind === "user" || row.actor_kind === "telegram_bot",
       );
       if (users.some((row) => row.telegram_user_id === null)) {
         throw new AppError(
@@ -292,24 +292,32 @@ export const conversationRepository = {
                first_observed_at = least(conversation_participants.first_observed_at, EXCLUDED.first_observed_at),
                last_observed_at = greatest(conversation_participants.last_observed_at, EXCLUDED.last_observed_at),
                updated_at = now()`,
-          [boundary.id, boundary.family_id, boundary.scope, boundary.scope_partition_key,
-            row.telegram_user_id, row.sender_display_name, row.sent_at,
+          [
+            boundary.id,
+            boundary.family_id,
+            boundary.scope,
+            boundary.scope_partition_key,
+            row.telegram_user_id,
+            row.sender_display_name,
+            row.sent_at,
             // The column check bounds it; an over-long value is shown as no username at all.
-            row.sender_username && row.sender_username.length <= 64 ? row.sender_username : null],
+            row.sender_username && row.sender_username.length <= 64 ? row.sender_username : null,
+          ],
         );
       }
 
       const telegramUserIds = users.map((row) => row.telegram_user_id!);
-      const result = telegramUserIds.length === 0
-        ? { rows: [] as ParticipantRow[] }
-        : await client.query<ParticipantRow>(
-            `SELECT id, participant_ref, conversation_id, telegram_user_id, linked_user_id,
+      const result =
+        telegramUserIds.length === 0
+          ? { rows: [] as ParticipantRow[] }
+          : await client.query<ParticipantRow>(
+              `SELECT id, participant_ref, conversation_id, telegram_user_id, linked_user_id,
                     display_name_snapshot, username_snapshot, first_observed_at, last_observed_at
              FROM conversation_participants
              WHERE conversation_id = $1 AND telegram_user_id = ANY($2::text[])
              ORDER BY telegram_user_id`,
-            [conversationId, telegramUserIds],
-          );
+              [conversationId, telegramUserIds],
+            );
       await client.query("COMMIT");
       return result.rows.map(projectParticipant);
     } catch (error) {

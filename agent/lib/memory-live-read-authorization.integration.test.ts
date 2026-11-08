@@ -12,9 +12,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
-import {
-  MEMORY_EMBEDDING_MODEL_VERSION,
-} from "./memory-config.js";
+import { MEMORY_EMBEDDING_MODEL_VERSION } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryListRepository } from "./memory-list-repository.js";
 import { memoryRepository } from "./memory-repository.js";
@@ -71,10 +69,9 @@ interface ReadFixture {
 
 async function indexClaim(claimId: string): Promise<void> {
   // A deterministic vector makes retrieval authorization observable without a model provider.
-  await database().query(
-    "UPDATE memory_items SET embedding_status = 'indexed' WHERE id = $1",
-    [claimId],
-  );
+  await database().query("UPDATE memory_items SET embedding_status = 'indexed' WHERE id = $1", [
+    claimId,
+  ]);
   await database().query(
     `INSERT INTO memory_embedding_chunks
        (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
@@ -176,8 +173,14 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
      VALUES ($1, $2, $3, 'group', 'episode', 'Групповой план ремонта', 'test:live-read',
              'user_confirmed', 'normal', $4, 'indexed', 'evidenced', $5, $6, true,
              'групповой план ремонта', false) RETURNING id`,
-    [familyId, groupId, `live-group-${suffix}`, `live-group-claim-${suffix}`,
-      conversation.rows[0]!.id, project.rows[0]!.id],
+    [
+      familyId,
+      groupId,
+      `live-group-${suffix}`,
+      `live-group-claim-${suffix}`,
+      conversation.rows[0]!.id,
+      project.rows[0]!.id,
+    ],
   );
   await database().query(
     `INSERT INTO claim_evidence
@@ -188,8 +191,16 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
      VALUES ($1, $2, 'group', $3, 'primary', 'firsthand', $4, $5, $3, $6, $7,
              'Group member', now(), 'Продолжаем групповой ремонт', $8, 1, 1,
              '{"content":"Продолжаем групповой ремонт"}'::jsonb)`,
-    [claim.rows[0]!.id, familyId, groupId, conversation.rows[0]!.id, `Live ${suffix}`,
-      participant.rows[0]!.id, userId, timeline.rows[0]!.id],
+    [
+      claim.rows[0]!.id,
+      familyId,
+      groupId,
+      conversation.rows[0]!.id,
+      `Live ${suffix}`,
+      participant.rows[0]!.id,
+      userId,
+      timeline.rows[0]!.id,
+    ],
   );
   await indexClaim(claim.rows[0]!.id);
   const thread = await database().query<{ id: string; thread_ref: string }>(
@@ -198,8 +209,13 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
         title_embedding, title_embedding_model)
      VALUES ($1, 'group', $2, $3, 'Групповой ремонт', 'Хранить решения ремонта', $4::vector, $5)
      RETURNING id, thread_ref`,
-    [familyId, groupId, project.rows[0]!.id, `[${QUERY_VECTOR.join(",")}]`,
-      MEMORY_EMBEDDING_MODEL_VERSION],
+    [
+      familyId,
+      groupId,
+      project.rows[0]!.id,
+      `[${QUERY_VECTOR.join(",")}]`,
+      MEMORY_EMBEDDING_MODEL_VERSION,
+    ],
   );
   await database().query(
     `INSERT INTO memory_thread_entries
@@ -228,49 +244,67 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
 
 async function expectReadable(fixture: ReadFixture): Promise<void> {
   const briefs = createMemoryThreadBriefRepository();
-  expect((await memoryListRepository.list(fixture.auth, { limit: 20 })).items.length).toBeGreaterThan(0);
-  expect((await memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR)).length)
-    .toBeGreaterThan(0);
-  expect((await memoryRetrievalRepository.searchWithConflictClosure(
-    fixture.auth,
-    "ремонт",
-    QUERY_VECTOR,
-  )).results.length).toBeGreaterThan(0);
-  expect((await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 })).items)
-    .toHaveLength(1);
+  expect(
+    (await memoryListRepository.list(fixture.auth, { limit: 20 })).items.length,
+  ).toBeGreaterThan(0);
+  expect(
+    (await memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR)).length,
+  ).toBeGreaterThan(0);
+  expect(
+    (
+      await memoryRetrievalRepository.searchWithConflictClosure(
+        fixture.auth,
+        "ремонт",
+        QUERY_VECTOR,
+      )
+    ).results.length,
+  ).toBeGreaterThan(0);
+  expect((await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 })).items).toHaveLength(
+    1,
+  );
   expect(await memoryThreadQueryRepository.search(fixture.auth, "ремонт", 20)).toHaveLength(1);
-  expect((await memoryThreadQueryRepository.read(fixture.auth, fixture.threadRef, { limit: 20 })).entries)
-    .toHaveLength(1);
-  expect((await briefs.activate({
-    auth: fixture.auth,
-    queryEmbedding: QUERY_VECTOR,
-    retrievedClaimIds: [fixture.claimId],
-    skillHints: [],
-  })).threads).toHaveLength(1);
+  expect(
+    (await memoryThreadQueryRepository.read(fixture.auth, fixture.threadRef, { limit: 20 }))
+      .entries,
+  ).toHaveLength(1);
+  expect(
+    (
+      await briefs.activate({
+        auth: fixture.auth,
+        queryEmbedding: QUERY_VECTOR,
+        retrievedClaimIds: [fixture.claimId],
+        skillHints: [],
+      })
+    ).threads,
+  ).toHaveLength(1);
 }
 
 async function expectDenied(fixture: ReadFixture): Promise<void> {
   const briefs = createMemoryThreadBriefRepository();
-  await expect(memoryListRepository.list(fixture.auth, { limit: 20 }))
-    .resolves.toMatchObject({ items: [] });
-  await expect(memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR))
-    .resolves.toEqual([]);
-  await expect(memoryRetrievalRepository.searchWithConflictClosure(
-    fixture.auth,
-    "ремонт",
-    QUERY_VECTOR,
-  )).resolves.toEqual({ conflicts: [], relatedClaimIds: [], results: [] });
-  await expect(memoryThreadQueryRepository.list(fixture.auth, { limit: 20 }))
-    .resolves.toMatchObject({ items: [] });
+  await expect(memoryListRepository.list(fixture.auth, { limit: 20 })).resolves.toMatchObject({
+    items: [],
+  });
+  await expect(
+    memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR),
+  ).resolves.toEqual([]);
+  await expect(
+    memoryRetrievalRepository.searchWithConflictClosure(fixture.auth, "ремонт", QUERY_VECTOR),
+  ).resolves.toEqual({ conflicts: [], relatedClaimIds: [], results: [] });
+  await expect(
+    memoryThreadQueryRepository.list(fixture.auth, { limit: 20 }),
+  ).resolves.toMatchObject({ items: [] });
   await expect(memoryThreadQueryRepository.search(fixture.auth, "ремонт", 20)).resolves.toEqual([]);
-  await expect(memoryThreadQueryRepository.read(fixture.auth, fixture.threadRef, { limit: 20 }))
-    .rejects.toMatchObject({ code: "AGENT_MEMORY_THREAD_NOT_FOUND" });
-  await expect(briefs.activate({
-    auth: fixture.auth,
-    queryEmbedding: QUERY_VECTOR,
-    retrievedClaimIds: [fixture.claimId],
-    skillHints: [],
-  })).resolves.toEqual({ threads: [], totalCharacters: 0 });
+  await expect(
+    memoryThreadQueryRepository.read(fixture.auth, fixture.threadRef, { limit: 20 }),
+  ).rejects.toMatchObject({ code: "AGENT_MEMORY_THREAD_NOT_FOUND" });
+  await expect(
+    briefs.activate({
+      auth: fixture.auth,
+      queryEmbedding: QUERY_VECTOR,
+      retrievedClaimIds: [fixture.claimId],
+      skillHints: [],
+    }),
+  ).resolves.toEqual({ threads: [], totalCharacters: 0 });
 }
 
 describeWithDatabase("live memory read authorization", () => {
@@ -285,10 +319,10 @@ describeWithDatabase("live memory read authorization", () => {
     await expectReadable(fixture);
 
     // The Eve turn still carries old scopes, but the database membership is authoritative.
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [fixture.familyId, fixture.userId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.userId,
+    ]);
     await expectDenied(fixture);
   });
 
@@ -296,18 +330,22 @@ describeWithDatabase("live memory read authorization", () => {
     const fixture = await createTrustedFixture();
     const briefs = createMemoryThreadBriefRepository();
 
-    await expect(briefs.activate({
-      auth: fixture.auth,
-      queryEmbedding: QUERY_VECTOR,
-      retrievedClaimIds: [fixture.claimId],
-      skillHints: [],
-    })).resolves.toMatchObject({
+    await expect(
+      briefs.activate({
+        auth: fixture.auth,
+        queryEmbedding: QUERY_VECTOR,
+        retrievedClaimIds: [fixture.claimId],
+        skillHints: [],
+      }),
+    ).resolves.toMatchObject({
       threads: [expect.objectContaining({ blocks: expect.any(Array) })],
     });
-    await expect(database().query(
-      "SELECT 1 FROM memory_thread_briefs AS brief JOIN memory_threads AS thread ON thread.id = brief.thread_id WHERE thread.thread_ref = $1",
-      [fixture.threadRef],
-    )).resolves.toMatchObject({ rows: [] });
+    await expect(
+      database().query(
+        "SELECT 1 FROM memory_thread_briefs AS brief JOIN memory_threads AS thread ON thread.id = brief.thread_id WHERE thread.thread_ref = $1",
+        [fixture.threadRef],
+      ),
+    ).resolves.toMatchObject({ rows: [] });
   });
 
   it("denies the thread source loader directly after membership revocation", async () => {
@@ -320,8 +358,9 @@ describeWithDatabase("live memory read authorization", () => {
     const client = await database().connect();
     try {
       // Prove the defense-in-depth loader independently of activation candidate selection.
-      await expect(loadMemoryThreadSources(client, internal.id, fixture.auth))
-        .resolves.not.toHaveLength(0);
+      await expect(
+        loadMemoryThreadSources(client, internal.id, fixture.auth),
+      ).resolves.not.toHaveLength(0);
       await database().query(
         "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
         [fixture.familyId, fixture.userId],
@@ -355,7 +394,10 @@ describeWithDatabase("live memory read authorization", () => {
       revoked = true;
     };
     try {
-      await expect(briefs.activate(activation)).resolves.toEqual({ threads: [], totalCharacters: 0 });
+      await expect(briefs.activate(activation)).resolves.toEqual({
+        threads: [],
+        totalCharacters: 0,
+      });
       expect(revoked).toBe(true);
     } finally {
       sourceEvidenceBoundary.beforeRead = null;
@@ -367,10 +409,10 @@ describeWithDatabase("live memory read authorization", () => {
     fixture.auth = { ...fixture.auth, groupId: fixture.groupId, scopes: ["family"] };
     await expectReadable(fixture);
 
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [fixture.familyId, fixture.userId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.userId,
+    ]);
     await expectDenied(fixture);
 
     // A new valid membership cannot revive a stale turn after its exact group registration is gone.
@@ -390,10 +432,10 @@ describeWithDatabase("live memory read authorization", () => {
 
   it("keeps an external group isolated without membership and denies it after registration deletion", async () => {
     const fixture = await createExternalGroupFixture("external");
-    await database().query(
-      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-      [fixture.familyId, fixture.userId],
-    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [
+      fixture.familyId,
+      fixture.userId,
+    ]);
     await expectReadable(fixture);
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [fixture.groupId]);

@@ -61,7 +61,10 @@ export async function registerTelegramDeliveredMessageRoutes(
 ): Promise<void> {
   const state = channel.state;
   if (!state.chatId) {
-    throw new AppError("AGENT_SESSION_ROUTE_INVALID", "Не удалось определить Telegram-чат контекста");
+    throw new AppError(
+      "AGENT_SESSION_ROUTE_INVALID",
+      "Не удалось определить Telegram-чат контекста",
+    );
   }
 
   // Delivery anchors are application aliases only. Private HITL callbacks need their exact message

@@ -1,4 +1,9 @@
-export declare const WORKFLOW_STEP_EXTERNAL_PACKAGES: readonly ["@mongodb-js/zstd", "just-bash", "microsandbox", "node-liblzma"];
+export declare const WORKFLOW_STEP_EXTERNAL_PACKAGES: readonly [
+  "@mongodb-js/zstd",
+  "just-bash",
+  "microsandbox",
+  "node-liblzma",
+];
 /**
  * Packages that must stay external during the initial workflow builder
  * pass so `node:*` transitive dependencies do not fail the workflow VM check.
@@ -29,6 +34,9 @@ export declare function materializeVercelWorkflowFunctionOutput(outputDir: strin
  * that model by copying the shared target once into the eve-owned tree and
  * repointing eve route aliases at it before pruning the root target.
  */
-export declare function normalizeEveVercelFunctionOutput(outputDir: string, options?: {
+export declare function normalizeEveVercelFunctionOutput(
+  outputDir: string,
+  options?: {
     readonly servicePrefix?: string;
-}): Promise<void>;
+  },
+): Promise<void>;

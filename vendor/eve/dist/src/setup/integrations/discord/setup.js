@@ -99,16 +99,12 @@ async function applyDiscordSetup(e, t, n = defaultDeps) {
     description: e.commandDescription,
   }),
     await n.configureEndpoint(e.botToken, i.id),
-    await n.writeTextFile(
-      join(t.appRoot, `agent/channels/discord.ts`),
-      connectTemplate(i.uid),
-      { force: t.force },
-    ));
+    await n.writeTextFile(join(t.appRoot, `agent/channels/discord.ts`), connectTemplate(i.uid), {
+      force: t.force,
+    }));
   let o = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(r.id)}&scope=bot%20applications.commands&permissions=3072`;
   return (
-    t.presenter.nextSteps([
-      `Install the Discord application, then try /${e.commandName}: ${o}`,
-    ]),
+    t.presenter.nextSteps([`Install the Discord application, then try /${e.commandName}: ${o}`]),
     {
       deploymentRequired: !0,
       facts: [

@@ -43,7 +43,18 @@ import {
   type YandexTaxiEndpoint,
 } from "./yandex-taxi-config.js";
 
-export type YandexTaxiProjection = "cancel" | "commit" | "draft" | "finalize" | "launch" | "order" | "payments" | "places" | "routestats" | "suggest" | "zoneinfo";
+export type YandexTaxiProjection =
+  | "cancel"
+  | "commit"
+  | "draft"
+  | "finalize"
+  | "launch"
+  | "order"
+  | "payments"
+  | "places"
+  | "routestats"
+  | "suggest"
+  | "zoneinfo";
 
 export interface YandexTaxiPageRequest {
   body: Record<string, unknown>;

@@ -4,9 +4,7 @@ import { DEVELOPMENT_WORKER_APP_ROOT_ENV } from "#internal/workflow/development-
 import { installLocalInstrumentationRuntime } from "#tracing/local-instrumentation-runtime.js";
 const appRoot = process.env[DEVELOPMENT_WORKER_APP_ROOT_ENV];
 if (appRoot === void 0)
-  throw Error(
-    `${DEVELOPMENT_WORKER_APP_ROOT_ENV} is required for local tracing.`,
-  );
+  throw Error(`${DEVELOPMENT_WORKER_APP_ROOT_ENV} is required for local tracing.`);
 const runtime = installLocalInstrumentationRuntime({
   appRoot,
   frameworkVersion: resolveInstalledPackageInfo().version,

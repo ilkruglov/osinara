@@ -29,8 +29,8 @@ function buildSubagentRunInput(e) {
       subagentName: r.subagentName,
     };
   return (
-    (e.graph?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox?.definition
-      .inheritsParent === !0 ||
+    (e.graph?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox?.definition.inheritsParent ===
+      !0 ||
       r.subagentName === `agent`) &&
       (l.sandboxState !== void 0 && (g.parentSandboxState = l.sandboxState),
       (g.sandboxSessionId = e.sandboxSessionId ?? l.sessionId)),

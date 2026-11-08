@@ -6,8 +6,7 @@ function isStreamDisconnectError(e) {
     e.name === `AbortError` ||
     e.message === `terminated` ||
     t === `UND_ERR_SOCKET` ||
-    (e instanceof TypeError &&
-      /^(?:failed to fetch|fetch failed)$/i.test(e.message)) ||
+    (e instanceof TypeError && /^(?:failed to fetch|fetch failed)$/i.test(e.message)) ||
     /abort|cancel|disconnect|premature close|socket|terminated/i.test(e.message)
   );
 }
@@ -26,7 +25,7 @@ async function* readNdjsonStream(e) {
       e.value && (r += n.decode(e.value, { stream: !0 }));
       let a = r.indexOf(`
 `);
-      for (; a !== -1; ) {
+      for (; a !== -1;) {
         let e = r.slice(0, a).trim();
         ((r = r.slice(a + 1)),
           e.length > 0 && (yield JSON.parse(e)),

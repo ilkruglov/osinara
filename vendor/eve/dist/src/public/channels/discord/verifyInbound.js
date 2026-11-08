@@ -8,10 +8,7 @@ async function verifyDiscordInbound(e, t) {
       webhookVerifier: t?.webhookVerifier,
     });
   } catch (e) {
-    return (
-      log.warn(`discord inbound verification failed`, { error: e }),
-      null
-    );
+    return (log.warn(`discord inbound verification failed`, { error: e }), null);
   }
 }
 export { verifyDiscordInbound };

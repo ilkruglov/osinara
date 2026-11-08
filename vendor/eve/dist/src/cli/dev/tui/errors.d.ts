@@ -3,20 +3,25 @@
  * terminal renderer. One module owns the interrupt sentinel and the
  * failure-event projections so the two sides cannot drift apart.
  */
-import type { SessionFailedStreamEvent, StepFailedStreamEvent, TurnFailedStreamEvent } from "#client/index.js";
+import type {
+  SessionFailedStreamEvent,
+  StepFailedStreamEvent,
+  TurnFailedStreamEvent,
+} from "#client/index.js";
 /**
  * One of the failure events a session stream can carry. All three share the
  * same `{ code, message, details? }` payload shape — the harness emits them
  * as a cascade (`step.failed` → `turn.failed` → `session.failed` /
  * `session.waiting`) describing a single underlying failure.
  */
-export type FailureStreamEvent = StepFailedStreamEvent | TurnFailedStreamEvent | SessionFailedStreamEvent;
+export type FailureStreamEvent =
+  StepFailedStreamEvent | TurnFailedStreamEvent | SessionFailedStreamEvent;
 /**
  * Thrown when the user interrupts the TUI (Ctrl+C, or Ctrl+D on an empty
  * prompt). The runner treats it as a clean exit, never as a failure.
  */
 export declare class InterruptedError extends Error {
-    constructor();
+  constructor();
 }
 export declare function interruptedError(): InterruptedError;
 export declare function isInterruptedError(error: unknown): boolean;
@@ -47,9 +52,9 @@ export declare function formatFailureMessage(event: FailureStreamEvent): string;
  * consumer narrows the untyped `details` payload the same way.
  */
 export interface FailureDetails {
-    readonly semanticErrorId?: string;
-    readonly hint?: string;
-    readonly detail?: string;
+  readonly semanticErrorId?: string;
+  readonly hint?: string;
+  readonly detail?: string;
 }
 export declare function failureDetails(event: FailureStreamEvent): FailureDetails;
 /**

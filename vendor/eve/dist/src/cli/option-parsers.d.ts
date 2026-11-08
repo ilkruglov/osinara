@@ -1,5 +1,9 @@
 import type { AgentReasoningDefinition } from "#shared/agent-definition.js";
-import type { AssistantResponseStatsMode, LogDisplayMode, TerminalPartDisplayMode } from "#cli/dev/tui/types.js";
+import type {
+  AssistantResponseStatsMode,
+  LogDisplayMode,
+  TerminalPartDisplayMode,
+} from "#cli/dev/tui/types.js";
 /** Parses a TCP port accepted by the CLI. */
 export declare function parsePortOption(value: string): number;
 /** Parses a terminal part display mode. */

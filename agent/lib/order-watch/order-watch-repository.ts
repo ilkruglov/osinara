@@ -16,10 +16,15 @@
  */
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import { ORDER_WATCH_DURATION_MS, ORDER_WATCH_RETENTION_DAYS, type OrderWatchService } from "./order-watch-config.js";
+import {
+  ORDER_WATCH_DURATION_MS,
+  ORDER_WATCH_RETENTION_DAYS,
+  type OrderWatchService,
+} from "./order-watch-config.js";
 import type { OrderWatchState } from "./order-watch-status.js";
 
-export type OrderWatchFinishReason = "deadline" | "failed" | "order_ended" | "stopped" | "unreachable";
+export type OrderWatchFinishReason =
+  "deadline" | "failed" | "order_ended" | "stopped" | "unreachable";
 
 export interface ClaimedOrderWatch {
   createdAt: Date;
@@ -51,7 +56,8 @@ interface ClaimedRow {
   user_id: string;
 }
 
-const staleLease = () => new AppError("AGENT_ORDER_WATCH_LEASE_STALE", "Слежение за заказом уже взял другой проход");
+const staleLease = () =>
+  new AppError("AGENT_ORDER_WATCH_LEASE_STALE", "Слежение за заказом уже взял другой проход");
 
 function requireLeased(rowCount: number | null): void {
   if ((rowCount ?? 0) !== 1) throw staleLease();
@@ -78,14 +84,27 @@ export const orderWatchRepository = {
        DO UPDATE SET telegram_chat_id = EXCLUDED.telegram_chat_id,
                      sandbox_session_id = EXCLUDED.sandbox_session_id, updated_at = now()
        RETURNING id, (xmax = 0) AS created`,
-      [input.familyId, input.userId, input.service, input.orderId, input.telegramChatId, input.sandboxSessionId,
-        input.initialState === null ? null : JSON.stringify(input.initialState), input.now, ORDER_WATCH_DURATION_MS],
+      [
+        input.familyId,
+        input.userId,
+        input.service,
+        input.orderId,
+        input.telegramChatId,
+        input.sandboxSessionId,
+        input.initialState === null ? null : JSON.stringify(input.initialState),
+        input.now,
+        ORDER_WATCH_DURATION_MS,
+      ],
     );
     return result.rows[0]!;
   },
 
   /** Stops the person's watches of a service, or of one order of it. */
-  async stop(input: { orderId?: string | undefined; service: OrderWatchService; userId: string }): Promise<number> {
+  async stop(input: {
+    orderId?: string | undefined;
+    service: OrderWatchService;
+    userId: string;
+  }): Promise<number> {
     const result = await database().query(
       `UPDATE order_watches
           SET status = 'finished', finish_reason = 'stopped', finished_at = now(), updated_at = now(),
@@ -104,7 +123,11 @@ export const orderWatchRepository = {
     return result.rows.map((row) => row.order_id);
   },
 
-  async claimDue(options: { leaseMilliseconds: number; limit: number; now: Date }): Promise<ClaimedOrderWatch[]> {
+  async claimDue(options: {
+    leaseMilliseconds: number;
+    limit: number;
+    now: Date;
+  }): Promise<ClaimedOrderWatch[]> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -175,11 +198,14 @@ export const orderWatchRepository = {
     requireLeased(result.rowCount);
   },
 
-  async reschedule(watch: ClaimedOrderWatch, input: {
-    errorCode: string | null;
-    nextCheckAt: Date;
-    state: OrderWatchState | null;
-  }): Promise<void> {
+  async reschedule(
+    watch: ClaimedOrderWatch,
+    input: {
+      errorCode: string | null;
+      nextCheckAt: Date;
+      state: OrderWatchState | null;
+    },
+  ): Promise<void> {
     // A failed check counts towards giving up; a successful one starts the count again. A null state
     // leaves what was kept as it is.
     const result = await database().query(
@@ -188,7 +214,13 @@ export const orderWatchRepository = {
               failures = CASE WHEN $5::text IS NULL THEN 0 ELSE failures + 1 END,
               last_error_code = $5, lease_token = NULL, lease_expires_at = NULL, updated_at = now()
         WHERE id = $1 AND lease_token = $2 AND status = 'active'`,
-      [watch.id, watch.leaseToken, input.state === null ? null : JSON.stringify(input.state), input.nextCheckAt, input.errorCode],
+      [
+        watch.id,
+        watch.leaseToken,
+        input.state === null ? null : JSON.stringify(input.state),
+        input.nextCheckAt,
+        input.errorCode,
+      ],
     );
     requireLeased(result.rowCount);
   },
@@ -205,22 +237,32 @@ export const orderWatchRepository = {
 
   async isMember(watch: Pick<ClaimedOrderWatch, "familyId" | "userId">): Promise<boolean> {
     const result = await database().query(
-      "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2", [watch.familyId, watch.userId],
+      "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2",
+      [watch.familyId, watch.userId],
     );
     return (result.rowCount ?? 0) > 0;
   },
 
-  async finish(watch: ClaimedOrderWatch, input: {
-    errorCode: string | null;
-    reason: OrderWatchFinishReason;
-    state: OrderWatchState | null;
-  }): Promise<void> {
+  async finish(
+    watch: ClaimedOrderWatch,
+    input: {
+      errorCode: string | null;
+      reason: OrderWatchFinishReason;
+      state: OrderWatchState | null;
+    },
+  ): Promise<void> {
     const result = await database().query(
       `UPDATE order_watches
           SET status = 'finished', finish_reason = $3, finished_at = now(), last_state = coalesce($4::jsonb, last_state),
               last_error_code = $5, lease_token = NULL, lease_expires_at = NULL, updated_at = now()
         WHERE id = $1 AND lease_token = $2 AND status = 'active'`,
-      [watch.id, watch.leaseToken, input.reason, input.state === null ? null : JSON.stringify(input.state), input.errorCode],
+      [
+        watch.id,
+        watch.leaseToken,
+        input.reason,
+        input.state === null ? null : JSON.stringify(input.state),
+        input.errorCode,
+      ],
     );
     requireLeased(result.rowCount);
   },
