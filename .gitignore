@@ -24,6 +24,7 @@ result-chat.json
 # Локальные инструкции и отчёты не публикуются и не входят в сборку.
 /AGENTS.md
 /CLAUDE.md
+/.claude/rules
 /CODE_REVIEW*.md
 /docs/*
 !/docs/production-deployment.md
