@@ -37,4 +37,5 @@ result-chat.json
 # Локальные артефакты, не для репозитория
 .claude/worktrees/
 SECURITY_AUDIT_*.md
+SECURITY_ADDENDUM_*.md
 skills-lock.json
