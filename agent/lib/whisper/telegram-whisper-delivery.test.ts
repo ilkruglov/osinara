@@ -174,6 +174,57 @@ describe("deliverTelegramWhisperCompletion", () => {
     },
   );
 
+  // /code-review of 1.8.57–1.8.58: one paragraph longer than a message left only the note.
+  it("keeps the start of an answer that is one long paragraph, cut at a word", async () => {
+    const { api, dependencies } = setup();
+    // Past the rich message's 32 768 characters, in one paragraph.
+    const message = `Начало ответа. ${"Слово 😀 ещё ".repeat(3_000)}конец.`;
+
+    await deliverTelegramWhisperCompletion({ finishReason: "stop", message }, AUTH, dependencies);
+
+    const content = (api.edit.mock.calls[0]![0] as { content: { format: string; text: string } })
+      .content;
+    expect(content.text).toContain("Начало ответа. Слово 😀 ещё");
+    expect(content.text).toContain(WHISPER_TRUNCATED_NOTE.trim());
+    expect(content.text.length).toBeGreaterThan(20_000);
+    expect(formatTelegramRichMessages(content.text)).toHaveLength(1);
+    // Cut between words and never inside a surrogate pair.
+    expect(content.text).not.toContain("конец.");
+    expect(content.text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/u);
+  });
+
+  it("closes a code block cut short before the note, so the note is not code", async () => {
+    const { api, dependencies } = setup();
+    // One paragraph of code past the rich message's 32 768 characters.
+    const message = `\`\`\`js\n${"const value = 1;\n".repeat(2_500)}\`\`\``;
+
+    await deliverTelegramWhisperCompletion({ finishReason: "stop", message }, AUTH, dependencies);
+
+    const content = (api.edit.mock.calls[0]![0] as { content: { format: string; text: string } })
+      .content;
+    expect(content.text).toContain(`\`\`\`${WHISPER_TRUNCATED_NOTE}`);
+    expect(content.text.match(/<\/details>/gu)?.length).toBe(
+      content.text.match(/<details>/gu)?.length,
+    );
+  });
+
+  // /code-review of the fence fix, 9 November 2026: a ``` with more backticks on its line is inline
+  // code to Telegram and to the formatter's code guard; closing it broke the layout's closing tags.
+  it("takes a line opening with inline code for text, not for a code block to close", async () => {
+    const { api, dependencies } = setup();
+    const message = `\`\`\`npm ci\`\`\` ставит пакеты. ${"Слово ещё ".repeat(4_000)}конец.`;
+
+    await deliverTelegramWhisperCompletion({ finishReason: "stop", message }, AUTH, dependencies);
+
+    const content = (api.edit.mock.calls[0]![0] as { content: { format: string; text: string } })
+      .content;
+    expect(content.text).toContain(WHISPER_TRUNCATED_NOTE.trim());
+    expect(content.text).not.toContain(`\n\`\`\`${WHISPER_TRUNCATED_NOTE}`);
+    expect(content.text.match(/<\/details>/gu)?.length).toBe(
+      content.text.match(/<details>/gu)?.length,
+    );
+  });
+
   it("puts a reaction into the placeholder as its emoji", async () => {
     const { api, dependencies } = setup();
 

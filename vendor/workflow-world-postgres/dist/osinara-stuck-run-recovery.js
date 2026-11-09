@@ -18,6 +18,8 @@
  *   for 8.5 hours, until a restart re-enqueued every active run. This scan does the same for the
  *   runs that need it, without a restart. Replay is idempotent, so a duplicate enqueue is safe.
  * - Runs that wait on a hook, a sleep or a parked session end on other events and are never touched.
+ *   A turn cannot be told apart that way (its inbox hook lives from its start), so a turn found again
+ *   in the state its replay left it in is skipped for an hour (`STUCK_REQUEUE_REPEAT_AFTER_MS`).
  */
 
 export const STUCK_RETRY_AFTER_MS = 10 * 60 * 1000;
@@ -41,9 +43,19 @@ export const STUCK_RUN_SCAN_INTERVAL_MS = 5 * 60 * 1000;
 
                            
                     
+                                                                                               
+                       
                 
                        
  
+
+/**
+ * A run found again with the same last event after its replay only waits: an approval or a child
+ * writes nothing while it waits, and a replay of such a turn returns to the same wait (/code-review
+ * of 1.8.57–1.8.58: every pass replayed it, reading its whole event log). It is replayed once per
+ * state, and again after this long in case the requeued job itself was lost.
+ */
+export const STUCK_REQUEUE_REPEAT_AFTER_MS = 60 * 60 * 1000;
 
 export async function findStuckRuns(
   pool               ,
@@ -51,13 +63,15 @@ export async function findStuckRuns(
     retryAfterMs: STUCK_RETRY_AFTER_MS,
     stepStartedAfterMs: STUCK_STEP_STARTED_AFTER_MS,
   },
+  /** Runs left out while their last event is still this one: a replay left them waiting. */
+  skip                                                    = [],
 )                      {
   // Event times are stored without a zone in the session's local time, hence LOCALTIMESTAMP.
   const result = await pool.query(
-    `SELECT r.id AS run_id, r.name AS workflow_name, last.type AS last_event
+    `SELECT r.id AS run_id, r.name AS workflow_name, last.type AS last_event, last.id AS last_event_id
        FROM workflow.workflow_runs r
        JOIN LATERAL (
-         SELECT e.type, e.created_at FROM workflow.workflow_events e
+         SELECT e.id, e.type, e.created_at FROM workflow.workflow_events e
           WHERE e.run_id = r.id
           ORDER BY e.created_at DESC, e.id DESC
           LIMIT 1
@@ -67,6 +81,9 @@ export async function findStuckRuns(
           OR (last.type = 'step_started' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $2::double precision))
           OR (last.type = 'step_completed' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $3::double precision)
               AND (r.name = $4 OR NOT EXISTS (SELECT 1 FROM workflow.workflow_hooks h WHERE h.run_id = r.id))))
+        -- Left out here, not after the limit, so waiting runs take no place from stuck ones.
+        AND NOT EXISTS (SELECT 1 FROM unnest($5::text[], $6::text[]) AS skip(run_id, event_id)
+                         WHERE skip.run_id = r.id AND skip.event_id = last.id)
       ORDER BY last.created_at
       LIMIT 50`,
     [
@@ -74,13 +91,22 @@ export async function findStuckRuns(
       limits.stepStartedAfterMs / 1000,
       STUCK_STEP_COMPLETED_AFTER_MS / 1000,
       TURN_WORKFLOW_NAME,
+      skip.map((run) => run.runId),
+      skip.map((run) => run.lastEventId),
     ],
   );
   return result.rows.flatMap((row) =>
     typeof row.run_id === "string" &&
     typeof row.workflow_name === "string" &&
     typeof row.last_event === "string"
-      ? [{ lastEvent: row.last_event, runId: row.run_id, workflowName: row.workflow_name }]
+      ? [
+          {
+            lastEvent: row.last_event,
+            ...(typeof row.last_event_id === "string" ? { lastEventId: row.last_event_id } : {}),
+            runId: row.run_id,
+            workflowName: row.workflow_name,
+          },
+        ]
       : [],
   );
 }
@@ -204,16 +230,36 @@ export async function releaseDeadWorkerLocks(
 export function startStuckRunRecovery(input   
                                                                                
                       
+                     
                       
                       
  )             {
+  const now = input.now ?? Date.now;
   let running = false;
+  /** Runs this process requeued within the hour: the last event they had then and when. */
+  const requeued = new Map                                             ();
   const scan = async () => {
     if (running) return;
     running = true;
     try {
-      for (const run of await findStuckRuns(input.pool)) {
+      for (const [runId, entry] of requeued) {
+        if (now() - entry.at >= STUCK_REQUEUE_REPEAT_AFTER_MS) requeued.delete(runId);
+      }
+      const skip = [...requeued].map(([runId, entry]) => ({
+        lastEventId: entry.lastEventId,
+        runId,
+      }));
+      for (const run of await findStuckRuns(input.pool, undefined, skip)) {
         await input.enqueue(`${input.queuePrefix}${run.workflowName}`, { runId: run.runId });
+        // Only a turn after a completed step may just be waiting (an approval, a child); any other
+        // run whose requeued job was lost again goes once more next pass (1 October 2026).
+        // Remembered at once: a later enqueue of this pass may throw.
+        if (
+          run.workflowName === TURN_WORKFLOW_NAME &&
+          run.lastEvent === "step_completed" &&
+          run.lastEventId !== undefined
+        )
+          requeued.set(run.runId, { at: now(), lastEventId: run.lastEventId });
         console.warn(
           JSON.stringify({
             code: "AGENT_WORKFLOW_STUCK_RUN_REQUEUED",

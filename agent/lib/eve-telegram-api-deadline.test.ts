@@ -8,6 +8,9 @@
  * - getFile gets one minute; every other method keeps 30 seconds.
  * - A second 429 (on the retry) pauses every other call for the time it names too, and goes back to
  *   the caller (Codex review, 6 November 2026: its retry_after was dropped).
+ * - A call with `paced: false` takes no slot, and its 429 goes back at once (the whisper placeholder);
+ *   the send is counted in the pacer's windows, and the pause Telegram named still holds the paced
+ *   calls.
  *
  * Node's fetch waits five minutes for response headers by default, so before this a stuck Telegram
  * call held the turn that long (skill review of 24 October 2026). On 5 November 2026 Telegram held
@@ -78,6 +81,41 @@ describe("Eve Telegram API deadlines", () => {
     expect(response.status).toBe(429);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(retryAfter.mock.calls).toEqual([[1], [7]]);
+  });
+
+  it("sends an unpaced call at once and gives its 429 back without waiting or retrying", async () => {
+    const acquire = vi.spyOn(telegramSendPacer, "acquire");
+    // The pause is not set for real: it would hold the other tests' calls.
+    const retryAfter = vi.spyOn(telegramSendPacer, "retryAfter").mockReturnValue(true);
+    const waitForPause = vi.spyOn(telegramSendPacer, "waitForPause");
+    // Not counted for real: the send would fill the windows of the other tests' calls.
+    const record = vi.spyOn(telegramSendPacer, "record").mockReturnValue(undefined);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error_code: 429, ok: false, parameters: { retry_after: 9 } },
+          { status: 429 },
+        ),
+      );
+
+    const response = await callTelegramApi({
+      body: { chat_id: -1001, text: "x" },
+      botToken: "1:test",
+      fetch,
+      method: "sendMessage",
+      paced: false,
+      timeoutMs: 10_000,
+    });
+
+    expect(response.status).toBe(429);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(acquire).not.toHaveBeenCalled();
+    expect(waitForPause).not.toHaveBeenCalled();
+    // Its pause still holds the paced calls, and the send is counted in its group's window
+    // (/code-review of the fix, 9 November 2026).
+    expect(retryAfter.mock.calls).toEqual([[9]]);
+    expect(record.mock.calls).toEqual([["sendMessage", { chat_id: -1001, text: "x" }]]);
   });
 
   it("gives getFile a one-minute deadline and leaves every other method at 30 seconds", async () => {

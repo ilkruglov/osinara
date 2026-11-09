@@ -21,34 +21,12 @@ import {
 import type { OwnerHealthReport } from "./owner-health-digest-repository.js";
 import type { TelegramWebhookHealth } from "./telegram-webhook-health.js";
 import { TelegramRecipientUnreachableError } from "../memory-review/memory-review-owner-alert-transport.js";
-import { NO_SCHEDULE_RUN_FAILURES } from "./schedule-run-failures.js";
+import {
+  ownerHealthDigestDependencies,
+  QUIET_OWNER_HEALTH_REPORT,
+} from "./owner-health-digest.test-support.js";
 
-const quiet: OwnerHealthReport = {
-  alertDeliveryFailures: 0,
-  ingressFailures: { codes: [], count: 0 },
-  lanes: { blocked: [], lagging: [] },
-  memoryWritten: [
-    { count: 3, kind: "episode", scope: "group" },
-    { count: 1, kind: "profile", scope: "personal" },
-  ],
-  reviewBatches: { ambiguous: 0, failed: 0 },
-  rotations: { count: 0, latestAt: null },
-  scheduleFailures: NO_SCHEDULE_RUN_FAILURES,
-  turnQuality: {
-    delivered: 0,
-    failed: 0,
-    failedToolTurns: 0,
-    followUps: { corrections: 0, repliesToMia: 0 },
-    forbiddenTool: 0,
-    heavy: 0,
-    loops: 0,
-    reactions: { negative: 0, other: 0, positive: 0 },
-    repeatAfterError: 0,
-    turns: 0,
-    versions: [],
-  },
-  windowStart: new Date("2026-09-08T06:00:00.000Z"),
-};
+const quiet = QUIET_OWNER_HEALTH_REPORT;
 
 describe("formatOwnerHealthDigest", () => {
   const webhook = (
@@ -183,25 +161,7 @@ describe("digestDateFor", () => {
 describe("createOwnerHealthDigestDispatcher", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  function dependencies(
-    overrides: Partial<Parameters<typeof createOwnerHealthDigestDispatcher>[0]> = {},
-  ) {
-    return {
-      claim: vi.fn().mockResolvedValue(true),
-      complete: vi.fn().mockResolvedValue(undefined),
-      balance: vi.fn().mockResolvedValue(null),
-      deliver: vi.fn().mockResolvedValue(undefined),
-      previousBalance: vi.fn().mockResolvedValue(null),
-      storage: vi.fn().mockResolvedValue(null),
-      recipients: vi.fn().mockResolvedValue([
-        { familyId: "family-1", ownerTelegramUserId: "101" },
-        { familyId: "family-2", ownerTelegramUserId: "202" },
-      ]),
-      release: vi.fn().mockResolvedValue(undefined),
-      report: vi.fn().mockResolvedValue(quiet),
-      ...overrides,
-    };
-  }
+  const dependencies = ownerHealthDigestDependencies;
 
   it("sends nothing before the digest hour", async () => {
     const deps = dependencies();
@@ -422,37 +382,6 @@ describe("createOwnerHealthDigestDispatcher", () => {
       .map((call) => String(call[0].text));
     for (const message of sent) expect(message.length).toBeLessThanOrEqual(4_096);
     expect(sent).toEqual([text, expect.stringMatching(/^Карточка сводки не отправилась/u)]);
-  });
-
-  // Codex review, 6 November 2026: with many stuck lanes the digest itself passed 4 096 characters,
-  // Telegram refused it, and the claim went back every ten minutes.
-  it("sends a digest longer than one Telegram message in parts cut at line ends", async () => {
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const huge: OwnerHealthReport = {
-      ...quiet,
-      lanes: {
-        blocked: Array.from({ length: 40 }, (_, index) => ({
-          code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED",
-          headStatus: "failed",
-          label: `Группа ${index} ${"с очень длинным названием ".repeat(4)}`,
-          waiting: 40 + index,
-        })),
-        lagging: [],
-      },
-    };
-    const text = formatOwnerHealthDigest(huge);
-    expect(text.length).toBeGreaterThan(4_096);
-    const deps = dependencies({ report: vi.fn().mockResolvedValue(huge) });
-
-    await createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"));
-
-    const sent = (deps.deliver as ReturnType<typeof vi.fn>).mock.calls
-      .filter((call) => call[0].chatId === "101")
-      .map((call) => String(call[0].text));
-    expect(sent.length).toBeGreaterThan(1);
-    for (const message of sent) expect(message.length).toBeLessThanOrEqual(4_096);
-    expect(sent.join("\n")).toBe(text);
-    expect(deps.release).not.toHaveBeenCalled();
   });
 
   // Codex review, 6 November 2026: a card with an unknown outcome and a refused text released the

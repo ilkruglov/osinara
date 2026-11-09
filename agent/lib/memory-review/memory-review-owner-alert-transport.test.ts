@@ -6,7 +6,10 @@
  * - HTTP rejection is definite while transport uncertainty is classified by the dispatcher.
  * - A chat Telegram calls gone is rejected with the stable unreachable code, and a chat already
  *   marked unreachable is skipped without a request; the skip stays a definite failure.
+ * - A card over the size limit is a definite failure too, refused before any request.
  */
+import { randomBytes } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -204,5 +207,25 @@ describe("memory review owner alert transport", () => {
       message: expect.stringContaining("HTTP 502"),
     });
     expect(failure).not.toBeInstanceOf(MemoryReviewOwnerAlertTransportError);
+  });
+
+  // /code-review of the owner digest fix, 9 November 2026: the size is checked before the request,
+  // so a card over the limit is surely not in the chat; the digest measured it a second time to know.
+  it("refuses a card over Telegram's size limit without a request", async () => {
+    const fetch = vi.fn();
+    const transport = createMemoryReviewOwnerAlertTransport({
+      botToken: "telegram-bot-secret",
+      fetch,
+      timeoutMilliseconds: 15_000,
+    });
+    const html = `<div>${randomBytes(8_000).toString("base64")}</div>`;
+
+    const failure = await transport
+      .deliverWidget({ caption: "x", chatId: "101", html })
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(MemoryReviewOwnerAlertTransportError);
+    expect(failure).toMatchObject({ code: "AGENT_TELEGRAM_WIDGET_TOO_LARGE" });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

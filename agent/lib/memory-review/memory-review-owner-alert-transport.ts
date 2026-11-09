@@ -26,6 +26,8 @@ import {
 } from "../telegram-reachability/recipient-failure.js";
 import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
 
+const WIDGET_TOO_LARGE = "AGENT_TELEGRAM_WIDGET_TOO_LARGE";
+
 export class MemoryReviewOwnerAlertTransportError extends AppError {
   readonly delivery: "failed";
 
@@ -101,13 +103,26 @@ export function createMemoryReviewOwnerAlertTransport(
   return {
     async deliverWidget(input): Promise<void> {
       await requireReachable(input.chatId);
-      const sent = await sendTelegramWidget({
-        botToken: dependencies.botToken,
-        caption: input.caption,
-        chatId: input.chatId,
-        fetch: boundedFetch,
-        html: input.html,
-      });
+      let sent: Awaited<ReturnType<typeof sendTelegramWidget>>;
+      try {
+        sent = await sendTelegramWidget({
+          botToken: dependencies.botToken,
+          caption: input.caption,
+          chatId: input.chatId,
+          fetch: boundedFetch,
+          html: input.html,
+        });
+      } catch (error) {
+        // The size is measured before the request: a card over the limit is surely not in the chat,
+        // a definite failure like Telegram's refusal (/code-review of 1.8.57–1.8.58).
+        if (error instanceof AppError && error.code === WIDGET_TOO_LARGE)
+          throw new MemoryReviewOwnerAlertTransportError(
+            "failed",
+            WIDGET_TOO_LARGE,
+            error.message.replace(/^AGENT_TELEGRAM_WIDGET_TOO_LARGE:\s*/u, ""),
+          );
+        throw error;
+      }
       if (!sent.ok) {
         const reason = classifyTelegramRecipientFailure(sent.status, sent.body);
         if (reason !== null) throw new TelegramRecipientUnreachableError(input.chatId, reason);

@@ -210,10 +210,19 @@ readonly TURN_DRAIN_TIMEOUT_SECONDS=300
 readonly TURN_DRAIN_POLL_SECONDS=3
 readonly TURN_DRAIN_QUERY_SECONDS=20
 
+# Seconds one drain query may take: the rest of the drain, at most TURN_DRAIN_QUERY_SECONDS, at least 1.
+turn_drain_query_budget() {
+  local started="$1" timeout="$2"
+  local remaining=$((timeout - (SECONDS - started)))
+  local budget=$((remaining < TURN_DRAIN_QUERY_SECONDS ? remaining : TURN_DRAIN_QUERY_SECONDS))
+  ((budget >= 1)) || budget=1
+  printf '%s' "$budget"
+}
+
 drain_current_turns() {
   local timeout="${1:-$TURN_DRAIN_TIMEOUT_SECONDS}"
   local started=$SECONDS
-  local active
+  local active claimed
   # From here on a failure must bring the current release back, ingress included.
   CURRENT_SERVICES_STOPPED=1
   compose_current stop telegram-ingress-worker
@@ -221,22 +230,28 @@ drain_current_turns() {
     log_event "DEPLOY_TURN_PAUSE_FAILED" "Could not pause new turns; the deploy is cancelled"
     return 1
   fi
-  local remaining budget
   while true; do
-    remaining=$((timeout - (SECONDS - started)))
-    budget=$((remaining < TURN_DRAIN_QUERY_SECONDS ? remaining : TURN_DRAIN_QUERY_SECONDS))
-    ((budget >= 1)) || budget=1
-    if ! active="$(count_active_workflow_runs "$budget")"; then
+    # Work claimed before the pause that is not a Workflow run yet (/code-review of 1.8.57–1.8.58),
+    # read before the runs: a claim stops counting only once its run exists, so work that turns
+    # into a run between the two reads is still seen by the second.
+    if ! claimed="$(count_claimed_turn_work "$(turn_drain_query_budget "$started" "$timeout")")"; then
+      log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read the claimed work; the deploy is cancelled"
+      resume_new_turns || log_event "DEPLOY_TURN_PAUSE_RESUME_FAILED" "New turns stay paused until the pause expires"
+      return 1
+    fi
+    if ! active="$(count_active_workflow_runs "$(turn_drain_query_budget "$started" "$timeout")")"; then
       log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read Workflow runs; the deploy is cancelled"
       resume_new_turns || log_event "DEPLOY_TURN_PAUSE_RESUME_FAILED" "New turns stay paused until the pause expires"
       return 1
     fi
-    if [[ "$active" == "0" ]]; then
+    # A claim that read no pause had committed before the pause did (pause_new_turns waits for it),
+    # so one quiet poll is enough.
+    if [[ "$active" == "0" && "$claimed" == "0" ]]; then
       log_event "DEPLOY_TURNS_DRAINED" "No running turns after $((SECONDS - started)) s"
       return 0
     fi
     if (( SECONDS - started >= timeout )); then
-      log_event "DEPLOY_TURN_DRAIN_TIMEOUT" "${active} Workflow runs still active after $((SECONDS - started)) s"
+      log_event "DEPLOY_TURN_DRAIN_TIMEOUT" "${active} Workflow runs and ${claimed} claimed items still active after $((SECONDS - started)) s"
       return 0
     fi
     sleep "$TURN_DRAIN_POLL_SECONDS"

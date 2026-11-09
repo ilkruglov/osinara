@@ -4,7 +4,7 @@
  * Exports:
  * - `telegramIngressRepository`: production PostgreSQL implementation.
  */
-import type { PoolClient } from "pg";
+import type { PoolClient, QueryResult } from "pg";
 
 import { TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED } from "../config.js";
 import { AppError } from "./app-error.js";
@@ -26,7 +26,7 @@ import {
 import { telegramIngressProcessingRepository } from "./telegram-ingress-processing-repository.js";
 import { withoutRichMediaBlocks } from "./telegram-rich-message.js";
 import { telegramIngressSessionCursorRepository } from "./telegram-ingress-session-cursor-repository.js";
-import { TURN_START_PAUSED_SQL } from "./deploy/turn-start-pause.js";
+import { TURN_START_LOCK_SQL, TURN_START_PAUSED_SQL } from "./deploy/turn-start-pause.js";
 
 const IGNORED_MEDIA_REASON = "external_media";
 
@@ -272,8 +272,14 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     // A private chat still receiving a burst is left alone until it has been quiet for the window,
     // or the cap has passed since its head arrived; only a pending message waits, never a retry.
     // A button press has no message and must compare as not private, never as unknown.
-    const result = await database().query<ClaimRow>(
-      `WITH candidate AS (
+    const client = await database().connect();
+    let result: QueryResult<ClaimRow>;
+    try {
+      await client.query("BEGIN");
+      // Before the pause is read: a deploy setting it waits for this claim (turn-start-pause.ts).
+      await client.query(TURN_START_LOCK_SQL);
+      result = await client.query<ClaimRow>(
+        `WITH candidate AS (
          SELECT item.update_id
          FROM telegram_ingress_updates item
          WHERE (item.status = 'pending'
@@ -314,8 +320,14 @@ export const telegramIngressRepository: TelegramIngressRepository = {
          item.payload, item.attempt_count, item.lease_token::text, item.lease_expires_at,
          item.voice_file_id, item.voice_file_size::text, item.voice_mime_type,
          item.voice_transcript, queue.current_continuation_key`,
-      [leaseMilliseconds, burst.quietMilliseconds, burst.maxWaitMilliseconds],
-    );
+        [leaseMilliseconds, burst.quietMilliseconds, burst.maxWaitMilliseconds],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      return rollbackAndRethrow(client, error);
+    } finally {
+      client.release();
+    }
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
   },
 

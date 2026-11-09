@@ -25,6 +25,11 @@ import {
 } from "./telegram-on-message.test-fixtures.js";
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 import { telegramRepository } from "./telegram-repository.js";
+import {
+  isClaimedTurnWork,
+  pauseBeingSet,
+  stillPendingAfter,
+} from "./deploy/claimed-turn-work.test-support.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const integrationDatabaseUrl = process.env.DATABASE_URL;
@@ -87,6 +92,44 @@ describeWithDatabase("telegramIngressRepository", () => {
       { chatType: "private", updateId: "1101" },
     ]);
     await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toEqual([]);
+  });
+
+  // /code-review of 1.8.57–1.8.58: a message claimed just before the pause is not a Workflow run
+  // yet, and the deploy's wait saw nothing; it counts until its dispatch had five minutes to start one.
+  it("is counted by the deploy's wait from its claim until its dispatch is five minutes old", async () => {
+    await telegramIngressRepository.enqueue(updateInput("1301", "telegram:private:131", "привет"));
+    await expect(isClaimedTurnWork("ingress", "1301")).resolves.toBe(false);
+    const claim = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    await expect(isClaimedTurnWork("ingress", "1301")).resolves.toBe(true);
+    await telegramIngressRepository.beginDispatch(claim!.updateId, claim!.leaseToken);
+    await expect(isClaimedTurnWork("ingress", "1301")).resolves.toBe(true);
+
+    // Before its run exists the turn may wait out a group's pacing and a 429 pause in onMessage.
+    await database().query(
+      "UPDATE telegram_ingress_updates SET dispatch_started_at = now() - interval '4 minutes' WHERE update_id = 1301",
+    );
+    await expect(isClaimedTurnWork("ingress", "1301")).resolves.toBe(true);
+    await database().query(
+      "UPDATE telegram_ingress_updates SET dispatch_started_at = now() - interval '301 seconds' WHERE update_id = 1301",
+    );
+    await expect(isClaimedTurnWork("ingress", "1301")).resolves.toBe(false);
+  });
+
+  // /code-review of the drain fix, 9 November 2026: a claim that read no pause before the pause
+  // committed was still in its transaction when the deploy's wait looked; it now waits for the pause.
+  it("waits for a pause being set and then claims nothing", async () => {
+    await telegramIngressRepository.enqueue(updateInput("1401", "telegram:private:141", "привет"));
+    const pause = await pauseBeingSet();
+    try {
+      const claim = telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+      const waited = await stillPendingAfter(claim, 300);
+      await pause.commit();
+
+      expect(waited).toBe(true);
+      await expect(claim).resolves.toBeNull();
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
   });
 
   // Codex review, 6 November 2026: the deploy stopped the poller, yet the webhook's own drain

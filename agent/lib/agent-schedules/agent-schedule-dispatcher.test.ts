@@ -36,30 +36,6 @@ const job: ClaimedAgentSchedule = {
 };
 
 describe("agent schedule dispatcher", () => {
-  it("claims nothing while a deploy pauses new turns", async () => {
-    const repository = {
-      claimDue: vi.fn().mockResolvedValue([job]),
-      failClaim: vi.fn(),
-      markDispatchStarted: vi.fn(),
-      markRunning: vi.fn(),
-    };
-    const to = vi.fn();
-
-    await expect(
-      createAgentScheduleDispatcher({
-        discardSession: vi.fn(),
-        prepareHistory: vi.fn(),
-        prepareSession: vi.fn(),
-        repository,
-        to,
-        turnStartsPaused: vi.fn().mockResolvedValue(true),
-      })(new Date("2026-07-17T06:00:00.000Z")),
-    ).resolves.toBe(0);
-
-    expect(repository.claimDue).not.toHaveBeenCalled();
-    expect(to).not.toHaveBeenCalled();
-  });
-
   it("fails a run whose chat is unreachable before preparing a session or calling Eve", async () => {
     const repository = {
       claimDue: vi.fn().mockResolvedValue([job]),

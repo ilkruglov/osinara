@@ -16,7 +16,8 @@
  *   viewport height, sticky positioning, 3D transforms and inner scrolling, and grid is not on every
  *   client; an inline picture of a few kilobytes eats most of the 4 KB budget.
  * - Regular expressions, not a parser: the check names the construct with a short excerpt so the
- *   model can find it; Telegram's own validator remains the boundary. Attribute values are read as
+ *   model can find it; Telegram's own validator remains the boundary. Each tag is read from its own
+ *   «<», so no false tag (in a comment, a script, a quoted value) can hide a real one. Attribute values are read as
  *   the browser reads them (entities decoded, a «>» inside quotes kept in the tag), CSS with its
  *   escapes decoded, srcset address by address. Where links are not allowed, a javascript: link, a
  *   meta refresh and the script's means of opening an address (openLink, window.open, location)
@@ -29,10 +30,24 @@ export interface TelegramWidgetLint {
 }
 
 const NETWORK_URL = /^\s*(?:https?:)?\/\//iu;
-// A tag with its attributes; a quoted value may hold «>», so the tag ends only outside quotes.
-const TAG =
-  /<([a-z][a-z0-9-]*)((?:\s+[^\s=>"'/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?)*)\s*\/?>/giu;
-const ATTRIBUTE = /([^\s=>"'/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+)))?/giu;
+// A tag as the browser tokenizes it (HTML whitespace only: a no-break space is an ordinary character
+// there). An attribute name runs to whitespace, «/», «>» or «=», a leading «=» included; a value is
+// quoted only when a quote comes first after «=», otherwise it runs to whitespace or «>» with any
+// quotes or «=» in it; an attribute may follow a closing quote or «/» with no space. A quote that
+// never closes, like a tag with no «>», runs to the end of the card. Every character has one
+// reading, so one tag is read in linear time (/code-review of 1.8.57–1.8.58).
+const TAG_AT = new RegExp(
+  String.raw`<([a-z][a-z0-9-]*)(?=[\t\n\f\r />]|$)((?:[\t\n\f\r /]|[^\t\n\f\r />][^\t\n\f\r />=]*(?:[\t\n\f\r ]*=[\t\n\f\r ]*(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\t\n\f\r >"'][^\t\n\f\r >]*|(?=>|$))|(?![\t\n\f\r ]*=)))*)(?:>|$)`,
+  "iuy",
+);
+const TAG_START = /<[a-z]/giu;
+/** Characters of tag text read for one card, some thirty cards' worth; past it the card is refused. */
+const TAG_SCAN_BUDGET = 1_000_000;
+// The attributes of a tag's text by the same grammar; an empty value can only end the text.
+const ATTRIBUTE = new RegExp(
+  String.raw`([^\t\n\f\r />][^\t\n\f\r />=]*)(?:[\t\n\f\r ]*=[\t\n\f\r ]*(?:"([^"]*)"?|'([^']*)'?|([^\t\n\f\r >"'][^\t\n\f\r >]*)|$))?`,
+  "gu",
+);
 const OPEN_LINK = /\bopen(?:Telegram)?Link\s*\(\s*(["'`])([^"'`]+)\1/gu;
 // Ways a card can leave for an address that a literal check cannot follow: when links are not
 // allowed, using them at all is refused.
@@ -94,6 +109,27 @@ function decodeCssEscapes(css: string): string {
   });
 }
 
+/**
+ * Every start tag the card may hold, each read from its own «<» and none consuming the next: a
+ * pattern that consumed its matches let a false tag inside a comment or a <style> swallow the real
+ * link after it (Codex review, 9 November 2026). Tags inside comments, scripts and quoted values are
+ * read too, so the check may refuse more than the browser shows, never less. Null when overlapping
+ * tags (unclosed quotes, «<» with no «>») add up past the budget.
+ */
+function startTags(html: string): Array<{ attributes: string; name: string; text: string }> | null {
+  const tags: Array<{ attributes: string; name: string; text: string }> = [];
+  let read = 0;
+  for (const start of html.matchAll(TAG_START)) {
+    TAG_AT.lastIndex = start.index;
+    const tag = TAG_AT.exec(html);
+    if (tag === null) continue;
+    read += tag[0].length;
+    if (read > TAG_SCAN_BUDGET) return null;
+    tags.push({ attributes: tag[2]!, name: tag[1]!.toLowerCase(), text: tag[0] });
+  }
+  return tags;
+}
+
 function excerpt(text: string): string {
   const flat = text.replace(/\s+/gu, " ").trim();
   return flat.length <= 80 ? flat : `${flat.slice(0, 79)}…`;
@@ -110,11 +146,18 @@ export function lintTelegramWidget(
     if (!warnings.includes(message)) warnings.push(message);
   };
 
+  const tags = startTags(html);
+  if (tags === null) {
+    errors.push(
+      "Разметка карточки слишком запутанная для проверки: незакрытые кавычки или «<» без «>» тянут теги до конца. Закрой кавычки и теги, «<» в тексте пиши как &lt;",
+    );
+    return { errors, links, warnings };
+  }
   const handlers: string[] = [];
-  for (const tag of html.matchAll(TAG)) {
-    const name = tag[1]!.toLowerCase();
+  for (const tag of tags) {
+    const name = tag.name;
     const attributes = new Map<string, string>();
-    for (const attribute of tag[2]!.matchAll(ATTRIBUTE)) {
+    for (const attribute of tag.attributes.matchAll(ATTRIBUTE)) {
       // The browser keeps the first of repeated attributes.
       const attributeName = attribute[1]!.toLowerCase();
       if (!attributes.has(attributeName)) {
@@ -135,7 +178,7 @@ export function lintTelegramWidget(
       }
       if (name === "script" && attribute === "src") {
         errors.push(
-          `<script src> не загрузится: у виджета нет сети, код пиши прямо в <script> (${excerpt(tag[0])})`,
+          `<script src> не загрузится: у виджета нет сети, код пиши прямо в <script> (${excerpt(tag.text)})`,
         );
         continue;
       }
@@ -149,11 +192,11 @@ export function lintTelegramWidget(
       for (const address of addresses) {
         if (NETWORK_URL.test(address)) {
           errors.push(
-            `Внешний ресурс не загрузится, Telegram покажет заглушку: ${excerpt(tag[0])}. Рисуй SVG или вшей маленькую картинку data:-адресом`,
+            `Внешний ресурс не загрузится, Telegram покажет заглушку: ${excerpt(tag.text)}. Рисуй SVG или вшей маленькую картинку data:-адресом`,
           );
         } else if (/^\s*data:image\/svg\+xml/iu.test(address)) {
           errors.push(
-            `SVG картинкой (data:image/svg+xml) Telegram не показывает: вставь <svg> прямо в разметку (${excerpt(tag[0])})`,
+            `SVG картинкой (data:image/svg+xml) Telegram не показывает: вставь <svg> прямо в разметку (${excerpt(tag.text)})`,
           );
         } else if (/^\s*data:image\//iu.test(address) && address.length > 2_000) {
           warn(

@@ -17,6 +17,11 @@ import { memoryReviewDispatchRepository } from "./memory-review-dispatch-reposit
 import { memoryReviewOwnerAlertRepository } from "./memory-review-owner-alert-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewSessionRepository } from "./memory-review-session-repository.js";
+import {
+  isClaimedTurnWork,
+  pauseBeingSet,
+  stillPendingAfter,
+} from "../deploy/claimed-turn-work.test-support.js";
 
 const describeWithDatabase =
   process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
@@ -171,6 +176,77 @@ describeWithDatabase("memory review dispatch repository", () => {
     await expect(
       memoryReviewDispatchRepository.markDispatchStarted(claim!, prepared.id),
     ).resolves.toBe(false);
+  });
+
+  it("claims nothing while a deploy pauses new turns, in the claim itself", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51);
+    await database().query(
+      `INSERT INTO deploy_turn_pause (singleton, paused_until) VALUES (true, now() + interval '15 minutes')
+       ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until`,
+    );
+    try {
+      await expect(
+        memoryReviewDispatchRepository.claimPending({
+          leaseMilliseconds: 60_000,
+          limit: 5,
+          now: new Date(),
+        }),
+      ).resolves.toEqual([]);
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
+    await expect(
+      memoryReviewDispatchRepository.claimPending({
+        leaseMilliseconds: 60_000,
+        limit: 5,
+        now: new Date(),
+      }),
+    ).resolves.toHaveLength(1);
+  });
+
+  // /code-review of 1.8.57–1.8.58: a batch claimed just before the pause is not a Workflow run
+  // yet, and the deploy's wait saw nothing; it counts until Eve confirms its run.
+  it("is counted by the deploy's wait from its claim until its run is confirmed", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51);
+    const [claim] = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date(),
+    });
+    await expect(isClaimedTurnWork("memory_review", claim!.batchId)).resolves.toBe(true);
+    const session = await memoryReviewSessionRepository.prepare(claim!, new Date());
+    await memoryReviewDispatchRepository.markDispatchStarted(claim!, session.id);
+    await expect(isClaimedTurnWork("memory_review", claim!.batchId)).resolves.toBe(true);
+
+    await memoryReviewDispatchRepository.markRunning(claim!, {
+      applicationSessionId: session.id,
+      eveSessionId: "eve-review-drain",
+    });
+    await expect(isClaimedTurnWork("memory_review", claim!.batchId)).resolves.toBe(false);
+  });
+
+  // /code-review of the drain fix, 9 November 2026: a claim that read no pause before the pause
+  // committed was still in its transaction when the deploy's wait looked; it now waits for the pause.
+  it("waits for a pause being set and then claims nothing", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51);
+    const pause = await pauseBeingSet();
+    try {
+      const claim = memoryReviewDispatchRepository.claimPending({
+        leaseMilliseconds: 60_000,
+        limit: 1,
+        now: new Date(),
+      });
+      const waited = await stillPendingAfter(claim, 300);
+      await pause.commit();
+
+      expect(waited).toBe(true);
+      await expect(claim).resolves.toEqual([]);
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
   });
 
   it("counts leased and dispatching batches against the in-flight cap", async () => {

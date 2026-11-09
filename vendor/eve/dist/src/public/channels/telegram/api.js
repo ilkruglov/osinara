@@ -39,13 +39,19 @@ async function callTelegramApi(e) {
   e.body !== void 0 && (i.body = JSON.stringify(parseJsonObject(e.body)));
   let u = `${e.apiBaseUrl ?? `https://api.telegram.org`}/bot${r}/${encodeURIComponent(e.method)}`;
   // Osinara: every sending method waits for its slot under Telegram's limits, and a 429 pauses
-  // all calls for the time Telegram names before this one is tried once more.
-  await telegramSendPacer.acquire(e.method, e.body);
+  // all calls for the time Telegram names before this one is tried once more. A call with
+  // `paced: false` neither waits nor retries: the reply to an ephemeral command must leave within
+  // Telegram's 15 seconds, and a slot or a pause could hold it for a minute. It is still counted
+  // in its chat's window, and its 429 still pauses the paced calls for the time Telegram named.
+  let paced = e.paced !== !1;
+  paced
+    ? await telegramSendPacer.acquire(e.method, e.body)
+    : telegramSendPacer.record(e.method, e.body);
   let deadline = e.timeoutMs ?? TELEGRAM_API_TIMEOUT_MS,
     startedAt = Date.now(),
     a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, deadline) }),
     s = await parseResponseBody(a);
-  if (a.status === 429) {
+  if (paced && a.status === 429) {
     let t = telegramRetryAfterSeconds(s);
     // The retry takes a slot like any call, after the whole pause; Telegram got nothing from
     // the refused request, so sending it once more creates no duplicate.
@@ -62,6 +68,9 @@ async function callTelegramApi(e) {
         again !== null && telegramSendPacer.retryAfter(again);
       }
     }
+  } else if (a.status === 429) {
+    let t = telegramRetryAfterSeconds(s);
+    t !== null && telegramSendPacer.retryAfter(t);
   }
   // Osinara: the final answer of a failed send to a chat goes to the application's reachability
   // observer (a blocked bot, a removed group), with the start of the answered attempt; the
@@ -159,11 +168,17 @@ function splitTelegramMessageText(e) {
       TELEGRAM_MESSAGE_TEXT_MAX_LENGTH,
     );
     (e <= 0 && (e = n.lastIndexOf(` `, TELEGRAM_MESSAGE_TEXT_MAX_LENGTH)),
-      e <= 0 && (e = TELEGRAM_MESSAGE_TEXT_MAX_LENGTH),
-      t.push(n.slice(0, e).trimEnd()),
+      e <= 0 &&
+        ((e = TELEGRAM_MESSAGE_TEXT_MAX_LENGTH),
+        // Osinara: a cut with no space or line break never splits a surrogate pair, which
+        // Telegram refuses with 400 (/code-review of 1.8.57–1.8.58).
+        /[\uD800-\uDBFF]/u.test(n[e - 1] ?? ``) && (e -= 1)),
+      // Osinara: a part of spaces only is not sent; Telegram refuses an empty message (400).
+      n.slice(0, e).trim() !== `` && t.push(n.slice(0, e).trimEnd()),
       (n = n.slice(e).trimStart()));
   }
-  return (t.push(n), t);
+  // Osinara: nor is a tail of spaces after the last cut.
+  return ((n.trim() !== `` || t.length === 0) && t.push(n), t);
 }
 function normalizeTelegramMessageBody(e, n) {
   return parseJsonObject({ ...e, chat_id: n });

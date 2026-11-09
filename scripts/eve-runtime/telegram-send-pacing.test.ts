@@ -71,6 +71,76 @@ describe("telegram send pacer", () => {
     expect(clock.sleeps).toEqual([150]);
   });
 
+  // /code-review of the unpaced whisper reply, 9 November 2026: a send that took no slot was not
+  // counted, so the next paced send to its group could pass Telegram's limit and draw a 429.
+  it("counts a send that went without a slot in its chat's and the global windows", async () => {
+    const clock = fakeClock();
+    const pacer = createTelegramSendPacer({ ...clock, globalPerSecond: 3, groupPerMinute: 2 });
+    pacer.record("sendMessage", { chat_id: -100 });
+    pacer.record("sendMessage", { chat_id: -100 });
+    pacer.record("getFile", { file_id: "x" });
+    expect(clock.sleeps).toEqual([]);
+
+    await pacer.acquire("sendMessage", { chat_id: -100 });
+    expect(clock.sleeps).toEqual([60_000]);
+    pacer.record("sendMessage", { chat_id: 7 });
+    pacer.record("sendMessage", { chat_id: 8 });
+    await pacer.acquire("sendMessage", { chat_id: 9 });
+    expect(clock.sleeps).toEqual([60_000, 1_000]);
+  });
+
+  // Codex review of `record`, 9 November 2026: a send counted while a paced one to the same group
+  // waited for its global slot let the paced one past the group's limit.
+  it("checks its chat's window again when a send was counted while it waited for the global slot", async () => {
+    const clock = fakeClock();
+    let duringGlobalWait: (() => void) | undefined;
+    const pacer = createTelegramSendPacer({
+      ...clock,
+      globalPerSecond: 1,
+      groupPerMinute: 2,
+      sleep: async (ms) => {
+        duringGlobalWait?.();
+        duringGlobalWait = undefined;
+        await clock.sleep(ms);
+      },
+    });
+    const start = clock.now();
+    await pacer.acquire("sendMessage", { chat_id: -100 });
+    duringGlobalWait = () => pacer.record("sendMessage", { chat_id: -100 });
+
+    await pacer.acquire("sendMessage", { chat_id: -100 });
+
+    // Two sends in the group's minute already: the third waits for the minute, not only the second.
+    expect(clock.now() - start).toBeGreaterThanOrEqual(60_000);
+  });
+
+  // Codex review of `record`, 9 November 2026: a send counted between the global window's last
+  // check and the reservation let a paced send take a slot past the global limit.
+  it("takes the last global slot only if no send was counted at any point before it", async () => {
+    for (let call = 1; call <= 4; call += 1) {
+      const clock = fakeClock();
+      let calls = 0;
+      let recorded = false;
+      const pacer = createTelegramSendPacer({
+        ...clock,
+        globalPerSecond: 1,
+        now: () => {
+          calls += 1;
+          if (calls === call) {
+            recorded = true;
+            pacer.record("sendMessage", { chat_id: 8 });
+          }
+          return clock.now();
+        },
+      });
+
+      await pacer.acquire("sendMessage", { chat_id: 7 });
+
+      // A send counted before the reservation filled the window: the paced one has to wait.
+      if (recorded) expect(clock.sleeps, `record at clock call ${call}`).toEqual([1_000]);
+    }
+  });
+
   it("reads the three limits from the environment within Telegram's ceilings", () => {
     expect(telegramSendPacerSettings({})).toEqual({
       globalPerSecond: 25,

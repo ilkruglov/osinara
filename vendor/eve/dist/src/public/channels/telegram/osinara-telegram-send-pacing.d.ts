@@ -8,6 +8,7 @@ export interface TelegramSendPacerOptions {
 }
 export interface TelegramSendPacer {
   acquire(method: string, body: unknown): Promise<void>;
+  record(method: string, body: unknown): void;
   retryAfter(seconds: number): boolean;
   waitForPause(): Promise<void>;
 }

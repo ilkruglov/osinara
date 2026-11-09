@@ -81,6 +81,10 @@ export declare function callTelegramApi(input: {
   readonly botToken?: TelegramBotToken;
   readonly fetch?: TelegramFetch;
   readonly method: string;
+  /** Osinara: false sends at once, without the pacer's slot, pause or 429 retry. */
+  readonly paced?: boolean;
+  /** Osinara: the per-attempt deadline in milliseconds. */
+  readonly timeoutMs?: number;
 }): Promise<TelegramApiResponse>;
 /** Sends a text message through Telegram's `sendMessage` method. */
 export declare function sendTelegramMessage(

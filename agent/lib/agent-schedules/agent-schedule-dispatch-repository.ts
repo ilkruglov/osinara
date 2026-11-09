@@ -28,6 +28,7 @@ import {
   beginAgentScheduleDispatch,
   markAgentScheduleRunning,
 } from "./agent-schedule-dispatch-state.js";
+import { TURN_START_LOCK_SQL, TURN_START_PAUSED_SQL } from "../deploy/turn-start-pause.js";
 
 export interface ClaimedAgentSchedule {
   authorUserId: string;
@@ -122,6 +123,8 @@ export const agentScheduleDispatchRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      // Before the pause is read: a deploy setting it waits for this claim (turn-start-pause.ts).
+      await client.query(TURN_START_LOCK_SQL);
 
       // Only an unfinished Eve handoff expires; a confirmed running workflow owns its lifecycle.
       const ambiguous = await client.query<{ family_id: string; id: string; lease_token: string }>(
@@ -273,6 +276,9 @@ export const agentScheduleDispatchRepository = {
            JOIN users ON users.id = schedule.author_user_id
           WHERE schedule.status = 'active' AND schedule.next_run_at <= $1
             AND schedule.attempts < $3
+            -- A deploy is waiting for the running turns: nothing new starts. A claim that began
+            -- before the pause committed still goes through and is not yet a Workflow run.
+            AND NOT ${TURN_START_PAUSED_SQL}
           ORDER BY schedule.next_run_at, schedule.id
           FOR UPDATE OF schedule SKIP LOCKED
           LIMIT $2`,

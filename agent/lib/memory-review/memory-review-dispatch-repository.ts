@@ -36,6 +36,7 @@ import {
   type ReviewSubjectSlots,
 } from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
+import { TURN_START_LOCK_SQL, TURN_START_PAUSED_SQL } from "../deploy/turn-start-pause.js";
 
 interface SourceRow {
   actor_id: string;
@@ -402,6 +403,8 @@ export const memoryReviewDispatchRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      // Before the pause is read: a deploy setting it waits for this claim (turn-start-pause.ts).
+      await client.query(TURN_START_LOCK_SQL);
       // One claim pass at a time: two passes counting the in-flight cap at once each took what
       // looked free and doubled it (Codex review, 6 November 2026). A pass that finds another one
       // under way leaves this tick to it.
@@ -447,6 +450,8 @@ export const memoryReviewDispatchRepository = {
               AND batch.predecessor_sequence = candidate_lane.processed_through_sequence
               -- The owner switched review off: the batch waits until it is on again.
               AND COALESCE(candidate_group.memory_review_enabled, true)
+              -- A deploy is waiting for the running turns: nothing new starts.
+              AND NOT ${TURN_START_PAUSED_SQL}
             ORDER BY batch.created_at, batch.id FOR UPDATE OF batch SKIP LOCKED
             -- Leased and dispatching batches are on their way to running: they take the cap too.
             LIMIT LEAST($2::int, GREATEST(0, $4::int - (

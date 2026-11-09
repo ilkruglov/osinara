@@ -178,8 +178,10 @@ async function canonicalReplacementSeed(
 }
 
 /**
- * Thread and generation of a new whisper session. The thread is the group topic's current one (the
- * group workspace), else the one this person's earlier whispers used. The generation must be new
+ * Thread and generation of a new whisper session. The thread is the group topic's (the group
+ * workspace): its live session's, else the one its next session will take, as
+ * `canonicalReplacementSeed` picks it; without any group session, the one this person's earlier
+ * whispers used. The generation must be new
  * on that thread and for this whisper route alike: earlier whispers may sit on another thread, and
  * the continuation token is the route plus the generation.
  */
@@ -193,9 +195,13 @@ async function whisperPlacement(
     previous_thread: string | null;
   }>(
     `SELECT
+       -- The group's live session, else the thread its next one will take (canonicalReplacementSeed):
+       -- a session parked for a confirmation turns into a task, and a finished task is retired.
        (SELECT thread_id FROM conversation_sessions
          WHERE group_id = $1 AND telegram_forum_topic_id IS NOT DISTINCT FROM $2
-           AND kind = 'canonical' AND retired_at IS NULL
+           AND kind <> 'whisper'
+         ORDER BY (kind = 'canonical' AND retired_at IS NULL) DESC,
+                  (kind = 'task' AND retired_at IS NULL) DESC, generation DESC, started_at DESC
          LIMIT 1) AS group_thread,
        (SELECT thread_id FROM conversation_sessions
          WHERE conversation_key = $3 ORDER BY generation DESC LIMIT 1) AS previous_thread,

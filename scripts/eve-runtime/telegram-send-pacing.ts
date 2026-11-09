@@ -124,6 +124,11 @@ export interface TelegramSendPacer {
    * longer than the cap, in which case the caller gives the answer back instead of retrying.
    */
   retryAfter(seconds: number): boolean;
+  /**
+   * Counts a send that went without a slot (the reply to an ephemeral command, which cannot wait)
+   * in its chat's and the global windows, so the paced sends after it keep within the limits.
+   */
+  record(method: string, body: unknown): void;
   /** Waits out the pause, including one extended by another 429 meanwhile. */
   waitForPause(): Promise<void>;
 }
@@ -202,19 +207,24 @@ export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}):
   function takeGlobalSlot(): Promise<number> {
     // Only this waiter takes global slots while it holds the queue, so the wait converges.
     const turn = globalQueue.then(async () => {
-      await waitOut(globalWait);
-      const at = now();
-      globalSends.push(at);
-      return at;
+      // The last check and the reservation run with no await between them: a send counted without
+      // a slot (`record`) could otherwise take the last place in between (Codex review,
+      // 9 November 2026).
+      for (;;) {
+        const at = now();
+        const wait = globalWait(at);
+        if (wait <= 0) {
+          globalSends.push(at);
+          return at;
+        }
+        await sleep(wait);
+      }
     });
     globalQueue = turn.catch(() => undefined);
     return turn;
   }
 
-  async function takeSlot(chat: { id: string; group: boolean } | null): Promise<void> {
-    // Only this waiter of the chat takes the chat's slots while it holds the chat's queue.
-    if (chat) await waitOut((at) => chatWait(at, chat));
-    const at = await takeGlobalSlot();
+  function countChatSend(chat: { id: string; group: boolean } | null, at: number): void {
     if (chat?.group) {
       const sends = groupSends.get(chat.id) ?? [];
       sends.push(at);
@@ -224,6 +234,22 @@ export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}):
     }
     acquires += 1;
     if (acquires % PRUNE_EVERY_ACQUIRES === 0) prune(at);
+  }
+
+  async function takeSlot(chat: { id: string; group: boolean } | null): Promise<void> {
+    for (;;) {
+      // This waiter holds the chat's queue, but a send counted without a slot (`record`) may fill
+      // the chat's window while it waits for the global slot: then the global slot goes back and the
+      // chat's window is waited out again (Codex review, 9 November 2026).
+      if (chat) await waitOut((at) => chatWait(at, chat));
+      const at = await takeGlobalSlot();
+      if (!chat || chatWait(at, chat) <= 0) {
+        countChatSend(chat, at);
+        return;
+      }
+      const index = globalSends.lastIndexOf(at);
+      if (index >= 0) globalSends.splice(index, 1);
+    }
   }
 
   return {
@@ -244,6 +270,12 @@ export function createTelegramSendPacer(options: TelegramSendPacerOptions = {}):
           if (entry.waiting === 0 && chatQueues.get(key) === entry) chatQueues.delete(key);
         });
       return turn;
+    },
+    record(method, body) {
+      if (!PACED_METHODS.has(method)) return;
+      const at = now();
+      globalSends.push(at);
+      countChatSend(chatKey(body), at);
     },
     retryAfter(seconds) {
       if (seconds > RETRY_AFTER_MAX_SECONDS) return false;

@@ -88,6 +88,86 @@ describe("lintTelegramWidget", () => {
     expect(lintTelegramWidget(html, { allowLinks: false }).errors.join("\n")).toMatch(/ссылк/u);
   });
 
+  // /code-review of 1.8.57–1.8.58, 9 November 2026: the tag pattern required a space before every
+  // attribute, so a tag whose attribute followed «/» or a closing quote was not seen at all.
+  it.each([
+    ["an attribute after «/»", `<a/href="https://example.com/">x</a>`],
+    ["an attribute right after a closing quote", `<a title="t"href="https://example.com/">x</a>`],
+    ["an attribute after a stray quote", `<a data-x=y' href="https://example.com/">x</a>`],
+  ])("refuses a link behind %s where links are not allowed", (_name, html) => {
+    expect(lintTelegramWidget(html, { allowLinks: false }).links).toEqual(["https://example.com/"]);
+  });
+
+  // Codex review of the fix, 9 November 2026: a quote opens a value only right after «=»; inside an
+  // unquoted value a quote or «=» is an ordinary character, and only HTML whitespace separates.
+  it.each([
+    [
+      "a quote inside an unquoted value",
+      `<div data-x=x' href="">hello</div><a href="https://example.com/">x</a><div data-x=y'>end</div>`,
+    ],
+    [
+      "«=» and a quote inside an unquoted value",
+      `<div data-x=a="b><a href="https://example.com/">x</a>">`,
+    ],
+    [
+      "a no-break space, which is no separator to the browser",
+      `<a title=x\u00a0href=a href="https://example.com/">x</a>`,
+    ],
+  ])("does not let %s hide the next link", (_name, html) => {
+    expect(lintTelegramWidget(html, { allowLinks: false }).links).toEqual(["https://example.com/"]);
+  });
+
+  // Codex review, 9 November 2026: a pattern that consumed its matches let a false tag inside a
+  // comment or a <style> swallow the real link after it; every tag is now read from its own «<».
+  it.each([
+    [
+      "a comment with an unclosed quote",
+      `<!-- <div title=" --><a href='https://example.com/'>go</a>`,
+    ],
+    [
+      "a comment whose quote closes later",
+      `<!-- <div title=" --><a href='https://example.com/'>go</a><p title="x">`,
+    ],
+    ["a CSS comment", `<style>/*<div title="*/</style><a href='https://example.com/'>go</a>`],
+    [
+      "a comment before an area link",
+      `<!-- <div title=" --><map><area href="https://example.com/"></map>`,
+    ],
+  ])("does not let a false tag in %s swallow the real link after it", (_name, html) => {
+    expect(lintTelegramWidget(html, { allowLinks: false }).links).toEqual(["https://example.com/"]);
+  });
+
+  it("does not let a false tag in a comment hide an external image", () => {
+    const html = `<!-- <div title=" --><img src="https://example.com/p.png">`;
+    expect(lintTelegramWidget(html, { allowLinks: true }).errors.join("\n")).toMatch(
+      /Внешний ресурс не загрузится/u,
+    );
+  });
+
+  it("refuses a card whose tags overlap past what is read, telling how to fix it", () => {
+    const lint = lintTelegramWidget(`<a b="`.repeat(5_000), { allowLinks: true });
+    expect(lint.errors.join("\n")).toMatch(/слишком запутанная/u);
+  });
+
+  it.each([
+    ["quote pairs without a closing «>»", `<a ${'"x"'.repeat(40)}'`],
+    ["tags whose quoted values never close", `<a b="`.repeat(5_000)],
+    ["tags whose single quotes never close", `<a b='x `.repeat(4_000)],
+    ["unquoted values full of quotes", `<a b=x"y'z `.repeat(3_000)],
+  ])("reads a card of %s in linear time", (_name, html) => {
+    const started = performance.now();
+    lintTelegramWidget(html, { allowLinks: false });
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  it("refuses an external image behind «/» before its attribute", () => {
+    expect(
+      lintTelegramWidget(`<img/src="https://example.com/p.png">`, { allowLinks: true }).errors.join(
+        "\n",
+      ),
+    ).toMatch(/Внешний ресурс не загрузится/u);
+  });
+
   it("does not take a field named location for navigation", () => {
     const html = `<script>var item={location:"Москва"};if (item.location==="Москва") draw();</script>`;
     expect(lintTelegramWidget(html, { allowLinks: false }).errors).toEqual([]);

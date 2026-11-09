@@ -10,8 +10,11 @@
  * Key constructs:
  * - A reply anchored to the command is allowed within 15 seconds of it; an edit or a removal of the
  *   bot's own ephemeral message has no such window.
- * - Every call goes through Eve's `callTelegramApi`: the pacing slot and the per-attempt deadline
- *   are the same as for every other send. Telegram's refusal is returned, never thrown.
+ * - Every call goes through Eve's `callTelegramApi` with its per-attempt deadline. The edit and the
+ *   removal take the pacing slot like every other send; the placeholder reply does not: it is sent
+ *   from the webhook within Telegram's 15-second window, and the group's slot or a 429 pause could
+ *   hold it for a minute (/code-review of 1.8.57–1.8.58), so it goes at once with a 10-second
+ *   deadline. Telegram's refusal is returned, never thrown.
  */
 import { callTelegramApi } from "eve/channels/telegram";
 
@@ -21,6 +24,9 @@ export type TelegramWhisperSendResult =
   { ok: true; placeholderMessageId: number } | { body: unknown; ok: false; status: number };
 
 export type TelegramWhisperEditResult = { ok: true } | { body: unknown; ok: false; status: number };
+
+// Inside Telegram's 15 seconds for a reply to the command, with room for the webhook's own work.
+const WHISPER_REPLY_TIMEOUT_MS = 10_000;
 
 interface ApiOptions {
   readonly botToken?: string;
@@ -69,6 +75,8 @@ export async function sendTelegramWhisperReply(
       text: input.text,
     },
     method: "sendMessage",
+    paced: false,
+    timeoutMs: WHISPER_REPLY_TIMEOUT_MS,
     ...apiOptions(input),
   });
   const placeholderMessageId = response.ok ? sentEphemeralId(response.body) : null;

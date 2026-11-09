@@ -4,7 +4,8 @@
  * Constructs covered:
  * - A whisper gets its own session next to the group's active canonical one: the database admits
  *   one active canonical session per group topic and per thread, so a whisper is never canonical.
- * - It shares the group's sandbox thread (the group workspace) and never touches the group session.
+ * - It shares the group's sandbox thread (the group workspace) and never touches the group session,
+ *   also while the group session is parked for a confirmation (/code-review of 1.8.57–1.8.58).
  * - A whisper session ends with its turn; the next whisper starts a fresh one on the same thread,
  *   with or without a group session in the topic, and never reuses a continuation token.
  * - A group session that starts after a whisper is the group's first, not a replacement of it.
@@ -139,6 +140,53 @@ describeWithDatabase("whisper session repository", () => {
       "SELECT 1 FROM audit_events WHERE event_type = 'session.canonical_replaced'",
     );
     expect(audit.rowCount).toBe(0);
+  });
+
+  it("rides on the group's thread while the group session is parked for a confirmation", async () => {
+    const f = await fixture();
+    const group = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
+    await sessionRepository.bindEveSession(group.id, "wrun_group");
+    await sessionRepository.parkSession({
+      applicationSessionId: group.id,
+      pendingRequestId: "request-1",
+      requesterTelegramUserId: "101",
+      requesterUserId: null,
+    });
+
+    const whisper = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
+
+    expect(whisper.sandboxSessionId).toBe(group.sandboxSessionId);
+  });
+
+  // /code-review of the fix, 9 November 2026: a whisper must take the thread the group's next
+  // session will take (canonicalReplacementSeed), also once the parked one has finished.
+  it("rides on the group's thread after the parked group session has finished", async () => {
+    const f = await fixture();
+    const group = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
+    await sessionRepository.bindEveSession(group.id, "wrun_group");
+    await sessionRepository.parkSession({
+      applicationSessionId: group.id,
+      pendingRequestId: "request-1",
+      requesterTelegramUserId: "101",
+      requesterUserId: null,
+    });
+    await sessionRepository.recordTurnCompleted(group.id, "wrun_group", false);
+
+    const whisper = await sessionRepository.prepareTurn(
+      input(f, "whisper", `osinara:whisper:${f.groupId}:main:101`),
+    );
+    const next = await sessionRepository.prepareTurn(
+      input(f, "canonical", `osinara:group:${f.groupId}:main`),
+    );
+
+    expect(whisper.sandboxSessionId).toBe(group.sandboxSessionId);
+    expect(next.sandboxSessionId).toBe(group.sandboxSessionId);
   });
 
   it("keeps two people's whispers apart", async () => {

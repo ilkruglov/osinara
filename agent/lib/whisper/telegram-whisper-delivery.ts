@@ -77,21 +77,41 @@ function presentation(markdown: string): TelegramWhisperContent[] | null {
 }
 
 /**
- * One message for the placeholder. An answer longer than one message keeps as many whole
- * paragraphs as fit together with the note; cutting by paragraphs of the source keeps every block
- * whole, so the layout stays within Telegram's characters and blocks and no closing tag is lost.
+ * A cut answer with its last code block closed: a block cut short took the note and the layout's own
+ * closing tags into the code (/code-review of the whisper cut, 9 November 2026). A ``` line opens a
+ * block unless more backticks follow on it: «```npm ci``` ставит» is inline code to Telegram and to
+ * the formatter's own code guard, which pairs backtick runs (`telegram-rich-markdown.ts`); closing
+ * it would leave an odd run that swallows the layout's closing tags. A block closes on a line of
+ * ``` alone, at least as long as the opener.
  */
-function placeholderContent(markdown: string): TelegramWhisperContent | null {
-  const whole = presentation(markdown);
-  if (whole !== null && whole.length <= 1) return whole[0] ?? null;
-  const paragraphs = markdown.split(/\n{2,}/u);
+function closeOpenFence(markdown: string): string {
+  let open: string | null = null;
+  for (const line of markdown.split("\n")) {
+    const match = /^\s*(`{3,})(.*)$/u.exec(line);
+    if (match === null) continue;
+    const fence = match[1]!;
+    if (open === null) {
+      if (!match[2]!.includes("`")) open = fence;
+    } else if (fence.length >= open.length && match[2]!.trim() === "") {
+      open = null;
+    }
+  }
+  return open === null ? markdown : `${markdown}\n${open}`;
+}
+
+/** The longest prefix of `pieces` (joined by `separator`) that lays out with the note in one message. */
+function longestFitting(
+  pieces: readonly string[],
+  separator: string,
+  maxCount: number,
+): TelegramWhisperContent | null {
   let best: TelegramWhisperContent | null = null;
   let low = 1;
-  let high = paragraphs.length - 1;
+  let high = maxCount;
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
     const fitted = presentation(
-      `${paragraphs.slice(0, middle).join("\n\n")}${WHISPER_TRUNCATED_NOTE}`,
+      `${closeOpenFence(pieces.slice(0, middle).join(separator).trimEnd())}${WHISPER_TRUNCATED_NOTE}`,
     );
     if (fitted !== null && fitted.length === 1) {
       best = fitted[0]!;
@@ -100,7 +120,30 @@ function placeholderContent(markdown: string): TelegramWhisperContent | null {
       high = middle - 1;
     }
   }
-  return best ?? { format: "plain", text: WHISPER_TRUNCATED_NOTE.trim() };
+  return best;
+}
+
+/**
+ * One message for the placeholder. An answer longer than one message keeps as many whole
+ * paragraphs as fit together with the note; cutting by paragraphs of the source keeps every block
+ * whole, so the layout stays within Telegram's characters and blocks and no closing tag is lost.
+ * When even the first paragraph does not fit, it is cut between words (the space split keeps every
+ * character, emoji included, whole); a single paragraph used to leave only the note (/code-review of
+ * 1.8.57–1.8.58).
+ */
+function placeholderContent(markdown: string): TelegramWhisperContent | null {
+  const whole = presentation(markdown);
+  if (whole !== null && whole.length <= 1) return whole[0] ?? null;
+  const paragraphs = markdown.split(/\n{2,}/u);
+  const byParagraph = longestFitting(paragraphs, "\n\n", paragraphs.length - 1);
+  if (byParagraph !== null) return byParagraph;
+  const words = paragraphs[0]!.split(/(?<=\s)/u);
+  return (
+    longestFitting(words, "", words.length - 1) ?? {
+      format: "plain",
+      text: WHISPER_TRUNCATED_NOTE.trim(),
+    }
+  );
 }
 
 function presented(markdown: string): TelegramWhisperContent | null {

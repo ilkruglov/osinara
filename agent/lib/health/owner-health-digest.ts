@@ -43,7 +43,7 @@ import {
   readStorageHeadroom,
   type StorageHeadroom,
 } from "./storage-headroom.js";
-import { TELEGRAM_MESSAGE_TEXT_MAX_LENGTH } from "eve/channels/telegram";
+import { splitTelegramMessageText, TELEGRAM_MESSAGE_TEXT_MAX_LENGTH } from "eve/channels/telegram";
 
 import {
   MemoryReviewOwnerAlertTransportError,
@@ -213,30 +213,16 @@ export function digestDateFor(now: Date): string | null {
   return now.toISOString().slice(0, 10);
 }
 
-/**
- * The digest in messages Telegram takes, cut at line ends: with many stuck lanes the text passed
- * 4 096 characters, Telegram refused it and the claim went back every pass (Codex review,
- * 6 November 2026). A single line longer than a message is cut where it reaches the limit.
- */
-export function digestParts(text: string, limit = TELEGRAM_MESSAGE_TEXT_MAX_LENGTH): string[] {
-  const parts: string[] = [];
-  let current = "";
-  for (const line of text.split("\n")) {
-    const candidate = current === "" ? line : `${current}\n${line}`;
-    if (candidate.length <= limit) {
-      current = candidate;
-      continue;
-    }
-    if (current !== "") parts.push(current);
-    let rest = line;
-    while (rest.length > limit) {
-      parts.push(rest.slice(0, limit));
-      rest = rest.slice(limit);
-    }
-    current = rest;
+/** Part of a long digest is in the chat and the rest failed: sending again would repeat it. */
+class DigestPartlySentError extends Error {
+  constructor(
+    readonly cause: unknown,
+    readonly sentParts: number,
+    readonly totalParts: number,
+  ) {
+    super("AGENT_OWNER_HEALTH_DIGEST_PARTIAL: part of the digest is in the chat, the rest failed");
+    this.name = "DigestPartlySentError";
   }
-  if (current !== "" || parts.length === 0) parts.push(current);
-  return parts;
 }
 
 /** A card whose outcome is unknown, with the failure of the text sent after it. */
@@ -250,8 +236,48 @@ class DigestAfterAmbiguousCardError extends Error {
 }
 
 export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDigestDependencies) {
+  /**
+   * The digest in messages Telegram takes, cut by Eve's splitter at line ends first: with many
+   * stuck lanes the text passed 4 096 characters, Telegram refused it and the claim went back every
+   * pass (Codex review, 6 November 2026).
+   */
   async function deliverText(chatId: string, text: string): Promise<void> {
-    for (const part of digestParts(text)) await dependencies.deliver({ chatId, text: part });
+    const parts = splitTelegramMessageText(text);
+    for (const [index, part] of parts.entries()) {
+      try {
+        await dependencies.deliver({ chatId, text: part });
+      } catch (error) {
+        if (index === 0 || error instanceof TelegramRecipientUnreachableError) throw error;
+        throw new DigestPartlySentError(error, index, parts.length);
+      }
+    }
+  }
+
+  /**
+   * The card, or why it is not in the chat: `refused` when it surely is not (not built here, or
+   * refused before or by Telegram, size included), not when a timeout may have delivered it.
+   */
+  async function deliverCard(
+    deliverWidget: NonNullable<OwnerHealthDigestDependencies["deliverWidget"]>,
+    chatId: string,
+    sections: OwnerHealthDigestSections,
+    now: Date,
+  ): Promise<{ error: unknown; refused: boolean } | null> {
+    let widget: { caption: string; html: string };
+    try {
+      widget = ownerHealthDigestWidget(sections, now);
+    } catch (error) {
+      // Nothing was sent (/code-review of 1.8.57–1.8.58: this counted as a card that may have arrived).
+      return { error, refused: true };
+    }
+    try {
+      await deliverWidget({ caption: widget.caption, chatId, html: widget.html });
+      return null;
+    } catch (error) {
+      // A chat that is gone does not take the text either: the claim logic handles it.
+      if (error instanceof TelegramRecipientUnreachableError) throw error;
+      return { error, refused: error instanceof MemoryReviewOwnerAlertTransportError };
+    }
   }
 
   /** The card when widgets are on; the text otherwise, or with the reason when the card failed. */
@@ -265,48 +291,46 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
       await deliverText(chatId, text);
       return;
     }
+    const failure = await deliverCard(dependencies.deliverWidget, chatId, sections, now);
+    if (failure === null) return;
+    const { error, refused } = failure;
+    const reason =
+      error instanceof Error
+        ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160)
+        : String(error);
+    console.error(
+      JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }),
+    );
+    const note = refused
+      ? `Карточка сводки не отправилась (${reason}), поэтому текстом.`
+      : `Карточка сводки могла не дойти (${reason}), поэтому на всякий случай текстом.`;
+    const joined = `${text}\n${note}`;
     try {
-      const widget = ownerHealthDigestWidget(sections, now);
-      await dependencies.deliverWidget({ caption: widget.caption, chatId, html: widget.html });
-    } catch (error) {
-      // A chat that is gone does not take the text either: the claim logic below handles it.
-      if (error instanceof TelegramRecipientUnreachableError) throw error;
-      const reason =
-        error instanceof Error
-          ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160)
-          : String(error);
+      if (joined.length <= TELEGRAM_MESSAGE_TEXT_MAX_LENGTH) {
+        await dependencies.deliver({ chatId, text: joined });
+        return;
+      }
+      // The note goes apart rather than making the digest longer than its messages.
+      await deliverText(chatId, text);
+    } catch (textError) {
+      // The card may be in the chat: retrying would send it again every pass.
+      if (
+        !refused &&
+        !(textError instanceof TelegramRecipientUnreachableError) &&
+        !(textError instanceof DigestPartlySentError)
+      )
+        throw new DigestAfterAmbiguousCardError(textError);
+      throw textError;
+    }
+    try {
+      await dependencies.deliver({ chatId, text: note });
+    } catch (noteError) {
       console.error(
-        JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }),
+        JSON.stringify({
+          code: "AGENT_OWNER_HEALTH_DIGEST_NOTE_FAILED",
+          error: noteError instanceof Error ? noteError.name : "UnknownError",
+        }),
       );
-      // Only Telegram's own refusal proves the card is not in the chat; a timeout may have delivered it.
-      const refused = error instanceof MemoryReviewOwnerAlertTransportError;
-      const note = refused
-        ? `Карточка сводки не отправилась (${reason}), поэтому текстом.`
-        : `Карточка сводки могла не дойти (${reason}), поэтому на всякий случай текстом.`;
-      const joined = `${text}\n${note}`;
-      try {
-        if (joined.length <= TELEGRAM_MESSAGE_TEXT_MAX_LENGTH) {
-          await dependencies.deliver({ chatId, text: joined });
-          return;
-        }
-        // The note goes apart rather than making the digest longer than its messages.
-        await deliverText(chatId, text);
-      } catch (textError) {
-        // The card may be in the chat: retrying would send it again every pass.
-        if (!refused && !(textError instanceof TelegramRecipientUnreachableError))
-          throw new DigestAfterAmbiguousCardError(textError);
-        throw textError;
-      }
-      try {
-        await dependencies.deliver({ chatId, text: note });
-      } catch (noteError) {
-        console.error(
-          JSON.stringify({
-            code: "AGENT_OWNER_HEALTH_DIGEST_NOTE_FAILED",
-            error: noteError instanceof Error ? noteError.name : "UnknownError",
-          }),
-        );
-      }
     }
   }
 
@@ -346,13 +370,18 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
         try {
           await deliverDigest(recipient.ownerTelegramUserId, sections, text, now);
         } catch (error) {
-          if (!(error instanceof DigestAfterAmbiguousCardError)) throw error;
-          // The day counts as sent: the card may have arrived, and a retry would repeat it.
+          // The day counts as sent: a part of it, or a card that may have arrived, is in the chat,
+          // and a retry would repeat it.
+          const partly = error instanceof DigestPartlySentError;
+          if (!partly && !(error instanceof DigestAfterAmbiguousCardError)) throw error;
           console.error(
             JSON.stringify({
-              code: "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS",
+              code: partly
+                ? "AGENT_OWNER_HEALTH_DIGEST_PARTIAL"
+                : "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS",
               error: error.cause instanceof Error ? error.cause.name : "UnknownError",
               familyId: recipient.familyId,
+              ...(partly ? { sentParts: error.sentParts, totalParts: error.totalParts } : {}),
             }),
           );
         }

@@ -43,6 +43,47 @@ count_active_workflow_runs() {
     --username osinara --dbname osinara_workflow --no-align --tuples-only --quiet
 }
 
+# Work the agent took from the application database that is not a Workflow run yet: a message
+# claimed but not dispatched, or dispatched in the last 5 minutes (nothing records that Eve took it,
+# and before its run exists onMessage may wait out a group's pacing and a 429 pause; 5 minutes is
+# the drain's own ceiling, Codex review of the drain fix, 9 November 2026);
+# a schedule run claimed or dispatching under a live lease; a memory review batch leased, or
+# dispatching in the last 10 minutes. The pause stops new claims; a claim that read no pause had
+# committed before the pause did (pause_new_turns waits for it) and is counted here until its run
+# exists, where the Workflow count alone let the stop cut it (/code-review of 1.8.57–1.8.58). A turn
+# waiting for an approval holds none of these: its message ends at the session's waiting event.
+claimed_turn_work_rows_sql() {
+  cat <<'SQL'
+SELECT 'ingress' AS kind, update_id::text AS id FROM telegram_ingress_updates
+ WHERE status = 'processing' AND lease_expires_at > now()
+   AND (dispatch_started_at IS NULL OR dispatch_started_at > now() - interval '5 minutes')
+UNION ALL
+SELECT 'schedule', run.id::text FROM agent_schedule_runs AS run
+  JOIN agent_schedules AS schedule
+    ON schedule.id = run.schedule_id AND schedule.lease_token = run.lease_token
+ WHERE run.status IN ('claimed', 'dispatching')
+   AND schedule.status = 'leased' AND schedule.lease_expires_at > now()
+UNION ALL
+SELECT 'memory_review', id::text FROM memory_review_batches
+ WHERE (status = 'leased' AND lease_expires_at > now())
+    OR (status = 'dispatching' AND updated_at > now() - interval '10 minutes')
+SQL
+}
+
+claimed_turn_work_sql() {
+  printf 'SELECT count(*) FROM (\n%s\n) AS claimed;\n' "$(claimed_turn_work_rows_sql)"
+}
+
+# One poll of the claimed work within `seconds`, bounded like `count_active_workflow_runs`.
+count_claimed_turn_work() {
+  local seconds="$1"
+  {
+    printf "SET statement_timeout = '%ss';\nSET lock_timeout = '2s';\n" "$seconds"
+    claimed_turn_work_sql
+  } | compose_current_within "$seconds" exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
+    --username osinara --dbname osinara --no-align --tuples-only --quiet
+}
+
 # New turns wait while a deploy drains the running ones: the webhook path and the minute schedules
 # of the agent would otherwise start a turn the stop then cuts (Codex review, 6 November 2026).
 # The pause lives in the application database and is checked where a turn is claimed
@@ -65,8 +106,14 @@ END
 SQL
 }
 
+# The claims take this lock shared before they read the pause (TURN_START_LOCK_SQL in
+# agent/lib/deploy/turn-start-pause.ts); taken alone here, the pause commits only after every claim
+# that could have missed it, so the wait's first poll sees them all (/code-review of the drain fix,
+# 9 November 2026). A claim runs a few queries, so the lock is waited for up to 15 s.
 pause_new_turns() {
-  turn_pause_sql "INSERT INTO deploy_turn_pause (singleton, paused_until) VALUES (true, now() + interval '15 minutes')
+  turn_pause_sql "PERFORM set_config('lock_timeout', '15s', true);
+    PERFORM pg_advisory_xact_lock(hashtextextended('osinara.turn_start', 0));
+    INSERT INTO deploy_turn_pause (singleton, paused_until) VALUES (true, now() + interval '15 minutes')
       ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until, requested_at = now();" |
     compose_current_within "$TURN_PAUSE_QUERY_SECONDS" exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
       --username osinara --dbname osinara --no-align --tuples-only --quiet

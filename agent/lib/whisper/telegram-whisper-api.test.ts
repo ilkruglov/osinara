@@ -35,6 +35,30 @@ function sentMethod(fetch: ReturnType<typeof telegram>, call = 0): string {
 }
 
 describe("whisper Bot API", () => {
+  // /code-review of 1.8.57–1.8.58: the placeholder waited for the group's send slot (up to a minute)
+  // inside the webhook, while Telegram allows the reply only 15 seconds after the command.
+  it("sends the placeholder at once, past a group that used its send window, and within 10 s", async () => {
+    const { telegramSendPacer } = await import("eve/channels/telegram");
+    const acquire = vi.spyOn(telegramSendPacer, "acquire");
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const fetch = telegram({ ok: true, result: { ephemeral_message_id: 31, message_id: 0 } });
+
+    await sendTelegramWhisperReply({
+      botToken: "1:test",
+      chatId: "-1001",
+      ephemeralMessageId: 7,
+      fetch,
+      messageThreadId: null,
+      receiverUserId: "101",
+      text: "Думаю…",
+    });
+
+    expect(acquire).not.toHaveBeenCalled();
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([10_000]);
+    acquire.mockRestore();
+    timeout.mockRestore();
+  });
+
   it("replies to the ephemeral command for its author only and returns the reply's ephemeral id", async () => {
     const fetch = telegram({
       ok: true,

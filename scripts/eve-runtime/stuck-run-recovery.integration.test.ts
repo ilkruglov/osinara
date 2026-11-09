@@ -74,6 +74,19 @@ describe.skipIf(
         "turnWithInbox",
       ]);
       expect(found.every((run) => run.workflowName === "workflow//eve//turnWorkflow")).toBe(true);
+      // The id of the last event tells a run left in the same state by its replay; such a run is
+      // left out by the query, not after it, so it takes no place under the limit.
+      expect(found.every((run) => run.lastEventId === `${run.runId}-b`)).toBe(true);
+      const skipped = await findStuckRuns(pool, LIMITS, [
+        { lastEventId: `${prefix}-abandoned-b`, runId: `${prefix}-abandoned` },
+        { lastEventId: `${prefix}-lostStart-old`, runId: `${prefix}-lostStart` },
+      ]);
+      expect(
+        skipped
+          .filter((run) => run.runId.startsWith(prefix))
+          .map((run) => run.runId.slice(prefix.length + 1))
+          .sort(),
+      ).toEqual(["lostRetry", "lostStart", "turnWithInbox"]);
     } finally {
       await pool.query("DELETE FROM workflow.workflow_hooks WHERE run_id LIKE $1", [`${prefix}-%`]);
       await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [

@@ -12,6 +12,11 @@ import { closeDatabase, database } from "../database.js";
 import { sessionRepository } from "../sessions/session-repository.js";
 import { agentScheduleDispatchRepository } from "./agent-schedule-dispatch-repository.js";
 import { agentScheduleRepository } from "./agent-schedule-repository.js";
+import {
+  isClaimedTurnWork,
+  pauseBeingSet,
+  stillPendingAfter,
+} from "../deploy/claimed-turn-work.test-support.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const url = process.env.DATABASE_URL;
@@ -210,6 +215,119 @@ describeWithDatabase("agent schedule repositories", () => {
       [schedule.id],
     );
     expect(persisted.rows[0]?.history_window_days).toBeNull();
+  });
+
+  // /code-review of 1.8.57–1.8.58: the pause was checked by a separate query before the claim, so a
+  // tick that read «not paused» could still claim after the deploy set the pause.
+  it("claims nothing while a deploy pauses new turns, in the claim itself", async () => {
+    const fixture = await createFixture();
+    await agentScheduleRepository.create(privateAuth(fixture, "member"), {
+      firstRunAt: new Date("2026-07-17T09:00:00.000Z"),
+      operationKey: "paused-created",
+      recurrence: { kind: "once" },
+      scenarioPrompt: "Сделать сводку.",
+      scope: "personal",
+      timezone: "UTC",
+      title: "Сводка при деплое",
+      userRequest: "Пришли сводку",
+    });
+    await database().query(
+      `INSERT INTO deploy_turn_pause (singleton, paused_until) VALUES (true, now() + interval '15 minutes')
+       ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until`,
+    );
+    try {
+      await expect(
+        agentScheduleDispatchRepository.claimDue({
+          leaseMilliseconds: 300_000,
+          limit: 10,
+          now: new Date("2026-07-17T09:00:01.000Z"),
+        }),
+      ).resolves.toEqual([]);
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
+    await expect(
+      agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 300_000,
+        limit: 10,
+        now: new Date("2026-07-17T09:00:01.000Z"),
+      }),
+    ).resolves.toHaveLength(1);
+  });
+
+  // /code-review of 1.8.57–1.8.58: a run claimed just before the pause is not a Workflow run yet,
+  // and the deploy's wait saw nothing; it counts until Eve confirms its run.
+  it("is counted by the deploy's wait from its claim until its run is confirmed", async () => {
+    const fixture = await createFixture();
+    const now = new Date();
+    await agentScheduleRepository.create(privateAuth(fixture, "member"), {
+      firstRunAt: new Date(now.getTime() - 60_000),
+      operationKey: "drain-counted",
+      recurrence: { kind: "once" },
+      scenarioPrompt: "Сделать сводку.",
+      scope: "personal",
+      timezone: "UTC",
+      title: "Сводка перед деплоем",
+      userRequest: "Пришли сводку",
+    });
+    const [claimed] = await agentScheduleDispatchRepository.claimDue({
+      leaseMilliseconds: 300_000,
+      limit: 10,
+      now,
+    });
+    await expect(isClaimedTurnWork("schedule", claimed!.runId)).resolves.toBe(true);
+    const prepared = await sessionRepository.prepareTurn({
+      baseContinuationToken: "schedule-member::schedule:drain-run",
+      kind: "scheduled",
+      telegramForumTopicId: null,
+      familyId: fixture.familyId,
+      groupId: null,
+      now,
+      scope: "personal",
+      userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
+    });
+    await expect(isClaimedTurnWork("schedule", claimed!.runId)).resolves.toBe(true);
+
+    await agentScheduleDispatchRepository.markRunning(claimed!, {
+      applicationSessionId: prepared.id,
+      eveSessionId: "eve-schedule-drain",
+    });
+    await expect(isClaimedTurnWork("schedule", claimed!.runId)).resolves.toBe(false);
+  });
+
+  // /code-review of the drain fix, 9 November 2026: a claim that read no pause before the pause
+  // committed was still in its transaction when the deploy's wait looked; it now waits for the pause.
+  it("waits for a pause being set and then claims nothing", async () => {
+    const fixture = await createFixture();
+    const now = new Date();
+    await agentScheduleRepository.create(privateAuth(fixture, "member"), {
+      firstRunAt: new Date(now.getTime() - 60_000),
+      operationKey: "pause-being-set",
+      recurrence: { kind: "once" },
+      scenarioPrompt: "Сделать сводку.",
+      scope: "personal",
+      timezone: "UTC",
+      title: "Сводка во время паузы",
+      userRequest: "Пришли сводку",
+    });
+    const pause = await pauseBeingSet();
+    try {
+      const claim = agentScheduleDispatchRepository.claimDue({
+        leaseMilliseconds: 300_000,
+        limit: 10,
+        now,
+      });
+      const waited = await stillPendingAfter(claim, 300);
+      await pause.commit();
+
+      expect(waited).toBe(true);
+      await expect(claim).resolves.toEqual([]);
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
   });
 
   it("claims a weekday schedule once and advances it after Eve completion", async () => {

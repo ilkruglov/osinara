@@ -10,7 +10,8 @@
  * - A drain that cannot read the running turns, or cannot pause new ones, cancels the deploy and
  *   lifts the pause (owner's decision, 7 November 2026); stopping the release lifts it too.
  * - Every poll is bounded by the remaining drain budget, on the host (docker exec) and in
- *   PostgreSQL (statement and lock timeouts).
+ *   PostgreSQL (statement and lock timeouts); the claimed-work poll too (its own cases are in
+ *   `scripts/production-deploy/drain-current-turns.test.ts`).
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./agent/lib/database.js";
+import { TURN_START_LOCK_KEY_SQL } from "./agent/lib/deploy/turn-start-pause.js";
 
 const scripts = fileURLToPath(new URL("scripts/production-deploy/", import.meta.url));
 const describeWithDatabase =
@@ -74,6 +76,7 @@ function runDrain(
       [[ "$next" == "error" ]] && return 1
       printf '%s\\n' "\${next:-0}"
     }
+    count_claimed_turn_work() { printf '0\n'; }
     sleep() { :; }
     drain_current_turns ${timeoutSeconds} 2> "${dir}/log" && status=0 || status=$?
     echo "stopped=$CURRENT_SERVICES_STOPPED status=$status"
@@ -139,6 +142,9 @@ describe("deploy turn drain", () => {
     expect(stdin).toContain("to_regclass('public.deploy_turn_pause')");
     expect(stdin).toContain("now() + interval '15 minutes'");
     expect(stdin).toContain("DELETE FROM deploy_turn_pause");
+    // The claims' lock, taken alone, waited for up to 15 s (the claims run a few queries each).
+    expect(stdin).toContain(`pg_advisory_xact_lock(${TURN_START_LOCK_KEY_SQL})`);
+    expect(stdin).toContain("set_config('lock_timeout', '15s', true)");
   });
 
   it("lifts the pause once the release has stopped", () => {
@@ -188,6 +194,22 @@ describe("deploy turn drain", () => {
     expect(stdin).toContain("SET statement_timeout = '20s';");
     expect(stdin).toContain("SET lock_timeout = '2s';");
     expect(stdin).toContain("FROM workflow.workflow_runs AS run");
+  });
+
+  it("runs the claimed-work query against the application database under the same bounds", () => {
+    const dir = mkdtempSync(join(tmpdir(), "drain-claimed-"));
+    controller(`
+      CURRENT_ENV=/srv/release.env CURRENT_COMPOSE=/srv/compose.yaml
+      timeout() { printf '%s\n' "$*" > "${dir}/argv"; cat > "${dir}/stdin"; echo 0; }
+      count_claimed_turn_work 20
+    `);
+    const argv = readFileSync(join(dir, "argv"), "utf8");
+    const stdin = readFileSync(join(dir, "stdin"), "utf8");
+    expect(argv).toMatch(/^--kill-after=5 20 docker compose --project-name osinara-production /u);
+    expect(argv).toContain("--dbname osinara ");
+    expect(stdin).toContain("SET statement_timeout = '20s';");
+    expect(stdin).toContain("SET lock_timeout = '2s';");
+    expect(stdin).toContain("FROM telegram_ingress_updates");
   });
 });
 

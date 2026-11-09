@@ -2,8 +2,9 @@
  * Declaring `/whisper` to Telegram for all group chats.
  *
  * Export:
- * - `ensureTelegramWhisperCommand`: declares the ephemeral command when Telegram's list for all
- *   group chats lacks it or holds another version of it; other commands there are kept.
+ * - `ensureTelegramWhisperCommand`: keeps Telegram's list for all group chats equal to the default
+ *   list plus the ephemeral command, so groups see the default commands too; a list for one
+ *   language only is not followed.
  *
  * Key construct:
  * - Only a command declared with `is_ephemeral` makes the client send it as an ephemeral message
@@ -17,6 +18,8 @@ import { telegramProviderDescription } from "../telegram-reachability/recipient-
 import { TELEGRAM_WHISPER_BOT_COMMAND, TELEGRAM_WHISPER_COMMAND } from "./telegram-whisper.js";
 
 const GROUP_CHATS_SCOPE = { type: "all_group_chats" } as const;
+const DEFAULT_SCOPE = { type: "default" } as const;
+const TELEGRAM_COMMANDS_MAX = 100;
 
 type BotCommand = {
   command: string;
@@ -71,17 +74,24 @@ export async function ensureTelegramWhisperCommand(input: {
   });
   const current = read.ok ? commandsOf(read.body) : null;
   if (current === null) throw commandFailure("read", read);
-  const declared = current.find((command) => command.command === TELEGRAM_WHISPER_COMMAND);
-  if (
-    declared?.description === TELEGRAM_WHISPER_BOT_COMMAND.description &&
-    declared.is_ephemeral === true
-  ) {
-    return "unchanged";
-  }
+  // Telegram shows a group the narrowest list that has commands, so the group list is the default
+  // list and the command, read again on every check: a list of `/whisper` alone hid the default
+  // commands in groups, and a copy taken once kept them on an old default list.
+  const defaultRead = await callTelegramApi({
+    body: { scope: DEFAULT_SCOPE },
+    method: "getMyCommands",
+    ...options,
+  });
+  const defaults = defaultRead.ok ? commandsOf(defaultRead.body) : null;
+  if (defaults === null) throw commandFailure("read-default", defaultRead);
   const commands = [
-    ...current.filter((command) => command.command !== TELEGRAM_WHISPER_COMMAND),
+    // Telegram takes at most 100 commands in a list; the command keeps its place.
+    ...defaults
+      .filter((command) => command.command !== TELEGRAM_WHISPER_COMMAND)
+      .slice(0, TELEGRAM_COMMANDS_MAX - 1),
     { ...TELEGRAM_WHISPER_BOT_COMMAND },
   ];
+  if (JSON.stringify(current) === JSON.stringify(commands)) return "unchanged";
   const written = await callTelegramApi({
     body: { commands, scope: GROUP_CHATS_SCOPE },
     method: "setMyCommands",
