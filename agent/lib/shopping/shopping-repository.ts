@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import { isLivePersonalMember, personalChatUserId } from "../family-repository-checks.js";
 import type { MemoryAuthorization } from "../memory-context.js";
 import { sha256Json } from "../json-hash.js";
 
@@ -100,22 +101,9 @@ function shoppingDenied(): never {
 
 /** A family member in their own private chat, checked live: a revoked membership loses the list. */
 async function authorizeShopping(client: PoolClient, auth: MemoryAuthorization): Promise<string> {
-  if (
-    auth.telegramActorKind !== "telegram_user" ||
-    !auth.telegramUserId ||
-    !auth.userId ||
-    auth.telegramActorId !== auth.telegramUserId ||
-    auth.role === "external" ||
-    auth.groupId !== null
-  )
-    shoppingDenied();
-  const member = await client.query(
-    `SELECT 1 FROM family_memberships m JOIN users u ON u.id = m.user_id
-      WHERE m.family_id = $1 AND m.user_id = $2 AND u.telegram_user_id = $3`,
-    [auth.familyId, auth.userId, auth.telegramUserId],
-  );
-  if (!member.rowCount) shoppingDenied();
-  return auth.userId!;
+  const userId = personalChatUserId(auth);
+  if (userId === null || !(await isLivePersonalMember(client, auth, userId))) shoppingDenied();
+  return userId;
 }
 
 const COLUMNS = "id, list_name, title, quantity, note, version, bought_at";

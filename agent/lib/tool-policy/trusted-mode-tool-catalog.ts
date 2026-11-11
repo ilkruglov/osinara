@@ -4,6 +4,8 @@
  * Exports:
  * - `TRUSTED_MODE_TOOLS`: shared private/family tool definitions.
  * - `PRIVATE_ONLY_TOOLS`, `FAMILY_ONLY_TOOLS`: trust-zone-specific definitions.
+ * - `HEALTH_JOURNAL_TOOL_NAMES`, `HEALTH_JOURNAL_WRITE_TOOL_NAMES`: the health journal's tools, which
+ *   scheduled turns and children are denied by set, not by name.
  * - Sorted tool-name arrays used by policy contracts.
  */
 import type { ToolDefinition } from "eve/tools";
@@ -11,6 +13,11 @@ import { webFetch as eveWebFetch } from "eve/tools/defaults";
 import findFuelStations from "../tools/find_fuel_stations.js";
 import groceryCart from "../tools/grocery_cart.js";
 import manageShoppingList from "../tools/manage_shopping_list.js";
+import healthSummary from "../tools/health_summary.js";
+import manageBodyProfile from "../tools/manage_body_profile.js";
+import manageFoodLog from "../tools/manage_food_log.js";
+import manageSleepActivity from "../tools/manage_sleep_activity.js";
+import manageWorkouts from "../tools/manage_workouts.js";
 import yandexLavka from "../tools/yandex_lavka.js";
 import yandexTaxi from "../tools/yandex_taxi.js";
 
@@ -136,8 +143,25 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   web_fetch: TRUSTED_WEB_FETCH,
 };
 
+/**
+ * The health journal is the person's own and lives only in their private chat (11 November 2026).
+ * The writers record the person's own words, so scheduled turns and children never get them; the
+ * summary shows the person their numbers, so a child never gets it either.
+ */
+const HEALTH_JOURNAL_WRITE_TOOLS: ToolMap = {
+  manage_body_profile: manageBodyProfile as unknown as AnyToolDefinition,
+  manage_food_log: manageFoodLog as unknown as AnyToolDefinition,
+  manage_sleep_activity: manageSleepActivity as unknown as AnyToolDefinition,
+  manage_workouts: manageWorkouts as unknown as AnyToolDefinition,
+};
+const HEALTH_JOURNAL_TOOLS: ToolMap = {
+  ...HEALTH_JOURNAL_WRITE_TOOLS,
+  health_summary: healthSummary as unknown as AnyToolDefinition,
+};
+
 /** Owner administration and personal-only surfaces that require the owner's private chat. */
 export const PRIVATE_ONLY_TOOLS: ToolMap = {
+  ...HEALTH_JOURNAL_TOOLS,
   export_memory: exportMemory as unknown as AnyToolDefinition,
   grocery_cart: groceryCart as unknown as AnyToolDefinition,
   manage_shopping_list: manageShoppingList as unknown as AnyToolDefinition,
@@ -163,3 +187,5 @@ export const FAMILY_ONLY_TOOLS: ToolMap = {
 export const TRUSTED_MODE_TOOL_NAMES = Object.keys(TRUSTED_MODE_TOOLS).sort();
 export const PRIVATE_ONLY_TOOL_NAMES = Object.keys(PRIVATE_ONLY_TOOLS).sort();
 export const FAMILY_ONLY_TOOL_NAMES = Object.keys(FAMILY_ONLY_TOOLS).sort();
+export const HEALTH_JOURNAL_TOOL_NAMES = Object.keys(HEALTH_JOURNAL_TOOLS).sort();
+export const HEALTH_JOURNAL_WRITE_TOOL_NAMES = Object.keys(HEALTH_JOURNAL_WRITE_TOOLS).sort();

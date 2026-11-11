@@ -36,7 +36,11 @@ import {
   buildModeToolSurface,
   buildSubagentToolSurface,
 } from "./mode-tool-surface.js";
-import { TRUSTED_MODE_TOOLS } from "./trusted-mode-tool-catalog.js";
+import {
+  HEALTH_JOURNAL_TOOL_NAMES,
+  HEALTH_JOURNAL_WRITE_TOOL_NAMES,
+  TRUSTED_MODE_TOOLS,
+} from "./trusted-mode-tool-catalog.js";
 import { TURN_INTERJECTION_FRAMEWORK_TOOL_NAMES } from "../turn-interjection/turn-interjection-surface.js";
 import { FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS } from "./group-tool-catalog.js";
 
@@ -245,5 +249,25 @@ describe("trusted mode tool surfaces", () => {
         scheduledRun: true,
       }),
     ).not.toHaveProperty("remember");
+  });
+
+  it("keeps the health journal in the private chat, read-only in its scheduled turns", () => {
+    const writers = HEALTH_JOURNAL_WRITE_TOOL_NAMES;
+    const all = HEALTH_JOURNAL_TOOL_NAMES;
+    expect(all).toEqual([...writers, "health_summary"].sort());
+    const privateNames = names({ environment: "private" });
+    for (const tool of all) expect(privateNames).toContain(tool);
+    const elsewhere = [
+      names({ environment: "family" }),
+      names({ capabilities: new Set(), environment: "external" }),
+      Object.keys(buildSubagentToolSurface({ environment: "private" })),
+      Object.keys(buildModeToolSurface({ environment: "family", scheduledRun: true })),
+    ];
+    for (const surface of elsewhere) for (const tool of all) expect(surface).not.toContain(tool);
+    const scheduled = Object.keys(
+      buildModeToolSurface({ environment: "private", scheduledRun: true }),
+    );
+    expect(scheduled).toContain("health_summary");
+    for (const tool of writers) expect(scheduled).not.toContain(tool);
   });
 });

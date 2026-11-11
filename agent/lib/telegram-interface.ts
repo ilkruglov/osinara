@@ -16,6 +16,10 @@ const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
 };
 
 const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  manage_body_profile: {
+    erase_all:
+      "стереть весь дневник здоровья: еду и напитки, вес, сон, активность, тренировки и цели",
+  },
   manage_google_workspace_connection: {
     disconnect: "отключить Google Workspace от текущей области",
   },

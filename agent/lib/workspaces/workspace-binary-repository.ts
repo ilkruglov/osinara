@@ -3,7 +3,8 @@
  *
  * Exports:
  * - `WorkspaceBinaryFile`: current metadata plus an immutable byte snapshot.
- * - `createWorkspaceBinaryRepository`: scope authorization and binary I/O over a trusted resolver.
+ * - `createWorkspaceBinaryRepository`: scope authorization, binary I/O and listing a directory over a
+ *   trusted resolver.
  * - `workspaceBinaryRepository`: production repository rooted at `/app/workspaces`.
  */
 import { createHash } from "node:crypto";
@@ -109,6 +110,25 @@ export function createWorkspaceBinaryRepository(root: string, resolver: Workspac
         [operationKey, workspaceId],
       );
       return result.rows[0]?.result ?? null;
+    },
+
+    /** The files under a directory of the scope with their times; a missing directory has none. */
+    async listFilesUnder(
+      auth: WorkspaceAuthorization,
+      scope: WorkspaceScope,
+      directory: string,
+    ): Promise<Array<{ path: string; updatedAt: Date }>> {
+      const safePath = validateWorkspacePath(directory);
+      const workspaceId = await resolveWorkspaceId(resolver, auth, scope);
+      try {
+        return (await listWorkspaceStoredFilesUnder(root, workspaceId, safePath)).map((file) => ({
+          path: file.path,
+          updatedAt: file.updatedAt,
+        }));
+      } catch (error) {
+        if (error instanceof AppError && error.code === "AGENT_WORKSPACE_FILE_NOT_FOUND") return [];
+        throw error;
+      }
     },
 
     async readBinary(

@@ -71,6 +71,8 @@ import {
 } from "./group-tool-catalog.js";
 import {
   FAMILY_ONLY_TOOLS,
+  HEALTH_JOURNAL_TOOL_NAMES,
+  HEALTH_JOURNAL_WRITE_TOOL_NAMES,
   PRIVATE_ONLY_TOOLS,
   TRUSTED_MODE_TOOLS,
 } from "./trusted-mode-tool-catalog.js";
@@ -455,17 +457,22 @@ const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
   private: withTurnInterjectionSurface(TRUSTED_APPLICATION_SURFACES.private),
 };
 
+function withoutTools(surface: ToolMap, names: readonly string[]): ToolMap {
+  return Object.fromEntries(Object.entries(surface).filter(([name]) => !names.includes(name)));
+}
+
 const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> =
   Object.fromEntries(
     Object.entries(TRUSTED_APPLICATION_SURFACES).map(([environment, surface]) => {
       // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
+      // Nor for health journal entries: a scheduled summary reads the journal, it records nothing.
       const {
         manage_behavior_preference: _manageBehaviorPreference,
         manage_skill: _manageSkill,
         remember: _remember,
         ...readOnlyPromptSurface
       } = surface;
-      return [environment, readOnlyPromptSurface];
+      return [environment, withoutTools(readOnlyPromptSurface, HEALTH_JOURNAL_WRITE_TOOL_NAMES)];
     }),
   ) as Record<"family" | "private", ToolMap>;
 
@@ -523,8 +530,10 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
     remember: _remember,
     // A child works on a fresh context and reports to the root; cards in the chat are the root's.
     send_widget: _sendWidget,
-    ...surface
+    ...rootSurface
   } = buildModeToolSurface(effectiveInput);
+  // The health journal records the person's own words and shows them their cards: root work.
+  const surface = withoutTools(rootSurface, HEALTH_JOURNAL_TOOL_NAMES);
   // A child never loads external skills: imagegen rides on the removed grant and authored skills
   // belong to the root turn that the owner's grant addressed.
   return input.environment === "external"

@@ -19,7 +19,9 @@ const GENERIC_DESCRIPTION_FILLER = [
   "Вход: передавай только поля schema",
   "Ошибка: следуй code, correction, retryable",
 ] as const;
-const TOTAL_DESCRIPTION_MAX_CHARACTERS = 30_000;
+// 35 000 by the owner's decision of 11 November 2026: the private surface stood at 29 996 before
+// the five health journal tools (≈2 000 characters) and needs room for the next ones.
+const TOTAL_DESCRIPTION_MAX_CHARACTERS = 35_000;
 const TOOL_DESCRIPTION_MAX_CHARACTERS = 3_000;
 const DENIED_DESCRIPTION_MAX_CHARACTERS = 160;
 

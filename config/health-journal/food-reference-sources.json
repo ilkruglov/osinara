@@ -1,0 +1,1574 @@
+{
+ "source": "USDA FoodData Central API, https://api.nal.usda.gov/fdc/v1/foods",
+ "fetched_at": "2026-11-11T16:11:32+0300",
+ "groups": [
+  {
+   "title": "Крупы, гарниры, хлеб",
+   "rows": [
+    {
+     "name_ru": "Гречка (ядрица)",
+     "state_ru": "сухая",
+     "fdcId": 170685,
+     "description": "Buckwheat groats, roasted, dry",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Гречка",
+     "state_ru": "варёная",
+     "fdcId": 170686,
+     "description": "Buckwheat groats, roasted, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Рис белый длиннозёрный",
+     "state_ru": "сухой",
+     "fdcId": 168877,
+     "description": "Rice, white, long-grain, regular, raw, enriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Рис белый длиннозёрный",
+     "state_ru": "варёный",
+     "fdcId": 168878,
+     "description": "Rice, white, long-grain, regular, enriched, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Рис бурый",
+     "state_ru": "сухой",
+     "fdcId": 169703,
+     "description": "Rice, brown, long-grain, raw (Includes foods for USDA's Food Distribution Program)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Рис бурый",
+     "state_ru": "варёный",
+     "fdcId": 169704,
+     "description": "Rice, brown, long-grain, cooked (Includes foods for USDA's Food Distribution Program)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Овсяные хлопья",
+     "state_ru": "сухие",
+     "fdcId": 173904,
+     "description": "Cereals, oats, regular and quick, not fortified, dry",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Овсянка на воде",
+     "state_ru": "варёная, без соли",
+     "fdcId": 173905,
+     "description": "Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Пшено",
+     "state_ru": "сухое",
+     "fdcId": 169702,
+     "description": "Millet, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Пшено",
+     "state_ru": "варёное",
+     "fdcId": 168871,
+     "description": "Millet, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Булгур",
+     "state_ru": "сухой",
+     "fdcId": 170688,
+     "description": "Bulgur, dry",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Булгур",
+     "state_ru": "варёный",
+     "fdcId": 170287,
+     "description": "Bulgur, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Макароны",
+     "state_ru": "сухие",
+     "fdcId": 169736,
+     "description": "Pasta, dry, enriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Макароны",
+     "state_ru": "отварные, без соли",
+     "fdcId": 169737,
+     "description": "Pasta, cooked, enriched, without added salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Картофель",
+     "state_ru": "сырой",
+     "fdcId": 170026,
+     "description": "Potatoes, flesh and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Картофель",
+     "state_ru": "отварной без кожуры",
+     "fdcId": 170440,
+     "description": "Potatoes, boiled, cooked without skin, flesh, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Картофель жареный",
+     "state_ru": "жареный на масле",
+     "fdcId": 170036,
+     "description": "Potatoes, hash brown, home-prepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Картофель фри",
+     "state_ru": "фритюр",
+     "fdcId": 170698,
+     "description": "Fast foods, potato, french fried in vegetable oil",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Пюре картофельное",
+     "state_ru": "с молоком и сливочным маслом",
+     "fdcId": 168555,
+     "description": "Potatoes, mashed, home-prepared, whole milk and butter added",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Хлеб белый пшеничный",
+     "state_ru": "готовый",
+     "fdcId": 174924,
+     "description": "Bread, white, commercially prepared (includes soft bread crumbs)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Хлеб ржаной",
+     "state_ru": "готовый",
+     "fdcId": 172684,
+     "description": "Bread, rye",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Хлеб цельнозерновой",
+     "state_ru": "готовый",
+     "fdcId": 172688,
+     "description": "Bread, whole-wheat, commercially prepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Лаваш (ближе всего — пита)",
+     "state_ru": "готовый",
+     "fdcId": 174915,
+     "description": "Bread, pita, white, enriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Мука пшеничная",
+     "state_ru": "сухая",
+     "fdcId": 168894,
+     "description": "Wheat flour, white, all-purpose, enriched, bleached",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Мясо, птица, рыба, яйца",
+   "rows": [
+    {
+     "name_ru": "Куриная грудка без кожи",
+     "state_ru": "сырая",
+     "fdcId": 171077,
+     "description": "Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриная грудка без кожи",
+     "state_ru": "запечённая",
+     "fdcId": 171477,
+     "description": "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриная грудка без кожи",
+     "state_ru": "тушёная/варёная",
+     "fdcId": 171478,
+     "description": "Chicken, broilers or fryers, breast, meat only, cooked, stewed",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриное бедро без кожи",
+     "state_ru": "запечённое",
+     "fdcId": 172388,
+     "description": "Chicken, broilers or fryers, thigh, meat only, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриное бедро с кожей",
+     "state_ru": "запечённое",
+     "fdcId": 173625,
+     "description": "Chicken, broilers or fryers, thigh, meat and skin, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриные крылья с кожей",
+     "state_ru": "запечённые",
+     "fdcId": 173630,
+     "description": "Chicken, broilers or fryers, wing, meat and skin, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Куриная ножка с кожей (без кости)",
+     "state_ru": "сырая",
+     "fdcId": 172378,
+     "description": "Chicken, broilers or fryers, leg, meat and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Говядина (смесь отрубов, с жиром)",
+     "state_ru": "сырая",
+     "fdcId": 169483,
+     "description": "Beef, composite of trimmed retail cuts, separable lean and fat, trimmed to 1/8\" fat, all grades, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Говядина постная",
+     "state_ru": "приготовленная",
+     "fdcId": 170208,
+     "description": "Beef, composite of trimmed retail cuts, separable lean only, trimmed to 0\" fat, all grades, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Свинина, лопатка (мясо с жиром)",
+     "state_ru": "сырая",
+     "fdcId": 167843,
+     "description": "Pork, fresh, shoulder, whole, separable lean and fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Свинина, лопатка (мясо с жиром)",
+     "state_ru": "запечённая",
+     "fdcId": 167844,
+     "description": "Pork, fresh, shoulder, whole, separable lean and fat, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш говяжий 80/20",
+     "state_ru": "сырой",
+     "fdcId": 174036,
+     "description": "Beef, ground, 80% lean meat / 20% fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш говяжий 80/20",
+     "state_ru": "обжаренный",
+     "fdcId": 171799,
+     "description": "Beef, ground, 80% lean meat / 20% fat, crumbles, cooked, pan-browned",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш свиной",
+     "state_ru": "сырой",
+     "fdcId": 167902,
+     "description": "Pork, fresh, ground, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш свиной",
+     "state_ru": "приготовленный",
+     "fdcId": 167903,
+     "description": "Pork, fresh, ground, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш куриный",
+     "state_ru": "сырой",
+     "fdcId": 171116,
+     "description": "Chicken, ground, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Индейка, грудка без кожи",
+     "state_ru": "запечённая",
+     "fdcId": 171496,
+     "description": "Turkey, whole, breast, meat only, cooked, roasted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фарш индейки",
+     "state_ru": "сырой",
+     "fdcId": 171505,
+     "description": "Turkey, Ground, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Лосось атлантический (аквакультура)",
+     "state_ru": "сырой",
+     "fdcId": 175167,
+     "description": "Fish, salmon, Atlantic, farmed, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Лосось атлантический (аквакультура)",
+     "state_ru": "запечённый",
+     "fdcId": 175168,
+     "description": "Fish, salmon, Atlantic, farmed, cooked, dry heat",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Треска",
+     "state_ru": "запечённая",
+     "fdcId": 171956,
+     "description": "Fish, cod, Atlantic, cooked, dry heat",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Тунец в собственном соку",
+     "state_ru": "консервы, без жидкости",
+     "fdcId": 334194,
+     "description": "Fish, tuna, light, canned in water, drained solids",
+     "dataType": "Foundation"
+    },
+    {
+     "name_ru": "Креветки",
+     "state_ru": "варёные",
+     "fdcId": 175180,
+     "description": "Crustaceans, shrimp, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Яйцо куриное",
+     "state_ru": "сырое",
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Яйцо куриное",
+     "state_ru": "варёное вкрутую",
+     "fdcId": 173424,
+     "description": "Egg, whole, cooked, hard-boiled",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Яйцо куриное",
+     "state_ru": "жареное",
+     "fdcId": 173423,
+     "description": "Egg, whole, cooked, fried",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сосиски (мясные)",
+     "state_ru": "готовые",
+     "fdcId": 172968,
+     "description": "Frankfurter, meat",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Колбаса варёная (ближе всего — болонская)",
+     "state_ru": "готовая",
+     "fdcId": 172013,
+     "description": "Bologna, beef and pork",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Ветчина",
+     "state_ru": "готовая",
+     "fdcId": 168295,
+     "description": "Pork, cured, ham, boneless, extra lean and regular, unheated",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Бекон",
+     "state_ru": "сырой",
+     "fdcId": 168277,
+     "description": "Pork, cured, bacon, unprepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Бекон",
+     "state_ru": "жареный",
+     "fdcId": 168322,
+     "description": "Pork, cured, bacon, pre-sliced, cooked, pan-fried",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Молочное",
+   "rows": [
+    {
+     "name_ru": "Молоко 1 %",
+     "state_ru": "",
+     "fdcId": 170872,
+     "description": "Milk, lowfat, fluid, 1% milkfat, with added vitamin A and vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Молоко 2 %",
+     "state_ru": "",
+     "fdcId": 171267,
+     "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Молоко 3,25 %",
+     "state_ru": "",
+     "fdcId": 171265,
+     "description": "Milk, whole, 3.25% milkfat, with added vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Кефир 1 %",
+     "state_ru": "",
+     "fdcId": 170904,
+     "description": "Kefir, lowfat, plain, LIFEWAY",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Творог обезжиренный",
+     "state_ru": "",
+     "fdcId": 172181,
+     "description": "Cheese, cottage, nonfat, uncreamed, dry, large or small curd",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Творог зернёный 2 %",
+     "state_ru": "",
+     "fdcId": 172182,
+     "description": "Cheese, cottage, lowfat, 2% milkfat",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Творог зернёный 4–5 %",
+     "state_ru": "",
+     "fdcId": 172179,
+     "description": "Cheese, cottage, creamed, large or small curd",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сметана ~12 % (вместо 15 %)",
+     "state_ru": "",
+     "fdcId": 171256,
+     "description": "Cream, sour, reduced fat, cultured",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сметана ~19 % (вместо 20 %)",
+     "state_ru": "",
+     "fdcId": 171257,
+     "description": "Cream, sour, cultured",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сыр твёрдый (гауда)",
+     "state_ru": "",
+     "fdcId": 171241,
+     "description": "Cheese, gouda",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Моцарелла",
+     "state_ru": "",
+     "fdcId": 170845,
+     "description": "Cheese, mozzarella, whole milk",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Йогурт греческий ~2 %",
+     "state_ru": "без добавок",
+     "fdcId": 170903,
+     "description": "Yogurt, Greek, plain, lowfat",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Йогурт натуральный 3,25 %",
+     "state_ru": "без добавок",
+     "fdcId": 171284,
+     "description": "Yogurt, plain, whole milk",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Йогурт фруктовый ~1 %",
+     "state_ru": "сладкий",
+     "fdcId": 170889,
+     "description": "Yogurt, fruit, low fat,9 g protein/8 oz",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Масло сливочное 81 %",
+     "state_ru": "",
+     "fdcId": 173430,
+     "description": "Butter, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сливки 11,5 % (вместо 10 %)",
+     "state_ru": "",
+     "fdcId": 171255,
+     "description": "Cream, fluid, half and half",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сливки ~19 % (вместо 20 %)",
+     "state_ru": "",
+     "fdcId": 170857,
+     "description": "Cream, fluid, light (coffee cream or table cream)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Овощи",
+   "rows": [
+    {
+     "name_ru": "Огурец",
+     "state_ru": "свежий, с кожурой",
+     "fdcId": 168409,
+     "description": "Cucumber, with peel, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Огурцы солёные",
+     "state_ru": "",
+     "fdcId": 168558,
+     "description": "Pickles, cucumber, dill or kosher dill",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Помидор",
+     "state_ru": "свежий",
+     "fdcId": 170457,
+     "description": "Tomatoes, red, ripe, raw, year round average",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Капуста белокочанная",
+     "state_ru": "свежая",
+     "fdcId": 169975,
+     "description": "Cabbage, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Капуста квашеная",
+     "state_ru": "с рассолом",
+     "fdcId": 169279,
+     "description": "Sauerkraut, canned, solids and liquids",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Морковь",
+     "state_ru": "сырая",
+     "fdcId": 170393,
+     "description": "Carrots, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Морковь",
+     "state_ru": "варёная",
+     "fdcId": 170394,
+     "description": "Carrots, cooked, boiled, drained, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Свёкла",
+     "state_ru": "сырая",
+     "fdcId": 169145,
+     "description": "Beets, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Свёкла",
+     "state_ru": "варёная",
+     "fdcId": 169146,
+     "description": "Beets, cooked, boiled, drained",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Кабачок",
+     "state_ru": "сырой",
+     "fdcId": 169291,
+     "description": "Squash, summer, zucchini, includes skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Брокколи",
+     "state_ru": "сырая",
+     "fdcId": 170379,
+     "description": "Broccoli, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Брокколи",
+     "state_ru": "варёная",
+     "fdcId": 169967,
+     "description": "Broccoli, cooked, boiled, drained, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Перец сладкий красный",
+     "state_ru": "сырой",
+     "fdcId": 170108,
+     "description": "Peppers, sweet, red, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Лук репчатый",
+     "state_ru": "сырой",
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Чеснок",
+     "state_ru": "сырой",
+     "fdcId": 169230,
+     "description": "Garlic, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Горошек зелёный",
+     "state_ru": "консервы, без жидкости",
+     "fdcId": 170013,
+     "description": "Peas, green (includes baby and lesuer types), canned, drained solids, unprepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Томатная паста",
+     "state_ru": "",
+     "fdcId": 170459,
+     "description": "Tomato products, canned, paste, without salt added (Includes foods for USDA's Food Distribution Program)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Авокадо",
+     "state_ru": "сырой",
+     "fdcId": 171705,
+     "description": "Avocados, raw, all commercial varieties",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Фрукты и ягоды",
+   "rows": [
+    {
+     "name_ru": "Банан",
+     "state_ru": "",
+     "fdcId": 173944,
+     "description": "Bananas, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Яблоко",
+     "state_ru": "с кожурой",
+     "fdcId": 171688,
+     "description": "Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Апельсин",
+     "state_ru": "",
+     "fdcId": 169097,
+     "description": "Oranges, raw, all commercial varieties",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Мандарин",
+     "state_ru": "",
+     "fdcId": 169105,
+     "description": "Tangerines, (mandarin oranges), raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Груша",
+     "state_ru": "",
+     "fdcId": 169118,
+     "description": "Pears, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Виноград",
+     "state_ru": "",
+     "fdcId": 174683,
+     "description": "Grapes, red or green (European type, such as Thompson seedless), raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Клубника",
+     "state_ru": "",
+     "fdcId": 167762,
+     "description": "Strawberries, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Черника",
+     "state_ru": "",
+     "fdcId": 171711,
+     "description": "Blueberries, raw",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Орехи, семечки, бобовые",
+   "rows": [
+    {
+     "name_ru": "Грецкий орех",
+     "state_ru": "сырой",
+     "fdcId": 170187,
+     "description": "Nuts, walnuts, english",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Миндаль",
+     "state_ru": "сырой",
+     "fdcId": 170567,
+     "description": "Nuts, almonds",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Арахис",
+     "state_ru": "сырой",
+     "fdcId": 172430,
+     "description": "Peanuts, all types, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Арахис",
+     "state_ru": "жареный без масла, без соли",
+     "fdcId": 173806,
+     "description": "Peanuts, all types, dry-roasted, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Семечки подсолнечника",
+     "state_ru": "жареные, без соли",
+     "fdcId": 170563,
+     "description": "Seeds, sunflower seed kernels, dry roasted, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Фасоль красная",
+     "state_ru": "варёная",
+     "fdcId": 173740,
+     "description": "Beans, kidney, all types, mature seeds, cooked, boiled, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Нут",
+     "state_ru": "варёный",
+     "fdcId": 173757,
+     "description": "Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Чечевица",
+     "state_ru": "варёная",
+     "fdcId": 172421,
+     "description": "Lentils, mature seeds, cooked, boiled, without salt",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Масла, соусы, сладкое, перекусы",
+   "rows": [
+    {
+     "name_ru": "Масло подсолнечное",
+     "state_ru": "",
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Масло оливковое",
+     "state_ru": "",
+     "fdcId": 171413,
+     "description": "Oil, olive, salad or cooking",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Майонез (около 75 % жира)",
+     "state_ru": "",
+     "fdcId": 171009,
+     "description": "Salad dressing, mayonnaise, regular",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Кетчуп",
+     "state_ru": "",
+     "fdcId": 168556,
+     "description": "Catsup",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Сахар",
+     "state_ru": "",
+     "fdcId": 169655,
+     "description": "Sugars, granulated",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Мёд",
+     "state_ru": "",
+     "fdcId": 169640,
+     "description": "Honey",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Шоколад молочный",
+     "state_ru": "",
+     "fdcId": 167587,
+     "description": "Candies, milk chocolate",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Шоколад горький 70–85 %",
+     "state_ru": "",
+     "fdcId": 170273,
+     "description": "Chocolate, dark, 70-85% cacao solids",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Печенье сливочное",
+     "state_ru": "",
+     "fdcId": 172819,
+     "description": "Cookies, butter, commercially prepared, unenriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Чипсы картофельные",
+     "state_ru": "",
+     "fdcId": 169677,
+     "description": "Snacks, potato chips, plain, salted",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Мороженое пломбир (сливочное ~16 %)",
+     "state_ru": "",
+     "fdcId": 167573,
+     "description": "Ice creams, vanilla, rich",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Протеиновый батончик (пример: South Beach)",
+     "state_ru": "",
+     "fdcId": 173158,
+     "description": "Formulated Bar, SOUTH BEACH protein bar",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "title": "Напитки",
+   "rows": [
+    {
+     "name_ru": "Сок апельсиновый",
+     "state_ru": "пакетированный",
+     "fdcId": 169100,
+     "description": "Orange juice, chilled, includes from concentrate",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Кола",
+     "state_ru": "с сахаром",
+     "fdcId": 174852,
+     "description": "Beverages, carbonated, cola, regular",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Пиво светлое",
+     "state_ru": "",
+     "fdcId": 168746,
+     "description": "Alcoholic beverage, beer, regular, all",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Вино сухое красное",
+     "state_ru": "",
+     "fdcId": 173190,
+     "description": "Alcoholic beverage, wine, table, red",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Вино сухое белое",
+     "state_ru": "",
+     "fdcId": 174837,
+     "description": "Alcoholic beverage, wine, table, white",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Кофе чёрный",
+     "state_ru": "заварной, без сахара",
+     "fdcId": 171890,
+     "description": "Beverages, coffee, brewed, prepared with tap water",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "Эспрессо",
+     "state_ru": "",
+     "fdcId": 171891,
+     "description": "Beverages, coffee, brewed, espresso, restaurant-prepared",
+     "dataType": "SR Legacy"
+    }
+   ]
+  }
+ ],
+ "dishes": [
+  {
+   "name_ru": "Борщ с говядиной (без сметаны)",
+   "yield_g": 3180.0,
+   "loss_g": 200,
+   "ingredients": [
+    {
+     "name_ru": "говядина сырая",
+     "grams": 300,
+     "fdcId": 169483,
+     "description": "Beef, composite of trimmed retail cuts, separable lean and fat, trimmed to 1/8\" fat, all grades, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "картофель",
+     "grams": 300,
+     "fdcId": 170026,
+     "description": "Potatoes, flesh and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "капуста",
+     "grams": 300,
+     "fdcId": 169975,
+     "description": "Cabbage, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "свёкла",
+     "grams": 200,
+     "fdcId": 169145,
+     "description": "Beets, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь",
+     "grams": 100,
+     "fdcId": 170393,
+     "description": "Carrots, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 100,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "томатная паста",
+     "grams": 40,
+     "fdcId": 170459,
+     "description": "Tomato products, canned, paste, without salt added (Includes foods for USDA's Food Distribution Program)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 30,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "сахар",
+     "grams": 10,
+     "fdcId": 169655,
+     "description": "Sugars, granulated",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода",
+     "grams": 2000,
+     "ref": null
+    }
+   ]
+  },
+  {
+   "name_ru": "Щи из свежей капусты с говядиной (без сметаны)",
+   "yield_g": 3120.0,
+   "loss_g": 200,
+   "ingredients": [
+    {
+     "name_ru": "говядина сырая",
+     "grams": 300,
+     "fdcId": 169483,
+     "description": "Beef, composite of trimmed retail cuts, separable lean and fat, trimmed to 1/8\" fat, all grades, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "капуста",
+     "grams": 500,
+     "fdcId": 169975,
+     "description": "Cabbage, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "картофель",
+     "grams": 300,
+     "fdcId": 170026,
+     "description": "Potatoes, flesh and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь",
+     "grams": 100,
+     "fdcId": 170393,
+     "description": "Carrots, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 100,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 20,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода",
+     "grams": 2000,
+     "ref": null
+    }
+   ]
+  },
+  {
+   "name_ru": "Куриный суп с лапшой",
+   "yield_g": 2740.0,
+   "loss_g": 200,
+   "ingredients": [
+    {
+     "name_ru": "куриная ножка с кожей без кости",
+     "grams": 400,
+     "fdcId": 172378,
+     "description": "Chicken, broilers or fryers, leg, meat and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "картофель",
+     "grams": 300,
+     "fdcId": 170026,
+     "description": "Potatoes, flesh and skin, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь",
+     "grams": 80,
+     "fdcId": 170393,
+     "description": "Carrots, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 80,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лапша яичная сухая",
+     "grams": 80,
+     "fdcId": 169731,
+     "description": "Noodles, egg, dry, enriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода",
+     "grams": 2000,
+     "ref": null
+    }
+   ]
+  },
+  {
+   "name_ru": "Пельмени говядина+свинина, варёные (без сметаны)",
+   "yield_g": 1120.0,
+   "loss_g": 0,
+   "ingredients": [
+    {
+     "name_ru": "мука",
+     "grams": 300,
+     "fdcId": 168894,
+     "description": "Wheat flour, white, all-purpose, enriched, bleached",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "яйцо",
+     "grams": 50,
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода в тесто",
+     "grams": 120,
+     "ref": null
+    },
+    {
+     "name_ru": "фарш говяжий 80/20",
+     "grams": 250,
+     "fdcId": 174036,
+     "description": "Beef, ground, 80% lean meat / 20% fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "фарш свиной",
+     "grams": 250,
+     "fdcId": 167902,
+     "description": "Pork, fresh, ground, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 100,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода в фарш",
+     "grams": 50,
+     "ref": null
+    }
+   ]
+  },
+  {
+   "name_ru": "Котлета домашняя говядина+свинина, жареная",
+   "yield_g": 690.0,
+   "loss_g": 170,
+   "ingredients": [
+    {
+     "name_ru": "фарш говяжий 80/20",
+     "grams": 250,
+     "fdcId": 174036,
+     "description": "Beef, ground, 80% lean meat / 20% fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "фарш свиной",
+     "grams": 250,
+     "fdcId": 167902,
+     "description": "Pork, fresh, ground, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "хлеб белый",
+     "grams": 80,
+     "fdcId": 174924,
+     "description": "Bread, white, commercially prepared (includes soft bread crumbs)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "молоко 2 %",
+     "grams": 100,
+     "fdcId": 171267,
+     "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "яйцо",
+     "grams": 50,
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 100,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное для жарки, целиком",
+     "grams": 30,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Гречка с котлетой (тарелка 300 г)",
+   "yield_g": 300.0,
+   "loss_g": 0,
+   "ingredients": [
+    {
+     "name_ru": "гречка варёная",
+     "grams": 200,
+     "fdcId": 170686,
+     "description": "Buckwheat groats, roasted, cooked",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "котлета из строки выше",
+     "grams": 100,
+     "ref": "dish:kotleta"
+    }
+   ]
+  },
+  {
+   "name_ru": "Плов со свининой",
+   "yield_g": 2330.0,
+   "loss_g": 300,
+   "ingredients": [
+    {
+     "name_ru": "рис белый сухой",
+     "grams": 500,
+     "fdcId": 168877,
+     "description": "Rice, white, long-grain, regular, raw, enriched",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "свинина, лопатка сырая",
+     "grams": 500,
+     "fdcId": 167843,
+     "description": "Pork, fresh, shoulder, whole, separable lean and fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь",
+     "grams": 400,
+     "fdcId": 170393,
+     "description": "Carrots, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 200,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 100,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "чеснок",
+     "grams": 30,
+     "fdcId": 169230,
+     "description": "Garlic, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "вода",
+     "grams": 900,
+     "ref": null
+    }
+   ]
+  },
+  {
+   "name_ru": "Макароны по-флотски",
+   "yield_g": 970.0,
+   "loss_g": 150,
+   "ingredients": [
+    {
+     "name_ru": "макароны отварные (≈250 г сухих)",
+     "grams": 600,
+     "fdcId": 169737,
+     "description": "Pasta, cooked, enriched, without added salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "фарш говяжий 80/20 сырой",
+     "grams": 400,
+     "fdcId": 174036,
+     "description": "Beef, ground, 80% lean meat / 20% fat, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 100,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 20,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Оливье с варёной колбасой",
+   "yield_g": 1400.0,
+   "loss_g": 0,
+   "ingredients": [
+    {
+     "name_ru": "картофель отварной",
+     "grams": 300,
+     "fdcId": 170440,
+     "description": "Potatoes, boiled, cooked without skin, flesh, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь варёная",
+     "grams": 100,
+     "fdcId": 170394,
+     "description": "Carrots, cooked, boiled, drained, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "яйцо варёное",
+     "grams": 200,
+     "fdcId": 173424,
+     "description": "Egg, whole, cooked, hard-boiled",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "колбаса варёная",
+     "grams": 250,
+     "fdcId": 172013,
+     "description": "Bologna, beef and pork",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "огурцы солёные",
+     "grams": 150,
+     "fdcId": 168558,
+     "description": "Pickles, cucumber, dill or kosher dill",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "горошек консервированный",
+     "grams": 150,
+     "fdcId": 170013,
+     "description": "Peas, green (includes baby and lesuer types), canned, drained solids, unprepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 50,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "майонез",
+     "grams": 200,
+     "fdcId": 171009,
+     "description": "Salad dressing, mayonnaise, regular",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Винегрет",
+   "yield_g": 1190.0,
+   "loss_g": 0,
+   "ingredients": [
+    {
+     "name_ru": "свёкла варёная",
+     "grams": 300,
+     "fdcId": 169146,
+     "description": "Beets, cooked, boiled, drained",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "картофель отварной",
+     "grams": 250,
+     "fdcId": 170440,
+     "description": "Potatoes, boiled, cooked without skin, flesh, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "морковь варёная",
+     "grams": 150,
+     "fdcId": 170394,
+     "description": "Carrots, cooked, boiled, drained, without salt",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "огурцы солёные",
+     "grams": 150,
+     "fdcId": 168558,
+     "description": "Pickles, cucumber, dill or kosher dill",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "капуста квашеная",
+     "grams": 150,
+     "fdcId": 169279,
+     "description": "Sauerkraut, canned, solids and liquids",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "горошек консервированный",
+     "grams": 100,
+     "fdcId": 170013,
+     "description": "Peas, green (includes baby and lesuer types), canned, drained solids, unprepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "лук",
+     "grams": 50,
+     "fdcId": 170000,
+     "description": "Onions, raw",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 40,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Сырники жареные",
+   "yield_g": 620.0,
+   "loss_g": 60,
+   "ingredients": [
+    {
+     "name_ru": "творог зернёный 4–5 %",
+     "grams": 500,
+     "fdcId": 172179,
+     "description": "Cheese, cottage, creamed, large or small curd",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "яйцо",
+     "grams": 50,
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "мука",
+     "grams": 60,
+     "fdcId": 168894,
+     "description": "Wheat flour, white, all-purpose, enriched, bleached",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "сахар",
+     "grams": 40,
+     "fdcId": 169655,
+     "description": "Sugars, granulated",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное для жарки, целиком",
+     "grams": 30,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Блины на молоке",
+   "yield_g": 725.0,
+   "loss_g": 130,
+   "ingredients": [
+    {
+     "name_ru": "молоко 2 %",
+     "grams": 500,
+     "fdcId": 171267,
+     "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "яйцо",
+     "grams": 100,
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "мука",
+     "grams": 200,
+     "fdcId": 168894,
+     "description": "Wheat flour, white, all-purpose, enriched, bleached",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "сахар",
+     "grams": 25,
+     "fdcId": 169655,
+     "description": "Sugars, granulated",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло подсолнечное",
+     "grams": 30,
+     "fdcId": 171025,
+     "description": "Oil, sunflower, linoleic, (approx. 65%)",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Омлет на молоке (порция из 3 яиц)",
+   "yield_g": 190.0,
+   "loss_g": 20,
+   "ingredients": [
+    {
+     "name_ru": "яйцо",
+     "grams": 150,
+     "fdcId": 171287,
+     "description": "Egg, whole, raw, fresh",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "молоко 2 %",
+     "grams": 50,
+     "fdcId": 171267,
+     "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "масло сливочное",
+     "grams": 10,
+     "fdcId": 173430,
+     "description": "Butter, without salt",
+     "dataType": "SR Legacy"
+    }
+   ]
+  },
+  {
+   "name_ru": "Капучино без сахара (чашка 190 г)",
+   "yield_g": 190.0,
+   "loss_g": 0,
+   "ingredients": [
+    {
+     "name_ru": "эспрессо",
+     "grams": 40,
+     "fdcId": 171891,
+     "description": "Beverages, coffee, brewed, espresso, restaurant-prepared",
+     "dataType": "SR Legacy"
+    },
+    {
+     "name_ru": "молоко 3,25 %",
+     "grams": 150,
+     "fdcId": 171265,
+     "description": "Milk, whole, 3.25% milkfat, with added vitamin D",
+     "dataType": "SR Legacy"
+    }
+   ]
+  }
+ ]
+}

@@ -63,6 +63,7 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set([
   "authored",
   "behavior-preferences",
   "docx",
+  "health-journal",
   "imagegen",
   "pdf",
   "skill-authoring",
