@@ -6,6 +6,8 @@
  * - Only the delivery ceiling merges parts back; shape stays the author's decision.
  * - Directives inside fenced or indented code stay literal content of the answer.
  * - A directive written anywhere but on its own line is removed instead of reaching a person.
+ * - The closing and self-closing forms the model also writes act as the directive (13 November
+ *   2026: `</telegram-split>` reached ten group messages as text in 60 days).
  * - `stripTelegramAsideDirectives`: durable projection text without transport directives.
  */
 import { describe, expect, it } from "vitest";
@@ -140,6 +142,30 @@ describe("splitTelegramAuthoredParts", () => {
     expect(splitTelegramAuthoredParts(`  ${directive}  `)).toEqual({ asides: [], main: "" });
   });
 
+  it("splits on the closing and self-closing forms of the directive", () => {
+    for (const form of ["</telegram-split>", "<telegram-split/>", "<telegram-split />"])
+      expect(splitTelegramAuthoredParts(`Ответ\n${form}\nдобивка`)).toEqual({
+        asides: ["добивка"],
+        main: "Ответ",
+      });
+  });
+
+  it("drops a closing directive that ends the answer, on its own line or after the text", () => {
+    expect(splitTelegramAuthoredParts("Нуменор скучный.\n</telegram-split>")).toEqual({
+      asides: [],
+      main: "Нуменор скучный.",
+    });
+    expect(splitTelegramAuthoredParts("Нуменор скучный.</telegram-split>")).toEqual({
+      asides: [],
+      main: "Нуменор скучный.",
+    });
+  });
+
+  it("keeps a closing directive inside fenced code", () => {
+    const markdown = "Пример:\n```\n</telegram-split>\n```";
+    expect(splitTelegramAuthoredParts(markdown)).toEqual({ asides: [], main: markdown });
+  });
+
   it("uses the first non-empty part as the main answer", () => {
     expect(splitTelegramAuthoredParts(`${directive}\nОтвет\n${directive}\nдобивка`)).toEqual({
       asides: ["добивка"],
@@ -153,6 +179,12 @@ describe("stripTelegramAsideDirectives", () => {
     const markdown = `Основной ответ\n${directive}\nдобивка`;
 
     expect(stripTelegramAsideDirectives(markdown)).toBe("Основной ответ\n\nдобивка");
+  });
+
+  it("removes the closing form from the durable conversation projection", () => {
+    expect(stripTelegramAsideDirectives("Основной ответ.</telegram-split>")).toBe(
+      "Основной ответ.",
+    );
   });
 
   it("keeps a fenced directive inside the stored answer", () => {

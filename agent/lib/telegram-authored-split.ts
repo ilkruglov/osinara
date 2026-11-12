@@ -13,14 +13,19 @@
  *   transport limit is still split further by the presentation layer, as any answer always was.
  * - The directive is transport syntax and never reaches a person: a whole-line directive splits,
  *   any other occurrence is removed. Fenced and indented code keeps its literal content.
+ * - The closing and self-closing forms (`</telegram-split>`, `<telegram-split/>`) are the same
+ *   directive: the model writes the closing one as if it ended something, and in 60 days ten of
+ *   Mia's group messages showed it to people as text (13 November 2026).
  */
 const TELEGRAM_AUTHORED_MESSAGE_MAX_COUNT = 5;
 
 export const TELEGRAM_ASIDE_DIRECTIVE = "<telegram-split>";
 
+const DIRECTIVE_SOURCE = String.raw`<\/?telegram-split\s*\/?>`;
 // Column zero only: an indented directive belongs to a Markdown code block, not to the transport.
-const DIRECTIVE_LINE_PATTERN = new RegExp(`^${TELEGRAM_ASIDE_DIRECTIVE}[ \\t\\r]*$`, "u");
-const INLINE_DIRECTIVE_PATTERN = new RegExp(TELEGRAM_ASIDE_DIRECTIVE, "gu");
+const DIRECTIVE_LINE_PATTERN = new RegExp(`^${DIRECTIVE_SOURCE}[ \\t\\r]*$`, "u");
+const INLINE_DIRECTIVE_PATTERN = new RegExp(DIRECTIVE_SOURCE, "gu");
+const DIRECTIVE_PRESENT_PATTERN = new RegExp(DIRECTIVE_SOURCE, "u");
 const FENCE_LINE_PATTERN = /^ {0,3}(?<fence>`{3,}|~{3,})(?<info>.*)$/u;
 const INDENTED_CODE_PATTERN = /^(?: {4}|\t)/u;
 
@@ -52,7 +57,7 @@ function nextFenceState(line: string, open: FenceState | null): FenceState | nul
 }
 
 function withoutInlineDirective(line: string): string {
-  if (!line.includes(TELEGRAM_ASIDE_DIRECTIVE) || INDENTED_CODE_PATTERN.test(line)) return line;
+  if (!DIRECTIVE_PRESENT_PATTERN.test(line) || INDENTED_CODE_PATTERN.test(line)) return line;
   return line
     .replace(INLINE_DIRECTIVE_PATTERN, "")
     .replace(/[ \t]{2,}/gu, " ")
