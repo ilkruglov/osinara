@@ -1,6 +1,6 @@
 {
   "name": "osinara-family-agent",
-  "version": "1.8.61",
+  "version": "1.8.62",
   "private": true,
   "type": "module",
   "imports": {
