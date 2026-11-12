@@ -39,7 +39,7 @@ function memoryStore(clock: { now: number }): HealthCardStore & {
   };
 }
 
-const steady = async () => 0;
+const steady = async () => ({ erases: 0, mode: "database" as const });
 
 describe("health card files", () => {
   it("keeps the newer card and its replay, and drops cards older than the grace period", async () => {
@@ -47,14 +47,14 @@ describe("health card files", () => {
     const store = memoryStore(clock);
     const a = await publishHealthCard(store, {
       erasesBefore: 0,
-      erasesNow: steady,
+      stateNow: steady,
       html: "<b>A</b>",
       kind: "day-progress",
       operationKey: "call-a",
     });
     const week = await publishHealthCard(store, {
       erasesBefore: 0,
-      erasesNow: steady,
+      stateNow: steady,
       html: "<b>W</b>",
       kind: "week",
       operationKey: "call-w",
@@ -62,7 +62,7 @@ describe("health card files", () => {
     clock.now += 60_000;
     const b = await publishHealthCard(store, {
       erasesBefore: 0,
-      erasesNow: steady,
+      stateNow: steady,
       html: "<b>B</b>",
       kind: "day-progress",
       operationKey: "call-b",
@@ -75,7 +75,7 @@ describe("health card files", () => {
     store.files.delete(a);
     const replay = await publishHealthCard(store, {
       erasesBefore: 0,
-      erasesNow: steady,
+      stateNow: steady,
       html: "<b>A</b>",
       kind: "day-progress",
       operationKey: "call-a",
@@ -87,7 +87,7 @@ describe("health card files", () => {
     clock.now += 11 * 60_000;
     const c = await publishHealthCard(store, {
       erasesBefore: 0,
-      erasesNow: steady,
+      stateNow: steady,
       html: "<b>C</b>",
       kind: "day-progress",
       operationKey: "call-c",
@@ -95,18 +95,25 @@ describe("health card files", () => {
     expect([...store.files.keys()].sort()).toEqual([c, week].sort());
   });
 
-  it("removes a card written across an erase and fails", async () => {
-    const store = memoryStore({ now: 0 });
-    await expect(
-      publishHealthCard(store, {
-        erasesBefore: 0,
-        erasesNow: async () => 1,
-        html: "<b>old numbers</b>",
-        kind: "week",
-        operationKey: "call",
-      }),
-    ).rejects.toMatchObject({ code: "AGENT_HEALTH_ERASED_MEANWHILE" });
-    expect(store.files.size).toBe(0);
+  it("removes a card written across an erase or in the files mode and fails", async () => {
+    // An erase, a switch to the files, and a switch that landed before the state was first read:
+    // the journal is in the files mode after the write either way.
+    for (const now of [
+      { erases: 1, mode: "database" as const },
+      { erases: 0, mode: "files" as const },
+    ]) {
+      const store = memoryStore({ now: 0 });
+      await expect(
+        publishHealthCard(store, {
+          erasesBefore: 0,
+          html: "<b>old numbers</b>",
+          kind: "week",
+          operationKey: "call",
+          stateNow: async () => now,
+        }),
+      ).rejects.toMatchObject({ code: "AGENT_HEALTH_ERASED_MEANWHILE" });
+      expect(store.files.size).toBe(0);
+    }
   });
 
   it("drops every card on erase", async () => {
@@ -114,7 +121,7 @@ describe("health card files", () => {
     for (const kind of ["day-progress", "day-evening", "week"] as const)
       await publishHealthCard(store, {
         erasesBefore: 0,
-        erasesNow: steady,
+        stateNow: steady,
         html: kind,
         kind,
         operationKey: kind,

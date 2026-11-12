@@ -345,7 +345,7 @@ export const sleepActivityRepository = {
     if (!parsed.success || parsed.data.action === "import_zepp")
       inputInvalid("сна или активности", "manage_sleep_activity");
     const input = parsed.data;
-    return await withHealthTransaction(auth, async (tx) => {
+    return await withHealthTransaction(auth, { operationKey }, async (tx) => {
       if (input.action === "list") return await list(tx, input);
       return await replayable(tx, operationKey, input, async () => {
         if (input.action === "log_sleep") return await logSleep(tx, input);
@@ -377,7 +377,7 @@ export const sleepActivityRepository = {
     data: ZeppExport,
     operationKey: string,
   ) {
-    return await withHealthTransaction(auth, async (tx) =>
+    return await withHealthTransaction(auth, { operationKey }, async (tx) =>
       replayable(tx, operationKey, input, async () => await importZepp(tx, data, input.since)),
     );
   },

@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-import { civilDate, clockTime, rejectForeignFields } from "./health-access.js";
+import { civilDate, clockTime, JOURNAL_MODES, rejectForeignFields } from "./health-access.js";
 
 export const PROFILE_FIELDS = {
   activityLevel: "activity_level",
@@ -41,6 +41,7 @@ const FIELDS: Readonly<Record<string, readonly string[]>> = {
     "note",
   ],
   remove_measurement: ["id"],
+  set_journal_mode: ["journalMode"],
   set_profile: [...Object.keys(PROFILE_FIELDS), "version"],
 };
 
@@ -64,6 +65,7 @@ export const bodyProfileInput = z
       "remove_measurement",
       "apply_adjustment",
       "erase_all",
+      "set_journal_mode",
     ]),
     activityLevel: z
       .enum(["sedentary", "light", "moderate", "active", "very_active"])
@@ -94,6 +96,12 @@ export const bodyProfileInput = z
     goal: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
     heightCm: z.number().min(100).max(250).nullable().optional(),
     id: z.uuid().optional(),
+    journalMode: z
+      .enum(JOURNAL_MODES)
+      .optional()
+      .describe(
+        "Только по прямому слову человека: database — этот дневник, files — его файлы health/",
+      ),
     kcalTarget: target(6000, "Своя цель калорий в день"),
     musclePct: z.number().min(10).max(90).optional(),
     note: z.string().trim().min(1).max(500).optional(),
@@ -129,6 +137,8 @@ export const bodyProfileInput = z
       ctx.addIssue({ code: "custom", message: "Нужен вес, процент жира или талия" });
     if (value.action === "log_measurement" && !value.source)
       ctx.addIssue({ code: "custom", message: "Для log_measurement нужен source" });
+    if (value.action === "set_journal_mode" && !value.journalMode)
+      ctx.addIssue({ code: "custom", message: "Для set_journal_mode нужен journalMode" });
     if (value.action === "remove_measurement" && !value.id)
       ctx.addIssue({ code: "custom", message: "Нужен id замера из list_measurements" });
     if (

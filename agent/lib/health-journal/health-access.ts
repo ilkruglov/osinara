@@ -3,8 +3,13 @@
  *
  * Exports:
  * - `HealthTransaction`: the client, owner, family and timezone of one journal operation.
- * - `withHealthTransaction`: authorizes the person, resolves their timezone, runs one transaction.
- * - `replayable`: runs a write once per Eve call id and returns the stored result on a replay.
+ * - `withHealthTransaction`: authorizes the person, resolves their timezone, refuses the files
+ *   mode (unless the operation works in both modes or replays a committed call), runs one
+ *   transaction.
+ * - `JournalMode`, `JOURNAL_MODES`, `journalMode`, `journalState`, `assertDatabaseJournal`,
+ *   `ERASE_RESULT_SQL`: where the journal lives and how many erases it has seen.
+ * - `replayable`: runs a write once per Eve call id under the person's lock, returns the stored
+ *   result on a replay, and checks the files mode again after both.
  * - `healthError`, `inputInvalid`, `staleVersion`, `notFound`: model-facing errors with their code,
  *   correction and retry verdict.
  * - `civilDate`, `clockTime`, `rejectForeignFields`: shared pieces of the tools' input schemas.
@@ -56,7 +61,13 @@ export function rejectForeignFields(
   }
 }
 
+export const JOURNAL_MODES = ["database", "files"] as const;
+/** `database`: the journal tools; `files`: the person keeps the journal in `health/`. */
+export type JournalMode = (typeof JOURNAL_MODES)[number];
+
 export interface HealthTransaction {
+  /** Works in both modes: the journal's facts, switching the mode, erasing the database copies. */
+  anyMode: boolean;
   client: PoolClient;
   familyId: string;
   /** The person's civil time now, `HH:MM`, read from the same moment as `today`. */
@@ -152,8 +163,78 @@ async function resolveTimezone(
   return { ...clock, timezone };
 }
 
+/** The predicate of an erase in the operations journal: an erase keeps its counts there. */
+// Null-safe, so `NOT (${ERASE_RESULT_SQL})` is true for a result without the key.
+export const ERASE_RESULT_SQL = "jsonb_typeof(result -> 'erased') IS NOT DISTINCT FROM 'object'";
+
+function fileJournal(): ModelFacingError {
+  return healthError(
+    "AGENT_HEALTH_FILE_JOURNAL",
+    "Человек ведёт дневник в своих файлах (health/), а не в этом дневнике",
+    {
+      category: "operation",
+      correction:
+        "Не пользуйся инструментами дневника для этого человека: веди записи, сводки и карточки в его файлах по health/README.md, как раньше. Ничего не потеряно и не стёрто. Режим дневника меняет только сам человек, ради записи его не переключай и не предлагай.",
+      retryable: false,
+    },
+  );
+}
+
+const MODE_SQL = "SELECT journal_mode FROM health_profiles WHERE owner_user_id = $1";
+
+export async function journalMode(
+  client: Pick<PoolClient, "query">,
+  ownerUserId: string,
+): Promise<JournalMode> {
+  const mode = await client.query<{ journal_mode: JournalMode }>(MODE_SQL, [ownerUserId]);
+  return mode.rows[0]?.journal_mode ?? "database";
+}
+
+/** The erases and the mode, read together: a card is checked against them after its write. */
+export async function journalState(
+  client: Pick<PoolClient, "query">,
+  ownerUserId: string,
+): Promise<{ erases: number; mode: JournalMode }> {
+  const state = await client.query<{ erases: number; mode: JournalMode | null }>(
+    `SELECT (SELECT count(*)::integer FROM health_operations
+              WHERE owner_user_id = $1 AND ${ERASE_RESULT_SQL}) AS erases,
+            (${MODE_SQL}) AS mode`,
+    [ownerUserId],
+  );
+  return { erases: state.rows[0]!.erases, mode: state.rows[0]!.mode ?? "database" };
+}
+
+async function requireDatabaseJournal(tx: HealthTransaction): Promise<void> {
+  if ((await journalMode(tx.client, tx.ownerUserId)) === "files") throw fileJournal();
+}
+
+/** The start check: one statement for the mode and for whether this call already committed. */
+async function refuseFilesMode(tx: HealthTransaction, operationKey: string): Promise<void> {
+  const state = await tx.client.query<{ mode: JournalMode | null; replay: boolean }>(
+    `SELECT (${MODE_SQL}) AS mode,
+            EXISTS (SELECT 1 FROM health_operations
+                     WHERE owner_user_id = $1 AND operation_key = $2) AS replay`,
+    [tx.ownerUserId, operationKey],
+  );
+  if (state.rows[0]!.mode === "files" && !state.rows[0]!.replay) throw fileJournal();
+}
+
+async function storedOperation<T>(tx: HealthTransaction, operationKey: string) {
+  const stored = await tx.client.query<{ request_hash: string; result: T }>(
+    "SELECT request_hash, result FROM health_operations WHERE owner_user_id = $1 AND operation_key = $2",
+    [tx.ownerUserId, operationKey],
+  );
+  return stored.rows[0];
+}
+
+/**
+ * One journal operation of the person. In the files mode it is refused before it starts, unless it
+ * works in both modes (`anyMode`) or replays a call already committed: that replay returns its
+ * stored result. A write checks the mode again under the person's lock (`replayable`).
+ */
 export async function withHealthTransaction<T>(
   auth: MemoryAuthorization,
+  options: { anyMode?: boolean; operationKey: string },
   run: (tx: HealthTransaction) => Promise<T>,
 ): Promise<T> {
   const ownerUserId = personalChatUserId(auth);
@@ -164,7 +245,15 @@ export async function withHealthTransaction<T>(
   try {
     await client.query("BEGIN");
     if (!(await isLivePersonalMember(client, auth, ownerUserId))) throw accessDenied();
-    const result = await run({ client, familyId: auth.familyId, ownerUserId, ...clock });
+    const tx: HealthTransaction = {
+      anyMode: options.anyMode === true,
+      client,
+      familyId: auth.familyId,
+      ownerUserId,
+      ...clock,
+    };
+    if (!tx.anyMode) await refuseFilesMode(tx, options.operationKey);
+    const result = await run(tx);
     await client.query("COMMIT");
     return result;
   } catch (error) {
@@ -173,6 +262,14 @@ export async function withHealthTransaction<T>(
   } finally {
     client.release();
   }
+}
+
+/** The refusal of `withHealthTransaction` alone, before costly work (reading an archive). */
+export async function assertDatabaseJournal(
+  auth: MemoryAuthorization,
+  operationKey: string,
+): Promise<void> {
+  await withHealthTransaction(auth, { operationKey }, async () => undefined);
 }
 
 /**
@@ -192,12 +289,9 @@ export async function replayable<T extends object>(
   await tx.client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `${tx.ownerUserId}:health`,
   ]);
-  const previous = await tx.client.query<{ request_hash: string; result: T }>(
-    "SELECT request_hash, result FROM health_operations WHERE owner_user_id = $1 AND operation_key = $2",
-    [tx.ownerUserId, operationKey],
-  );
-  if (previous.rows[0]) {
-    if (previous.rows[0].request_hash !== hash)
+  const previous = await storedOperation<T>(tx, operationKey);
+  if (previous) {
+    if (previous.request_hash !== hash)
       throw healthError(
         "AGENT_HEALTH_OPERATION_REUSED",
         "Этот вызов уже выполнен с другими данными",
@@ -207,8 +301,11 @@ export async function replayable<T extends object>(
           retryable: false,
         },
       );
-    return { ...previous.rows[0].result, replayed: true };
+    return { ...previous.result, replayed: true };
   }
+  // After the lock and the replay: a switch to files committed while this call waited refuses it,
+  // and a write committed before the switch still replays above.
+  if (!tx.anyMode) await requireDatabaseJournal(tx);
   const result = await run();
   await tx.client.query(
     `INSERT INTO health_operations (owner_user_id, operation_key, request_hash, result)

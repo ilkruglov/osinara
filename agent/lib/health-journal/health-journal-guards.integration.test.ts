@@ -20,7 +20,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "../database.js";
 import { bodyProfileRepository, ERASED_TABLES } from "./body-profile-repository.js";
 import { foodLogRepository } from "./food-log-repository.js";
-import { eraseCount } from "./health-card-files.js";
+import { journalState } from "./health-access.js";
 import { renderDayCard } from "./health-cards.js";
 import {
   createHealthFamily,
@@ -181,7 +181,7 @@ describeWithDatabase("health journal guards", () => {
     const { owner } = await family();
     await bodyProfileRepository.execute(owner, { action: "erase_all" }, key());
     await bodyProfileRepository.execute(owner, { action: "erase_all" }, key());
-    expect(await eraseCount(database(), owner.userId!)).toBe(2);
+    expect((await journalState(database(), owner.userId!)).erases).toBe(2);
   });
 
   it("replays every write by its call id, and erasing as one erase", async () => {

@@ -19,6 +19,7 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
   manage_body_profile: {
     erase_all:
       "стереть весь дневник здоровья: еду и напитки, вес, сон, активность, тренировки и цели",
+    set_journal_mode: "сменить, где ведётся дневник здоровья",
   },
   manage_google_workspace_connection: {
     disconnect: "отключить Google Workspace от текущей области",
@@ -200,6 +201,18 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...(hasAllowlist ? [`Разрешённые инструменты: ${allowlist || "пуст"}`] : []),
       ];
     }
+    case "manage_body_profile":
+      // Erase takes the journal's records and its cards (widgets/health), nothing else of the folder.
+      if (input.action === "erase_all")
+        return ["Стирает дневник в чате и его карточки; остальные файлы в личной папке остаются"];
+      if (input.action !== "set_journal_mode") return [];
+      return input.journalMode === "files"
+        ? [
+            "Где вести: в файлах health/, как раньше; записи дневника в чате остаются, но не используются",
+          ]
+        : input.journalMode === "database"
+          ? ["Где вести: дневник в чате; файлы health/ остаются как есть"]
+          : [];
     case "manage_family_invitation":
       if (input.action === "create") return [];
       return [

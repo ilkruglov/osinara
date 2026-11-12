@@ -210,7 +210,7 @@ export const workoutRepository = {
     const parsed = workoutInput.safeParse(raw);
     if (!parsed.success) inputInvalid("тренировки", "manage_workouts");
     const input = parsed.data;
-    return await withHealthTransaction(auth, async (tx) => {
+    return await withHealthTransaction(auth, { operationKey }, async (tx) => {
       if (input.action === "progress") return await progress(tx, input.exercise!);
       if (input.action === "list") {
         const { from, to } = requireDateRange(tx, input, 14, MAX_LIST_DAYS);

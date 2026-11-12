@@ -2,8 +2,8 @@
  * Body parameters, goals, targets and measurements of one person.
  *
  * Exports:
- * - `bodyProfileRepository.execute`: get, set_profile, log/list/remove measurements,
- *   apply_adjustment and erase_all.
+ * - `bodyProfileRepository.execute`: get (with the journal's facts), set_profile, log/list/remove
+ *   measurements, apply_adjustment, erase_all and set_journal_mode.
  * - `ERASED_TABLES`: the tables `erase_all` empties for the person.
  *
  * Key constructs:
@@ -19,9 +19,12 @@
 import type { MemoryAuthorization } from "../memory-context.js";
 import { type BodyProfileInput, bodyProfileInput, PROFILE_FIELDS } from "./body-profile-input.js";
 import {
+  ERASE_RESULT_SQL,
   type HealthTransaction,
+  type JournalMode,
   healthError,
   inputInvalid,
+  journalMode,
   notFound,
   numberOrNull,
   replayable,
@@ -278,6 +281,8 @@ export const ERASED_TABLES = [
  * journal keeps only call ids and input hashes, no health data.
  */
 async function eraseAll(tx: HealthTransaction) {
+  // The mode is where the person keeps the journal, not a record of it: it outlives the erase.
+  const mode = await journalMode(tx.client, tx.ownerUserId);
   const counts: Record<string, number> = {};
   for (const table of ERASED_TABLES) {
     const result = await tx.client.query(`DELETE FROM ${table} WHERE owner_user_id = $1`, [
@@ -285,13 +290,55 @@ async function eraseAll(tx: HealthTransaction) {
     ]);
     counts[table] = result.rowCount ?? 0;
   }
+  if (mode !== "database") await saveJournalMode(tx, mode);
   await tx.client.query(
-    // Earlier erases keep their counts: they are what `eraseCount` counts, and it must only grow.
+    // Earlier erases keep their counts: they are what `journalState` counts, and it must only grow.
     `UPDATE health_operations SET result = '{"erased": true}'::jsonb
-      WHERE owner_user_id = $1 AND jsonb_typeof(result -> 'erased') IS DISTINCT FROM 'object'`,
+      WHERE owner_user_id = $1 AND NOT (${ERASE_RESULT_SQL})`,
     [tx.ownerUserId],
   );
   return { erased: counts };
+}
+
+/**
+ * What the journal knows about itself, so «was it erased» is a fact: its mode, its first write
+ * since the last erase, and its erases. An empty journal with no erase was never written to.
+ * The first write comes from the journal of operations, not from the records left: a write whose
+ * record was removed later was still made. An erase marks every earlier write `{"erased": true}`,
+ * so the writes not marked are those since the last erase; a mode switch is not a write.
+ */
+async function journalFacts(tx: HealthTransaction) {
+  // One pass over the person's operations.
+  const result = await tx.client.query<{
+    erases: number;
+    first_record: string | null;
+    last_erased: string | null;
+  }>(
+    `SELECT to_char(min(created_at) FILTER (WHERE NOT (result ? 'erased' OR result ? 'journal'))
+                      AT TIME ZONE $2, 'YYYY-MM-DD HH24:MI') AS first_record,
+            count(*) FILTER (WHERE ${ERASE_RESULT_SQL})::integer AS erases,
+            to_char(max(created_at) FILTER (WHERE ${ERASE_RESULT_SQL})
+                      AT TIME ZONE $2, 'YYYY-MM-DD HH24:MI') AS last_erased
+       FROM health_operations WHERE owner_user_id = $1`,
+    [tx.ownerUserId, tx.timezone],
+  );
+  const row = result.rows[0]!;
+  return {
+    erases: row.erases,
+    firstWriteAt: row.first_record,
+    lastErasedAt: row.last_erased,
+    mode: await journalMode(tx.client, tx.ownerUserId),
+  };
+}
+
+/** Where the person keeps the journal; it lives in the profile row and creates one if needed. */
+async function saveJournalMode(tx: HealthTransaction, mode: JournalMode): Promise<void> {
+  await tx.client.query(
+    `INSERT INTO health_profiles (owner_user_id, family_id, journal_mode) VALUES ($1, $2, $3)
+     ON CONFLICT (owner_user_id) DO UPDATE SET journal_mode = EXCLUDED.journal_mode,
+       version = health_profiles.version + 1, updated_at = now()`,
+    [tx.ownerUserId, tx.familyId, mode],
+  );
 }
 
 export const bodyProfileRepository = {
@@ -299,11 +346,17 @@ export const bodyProfileRepository = {
     const parsed = bodyProfileInput.safeParse(raw);
     if (!parsed.success) inputInvalid("профиля или замера", "manage_body_profile");
     const input = parsed.data;
-    return await withHealthTransaction(auth, async (tx) => {
+    // The journal's facts, the mode switch and erasing the database copies work in both modes.
+    const anyMode = ["get", "set_journal_mode", "erase_all"].includes(input.action);
+    return await withHealthTransaction(auth, { anyMode, operationKey }, async (tx) => {
       if (input.action === "get") {
+        // A person keeping files gets no numbers from the database copies, only where they are.
+        const journal = await journalFacts(tx);
+        if (journal.mode === "files") return { journal };
         const weight = await currentWeight(tx);
         return {
           ...presentProfile(await loadProfile(tx), weight.trendKg, tx.today),
+          journal,
           latestWeight: weight.latest,
         };
       }
@@ -323,6 +376,10 @@ export const bodyProfileRepository = {
       }
       return await replayable(tx, operationKey, input, async () => {
         if (input.action === "erase_all") return await eraseAll(tx);
+        if (input.action === "set_journal_mode") {
+          await saveJournalMode(tx, input.journalMode!);
+          return { journal: await journalFacts(tx) };
+        }
         if (input.action === "set_profile") return await setProfile(tx, input);
         if (input.action === "apply_adjustment") return await applyAdjustment(tx, input);
         if (input.action === "remove_measurement") {

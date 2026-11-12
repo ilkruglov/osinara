@@ -170,7 +170,7 @@ export const foodLogRepository = {
         ": у каждой позиции amount, unit и per100 (на 100 г или мл), у add — title и estimateSource",
       );
     const input = parsed.data;
-    return await withHealthTransaction(auth, async (tx) => {
+    return await withHealthTransaction(auth, { operationKey }, async (tx) => {
       if (input.action === "day") return await day(tx, input.date ?? tx.today);
       if (input.action === "get") {
         const row = await selectEntry(tx, input.id!, false);

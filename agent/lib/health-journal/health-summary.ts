@@ -22,10 +22,11 @@ import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.
 import {
   civilDate,
   inputInvalid,
+  journalState,
   requireNotFuture,
   withHealthTransaction,
 } from "./health-access.js";
-import { eraseCount, publishHealthCard, workspaceHealthCardStore } from "./health-card-files.js";
+import { publishHealthCard, workspaceHealthCardStore } from "./health-card-files.js";
 import { checkSentence, num, renderDayCard, renderWeekCard, signed } from "./health-cards.js";
 import {
   type DaySummary,
@@ -84,10 +85,10 @@ export async function buildHealthSummary(
   if (!parsed.success) inputInvalid("сводки", "health_summary");
   const input = parsed.data;
   const view = input.view ?? "progress";
-  const computed = await withHealthTransaction(auth, async (tx) => {
+  const computed = await withHealthTransaction(auth, { operationKey }, async (tx) => {
     const date = input.date ?? tx.today;
     requireNotFuture(tx, date, "date");
-    const erasesBefore = await eraseCount(tx.client, tx.ownerUserId);
+    const { erases: erasesBefore } = await journalState(tx.client, tx.ownerUserId);
     return input.action === "day"
       ? {
           day: await loadDaySummary(tx, date),
@@ -121,11 +122,11 @@ export async function buildHealthSummary(
   const size = requireTelegramWidgetSize(html);
   const path = await publishHealthCard(workspaceHealthCardStore(workspace), {
     erasesBefore: computed.erasesBefore,
-    // Read after the write on its own connection: no transaction is held at this point.
-    erasesNow: async () => await eraseCount(database(), computed.owner),
     html,
     kind: computed.kind === "week" ? "week" : view === "evening" ? "day-evening" : "day-progress",
     operationKey,
+    // Read after the write on its own connection: no transaction is held at this point.
+    stateNow: async () => await journalState(database(), computed.owner),
   });
   return {
     ...result,

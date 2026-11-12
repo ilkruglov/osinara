@@ -7,7 +7,11 @@
  */
 import { defineTool } from "eve/tools";
 
-import { healthError, inputInvalid } from "../health-journal/health-access.js";
+import {
+  assertDatabaseJournal,
+  healthError,
+  inputInvalid,
+} from "../health-journal/health-access.js";
 import { sleepActivityInput } from "../health-journal/sleep-activity-input.js";
 import { sleepActivityRepository } from "../health-journal/sleep-activity-repository.js";
 import { parseZeppExport, ZeppExportError } from "../health-journal/zepp-export.js";
@@ -67,6 +71,8 @@ export default defineTool({
         "manage_sleep_activity",
         ": path к .zip в личном workspace (glob inbox/**/*.zip)",
       );
+    // A person keeping files is refused before the archive is read and decrypted, not after.
+    await assertDatabaseJournal(auth, operationKey);
     const file = await workspaceBinaryRepository.readBinary(
       requireWorkspaceAuthorization(ctx),
       "personal",

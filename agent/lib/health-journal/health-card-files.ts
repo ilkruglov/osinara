@@ -6,7 +6,6 @@
  * - `HealthCardStore`: writing, listing and removing files there (the workspace, or a test double).
  * - `publishHealthCard`: writes one immutable card and drops the older ones of its kind.
  * - `removeHealthCards`: drops every card, for `erase_all`.
- * - `eraseCount`: how many erases the person's journal has seen; it only grows.
  * - `workspaceHealthCardStore`: the production store over the personal workspace.
  *
  * Key constructs (Codex review of 11 November 2026):
@@ -14,18 +13,18 @@
  *   a later card that overwrote a shared name. Each publication writes (a replay restores its own
  *   card), and only cards of the same kind older than `CARD_GRACE_MS` are dropped, so a newer card
  *   or one another call is about to send stays (Codex, third round).
- * - A summary reads the journal, ends its transaction and only then writes the card. An erase that
- *   committed in between is seen by the erase count read again after the write: the card is
- *   removed and the call fails, so erased numbers never come back as a file.
+ * - A summary reads the journal, ends its transaction and only then writes the card. After the
+ *   write the journal must still have the same erases and be in the database mode: an erase or a
+ *   switch to the files that committed at any point since the summary's mode check removes the
+ *   card and fails the call, so erased numbers never come back as a file and a person keeping
+ *   files gets no card from the database copies.
  */
 import { createHash, randomUUID } from "node:crypto";
-
-import type { PoolClient } from "pg";
 
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
 import { workspaceRepository } from "../workspaces/workspace-repository.js";
-import { healthError } from "./health-access.js";
+import { healthError, type JournalMode } from "./health-access.js";
 
 export const HEALTH_CARD_DIRECTORY = "widgets/health";
 
@@ -42,27 +41,15 @@ const shortHash = (text: string) => createHash("sha256").update(text).digest("he
 /** A card younger than this may still be on its way to send_widget; older ones of its kind go. */
 const CARD_GRACE_MS = 10 * 60_000;
 
-/** Erases recorded in the journal of operations: an erase leaves one row with its counts. */
-export async function eraseCount(
-  client: Pick<PoolClient, "query">,
-  ownerUserId: string,
-): Promise<number> {
-  const result = await client.query<{ erases: number }>(
-    `SELECT count(*)::integer AS erases FROM health_operations
-      WHERE owner_user_id = $1 AND jsonb_typeof(result -> 'erased') = 'object'`,
-    [ownerUserId],
-  );
-  return result.rows[0]!.erases;
-}
-
 export async function publishHealthCard(
   store: HealthCardStore,
   input: {
     erasesBefore: number;
-    erasesNow: () => Promise<number>;
     html: string;
     kind: HealthCardKind;
     operationKey: string;
+    /** The journal's erases and mode after the write (`journalState`, outside the transaction). */
+    stateNow: () => Promise<{ erases: number; mode: JournalMode }>;
   },
 ): Promise<string> {
   const hash = shortHash(input.html);
@@ -73,13 +60,21 @@ export async function publishHealthCard(
     Buffer.from(input.html, "utf8"),
     `health-card:${input.operationKey}:${hash}:${randomUUID()}`,
   );
-  if ((await input.erasesNow()) !== input.erasesBefore) {
+  const now = await input.stateNow();
+  // The mode is compared with "database", not with a mode read earlier: a switch that landed
+  // between the summary's check and its first read would otherwise look like no change.
+  if (now.erases !== input.erasesBefore || now.mode !== "database") {
     await store.remove(path, `health-card-erased:${input.operationKey}:${hash}:${randomUUID()}`);
-    throw healthError("AGENT_HEALTH_ERASED_MEANWHILE", "Дневник стёрли, пока собиралась карточка", {
-      category: "conflict",
-      correction: "Не отправляй карточку. Скажи человеку, что дневник стёрт и сводки пока нет.",
-      retryable: false,
-    });
+    throw healthError(
+      "AGENT_HEALTH_ERASED_MEANWHILE",
+      "Дневник стёрли или перевели в файлы, пока собиралась карточка",
+      {
+        category: "conflict",
+        correction:
+          "Не отправляй карточку. Посмотри journal через manage_body_profile get: стирание видно в erases, файлы — в mode.",
+        retryable: false,
+      },
+    );
   }
   // Only cards of this kind older than the grace period go: a newer one, or one another call is
   // about to send, stays.

@@ -16,17 +16,22 @@ import {
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 
+// Erasing the journal cannot be undone, and moving it decides which records count, so the person
+// confirms both with a button; the rest is their own journal written at their word, like the
+// shopping list.
+const APPROVAL_ACTIONS = new Set(["erase_all", "set_journal_mode"]);
+
 export default defineTool({
-  // Erasing the journal cannot be undone, so the person confirms it with a button; the rest is
-  // their own journal written at their word, like the shopping list.
-  approval: ({ toolInput }) =>
-    (toolInput as { action?: unknown } | undefined)?.action === "erase_all"
+  approval: ({ toolInput }) => {
+    const action = (toolInput as { action?: unknown } | undefined)?.action;
+    return typeof action === "string" && APPROVAL_ACTIONS.has(action)
       ? "user-approval"
-      : "not-applicable",
+      : "not-applicable";
+  },
   description: [
     "Тело, цели и нормы человека (личный чат): вес и замеры, параметры для нормы, цель похудеть/держать/набрать, своя норма, недельная поправка, стирание всего дневника. Не для еды, сна и тренировок.",
-    "get — профиль, нормы (targets, missing) и тренд веса; set_profile — изменённые поля с version из get; log_/list_/remove_measurement — замеры.",
-    "apply_adjustment — только после «да» человека, с числом из health_summary week; erase_all — по прямой просьбе, подтверждается кнопкой. Опасную цель инструмент отклонит сам.",
+    "get — профиль, нормы (targets, missing), тренд веса и journal: где дневник (mode), с какого времени и были ли стирания; set_profile — изменённые поля с version из get; log_/list_/remove_measurement — замеры.",
+    "apply_adjustment — только после «да» человека, с числом из health_summary week; erase_all и set_journal_mode — только по прямой просьбе, подтверждаются кнопкой. Опасную цель инструмент отклонит сам.",
   ].join(" "),
   inputSchema: bodyProfileInput,
   async execute(input, ctx) {
