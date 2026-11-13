@@ -73,7 +73,9 @@ const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_700;
 // then by 400 on 10 September for the core rule against repeating another person's obscenity.
 // +700 on 16 October 2026 for the external character section (the core itself grew by 31),
 // +200 the same day for the image grant lines now counted in the external worst case (37 801).
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_900;
+// 40 000 on 13 November 2026, owner's word: the core names the feminine in headings and «бы»
+// phrases, where Mia still slipped into the masculine (37 938 at the time).
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 40_000;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {
