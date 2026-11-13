@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { estimateTokens } from "#harness/token-estimate.js";
+import { clipMiddleText } from "./osinara-display-text.js";
 import {
   COMPACTION_CHECKPOINT_MARKER,
   COMPACTION_PROMPT_ENVELOPE,
@@ -9,6 +10,13 @@ import {
   createCompactionPrompt,
   stubContentOutputFileParts,
 } from "#harness/compaction-prompt.js";
+class CompactionBlankSummaryError extends Error {
+  constructor(e) {
+    super(`The compaction model returned an empty summary. Finish reason: ${e}.`);
+    this.name = `CompactionBlankSummaryError`;
+    this.finishReason = e;
+  }
+}
 const COMPACTION_PROMPT_OVERHEAD_TOKENS = estimateTokens([
   { content: COMPACTION_PROMPT_ENVELOPE.system, role: `system` },
   { content: COMPACTION_PROMPT_ENVELOPE.prompt, role: `user` },
@@ -123,8 +131,11 @@ async function compactMessages(t, r, i, a, o, c, l, d = !1) {
         system: d.system,
         telemetry: o ? { ...o, functionId: `eve.compaction` } : void 0,
         temperature: 0,
-      }),
-      g = [
+      });
+    // Osinara: a blank summary never replaces the history with an empty checkpoint (ported from
+    // Eve 1.0 1807ff9); `maybeCompact` catches this error and goes on with the history as it was.
+    if (h.text.trim().length === 0) throw new CompactionBlankSummaryError(h.finishReason);
+    let g = [
         { content: COMPACTION_CHECKPOINT_MARKER, role: `user` },
         { content: h.text, role: `assistant` },
       ],
@@ -165,7 +176,7 @@ function capToolResults(e) {
               ...e,
               output: {
                 type: `text`,
-                value: `[Truncated by eve: tool result reduced during context compaction. Re-run the tool if you need the full output.]\n\n${r.slice(0, TRANSCRIPT_PAYLOAD_LIMIT)}`,
+                value: `[Truncated by eve: tool result reduced during context compaction. Re-run the tool if you need the full output.]\n\n${clipMiddleText(r, TRANSCRIPT_PAYLOAD_LIMIT)}`,
               },
             });
       });
@@ -245,4 +256,10 @@ function splitMessagesForCompaction(e, t) {
   for (; n < e.length && e[n]?.role === `tool`;) n += 1;
   return { older: e.slice(0, n), recent: e.slice(n) };
 }
-export { compactMessages, getInputTokenCount, resolveCompactionModel, shouldCompact };
+export {
+  CompactionBlankSummaryError,
+  compactMessages,
+  getInputTokenCount,
+  resolveCompactionModel,
+  shouldCompact,
+};

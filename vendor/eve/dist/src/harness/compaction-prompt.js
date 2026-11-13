@@ -1,3 +1,4 @@
+import { clipMiddleText, sliceText } from "./osinara-display-text.js";
 import { estimateTokens } from "#harness/token-estimate.js";
 const COMPACTION_CHECKPOINT_MARKER = `Summary of our conversation so far:`,
   COMPACTION_RESUMPTION_MESSAGE = `Continue.`,
@@ -119,7 +120,7 @@ function renderToolResultOutput(e, t) {
   let n = contentToolOutputParts(e);
   return n === void 0
     ? renderPayload(e, t)
-    : capText(
+    : capPayload(
         n
           .map((e) => renderContentToolOutputPart(e, t))
           .filter((e) => e.length > 0)
@@ -169,7 +170,7 @@ function renderToolCall(e, t) {
   return n ? `Called ${e.toolName} with ${n}` : `Called ${e.toolName}`;
 }
 function renderPayload(e, t) {
-  return e === void 0 ? `` : capText(JSON.stringify(e) ?? ``, t);
+  return e === void 0 ? `` : capPayload(JSON.stringify(e) ?? ``, t);
 }
 function renderAttachedFileStub(e, t) {
   return `Attached file ${e ?? `attachment`} (${t})`;
@@ -177,9 +178,18 @@ function renderAttachedFileStub(e, t) {
 function renderConversationText(e, t) {
   return t === void 0 ? e.trim() : capText(e, t);
 }
+// Osinara: ported from Eve 1.0 (0.52.2 and a3654ef). A cut never splits a surrogate pair, and a
+// tool payload keeps its head and tail, where the failing test, the error and the `bash` exit code
+// usually are. The cuts are shared with the application (agent/lib/display-text.ts).
+function oneLine(e) {
+  return e.replace(/\s+/g, ` `).trim();
+}
 function capText(e, t) {
-  let n = e.replace(/\s+/g, ` `).trim();
-  return n.length <= t ? n : `${n.slice(0, t).trimEnd()}…`;
+  let n = oneLine(e);
+  return n.length <= t ? n : `${sliceText(n, t).trimEnd()}…`;
+}
+function capPayload(e, t) {
+  return clipMiddleText(oneLine(e), t);
 }
 export {
   COMPACTION_CHECKPOINT_MARKER,

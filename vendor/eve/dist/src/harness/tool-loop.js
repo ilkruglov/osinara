@@ -1,4 +1,9 @@
 import {
+  logRepair,
+  repairOrphanedToolCalls,
+  splitParkedResponse,
+} from "./osinara-tool-history-repair.js";
+import {
   createErrorId,
   createLogger,
   formatError,
@@ -167,6 +172,7 @@ import {
 } from "#harness/attachment-staging.js";
 import { createWorkflowLifecycle } from "#harness/workflow-lifecycle.js";
 import {
+  CompactionBlankSummaryError,
   compactMessages,
   getInputTokenCount,
   resolveCompactionModel,
@@ -850,7 +856,12 @@ function createToolLoopHarness(t) {
       e !== void 0 && e.length > 0 && J.push({ role: `system`, content: e });
     }
     ye && J.push({ role: `system`, content: CONDITIONAL_DELIVERY_INSTRUCTION });
-    let X = Y,
+    // Osinara: a call without a result anywhere would make the AI SDK reject the prompt
+    // (MissingToolResultsError) and fail the turn; it is answered as "outcome unknown" instead
+    // (ported from Eve 1.0 f5b36b3). The stored history is untouched; the repair is deterministic.
+    let osinaraRepair = repairOrphanedToolCalls(Y);
+    logRepair(E.sessionId, osinaraRepair.repaired);
+    let X = osinaraRepair.messages,
       prepareModelCallInput = (e) => {
         let t = e ? [{ role: `system`, content: e }] : [],
           n = E.agent.system ? [{ role: `system`, content: E.agent.system }] : [],
@@ -1464,7 +1475,10 @@ async function handleStepResult(e) {
     }),
     S = [...b, ...ne],
     C = renderPendingApprovalsSnippet(b),
-    w = [...r, ...(C === void 0 ? [] : [{ content: C, role: `user` }])],
+    // Osinara: results of work resumed at the start of this step go to the history ahead of the
+    // pending-approval note; only the rest waits with the batch (ported from Eve 1.0 4264f03).
+    osinaraParked = splitParkedResponse(g),
+    w = [...r, ...osinaraParked.committed, ...(C === void 0 ? [] : [{ content: C, role: `user` }])],
     re = getAdvertisedTools({
       delegatedCaller: e.delegatedCaller,
       session: v,
@@ -1505,7 +1519,7 @@ async function handleStepResult(e) {
     let e = setPendingRuntimeActionBatch({
       actions: T,
       event: { sequence: o.sequence, stepIndex: o.stepIndex, turnId: o.turnId },
-      responseMessages: g,
+      responseMessages: osinaraParked.pending,
       session: { ...v, history: w },
     });
     return (
@@ -1549,7 +1563,7 @@ async function handleStepResult(e) {
             return n !== void 0 && typeof n != `function` && n.response !== void 0;
           })
           .map((e) => e.requestId),
-        responseMessages: g,
+        responseMessages: osinaraParked.pending,
         session: { ...v, history: w },
       });
     return (
@@ -1857,18 +1871,18 @@ async function maybeCompact(e) {
     modelReference: requireSessionModelReference(i),
     resolveModel: e.resolveModel,
   });
-  if (
-    (t &&
-      (await t(
-        createCompactionRequestedEvent({
-          modelId: formatLanguageModelGatewayId(a.model),
-          sequence: n.sequence,
-          sessionId: i.sessionId,
-          turnId: n.turnId,
-          usageInputTokens: getInputTokenCount(r, i.compaction),
-        }),
-      )),
-    (r = await compactMessages(
+  t &&
+    (await t(
+      createCompactionRequestedEvent({
+        modelId: formatLanguageModelGatewayId(a.model),
+        sequence: n.sequence,
+        sessionId: i.sessionId,
+        turnId: n.turnId,
+        usageInputTokens: getInputTokenCount(r, i.compaction),
+      }),
+    ));
+  try {
+    r = await compactMessages(
       r,
       a.model,
       i.compaction,
@@ -1877,10 +1891,23 @@ async function maybeCompact(e) {
       buildGatewayAttributionHeaders(a.model, e.runtimeIdentity),
       e.abortSignal,
       e.force === !0,
-    )),
-    e.onCompaction)
-  )
-    for (let t of e.onCompaction()) r.push(t);
+    );
+  } catch (o) {
+    // Osinara: a blank summary compacted nothing. The step goes on with the history as it was:
+    // no framework-state hook, no compaction.completed; the next step may try again. A manual
+    // (forced) compaction gets the error: its handler keeps the session and its token counters.
+    if (!(o instanceof CompactionBlankSummaryError) || e.force === !0) throw o;
+    console.error(
+      JSON.stringify({
+        code: "AGENT_COMPACTION_EMPTY_SUMMARY",
+        finishReason: o.finishReason ?? null,
+        sessionId: i.sessionId,
+        turnId: n.turnId,
+      }),
+    );
+    return { messages: e.messages, session: i };
+  }
+  if (e.onCompaction) for (let t of e.onCompaction()) r.push(t);
   return (
     t &&
       (await t(

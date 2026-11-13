@@ -1108,11 +1108,15 @@ export function createEventsStorage(drizzle) {
               `Cannot modify step in terminal state "${validatedStep.status}"`,
             );
           }
-          // On terminal runs: only allow completing/failing in-progress steps
+          // On terminal runs: only allow completing/failing in-progress steps. A step_started is
+          // never that — it begins work, and no work should begin on a finished run — so it is
+          // rejected even when the step row still reads `running` (a redelivery of a start an
+          // earlier delivery already claimed). Ported from vercel/workflow 03455a2.
           if (currentRun && isTerminalWorkflowRunStatus(currentRun.status)) {
-            if (validatedStep.status !== "running") {
+            const starting = data.eventType === "step_started";
+            if (validatedStep.status !== "running" || starting) {
               throw new RunExpiredError(
-                `Cannot modify non-running step on run in terminal state "${currentRun.status}"`,
+                `Cannot ${starting ? "start" : "modify non-running"} step on run in terminal state "${currentRun.status}"`,
               );
             }
           }

@@ -21,6 +21,11 @@ const root = new URL("../", import.meta.url);
 export const EVE_RUNTIME_MODULES = [
   ["scripts/eve-runtime/delta-pacing.ts", "vendor/eve/dist/src/harness/osinara-delta-pacing.js"],
   [
+    "scripts/eve-runtime/tool-history-repair.ts",
+    "vendor/eve/dist/src/harness/osinara-tool-history-repair.js",
+  ],
+  ["agent/lib/display-text.ts", "vendor/eve/dist/src/harness/osinara-display-text.js"],
+  [
     "agent/lib/html-entities.ts",
     "vendor/eve/dist/src/execution/web-fetch/osinara-html-entities.js",
   ],
