@@ -98,8 +98,20 @@ describe("formatOwnerHealthDigest", () => {
 
   it("reports a quiet day with the memory counts", () => {
     expect(formatOwnerHealthDigest(quiet)).toBe(
-      "Сводка за сутки: сбоев нет.\nХоды: за сутки ни одного.\nПамять: +4 (group episode 3, personal profile 1).",
+      "Сводка за сутки: сбоев нет.\nХоды: за сутки ни одного.\nПамять: +4 (group episode 3, personal profile 1). Карточки: собрано 0, сбоев 0, записей убрано 0.",
     );
+  });
+
+  it("adds the person cards of the day to the memory line and a failed build to the failures", () => {
+    const text = formatOwnerHealthDigest({
+      ...quiet,
+      personCards: { built: 12, cleaned: 31, failed: 1 },
+    });
+    expect(text).toContain(
+      "Память: +4 (group episode 3, personal profile 1). Карточки: собрано 12, сбоев 1, записей убрано 31.",
+    );
+    expect(text.split("\n")[0]).toBe("Сводка за сутки.");
+    expect(text).toContain("Карточки собеседников: упавших сборок 1.");
   });
 
   it("names rotations, ingress failures, stuck lanes and undelivered alerts", () => {
@@ -144,7 +156,7 @@ describe("formatOwnerHealthDigest", () => {
         "Не доставлено предупреждений владельцу: 1.",
         "Сценарии по расписанию: 1 сбоев: «Утренние новости» ×1 (AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING ×1).",
         "Ходы: 10, сбоев 3 (30 %), с упавшим инструментом 1, тяжёлых 0; процесс: циклов 0, повторов после ошибки 0, запрещённых инструментов 0; отклик: реакций +0 −0 ~0, ответов Мие 0, поправок 0 из 7 доставленных.",
-        "Память: новых записей нет.",
+        "Память: новых записей нет. Карточки: собрано 0, сбоев 0, записей убрано 0.",
       ].join("\n"),
     );
   });

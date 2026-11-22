@@ -17,8 +17,12 @@ import type { SessionContext } from "eve/context";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import { requireMemoryAuthorization } from "./memory-context.js";
 import { memoryReinforcementRepository } from "./memory-reinforcement-repository.js";
+import { PERSON_CARD_REF_PATTERN } from "./model-memory.js";
+import { personCardUseRepository } from "./person-cards/person-card-use-repository.js";
 
 export interface ReinforceUsedMemoriesDependencies {
+  /** A person card shown this turn is marked used by its `pcard_` ref; it is not a record. */
+  cards: Pick<typeof personCardUseRepository, "record">;
   exposures: Pick<typeof memoryContextExposureRepository, "sessionTurn" | "shownMemoryRefsForTurn">;
   reinforcement: Pick<typeof memoryReinforcementRepository, "reinforceByRefs">;
 }
@@ -34,6 +38,7 @@ export async function reinforceUsedMemories(
     timelineEntryId?: string | null;
   },
   dependencies: ReinforceUsedMemoriesDependencies = {
+    cards: personCardUseRepository,
     exposures: memoryContextExposureRepository,
     reinforcement: memoryReinforcementRepository,
   },
@@ -67,14 +72,33 @@ export async function reinforceUsedMemories(
       console.warn(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: rejected }));
     }
     if (accepted.length === 0) return;
-    const result = await dependencies.reinforcement.reinforceByRefs(auth, {
-      memoryRefs: accepted,
-      provenance: { sessionId: input.ctx.session.id, turnId: input.ctx.session.turn.id },
-      reason: "model_used",
-    });
+    const cardRefs = accepted.filter((ref) => PERSON_CARD_REF_PATTERN.test(ref));
+    const memoryRefs = accepted.filter((ref) => !PERSON_CARD_REF_PATTERN.test(ref));
+    // A card use is its own bookkeeping: failing it must not cost the records their reinforcement.
+    const [usedCards, result] = await Promise.all([
+      dependencies.cards
+        .record(auth, { applicationSessionId: input.applicationSessionId, cardRefs, sessionTurn })
+        .catch((error: unknown) => {
+          console.error(
+            JSON.stringify({
+              code: "AGENT_PERSON_CARD_USE_FAILED",
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+          return [];
+        }),
+      memoryRefs.length === 0
+        ? Promise.resolve({ reinforced: [], unknown: [] })
+        : dependencies.reinforcement.reinforceByRefs(auth, {
+            memoryRefs,
+            provenance: { sessionId: input.ctx.session.id, turnId: input.ctx.session.turn.id },
+            reason: "model_used",
+          }),
+    ]);
     console.info(
       JSON.stringify({
         applicationSessionId: input.applicationSessionId,
+        ...(cardRefs.length === 0 ? {} : { cardRefs: usedCards }),
         code: "AGENT_MEMORY_REINFORCED",
         reason: "model_used",
         refs: result.reinforced,

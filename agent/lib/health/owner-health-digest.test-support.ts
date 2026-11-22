@@ -21,6 +21,7 @@ export const QUIET_OWNER_HEALTH_REPORT: OwnerHealthReport = {
     { count: 3, kind: "episode", scope: "group" },
     { count: 1, kind: "profile", scope: "personal" },
   ],
+  personCards: { built: 0, cleaned: 0, failed: 0 },
   reviewBatches: { ambiguous: 0, failed: 0 },
   rotations: { count: 0, latestAt: null },
   scheduleFailures: NO_SCHEDULE_RUN_FAILURES,

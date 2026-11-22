@@ -71,6 +71,27 @@ describe("parseModelProviderConfig", () => {
     ).toThrow();
   });
 
+  it("accepts a separate reasoning effort for person cards on the primary model", () => {
+    const primary = { ...validConfig.agent.models.primary, personCardReasoningEffort: "high" };
+    const config = {
+      ...validConfig,
+      agent: { ...validConfig.agent, models: { ...validConfig.agent.models, primary } },
+    };
+    expect(parseModelProviderConfig(config)).toEqual(config);
+    expect(() =>
+      parseModelProviderConfig({
+        ...config,
+        agent: {
+          ...config.agent,
+          models: {
+            ...config.agent.models,
+            primary: { ...primary, personCardReasoningEffort: "x" },
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("accepts the native DeepSeek Responses transport only on the DeepSeek host", () => {
     const responses = {
       ...validConfig,

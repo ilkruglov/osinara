@@ -111,6 +111,9 @@ const modelProviderConfigSchema = z
                 // tokens; on 31 real batches (3 October 2026) effort low kept the same good records as
                 // high with fewer unsupported ones at half the output. Unset keeps the transport's effort.
                 memoryReviewReasoningEffort: z.enum(["none", "low", "high", "max"]).optional(),
+                // Person cards: a background call that sums up hundreds of records about one person;
+                // the owner chose high (21 November 2026). Unset keeps the transport's effort.
+                personCardReasoningEffort: z.enum(["none", "low", "high", "max"]).optional(),
               })
               .strict(),
             vision: visionModelSchema,

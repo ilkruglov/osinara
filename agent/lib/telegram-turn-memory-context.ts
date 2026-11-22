@@ -16,6 +16,9 @@
  * - The same-turn profile view binds to the application session and the timeline entry, which
  *   exist before Eve starts the turn; Eve turn identity is not known at this boundary.
  * - Any failure degrades to an explicit unavailability notice: prompt assembly never fails a turn.
+ * - Person cards go first: the author's card in every turn, then the people replied to, mentioned
+ *   and found by retrieval; the profile block leaves out what those cards read and gets the budget
+ *   the cards left. The switch `AGENT_PERSON_CARDS_ENABLED=false` shows none.
  */
 import type { ConversationAccess } from "./family-access.js";
 import type { MemoryAuthorization } from "./memory-context.js";
@@ -35,6 +38,13 @@ import {
 import { formatProfileViewContext, profileViewRepository } from "./profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "./profile-view.js";
 import type { TelegramActorKind } from "./telegram-inbound-actor.js";
+import { personCardsEnabled } from "./person-cards/person-card-config.js";
+import { PROFILE_CONTEXT_MAX_CHARACTERS } from "./memory-config.js";
+import { personCardsBlock, type ShownPersonCard } from "./person-cards/person-card-render.js";
+import {
+  loadPersonCardsForTurn,
+  type LoadPersonCardsInput,
+} from "./person-cards/person-card-view-repository.js";
 
 export interface TelegramMemoryContextInput {
   readonly access: ConversationAccess;
@@ -72,6 +82,11 @@ interface TelegramMemoryContextDependencies {
   ): Promise<ProfileView | null>;
   /** What this session already showed; absent in tests that do not care about repetition. */
   exposures?: ExposureLedger;
+  /** Valid person cards of the people this turn is about; absent means no cards. */
+  loadPersonCards?(
+    auth: MemoryAuthorization,
+    input: LoadPersonCardsInput,
+  ): Promise<ShownPersonCard[]>;
   /** Pending repeat-task hint for this conversation; consumed once shown. */
   takeSkillHint?(conversationId: string): Promise<SkillHint | null>;
   retrieve(
@@ -101,6 +116,16 @@ function memoryAuthorization(input: TelegramMemoryContextInput): MemoryAuthoriza
   };
 }
 
+/** A `.catch` that logs one unavailable part of memory and lets the turn go on without it. */
+function unavailable<T>(component: string, fallback: T): (error: unknown) => T {
+  return (error) => {
+    console.error(
+      JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component, error: String(error) }),
+    );
+    return fallback;
+  };
+}
+
 function exposureFailure(error: unknown): null {
   console.error(JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }));
   return null;
@@ -115,6 +140,7 @@ export function createTelegramMemoryContextBuilder(
     try {
       const authorization = memoryAuthorization(input);
       const startedAt = performance.now();
+      const isUser = input.actor.kind === "telegram_user";
       // The same three facts shown fifty times a day read as a stuck record; what this session
       // already showed recently stays out of the automatic block (the model can still search).
       const exposures = dependencies.exposures;
@@ -147,12 +173,39 @@ export function createTelegramMemoryContextBuilder(
           };
         });
       const retrievedAt = performance.now();
-      const isUser = input.actor.kind === "telegram_user";
       const authorIsSubject =
         input.replyTelegramUserId === input.actor.id ||
         input.explicitMentionTelegramUserIds.includes(input.actor.id);
+      // Cards after retrieval: the people its records are about get their cards too.
+      const cardsStartedAt = performance.now();
+      const loadedCards =
+        isUser && dependencies.loadPersonCards !== undefined && personCardsEnabled()
+          ? await dependencies
+              .loadPersonCards(authorization, {
+                conversationId: input.conversationId,
+                replyTimelineSequence:
+                  input.replyTelegramUserId === null ? input.replyTimelineSequence : null,
+                retrievalClaimIds: [...context.retrievedClaimIds],
+                telegramUserIds: [
+                  input.actor.id,
+                  ...(input.replyTelegramUserId === null ? [] : [input.replyTelegramUserId]),
+                  ...input.explicitMentionTelegramUserIds,
+                ],
+              })
+              .catch(unavailable<ShownPersonCard[]>("person_cards", []))
+          : [];
+      const cardsMs = Math.round(performance.now() - cardsStartedAt);
+      // The cards and the profile block share the block's budget, the cards first.
+      const { block: cardsBlock, shown: cards } = personCardsBlock(
+        loadedCards,
+        PROFILE_CONTEXT_MAX_CHARACTERS,
+      );
+      // The author's card is in every turn, and with it what the card did not read: the "shown
+      // recently" suppression is for the author's records shown without a card.
+      const authorHasCard = cards.some((card) => card.subjectTelegramUserId === input.actor.id);
       const suppressCurrentAuthor =
         isUser &&
+        !authorHasCard &&
         exposures !== undefined &&
         sessionTurn !== null &&
         !authorIsSubject &&
@@ -174,17 +227,13 @@ export function createTelegramMemoryContextBuilder(
                 : { replyTimelineSequence: input.replyTimelineSequence }),
               retrievalClaimIds: [...context.retrievedClaimIds],
               suppressCurrentAuthor,
+              personCardIds: cards.map((card) => card.cardId),
+              maxCharacters: Math.max(
+                0,
+                PROFILE_CONTEXT_MAX_CHARACTERS - (cardsBlock?.length ?? 0),
+              ),
             })
-            .catch((error: unknown) => {
-              console.error(
-                JSON.stringify({
-                  code: "AGENT_MEMORY_UNAVAILABLE",
-                  component: "profile",
-                  error: String(error),
-                }),
-              );
-              return null;
-            })
+            .catch(unavailable("profile", null))
         : null;
       // Both versions of an unresolved conflict are shown too; without them in the ledger a version
       // the answer relied on was refused as unknown (Codex review, 6 October 2026).
@@ -193,7 +242,12 @@ export function createTelegramMemoryContextBuilder(
           ? memory.versions.map((version) => version.memoryRef)
           : [],
       );
+      const cardRefs = cards.flatMap((card) => [
+        card.cardRef,
+        ...card.freshRecords.map((record) => record.memoryRef),
+      ]);
       const shownMemoryRefs = [
+        ...cardRefs,
         ...context.memories.flatMap((memory) =>
           "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : [],
         ),
@@ -222,9 +276,11 @@ export function createTelegramMemoryContextBuilder(
       console.info(
         JSON.stringify({
           code: "AGENT_MEMORY_CONTEXT",
+          cardsMs,
           memories: context.memories.length,
+          personCards: cards.length,
           profile: profile !== null,
-          profileMs: Math.round(performance.now() - retrievedAt),
+          profileMs: Math.round(performance.now() - retrievedAt) - cardsMs,
           retrievalMs: Math.round(retrievedAt - startedAt),
           threads: context.threads.threads.length,
           // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
@@ -250,6 +306,8 @@ export function createTelegramMemoryContextBuilder(
           code: "AGENT_MEMORY_RETRIEVAL_TRACE",
           conflictRefs,
           memoryChars: memoryBlock.length,
+          personCardChars: cardsBlock?.length ?? 0,
+          personCardRefs: cards.map((card) => `${card.cardRef}:${card.version}`),
           profileChars: profileBlock?.length ?? 0,
           profileRefs:
             profile?.subjects.flatMap((subject) =>
@@ -270,6 +328,7 @@ export function createTelegramMemoryContextBuilder(
               return null;
             });
       return [
+        ...(cardsBlock === null ? [] : [cardsBlock]),
         ...(profileBlock === null ? [] : [profileBlock]),
         memoryBlock,
         ...(hint === null ? [] : [formatSkillHint(hint)]),
@@ -289,6 +348,7 @@ export function createTelegramMemoryContextBuilder(
 export const buildTelegramMemoryContext = createTelegramMemoryContextBuilder({
   createProfile: profileViewRepository.create,
   exposures: memoryContextExposureRepository,
+  loadPersonCards: loadPersonCardsForTurn,
   retrieve: retrieveMemoryTurnContext,
   takeSkillHint: (conversationId) => skillHintRepository.take(conversationId),
 });
@@ -297,5 +357,6 @@ export const buildTelegramMemoryContext = createTelegramMemoryContextBuilder({
 export const buildTelegramWhisperMemoryContext = createTelegramMemoryContextBuilder({
   createProfile: profileViewRepository.create,
   exposures: memoryContextExposureRepository,
+  loadPersonCards: loadPersonCardsForTurn,
   retrieve: retrieveMemoryTurnContext,
 });

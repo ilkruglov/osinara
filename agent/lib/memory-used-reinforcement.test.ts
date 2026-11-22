@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Only refs shown in the current turn reach the repository; the rest are logged as unknown.
  * - A repository failure is logged and never thrown into the delivery path.
+ * - A shown person card ref is recorded as a card use, never as a record to reinforce.
  * - An answer without the directive while records were shown is logged, so the share of turns
  *   that ignore the directive can be measured in production.
  * - Every outcome with shown records names the application session, its turn and the turn's
@@ -54,6 +55,7 @@ describe("reinforceUsedMemories", () => {
         timelineEntryId: "entry-9",
       },
       {
+        cards: { record: vi.fn().mockResolvedValue([]) },
         exposures: {
           sessionTurn: vi.fn().mockResolvedValue(4),
           shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
@@ -83,12 +85,60 @@ describe("reinforceUsedMemories", () => {
     });
   });
 
+  it("records a shown person card as used and reinforces only records", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const card = `pcard_${"a".repeat(32)}`;
+    const record = vi.fn().mockResolvedValue([card]);
+    const reinforceByRefs = vi.fn();
+    await reinforceUsedMemories(
+      { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [card] },
+      {
+        cards: { record },
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set([card])),
+        },
+        reinforcement: { reinforceByRefs },
+      },
+    );
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ familyId: "family-1" }), {
+      applicationSessionId: "app-1",
+      cardRefs: [card],
+      sessionTurn: 4,
+    });
+    expect(reinforceByRefs).not.toHaveBeenCalled();
+  });
+
+  it("still reinforces records when the card use cannot be recorded", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const card = `pcard_${"c".repeat(32)}`;
+    const reinforceByRefs = vi.fn().mockResolvedValue({ reinforced: ["mem_a"], unknown: [] });
+    await reinforceUsedMemories(
+      { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [card, "mem_a"] },
+      {
+        cards: { record: vi.fn().mockRejectedValue(new Error("cards down")) },
+        exposures: {
+          sessionTurn: vi.fn().mockResolvedValue(4),
+          shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set([card, "mem_a"])),
+        },
+        reinforcement: { reinforceByRefs },
+      },
+    );
+    expect(reinforceByRefs).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ memoryRefs: ["mem_a"] }),
+    );
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_PERSON_CARD_USE_FAILED"));
+  });
+
   it("logs a missing directive when records were shown this turn", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const reinforceByRefs = vi.fn();
     await reinforceUsedMemories(
       { applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] },
       {
+        cards: { record: vi.fn().mockResolvedValue([]) },
         exposures: {
           sessionTurn: vi.fn().mockResolvedValue(4),
           shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a", "mem_b"])),
@@ -114,6 +164,7 @@ describe("reinforceUsedMemories", () => {
     await reinforceUsedMemories(
       { applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] },
       {
+        cards: { record: vi.fn().mockResolvedValue([]) },
         exposures: {
           sessionTurn: vi.fn().mockResolvedValue(4),
           shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set()),
@@ -130,6 +181,7 @@ describe("reinforceUsedMemories", () => {
     await reinforceUsedMemories(
       { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [] },
       {
+        cards: { record: vi.fn().mockResolvedValue([]) },
         exposures: {
           sessionTurn: vi.fn().mockResolvedValue(4),
           shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
@@ -157,6 +209,7 @@ describe("reinforceUsedMemories", () => {
       reinforceUsedMemories(
         { applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a"] },
         {
+          cards: { record: vi.fn().mockResolvedValue([]) },
           exposures: {
             sessionTurn: vi.fn().mockResolvedValue(4),
             shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),

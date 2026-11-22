@@ -11,7 +11,8 @@ import { describe, expect, it } from "vitest";
 import { modelProviderConfig } from "./model-provider-config.js";
 import {
   memoryReviewModel,
-  memoryReviewTransport,
+  personCardModel,
+  transportAtEffort,
   primaryModel,
   visionModel,
   visionTransport,
@@ -67,44 +68,45 @@ describe("model registry", () => {
     expect(visionTransport(chat, vision)).toBe(chat);
   });
 
-  it("gives silent memory review its own reasoning effort where the transport has one", () => {
+  it("gives a background job its own reasoning effort where the transport has one", () => {
     const responses = {
       baseUrl: "https://api.deepseek.com",
       protocol: "deepseek-responses" as const,
       reasoning: { effort: "high" as const },
     };
-    const primary = {
-      contextWindowTokens: 1_000_000,
-      id: "deepseek-flash",
-      maxOutputTokens: 128_000,
-    };
-    expect(
-      memoryReviewTransport(responses, { ...primary, memoryReviewReasoningEffort: "low" }),
-    ).toEqual({ ...responses, reasoning: { effort: "low" } });
-    expect(memoryReviewTransport(responses, primary)).toBe(responses);
+    expect(transportAtEffort(responses, "low")).toEqual({
+      ...responses,
+      reasoning: { effort: "low" },
+    });
+    expect(transportAtEffort(responses, undefined)).toBe(responses);
     const chat = {
       baseUrl: "https://api.deepseek.com",
       protocol: "openai-chat-completions" as const,
       providerName: "deepseek" as const,
       reasoning: { effort: "high" as const, format: "deepseek" as const, type: "effort" as const },
     };
-    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "low" })).toEqual(
-      { ...chat, reasoning: { ...chat.reasoning, effort: "low" } },
-    );
-    expect(
-      memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "none" }),
-    ).toEqual({ ...chat, reasoning: { format: "deepseek", type: "none" } });
+    expect(transportAtEffort(chat, "low")).toEqual({
+      ...chat,
+      reasoning: { ...chat.reasoning, effort: "low" },
+    });
+    expect(transportAtEffort(chat, "none")).toEqual({
+      ...chat,
+      reasoning: { format: "deepseek", type: "none" },
+    });
     const anthropic = {
       baseUrl: "https://api.deepseek.com/anthropic",
       protocol: "anthropic-messages" as const,
     };
-    expect(
-      memoryReviewTransport(anthropic as never, { ...primary, memoryReviewReasoningEffort: "low" }),
-    ).toBe(anthropic);
+    expect(transportAtEffort(anthropic as never, "low")).toBe(anthropic);
   });
 
   it("reviews with the primary model itself unless an effort is configured", () => {
     expect(modelProviderConfig.agent.models.primary.memoryReviewReasoningEffort).toBeUndefined();
     expect(memoryReviewModel).toBe(primaryModel);
+  });
+
+  it("builds person cards with the primary model itself unless an effort is configured", () => {
+    expect(modelProviderConfig.agent.models.primary.personCardReasoningEffort).toBeUndefined();
+    expect(personCardModel).toBe(primaryModel);
   });
 });

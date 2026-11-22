@@ -2,6 +2,7 @@
  * Slot-based claim versioning.
  *
  * Exports:
+ * - `lockMemorySlot`: the advisory lock of one slot, empty or not.
  * - `lockSlotClaims`: locks the slot and returns its active records with their text.
  * - `SlotConflictRefusal`: that refusal, with the slot's records kept out of its message.
  * - `requireSlotUpdate`: refuses a write that ignores the slot or names a record no longer in it,
@@ -23,35 +24,49 @@ export interface SlotSupersedeInput {
   systemActor: boolean;
 }
 
-export async function lockSlotClaims(
-  client: PoolClient,
-  auth: MemoryAuthorization,
-  input: {
-    attribute: string;
-    kind: MemoryKind;
-    scope: MemoryScope;
-    scopePartitionKey: string;
-    subjectLabel: string | null;
-    subjectParticipantId: string | null;
-    subjectUserId: string | null;
-    memoryProjectId: string | null;
-  },
-): Promise<SlotClaimRow[]> {
-  // Lock the identity before inserting, including an empty slot. Row locks alone miss first-write races.
+export interface MemorySlotIdentity {
+  attribute: string;
+  kind: MemoryKind;
+  scope: MemoryScope;
+  scopePartitionKey: string;
+  subjectLabel: string | null;
+  subjectParticipantId: string | null;
+  subjectUserId: string | null;
+  memoryProjectId: string | null;
+}
+
+/**
+ * Locks one slot, empty or not, until the transaction ends. Every writer of the slot takes it before
+ * reading it: memory writes and the undo of the person card cleanup. Row locks alone miss
+ * first-write races.
+ */
+export async function lockMemorySlot(
+  client: Pick<PoolClient, "query">,
+  familyId: string,
+  slot: MemorySlotIdentity,
+): Promise<void> {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     JSON.stringify([
       "memory-slot",
-      auth.familyId,
-      input.scope,
-      input.scopePartitionKey,
-      input.attribute,
-      input.kind === "episode" ? "episode" : "semantic",
-      input.subjectLabel,
-      input.subjectParticipantId,
-      input.subjectUserId,
-      input.memoryProjectId,
+      familyId,
+      slot.scope,
+      slot.scopePartitionKey,
+      slot.attribute,
+      slot.kind === "episode" ? "episode" : "semantic",
+      slot.subjectLabel,
+      slot.subjectParticipantId,
+      slot.subjectUserId,
+      slot.memoryProjectId,
     ]),
   ]);
+}
+
+export async function lockSlotClaims(
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  input: MemorySlotIdentity,
+): Promise<SlotClaimRow[]> {
+  await lockMemorySlot(client, auth.familyId, input);
   // The slot is one subject in one partition; a label-only subject is still one slot per label.
   // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
   // version chain); an episode slot only ever holds episodes.

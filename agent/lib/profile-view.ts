@@ -50,6 +50,13 @@ export interface CreateProfileViewInput {
   retrievalClaimIds: readonly string[];
   /** The author's own card was shown recently; include them only as a reply or mention subject. */
   suppressCurrentAuthor?: boolean;
+  /**
+   * The person cards this turn shows: their people are subjects of the block, and the records the
+   * cards read stay out of it.
+   */
+  personCardIds?: readonly string[];
+  /** The block's budget once the person cards took theirs. */
+  maxCharacters?: number;
 }
 
 export function toProfileView(input: {

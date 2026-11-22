@@ -2,6 +2,7 @@
  * Exact normalized source-backed duplicate reinforcement.
  *
  * Exports:
+ * - `lockExactMemoryDuplicate`: the advisory lock of one text about one subject.
  * - `reinforceExactClaim`: serializes same-subject lookup and atomically records reinforcement.
  *   Identity is the normalized text plus subject, kind, slot and event date: two trips to the
  *   same city on different dates are two episodes, not one reinforced record.
@@ -31,6 +32,37 @@ interface ExactClaimIdentity {
   systemActor: boolean;
 }
 
+/**
+ * Locks one text about one subject until the transaction ends: it closes the race between the
+ * exact lookup and a new insert without a global lock. The undo of the person card cleanup takes
+ * it too, after the slot's lock, like memory writes.
+ */
+export async function lockExactMemoryDuplicate(
+  client: Pick<PoolClient, "query">,
+  identity: Pick<
+    ExactClaimIdentity,
+    | "contentNormalized"
+    | "memoryProjectId"
+    | "scope"
+    | "scopePartitionKey"
+    | "subjectLabel"
+    | "subjectParticipantId"
+    | "subjectUserId"
+  >,
+): Promise<void> {
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    JSON.stringify({
+      content: identity.contentNormalized,
+      memoryProjectId: identity.memoryProjectId,
+      partition: identity.scopePartitionKey,
+      scope: identity.scope,
+      subjectLabel: identity.subjectLabel,
+      subjectParticipantId: identity.subjectParticipantId,
+      subjectUserId: identity.subjectUserId,
+    }),
+  ]);
+}
+
 export async function reinforceExactClaim(
   client: PoolClient,
   auth: MemoryAuthorization,
@@ -38,17 +70,7 @@ export async function reinforceExactClaim(
 ): Promise<ReferencedMemoryRow | null> {
   const prepared = identity.prepared;
 
-  // This lock closes the race between exact lookup and new-claim insertion without a global lock.
-  const duplicateLock = JSON.stringify({
-    content: identity.contentNormalized,
-    memoryProjectId: identity.memoryProjectId,
-    partition: identity.scopePartitionKey,
-    scope: identity.scope,
-    subjectLabel: identity.subjectLabel,
-    subjectParticipantId: identity.subjectParticipantId,
-    subjectUserId: identity.subjectUserId,
-  });
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [duplicateLock]);
+  await lockExactMemoryDuplicate(client, identity);
   const duplicate = await client.query<ReferencedMemoryRow>(
     `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope,
             item.kind, item.content, item.source, item.confirmation, item.sensitivity,

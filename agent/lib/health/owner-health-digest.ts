@@ -174,8 +174,13 @@ export function ownerHealthDigestSections(
   const breakdown = report.memoryWritten
     .map((entry) => `${entry.scope} ${entry.kind} ${entry.count}`)
     .join(", ");
+  const cards = report.personCards;
+  // A failed build is a failure of the day, so the header does not say "no failures".
+  if (cards.failed > 0) lines.push(`Карточки собеседников: упавших сборок ${cards.failed}.`);
+  const cardsLine = ` Карточки: собрано ${cards.built}, сбоев ${cards.failed}, записей убрано ${cards.cleaned}.`;
   const memory =
-    written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`;
+    (written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`) +
+    cardsLine;
   const header = lines.length === 0 ? "Сводка за сутки: сбоев нет." : "Сводка за сутки.";
   const information = [
     ...(balance !== null && !balance.warning ? [balance.text] : []),

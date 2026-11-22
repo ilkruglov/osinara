@@ -30,6 +30,8 @@ export interface OwnerHealthReport {
     lagging: { label: string; oldestAt: Date; waiting: number }[];
   };
   memoryWritten: { count: number; kind: string; scope: string }[];
+  /** Person card builds that ended in the window, and the records their cleanup marked. */
+  personCards: { built: number; cleaned: number; failed: number };
   reviewBatches: { ambiguous: number; failed: number };
   rotations: { count: number; latestAt: Date | null };
   scheduleFailures: ScheduleRunFailures;
@@ -129,6 +131,13 @@ export const ownerHealthDigestRepository = {
         GROUP BY scope, kind ORDER BY scope, kind`,
       [familyId, windowStart],
     );
+    const cards = await client.query<{ built: string; cleaned: string; failed: string }>(
+      `SELECT count(*) FILTER (WHERE status = 'succeeded')::text AS built,
+              count(*) FILTER (WHERE status = 'failed')::text AS failed,
+              COALESCE(sum(cleaned_records) FILTER (WHERE status = 'succeeded'), 0)::text AS cleaned
+         FROM person_card_builds WHERE family_id = $1 AND finished_at >= $2`,
+      [familyId, windowStart],
+    );
     // A run is terminal once failed or ambiguous and is not touched again, so `updated_at` is when it ended.
     const scheduleRuns = await client.query<{
       code: string | null;
@@ -184,6 +193,11 @@ export const ownerHealthDigestRepository = {
         kind: row.kind,
         scope: row.scope,
       })),
+      personCards: {
+        built: Number(cards.rows[0]?.built ?? 0),
+        cleaned: Number(cards.rows[0]?.cleaned ?? 0),
+        failed: Number(cards.rows[0]?.failed ?? 0),
+      },
       reviewBatches: { ambiguous: status("ambiguous"), failed: status("failed") },
       rotations: {
         count: Number(rotations.rows[0]?.count ?? 0),

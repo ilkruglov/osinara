@@ -177,6 +177,7 @@ const POST_V0101_MIGRATIONS = [
   "144_whisper_placeholders.sql",
   "145_health_journal.sql",
   "146_health_journal_mode.sql",
+  "147_person_cards.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

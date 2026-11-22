@@ -10,6 +10,8 @@
  *   hands to its successor.
  * - `memoryReviewModel`: the primary model at the configured silent-review effort, or the primary
  *   model itself when none is configured.
+ * - `personCardModel`: the primary model at the configured person-card effort, or the primary model
+ *   itself when none is configured.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
  */
 import { createGroq } from "@ai-sdk/groq";
@@ -95,22 +97,27 @@ export const sessionHandoffModel = createConfiguredLanguageModel({
   transport: withReasoningEffort(modelProviderConfig.agent.transport, "none"),
 });
 
-/** The shared transport with the configured silent-review effort, or the transport as is. */
-export function memoryReviewTransport(
+/** The shared transport at a background job's own effort, or as is when none is configured. */
+export function transportAtEffort(
   transport: ModelProviderConfig["agent"]["transport"],
-  primary: ModelProviderConfig["agent"]["models"]["primary"],
+  effort: ReasoningEffort | undefined,
 ): ModelProviderConfig["agent"]["transport"] {
-  if (primary.memoryReviewReasoningEffort === undefined) return transport;
-  return withReasoningEffort(transport, primary.memoryReviewReasoningEffort);
+  return effort === undefined ? transport : withReasoningEffort(transport, effort);
 }
 
 const primaryConfig = modelProviderConfig.agent.models.primary;
-export const memoryReviewModel =
-  primaryConfig.memoryReviewReasoningEffort === undefined
+
+/** The primary model at a background job's own effort; the primary model itself without one. */
+function primaryAtEffort(effort: ReasoningEffort | undefined) {
+  return effort === undefined
     ? primaryModel
     : createConfiguredLanguageModel({
         apiKey: agentModelApiKey,
         maxOutputTokens: primaryConfig.maxOutputTokens,
         modelId: primaryConfig.id,
-        transport: memoryReviewTransport(modelProviderConfig.agent.transport, primaryConfig),
+        transport: transportAtEffort(modelProviderConfig.agent.transport, effort),
       });
+}
+
+export const memoryReviewModel = primaryAtEffort(primaryConfig.memoryReviewReasoningEffort);
+export const personCardModel = primaryAtEffort(primaryConfig.personCardReasoningEffort);

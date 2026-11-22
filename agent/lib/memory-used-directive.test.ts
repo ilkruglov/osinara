@@ -5,6 +5,7 @@
  * - A trailing directive is removed and its valid refs returned once each.
  * - A directive between words leaves readable text; malformed refs are ignored.
  * - Text without a directive is untouched; an empty directive counts as declared.
+ * - A person card ref (`pcard_…`) is a ref like a record's; a malformed one is dropped.
  */
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +25,13 @@ describe("extractMemoryUsedDirective", () => {
     expect(extractMemoryUsedDirective("Да.<memory-used>x, mem_short</memory-used> Точно.")).toEqual(
       { declared: true, memoryRefs: [], message: "Да. Точно." },
     );
+  });
+
+  it("keeps a person card ref next to record refs", () => {
+    const card = `pcard_${"a".repeat(32)}`;
+    expect(
+      extractMemoryUsedDirective(`Помню.\n<memory-used>${card}, ${A}, pcard_short</memory-used>`),
+    ).toEqual({ declared: true, memoryRefs: [card, A], message: "Помню." });
   });
 
   it("leaves text without a directive untouched", () => {

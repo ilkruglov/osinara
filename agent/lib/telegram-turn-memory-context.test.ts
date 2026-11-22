@@ -378,6 +378,8 @@ describe("createTelegramMemoryContextBuilder", () => {
       replyTimelineSequence: "44",
       retrievalClaimIds: ["claim-related"],
       suppressCurrentAuthor: false,
+      personCardIds: [],
+      maxCharacters: 6_000,
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).toContain("<verified_profile_view");

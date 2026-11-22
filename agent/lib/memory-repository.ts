@@ -7,6 +7,8 @@
  */
 import type { PoolClient } from "pg";
 import { AppError } from "./app-error.js";
+import { softDeleteMemoryWithRepeats } from "./memory-soft-delete.js";
+import { retryOnTransactionConflict } from "./transaction-conflict-retry.js";
 import { MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE } from "./memory-config.js";
 import { database } from "./database.js";
 import { createMemoryClaim } from "./memory-claim-writer.js";
@@ -216,6 +218,119 @@ async function hasImmediateUndoProvenance(
   );
   return Boolean(result.rowCount);
 }
+async function deleteMemoryOnce(
+  auth: MemoryAuthorization,
+  memoryRef: string,
+  operationKey: string,
+): Promise<{ deleted: true }> {
+  const inputHash = memoryOperationHash({ memoryRef });
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const replay = await existingOperation(client, auth, operationKey, "delete", inputHash);
+    if (replay) {
+      await client.query("COMMIT");
+      return { deleted: true };
+    }
+    const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
+    if (!memory) {
+      throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
+    }
+    await requireMutationAccess(client, auth, memory);
+
+    // Идемпотентность и аудит пишутся до удаления.
+    await client.query(
+      `INSERT INTO memory_mutation_operations
+         (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
+       VALUES ($1, $2, 'delete', $3, $4)`,
+      [auth.familyId, operationKey, inputHash, memory.id],
+    );
+    await client.query(
+      `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
+       VALUES ($1, $2, 'memory.deleted', $3,
+               jsonb_build_object('scope', $4::text, 'kind', $5::text))`,
+      [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
+    );
+    await softDeleteMemoryWithRepeats(client, auth, memory.id);
+    await client.query("COMMIT");
+    return { deleted: true };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function undoCreateOnce(
+  auth: MemoryAuthorization,
+  memoryRef: string,
+  input: MemoryUndoInput,
+): Promise<{ deleted: true }> {
+  const inputHash = memoryOperationHash({ memoryRef });
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const replay = await existingOperation(client, auth, input.operationKey, "delete", inputHash);
+    if (replay) {
+      const sameProvenance =
+        replay.actor_user_id === auth.userId &&
+        replay.actor_telegram_user_id === auth.telegramUserId &&
+        replay.eve_session_id === input.sessionId &&
+        replay.eve_turn_id === input.turnId;
+      if (!sameProvenance) {
+        throw new AppError(
+          "AGENT_MEMORY_REPLAY_MISMATCH",
+          "Повтор операции памяти не совпадает с исходным запросом",
+        );
+      }
+      await client.query("COMMIT");
+      return { deleted: true };
+    }
+
+    const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
+    if (!memory || memory.claim_status !== "active") {
+      throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+    }
+    await requireMutationAccess(client, auth, memory);
+    if (!(await hasImmediateUndoProvenance(client, auth, memory.id, input))) {
+      throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+    }
+
+    // Provenance, replay marker, audit, and physical deletion commit as one operation.
+    await client.query(
+      `INSERT INTO memory_mutation_operations
+         (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
+          actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
+       VALUES ($1, $2, 'delete', $3, $4, $5, $6, $7, $8)`,
+      [
+        auth.familyId,
+        input.operationKey,
+        inputHash,
+        memory.id,
+        auth.userId,
+        auth.telegramUserId,
+        input.sessionId,
+        input.turnId,
+      ],
+    );
+    await client.query(
+      `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
+       VALUES ($1, $2, 'memory.deleted', $3,
+               jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
+      [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
+    );
+    await softDeleteMemoryWithRepeats(client, auth, memory.id);
+    await client.query("COMMIT");
+    return { deleted: true };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export const memoryRepository = {
   async canUndoCreate(
     auth: MemoryAuthorization,
@@ -267,147 +382,24 @@ export const memoryRepository = {
     }
   },
 
-  async deleteByRef(
+  deleteByRef(
     auth: MemoryAuthorization,
     memoryRef: string,
     operationKey: string,
   ): Promise<{ deleted: true }> {
-    const inputHash = memoryOperationHash({ memoryRef });
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const replay = await existingOperation(client, auth, operationKey, "delete", inputHash);
-      if (replay) {
-        await client.query("COMMIT");
-        return { deleted: true };
-      }
-      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
-      if (!memory) {
-        throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
-      }
-      await requireMutationAccess(client, auth, memory);
-
-      // Идемпотентность и аудит пишутся до удаления.
-      await client.query(
-        `INSERT INTO memory_mutation_operations
-           (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
-         VALUES ($1, $2, 'delete', $3, $4)`,
-        [auth.familyId, operationKey, inputHash, memory.id],
-      );
-      await client.query(
-        `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
-         VALUES ($1, $2, 'memory.deleted', $3,
-                 jsonb_build_object('scope', $4::text, 'kind', $5::text))`,
-        [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
-      );
-      // Удаление мягкое: ошибка агента не должна уносить факт безвозвратно. Представление
-      // `memory_items` скрывает такую строку от всех чтений и от векторной выдачи.
-      // Заявление помечается отозванным, поэтому существующие триггеры снимают проекции нитей и
-      // подтверждённых исходов ровно так же, как это делал каскад физического удаления.
-      await client.query(
-        `UPDATE memory_items_all
-            SET deleted_at = now(), claim_status = 'retracted'
-          WHERE id = $1 AND deleted_at IS NULL`,
-        [memory.id],
-      );
-      // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
-      // воркер впустую. При восстановлении оно создаётся заново.
-      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [
-        memory.id,
-      ]);
-      await client.query("COMMIT");
-      return { deleted: true };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    // Takes the record before its hidden repeats: a lost deadlock is retried once.
+    return retryOnTransactionConflict(() => deleteMemoryOnce(auth, memoryRef, operationKey));
   },
 
   list: memoryListRepository.list,
 
-  async undoCreate(
+  undoCreate(
     auth: MemoryAuthorization,
     memoryRef: string,
     input: MemoryUndoInput,
   ): Promise<{ deleted: true }> {
-    const inputHash = memoryOperationHash({ memoryRef });
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const replay = await existingOperation(client, auth, input.operationKey, "delete", inputHash);
-      if (replay) {
-        const sameProvenance =
-          replay.actor_user_id === auth.userId &&
-          replay.actor_telegram_user_id === auth.telegramUserId &&
-          replay.eve_session_id === input.sessionId &&
-          replay.eve_turn_id === input.turnId;
-        if (!sameProvenance) {
-          throw new AppError(
-            "AGENT_MEMORY_REPLAY_MISMATCH",
-            "Повтор операции памяти не совпадает с исходным запросом",
-          );
-        }
-        await client.query("COMMIT");
-        return { deleted: true };
-      }
-
-      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
-      if (!memory || memory.claim_status !== "active") {
-        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
-      }
-      await requireMutationAccess(client, auth, memory);
-      if (!(await hasImmediateUndoProvenance(client, auth, memory.id, input))) {
-        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
-      }
-
-      // Provenance, replay marker, audit, and physical deletion commit as one operation.
-      await client.query(
-        `INSERT INTO memory_mutation_operations
-           (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
-            actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
-         VALUES ($1, $2, 'delete', $3, $4, $5, $6, $7, $8)`,
-        [
-          auth.familyId,
-          input.operationKey,
-          inputHash,
-          memory.id,
-          auth.userId,
-          auth.telegramUserId,
-          input.sessionId,
-          input.turnId,
-        ],
-      );
-      await client.query(
-        `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
-         VALUES ($1, $2, 'memory.deleted', $3,
-                 jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
-        [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
-      );
-      // Удаление мягкое: ошибка агента не должна уносить факт безвозвратно. Представление
-      // `memory_items` скрывает такую строку от всех чтений и от векторной выдачи.
-      // Заявление помечается отозванным, поэтому существующие триггеры снимают проекции нитей и
-      // подтверждённых исходов ровно так же, как это делал каскад физического удаления.
-      await client.query(
-        `UPDATE memory_items_all
-            SET deleted_at = now(), claim_status = 'retracted'
-          WHERE id = $1 AND deleted_at IS NULL`,
-        [memory.id],
-      );
-      // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
-      // воркер впустую. При восстановлении оно создаётся заново.
-      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [
-        memory.id,
-      ]);
-      await client.query("COMMIT");
-      return { deleted: true };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    // Deletes repeats like `deleteByRef`, so it retries a lost deadlock the same way.
+    return retryOnTransactionConflict(() => undoCreateOnce(auth, memoryRef, input));
   },
 
   async updateByRef(

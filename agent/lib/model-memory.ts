@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `MEMORY_REF_PATTERN`: validates opaque refs accepted at model-facing boundaries.
+ * - `PERSON_CARD_REF_PATTERN`: the opaque ref of a person card.
  * - `ModelMemory`: allowlisted DTO used by tools and automatic prompt retrieval.
  * - `ModelMemoryEvidence`: safe provenance attached to repository retrieval results.
  * - `EVIDENCE_KIND_LEGEND`: one shared explanation of every evidence kind.
@@ -21,6 +22,8 @@ import type {
 } from "./memory-record.js";
 
 export const MEMORY_REF_PATTERN = /^mem_[0-9a-f]{32}$/u;
+/** A person card shown in a turn; Mia marks it in `<memory-used>` like a record. */
+export const PERSON_CARD_REF_PATTERN = /^pcard_[0-9a-f]{32}$/u;
 
 export interface ModelMemory {
   matchQuality?: "weak";

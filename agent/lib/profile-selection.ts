@@ -104,6 +104,8 @@ function compareClaims(left: ProfileClaimCandidate, right: ProfileClaimCandidate
 export function selectProfileClaims(
   candidates: readonly ProfileClaimCandidate[],
   now: Date,
+  /** The block's budget; person cards shown beside it take their share first. */
+  maxCharacters: number = PROFILE_CONTEXT_MAX_CHARACTERS,
 ): ProfileSelection {
   // Eligibility is enforced again after SQL authorization so always-on context cannot accidentally
   // admit sensitive, episodic, stale-lifecycle, or unverified-subject records.
@@ -148,7 +150,7 @@ export function selectProfileClaims(
         claims.length >= PROFILE_CONTEXT_MAX_CLAIMS_PER_SUBJECT ||
         renderedText.length > PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS ||
         subjectCharacters + renderedText.length > PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS ||
-        totalCharacters + renderedText.length > PROFILE_CONTEXT_MAX_CHARACTERS
+        totalCharacters + renderedText.length > maxCharacters
       ) {
         continue;
       }
