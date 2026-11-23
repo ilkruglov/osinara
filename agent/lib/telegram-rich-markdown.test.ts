@@ -7,6 +7,7 @@
  * - A truncated collapsible block is closed; other malformed allowed HTML is rendered inert.
  * - Model-authored media, Telegram service tags, and unsafe links are rendered inert.
  * - Final rich messages split only between complete blocks at Telegram's length limit.
+ * - Code spans and allowed tags come back whatever digits stand between two of them.
  */
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +17,16 @@ import {
 } from "./telegram-rich-markdown.js";
 
 describe("sanitizeTelegramRichMarkdown", () => {
+  // Repeat review, 23 November 2026: placeholders restored one index at a time read the digits
+  // between two of them as a third («`x`0`y`» became a copy of the first code span).
+  it.each([
+    ["Запусти `npm ci`, потом `x`0`y`.", "Запусти `npm ci`, потом `x`0`y`."],
+    ["Шаги: `a` и `b`1`c`", "Шаги: `a` и `b`1`c`"],
+    ["<u>a</u>0<u>b</u>1<u>c</u>", "<u>a</u>0<u>b</u>1<u>c</u>"],
+  ])("restores %j whatever digits stand between its parts", (markdown, sanitized) => {
+    expect(sanitizeTelegramRichMarkdown(markdown)).toBe(sanitized);
+  });
+
   it("keeps useful rich structure and only explicitly allowed HTML", () => {
     const markdown = [
       "## Сравнение",

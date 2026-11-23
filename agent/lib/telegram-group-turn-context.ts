@@ -35,6 +35,7 @@ import {
   type TelegramGroupJournalRepository,
 } from "./telegram-group-journal-repository.js";
 import type { TelegramReplyTargetSnapshot } from "./telegram-reply-target-snapshot.js";
+import { fitReplyParts } from "./telegram-reply-fit.js";
 
 interface PrepareTelegramGroupTurnContextInput {
   applicationSessionId: string;
@@ -63,8 +64,14 @@ interface PrepareTelegramGroupTurnContextInput {
 interface TelegramGroupTurnContextDependencies {
   /** The summary the turn-limit rotation left for a new session (`sessions/session-handoff.ts`). */
   handoff: Pick<typeof sessionHandoffRepository, "read">;
-  journal: Pick<TelegramGroupJournalRepository, "listIncremental" | "listRecent">;
-  timeline?: Pick<typeof conversationTimelineRepository, "listIncremental" | "listRecent">;
+  journal: Pick<
+    TelegramGroupJournalRepository,
+    "listIncremental" | "listRecent" | "listRecentPage"
+  >;
+  timeline?: Pick<
+    typeof conversationTimelineRepository,
+    "listIncremental" | "listRecent" | "listRecentPage"
+  >;
   sessions: Pick<typeof groupTimelineCursorRepository, "currentGroupTimelineCursor">;
 }
 
@@ -271,27 +278,27 @@ export function createTelegramGroupTurnContextPreparer(
         "Не удалось загрузить историю личного разговора",
       );
     }
+    // A first turn reads the latest page; where the journal goes on before it, the timeline says so.
     const page =
       cursor === null
-        ? {
-            entries: useConversationTimeline
-              ? await dependencies.timeline!.listRecent({
-                  beforeSequence: input.currentSequence,
-                  conversationId: input.conversationId!,
-                  limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-                })
-              : await dependencies.journal.listRecent({
-                  anchorEntryId: input.currentEntryId,
-                  beforeSequence: input.currentSequence,
-                  groupId: input.groupId!,
-                  limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
-                  messageThreadId: input.messageThreadId,
-                }),
-            omittedBeforeSequence: null,
-          }
+        ? useConversationTimeline
+          ? await dependencies.timeline!.listRecentPage({
+              anchorEntryId: input.currentEntryId,
+              beforeSequence: input.currentSequence,
+              conversationId: input.conversationId!,
+              limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+            })
+          : await dependencies.journal.listRecentPage({
+              anchorEntryId: input.currentEntryId,
+              beforeSequence: input.currentSequence,
+              groupId: input.groupId!,
+              limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+              messageThreadId: input.messageThreadId,
+            })
         : useConversationTimeline
           ? await dependencies.timeline!.listIncremental({
               afterSequence: cursor,
+              anchorEntryId: input.currentEntryId,
               applicationSessionId: input.applicationSessionId,
               beforeSequence: input.currentSequence,
               conversationId: input.conversationId!,
@@ -314,6 +321,7 @@ export function createTelegramGroupTurnContextPreparer(
         : recentTimelineWindow(
             useConversationTimeline
               ? await dependencies.timeline!.listRecent({
+                  anchorEntryId: input.currentEntryId,
                   beforeSequence: input.currentSequence,
                   conversationId: input.conversationId!,
                   limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
@@ -331,19 +339,36 @@ export function createTelegramGroupTurnContextPreparer(
     const visibleEntries = timelineEntries.map((entry) =>
       visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess),
     );
-    const currentMessageEnvelope = currentTelegramMessageEnvelope(input);
     // The envelope is re-resolved below once the timeline is selected: a reply whose target did
     // not make it in grows by the unavailability flag, so the budget reserves the larger variant.
-    const currentMessageCharacters = Math.max(
-      currentMessageEnvelope.length,
-      input.replyToSequenceId === null
-        ? 0
-        : currentTelegramMessageEnvelope({
-            ...input,
-            replyTargetUnavailable: true,
-            replyToSequenceId: null,
-          }).length,
+    const reservedCharacters = (candidate: typeof input) =>
+      Math.max(
+        currentTelegramMessageEnvelope(candidate).length,
+        candidate.replyToSequenceId === null
+          ? 0
+          : currentTelegramMessageEnvelope({
+              ...candidate,
+              replyTargetUnavailable: true,
+              replyToSequenceId: null,
+            }).length,
+      );
+    // Telegram's copy of the target and the selected fragment give way to the timeline's reserve;
+    // the author's own text does not (past the budget it still fails the turn).
+    const replyParts = fitReplyParts(
+      { quotedText: input.replyQuotedText ?? null, snapshot: input.replyTargetSnapshot ?? null },
+      (parts) =>
+        reservedCharacters({
+          ...input,
+          replyQuotedText: parts.quotedText,
+          replyTargetSnapshot: parts.snapshot,
+        }),
     );
+    const fitted = {
+      ...input,
+      replyQuotedText: replyParts.quotedText,
+      replyTargetSnapshot: replyParts.snapshot,
+    };
+    const currentMessageCharacters = reservedCharacters(fitted);
     const handoffBlock = fitHandoffBlock(
       handoff,
       TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
@@ -376,7 +401,7 @@ export function createTelegramGroupTurnContextPreparer(
     const replyToSequenceId = replyTargetIncluded ? input.replyToSequenceId : null;
     const replyTargetUnavailable = input.replyTargetUnavailable || !replyTargetIncluded;
     const resolvedCurrentMessageEnvelope = currentTelegramMessageEnvelope({
-      ...input,
+      ...fitted,
       replyTargetUnavailable,
       replyToSequenceId,
     });

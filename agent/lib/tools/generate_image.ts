@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `createGenerateImageTool`: dependency-injected exact-once generation workflow.
- * - Default `generate_image`: production Eve tool using the image provider chain and the workspace.
+ * - Default `generate_image`: production Eve tool using the image provider (fal.ai) and the workspace.
  *
  * Key constructs:
  * - The verified workspace scope and call ID determine a stable non-overwriting output path.
@@ -19,8 +19,7 @@ import { createHash } from "node:crypto";
 import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
-import { AppError, isAppError } from "../app-error.js";
-import { ModelFacingError } from "../model-facing-error.js";
+import { AppError } from "../app-error.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import {
   imageGenerationClient,
@@ -28,6 +27,11 @@ import {
   type ImageMediaType,
   type ProviderJob,
 } from "../image-generation/image-generation-client.js";
+import {
+  correctableInputError,
+  settleProviderFailure,
+  terminalReservationError,
+} from "../image-generation/image-generation-failures.js";
 import {
   imageGenerationOperationRepository,
   type ImageGenerationReservation,
@@ -44,11 +48,15 @@ import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/works
 import type { WorkspaceFileRecord } from "../workspaces/workspace-file-record.js";
 import {
   readWorkspaceImage,
+  unsuitableImageSource,
   type WorkspaceImageLocation,
 } from "../workspaces/workspace-image-source.js";
 import { imageSourcesSchema } from "../image-generation/image-source-schema.js";
 import {
+  IMAGE_EDIT_SOURCES_RULE,
+  IMAGE_QUALITY_RULE,
   IMAGE_SERIES_RULE,
+  IMAGE_UNKNOWN_STATUS_RULE,
   imageKeepSchema,
 } from "../image-generation/image-generation-tool-presentation.js";
 
@@ -62,7 +70,6 @@ interface GenerateImageDependencies {
   series: ImagePromptSeries;
   client: {
     assertConfigured(): void;
-    assertSupportsEditing(): void;
     generate(input: ImageGenerationRequest): Promise<{
       bytes: Buffer;
       mediaType: ImageMediaType;
@@ -78,6 +85,7 @@ interface GenerateImageDependencies {
       workspaceId: string;
     }): Promise<ImageGenerationReservation>;
     complete(operationKey: string, file: WorkspaceFileRecord): Promise<void>;
+    exists(operationKey: string): Promise<boolean>;
     markAmbiguous(operationKey: string, errorCode: string): Promise<void>;
     markFailed(operationKey: string, errorCode: string): Promise<void>;
     recordProviderJob(operationKey: string, job: ProviderJob): Promise<void>;
@@ -120,7 +128,9 @@ const inputSchema = z
       .min(1)
       .max(IMAGE_PROMPT_MAX_LENGTH)
       .describe("Полная визуальная спецификация изображения без служебных инструкций"),
-    quality: z.enum(IMAGE_QUALITIES).describe("low, medium, high или auto"),
+    // No description of its own: the tool's `IMAGE_QUALITY_RULE` says «всегда auto», and a list
+    // of choices here contradicted it, as the external group's schema already does not.
+    quality: z.enum(IMAGE_QUALITIES),
     size: z.enum(IMAGE_SIZES).describe("1024x1024, 1536x1024, 1024x1536 или auto"),
   })
   .strict();
@@ -229,69 +239,6 @@ function assertOutputMatches(
   );
 }
 
-function terminalReservationError(
-  reservation: Extract<ImageGenerationReservation, { state: "ambiguous" | "failed" }>,
-): AppError {
-  if (reservation.state === "ambiguous") {
-    return new AppError(
-      "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
-      "Не удалось подтвердить прошлую генерацию. Не повторяйте её без нового запроса",
-    );
-  }
-  // A refusal of the series check is an input correction, replayed or not: nothing was started.
-  if (reservation.errorCode === "AGENT_IMAGE_PROMPT_REPEATS_SERIES") {
-    return new ModelFacingError({
-      category: "input",
-      code: reservation.errorCode,
-      field: "prompt",
-      retryable: true,
-      sideEffectStatus: "not_started",
-      reason: "Этот вызов уже отклонён: prompt повторял прошлые картинки серии",
-      correction:
-        "Напиши вариант заново по текущей просьбе без элементов прошлых картинок; то, что пользователь просил сохранить, перечисли в keep. Повтори вызов один раз с новым prompt.",
-    });
-  }
-  return new AppError(
-    reservation.errorCode,
-    "Прошлая генерация завершилась ошибкой. Создайте новый запрос",
-  );
-}
-
-async function settleProviderFailure(
-  dependencies: GenerateImageDependencies,
-  operationKey: string,
-  error: unknown,
-): Promise<never> {
-  const definitive =
-    isAppError(error) &&
-    [
-      "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
-      "AGENT_IMAGE_GENERATION_REJECTED",
-      "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE",
-      "AGENT_IMAGE_EDITING_UNAVAILABLE",
-      "AGENT_IMAGE_EDITING_INPUT_INVALID",
-    ].includes(error.code);
-  const errorCode = isAppError(error) ? error.code : "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN";
-  try {
-    if (definitive) await dependencies.operations.markFailed(operationKey, errorCode);
-    else await dependencies.operations.markAmbiguous(operationKey, errorCode);
-  } catch (ledgerError) {
-    console.error(
-      JSON.stringify({
-        code: "AGENT_IMAGE_GENERATION_LEDGER_SETTLEMENT_FAILED",
-        error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
-        operationKey,
-        providerErrorCode: errorCode,
-      }),
-    );
-  }
-  if (isAppError(error)) throw error;
-  throw new AppError(
-    "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
-    "Не удалось подтвердить результат генерации изображения. Не повторяйте запрос сразу",
-  );
-}
-
 async function recoverStartedOperation(
   dependencies: GenerateImageDependencies,
   auth: WorkspaceAuthorization,
@@ -311,17 +258,49 @@ async function recoverStartedOperation(
   return replay;
 }
 
+/**
+ * Reads one edit source. The reader refuses a file over 10 MB or of a type it cannot read before
+ * anything is reserved; the model is told to take another source, as for a source the provider
+ * refused, instead of an operation of unknown outcome (repeat review, 23 November 2026). Not on a
+ * replay of a call the ledger already holds: its source was replaced since, and another source under
+ * a new call would order a second paid picture.
+ */
+async function readSource(
+  dependencies: GenerateImageDependencies,
+  auth: WorkspaceAuthorization,
+  source: WorkspaceImageLocation,
+  index: number,
+  operationKey: string,
+) {
+  try {
+    return await dependencies.readImage(auth, source);
+  } catch (error) {
+    const refusal = unsuitableImageSource(error);
+    if (refusal === null || (await dependencies.operations.exists(operationKey))) throw error;
+    // With several sources, which one to replace is the advice itself.
+    throw correctableInputError(
+      "AGENT_IMAGE_EDITING_INPUT_INVALID",
+      `Исходник ${index + 1}: ${refusal.reason}`,
+      `images[${index}]`,
+    );
+  }
+}
+
 export function createGenerateImageTool(
   dependencies: GenerateImageDependencies,
 ): AnyToolDefinition {
   return defineTool({
     description: [
       "Когда использовать: создать raster-изображение или отредактировать существующее по просьбе пользователя и сохранить результат новым файлом в workspace.",
-      "Для правки передай images с исходниками из Telegram или workspace; prompt описывает изменения и что сохранить. До четырёх исходников; они уменьшаются до 1536 px по длинной стороне, результат в этом размере. Без images создаётся новая картинка.",
+      "Для правки передай images с исходниками из Telegram или workspace; prompt описывает изменения и что сохранить.",
+      IMAGE_EDIT_SOURCES_RULE,
+      "Без images создаётся новая картинка.",
       "Не использовать: для SVG, диаграмм из кода или незапрошенной фоновой генерации.",
-      "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер или качество не заданы пользователем, передай auto.",
+      "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер не задан пользователем, передай auto.",
+      IMAGE_QUALITY_RULE,
       "Результат: изображение сохраняется без перезаписи в generated-images и НЕ отправляется в чат; чтобы показать его, вызови send_workspace_image с этим path. Черновик можно сначала посмотреть через inspect_workspace_image и переделать, отправив только итог.",
-      "Ошибка: status unknown означает возможное списание лимита провайдера; не повторяй вызов автоматически. Надписи, особенно кириллицу, модели рисуют плохо, предупреждай об этом.",
+      IMAGE_UNKNOWN_STATUS_RULE,
+      "Надписи, особенно кириллицу, модели иногда искажают: важную надпись проверь через inspect_workspace_image или продублируй подписью к файлу.",
       IMAGE_SERIES_RULE,
     ].join(" "),
     inputSchema,
@@ -330,19 +309,19 @@ export function createGenerateImageTool(
       if (!IMAGE_GENERATION_AVAILABLE) {
         throw new AppError(
           "AGENT_IMAGE_GENERATION_UNAVAILABLE",
-          "Генерация изображений недоступна: не настроен ни один провайдер",
+          "Генерация изображений недоступна: не настроен сервис генерации изображений",
         );
       }
       const input = parseInput(rawInput);
       const auth = requireWorkspaceAuthorization(ctx);
       const scope = currentWorkspaceScope(auth);
-      if (input.images) dependencies.client.assertSupportsEditing();
-      else dependencies.client.assertConfigured();
+      dependencies.client.assertConfigured();
       const seriesKey = seriesKeyOf(ctx);
       const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
       const references: NonNullable<ImageGenerationRequest["referenceImages"]>[number][] = [];
-      for (const source of input.images ?? []) {
-        const image = await dependencies.readImage(auth, source as WorkspaceImageLocation);
+      for (const [index, source] of (input.images ?? []).entries()) {
+        const location = source as WorkspaceImageLocation;
+        const image = await readSource(dependencies, auth, location, index, ctx.callId);
         references.push({ bytes: image.bytes, mediaType: image.mediaType });
       }
       const referenceImages = input.images ? references : undefined;
@@ -391,16 +370,10 @@ export function createGenerateImageTool(
               ctx.callId,
               "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
             );
-            throw new ModelFacingError({
-              category: "input",
-              code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-              field: "prompt",
-              retryable: true,
-              sideEffectStatus: "not_started",
-              reason: `Prompt повторяет прошлые картинки этой серии: ${repeated.slice(0, 8).join(", ")}`,
-              correction:
-                "Напиши вариант заново по текущей просьбе без этих элементов; то, что пользователь просил сохранить из прошлых картинок, перечисли в keep. Повтори вызов один раз с новым prompt.",
-            });
+            throw correctableInputError(
+              "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
+              `Prompt повторяет прошлые картинки этой серии: ${repeated.slice(0, 8).join(", ")}`,
+            );
           }
         }
         let generatedImage: Awaited<ReturnType<GenerateImageDependencies["client"]["generate"]>>;
@@ -425,7 +398,7 @@ export function createGenerateImageTool(
             },
           });
         } catch (error) {
-          return await settleProviderFailure(dependencies, ctx.callId, error);
+          return await settleProviderFailure(dependencies.operations, ctx.callId, error);
         }
         try {
           file = await dependencies.workspaces.writeBinary(auth, {

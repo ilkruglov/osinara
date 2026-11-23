@@ -9,7 +9,9 @@
  * Exports:
  * - `TELEGRAM_PENDING_MESSAGES_MAX`, `TELEGRAM_PENDING_MARKER_KEY`.
  * - `TelegramPendingMessage`: what the model may know about a queued message.
- * - `pendingMessagesFromPayloads`: raw queue payloads to that shape; non-text becomes a placeholder.
+ * - `pendingMessagesFromPayloads`: raw queue payloads to that shape; non-text becomes a placeholder,
+ *   so does text that tells a secret in words (as the journal keeps no text of it); a key is masked
+ *   before the text is cut.
  * - `withPendingMarker`, `readTelegramPendingMarker`: marker transport through Eve's parsed update.
  * - `formatPendingMessagesContext`: the untrusted context block.
  */
@@ -20,6 +22,7 @@ import {
 } from "eve/channels/telegram";
 import { clipText } from "./display-text.js";
 
+import { journalText } from "./secret-redaction.js";
 import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
 import { normalizeRichMessage } from "./telegram-rich-message.js";
 import { withLocationText } from "./telegram-location-message.js";
@@ -27,6 +30,7 @@ import { withLocationText } from "./telegram-location-message.js";
 export const TELEGRAM_PENDING_MESSAGES_MAX = 10;
 const TELEGRAM_PENDING_MARKER_KEY = "osinara_pending";
 const TEXT_MAX_CHARACTERS = 500;
+const SPOKEN_SECRET_PLACEHOLDER = "[текст скрыт: секрет]";
 
 export interface TelegramPendingMessage {
   isBot: boolean;
@@ -38,7 +42,9 @@ export interface TelegramPendingMessage {
 }
 
 function clip(text: string): string {
-  return clipText(text.replace(/\s+/gu, " ").trim(), TEXT_MAX_CHARACTERS);
+  // Masked first: a cut through a key would leave a piece no shape recognizes.
+  const shown = journalText(text) ?? SPOKEN_SECRET_PLACEHOLDER;
+  return clipText(shown.replace(/\s+/gu, " ").trim(), TEXT_MAX_CHARACTERS);
 }
 
 /** Queue payloads in arrival order become model-safe summaries; anything unparsable is skipped. */

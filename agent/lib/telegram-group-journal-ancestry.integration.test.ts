@@ -1,15 +1,15 @@
 /**
- * PostgreSQL Telegram group journal ancestry and retention integration tests.
+ * PostgreSQL Telegram group journal ancestry integration tests.
  *
  * Constructs covered:
- * - `telegramGroupJournalRepository`: reply ancestry, retention, and unavailable targets.
+ * - `telegramGroupJournalRepository`: reply ancestry, unavailable targets, and no cap on how many
+ *   entries a chat keeps.
  * - `telegramGroupAttachmentRepository`: lazy capture for observed and raw reply targets.
  * - `telegramGroupAdministrationRepository`: family-scoped cascading group removal.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { telegramGroupAttachmentRepository } from "./attachments/telegram-group-attachment-repository.js";
 import { closeDatabase, database } from "./database.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
@@ -34,6 +34,8 @@ if (integrationTestsEnabled) {
 }
 
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
+/** The per-chat cap the journal had until 22 November 2026. */
+const OLD_CAP = 10_000;
 
 // Existing journal tests use only verified human fixtures; retain the complete repository surface
 // while routing inbound writes through the actor-validating test boundary.
@@ -76,7 +78,7 @@ function message(input: { id: string; text?: string; withPhoto?: boolean }): Tel
   };
 }
 
-describeWithDatabase("Telegram group journal ancestry and retention", () => {
+describeWithDatabase("Telegram group journal ancestry", () => {
   beforeEach(async () => {
     await database().query(
       `TRUNCATE invitations, memory_items_all,
@@ -243,7 +245,8 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
     expect(stored.rows).toEqual([{ id: targetEntry.entryId }]);
   });
 
-  it("physically prunes messages beyond the configured per-group retention cap", async () => {
+  // The journal had a cap of 10 000 entries per chat until 22 November 2026; it keeps everything now.
+  it("keeps every message past the old cap, the oldest reply target included", async () => {
     const { familyId, ownerId } = await createOwnedFamily("retention");
     const group = await telegramGroupAdministrationRepository.registerGroup({
       familyId,
@@ -260,15 +263,7 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
           telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
        SELECT $1, value, 'user', 'telegram:101', value, '101', 'Анна', false, 'text', 'seed', now()
        FROM generate_series(1, $2) AS value`,
-      [group.groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
-    );
-    // The seed represents rows already snapshotted by extraction, so ordinary retention may prune it.
-    await database().query(
-      `DELETE FROM memory_extraction_retention_holds
-       WHERE timeline_entry_id IN (
-         SELECT id FROM telegram_group_messages WHERE group_id = $1
-       )`,
-      [group.groupId],
+      [group.groupId, OLD_CAP],
     );
     await database().query(
       `INSERT INTO telegram_group_message_ids (group_id, telegram_message_id, entry_id)
@@ -278,7 +273,7 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
       [group.groupId],
     );
     const currentMessage = message({
-      id: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1),
+      id: String(OLD_CAP + 1),
       text: "новая",
     });
     const current = await telegramGroupJournalRepository.record(group.groupId, {
@@ -295,20 +290,14 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
        FROM telegram_group_messages WHERE group_id = $1`,
       [group.groupId],
     );
-    expect(retained.rows[0]).toEqual({
-      count: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES),
-      minimum: "2",
-    });
+    expect(retained.rows[0]).toEqual({ count: String(OLD_CAP + 1), minimum: "1" });
     const newest = await database().query<{ maximum: string }>(
       `SELECT max(sequence_id)::text AS maximum
        FROM telegram_group_messages WHERE group_id = $1`,
       [group.groupId],
     );
-    expect(newest.rows[0]?.maximum).toBe(String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1));
-    expect(current).toMatchObject({
-      replyTargetUnavailable: true,
-      replyToSequenceId: null,
-    });
+    expect(newest.rows[0]?.maximum).toBe(String(OLD_CAP + 1));
+    expect(current).toMatchObject({ replyTargetUnavailable: false, replyToSequenceId: "1" });
   });
 
   it("removes only a same-family group and cascades its journal and memory", async () => {

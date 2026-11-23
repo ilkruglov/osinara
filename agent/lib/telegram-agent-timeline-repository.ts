@@ -4,15 +4,17 @@
  * Exports:
  * - `RecordTelegramAgentResponseInput`: confirmed agent delivery projection.
  * - `nextTelegramGroupSequence`: transaction-scoped monotonic sequence allocation.
- * - `recordTelegramAgentResponse`: idempotent logical entry and chunk-alias persistence.
+ * - `recordTelegramAgentResponse`: idempotent logical entry and chunk-alias persistence; the stored
+ *   answer is `journalText`, as an inbound message is: no text when it tells a secret in words, a
+ *   key masked.
  */
 import type { PoolClient } from "pg";
 
 import { database } from "./database.js";
+import { journalText } from "./secret-redaction.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
 import {
   lockTelegramGroupJournal,
-  pruneTelegramGroupJournal,
   requireTelegramPositiveBigint,
 } from "./telegram-group-message-storage.js";
 
@@ -123,7 +125,7 @@ export async function recordTelegramAgentResponse(
         messageIds[0],
         input.messageThreadId,
         AGENT_DISPLAY_NAME,
-        input.contentText,
+        journalText(input.contentText),
         input.replyToEntryId,
         input.deliveredAt,
         input.applicationSessionId,
@@ -139,7 +141,6 @@ export async function recordTelegramAgentResponse(
        SELECT $1, unnest($2::bigint[]), $3`,
       [input.groupId, messageIds, entryId],
     );
-    await pruneTelegramGroupJournal(client, input.groupId);
     await client.query("COMMIT");
     return { entryId, sequenceId };
   } catch (error) {

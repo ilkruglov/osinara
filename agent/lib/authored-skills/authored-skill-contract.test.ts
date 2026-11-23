@@ -5,7 +5,8 @@
  * - Name pattern and reserved names, trial summary and change note presence.
  * - Size limits for markdown and reference files.
  * - Rubric: required sections, real tool names in «Шаги», referenced files supplied,
- *   no untrusted-context blocks, no secrets. Every problem is reported in one error.
+ *   no untrusted-context blocks, no key in any draft text (the shapes themselves are covered in
+ *   `secret-redaction.test.ts`). Every problem is reported in one error.
  */
 import { readdirSync } from "node:fs";
 
@@ -157,6 +158,26 @@ describe("authored skill contract", () => {
     ])
       expect(message).toContain(fragment);
     expect(message).not.toContain("generate_image");
+  });
+
+  // The description reaches external groups' context; the change note and the trial summary are
+  // kept in the version history. The rubric checks them itself: a rollback re-reads a stored
+  // version that no tool input carries.
+  it("refuses a key in the markdown, the description, the change note and the trial summary", () => {
+    const key = `abcdefghij0123456789KLMNOPQRSTuvwxyz012:${"0123456789abcdef".repeat(2)}`;
+    for (const overrides of [
+      { markdown: `${GOOD_MARKDOWN}\nFAL_KEY=${key}` },
+      { description: `Открытка, поздравление; ключ ${key}` },
+      { changeNote: `Новый ключ ${key}` },
+      { trialSummary: `Сгенерировала открытку с ключом ${key}` },
+    ]) {
+      expect(() => assertAuthoredSkillDraft(draft(overrides), { knownToolNames: KNOWN })).toThrow(
+        expect.objectContaining({
+          code: "AGENT_SKILL_RUBRIC_FAILED",
+          message: expect.stringContaining("похожая на ключ"),
+        }),
+      );
+    }
   });
 
   it("requires a reference file for a skill that generates images", () => {

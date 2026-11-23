@@ -117,6 +117,150 @@ describeWithDatabase("conversationRepository", () => {
       sender_display_name: "Мия",
     });
   });
+
+  it("pages the personal timeline and marks history left out before the page", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Paged timeline') RETURNING id",
+    );
+    const user = await database().query<{ id: string }>(
+      `INSERT INTO users (telegram_user_id, display_name)
+       VALUES ('504', 'Вера') RETURNING id`,
+    );
+    await database().query(
+      "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [family.rows[0]!.id, user.rows[0]!.id],
+    );
+    const conversation = await conversationRepository.getByChatId("504");
+    await database().query(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, sequence_id, actor_kind, actor_id, telegram_message_id,
+          sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       SELECT $1, value, 'agent_self', 'agent:osinara', value, 'Мия', true, 'text', 'seed', now()
+       FROM generate_series(1, 5) AS value`,
+      [conversation.id],
+    );
+    const page = (limit: number) =>
+      conversationTimelineRepository.listIncremental({
+        afterSequence: "1",
+        anchorEntryId: null,
+        applicationSessionId: "00000000-0000-4000-8000-000000000001",
+        beforeSequence: "6",
+        conversationId: conversation.id,
+        limit,
+      });
+
+    const short = await page(2);
+    expect(short.entries.map((entry) => entry.sequenceId)).toEqual(["4", "5"]);
+    expect(short.omittedBeforeSequence).toBe("4");
+    const whole = await page(10);
+    expect(whole.entries.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4", "5"]);
+    expect(whole.omittedBeforeSequence).toBeNull();
+    const recent = await conversationTimelineRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: "6",
+      conversationId: conversation.id,
+      limit: 3,
+    });
+    expect(recent.map((entry) => entry.sequenceId)).toEqual(["3", "4", "5"]);
+  });
+
+  // The journal keeps every entry, so a reply's target can lie further back than the window: the
+  // timeline brings it in from the journal, where a secret was already left out of its text.
+  it("brings the current message's reply chain into the personal timeline", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Reply chain') RETURNING id",
+    );
+    const user = await database().query<{ id: string }>(
+      `INSERT INTO users (telegram_user_id, display_name)
+       VALUES ('505', 'Глеб') RETURNING id`,
+    );
+    await database().query(
+      "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [family.rows[0]!.id, user.rows[0]!.id],
+    );
+    const conversation = await conversationRepository.getByChatId("505");
+    const seeded = await database().query<{ id: string; sequence_id: string }>(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, sequence_id, actor_kind, actor_id, telegram_message_id,
+          sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       SELECT $1, value, 'agent_self', 'agent:osinara', value, 'Мия', true, 'text', 'seed', now()
+       FROM generate_series(1, 7) AS value
+       RETURNING id, sequence_id::text`,
+      [conversation.id],
+    );
+    const id = (sequence: string) => seeded.rows.find((row) => row.sequence_id === sequence)!.id;
+    // 7 answers 4, 4 answers 3, 3 answers 2, 2 answers 1: the target and two ancestors, not 1.
+    for (const [child, parent] of [
+      ["7", "4"],
+      ["4", "3"],
+      ["3", "2"],
+      ["2", "1"],
+    ] as const) {
+      await database().query(
+        "UPDATE telegram_group_messages SET reply_to_entry_id = $2 WHERE id = $1",
+        [id(child), id(parent)],
+      );
+    }
+
+    const recent = await conversationTimelineRepository.listRecent({
+      anchorEntryId: id("7"),
+      beforeSequence: "7",
+      conversationId: conversation.id,
+      limit: 1,
+    });
+    expect(recent.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4", "6"]);
+    const incremental = await conversationTimelineRepository.listIncremental({
+      afterSequence: "5",
+      anchorEntryId: id("7"),
+      applicationSessionId: "00000000-0000-4000-8000-000000000001",
+      beforeSequence: "7",
+      conversationId: conversation.id,
+      limit: 5,
+    });
+    expect(incremental.entries.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4", "6"]);
+    expect(incremental.omittedBeforeSequence).toBeNull();
+  });
+
+  // The timeline had a cap of 10 000 entries per chat until 22 November 2026; it keeps everything.
+  it("keeps every personal timeline entry past the old cap", async () => {
+    const oldCap = 10_000;
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Long timeline') RETURNING id",
+    );
+    const user = await database().query<{ id: string }>(
+      `INSERT INTO users (telegram_user_id, display_name)
+       VALUES ('503', 'Борис') RETURNING id`,
+    );
+    await database().query(
+      "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [family.rows[0]!.id, user.rows[0]!.id],
+    );
+    const conversation = await conversationRepository.getByChatId("503");
+    // The next entry's sequence follows the largest one stored, so the seed can go in directly.
+    await database().query(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, sequence_id, actor_kind, actor_id, telegram_message_id,
+          sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       SELECT $1, value, 'agent_self', 'agent:osinara', value, 'Мия', true, 'text', 'seed', now()
+       FROM generate_series(1, $2) AS value`,
+      [conversation.id, oldCap],
+    );
+    await conversationTimelineRepository.recordAgentResponse({
+      applicationSessionId: null,
+      contentText: "новая",
+      conversationId: conversation.id,
+      deliveredAt: new Date("2026-09-03T09:00:00.000Z"),
+      messageThreadId: null,
+      replyToEntryId: null,
+      telegramMessageIds: [String(oldCap + 1)],
+    });
+
+    const kept = await database().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM telegram_group_messages WHERE conversation_id = $1",
+      [conversation.id],
+    );
+    expect(kept.rows[0]?.count).toBe(String(oldCap + 1));
+  });
 });
 
 describeWithDatabase("conversationRepository.findParticipantByHandle", () => {

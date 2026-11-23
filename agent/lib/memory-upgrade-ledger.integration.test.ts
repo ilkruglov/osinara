@@ -178,6 +178,10 @@ const POST_V0101_MIGRATIONS = [
   "145_health_journal.sql",
   "146_health_journal_mode.sql",
   "147_person_cards.sql",
+  "148_journal_reference_indexes.sql",
+  "149_memory_review_context_floor.sql",
+  "150_journal_source_delete_cascade.sql",
+  "151_drop_journal_retention_index.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

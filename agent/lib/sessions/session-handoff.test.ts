@@ -14,7 +14,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../app-error.js";
-import type { TelegramGroupJournalEntry } from "../telegram-group-journal-context.js";
+import {
+  renderTelegramGroupJournalContext,
+  type TelegramGroupJournalEntry,
+} from "../telegram-group-journal-context.js";
 import {
   SESSION_HANDOFF_MAX_CHARACTERS,
   SESSION_HANDOFF_SOURCE_MAX_CHARACTERS,
@@ -87,6 +90,7 @@ describe("prepareSessionHandoff", () => {
     await prepareSessionHandoff(input, deps);
 
     expect(deps.listPrivate).toHaveBeenCalledWith({
+      anchorEntryId: null,
       beforeSequence: "6",
       conversationId: "conversation-1",
       limit: 100,
@@ -183,6 +187,8 @@ describe("prepareSessionHandoff", () => {
     expect(rendered.rendered.length).toBeLessThanOrEqual(SESSION_HANDOFF_SOURCE_MAX_CHARACTERS);
     expect(rendered.entries.length).toBeGreaterThan(0);
     expect(rendered.entries.at(-1)?.sequenceId).toBe("61");
+    // Rendered once per entry, the block is still exactly the journal's rendering of what it kept.
+    expect(rendered.rendered).toBe(renderTelegramGroupJournalContext(rendered.entries, null, null));
 
     // One entry alone over the bound once rendered (the raw text passes): nothing to summarize, no model call.
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);

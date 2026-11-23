@@ -4,6 +4,8 @@
  * Constructs covered:
  * - Stable topic-confined cursor pagination beyond the first bounded page.
  * - Exact filename filtering and fail-fast malformed cursor rejection.
+ * - A caption written before the journal's secret rules is listed by them (22 November 2026): a key
+ *   masked, a password told in words without text.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -86,6 +88,21 @@ describeWithDatabase("Telegram attachment read pagination", () => {
     expect(new Set(ids)).toHaveLength(51);
     expect(exact.items).toHaveLength(1);
     expect(exact.items[0]).toMatchObject({ fileName: "нужный.pdf", telegramMessageId: "1" });
+    for (const [caption, listed] of [
+      ["Договор, ключ FAL_KEY=abcdefghij0123456789", "Договор, ключ FAL_KEY=[СКРЫТО]"],
+      ["Договор, пароль: Qwerty-12345", null],
+    ] as const) {
+      await database().query(
+        "UPDATE telegram_group_messages SET content_text = $2 WHERE group_id = $1 AND sequence_id = 1",
+        [group.rows[0]!.id, caption],
+      );
+      const captioned = await telegramGroupAttachmentRepository.list(auth, {
+        fileName: "нужный.pdf",
+        limit: 50,
+        messageThreadId: "77",
+      });
+      expect(captioned.items[0]?.contentText).toBe(listed);
+    }
     await expect(
       telegramGroupAttachmentRepository.list(auth, {
         cursor: "invalid",

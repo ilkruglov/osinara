@@ -12,7 +12,17 @@ import { fileTypeFromBuffer } from "file-type";
 
 import { AppError } from "../app-error.js";
 
-const VISION_IMAGE_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+export type VisionImageMediaType = "image/jpeg" | "image/png" | "image/webp";
+
+const VISION_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set<VisionImageMediaType>([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+function isVisionImageMediaType(mime: string): mime is VisionImageMediaType {
+  return VISION_IMAGE_MEDIA_TYPES.has(mime);
+}
 
 const VISION_IMAGE_EXTENSIONS = new Set([".jpeg", ".jpg", ".png", ".webp"]);
 
@@ -27,10 +37,10 @@ export function isTelegramImageDocumentCandidate(
   );
 }
 
-export async function validateVisionImageBytes(bytes: Uint8Array): Promise<string> {
+export async function validateVisionImageBytes(bytes: Uint8Array): Promise<VisionImageMediaType> {
   // Downloaded magic bytes are authoritative; Telegram MIME and filename are only candidates.
   const detected = await fileTypeFromBuffer(bytes);
-  if (!detected || !VISION_IMAGE_MEDIA_TYPES.has(detected.mime)) {
+  if (!detected || !isVisionImageMediaType(detected.mime)) {
     throw new AppError(
       "AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED",
       "Вложение не является поддерживаемым статическим изображением",

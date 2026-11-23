@@ -80,8 +80,11 @@ export const TELEGRAM_HITL_TIMEOUT_SWEEP_TIMEOUT_MS = 180 * 1_000;
 // so the minute schedule calls the agent's own private route. The port is fixed by `npm start`.
 export const AGENT_INTERNAL_SELF_BASE_URL = "http://127.0.0.1:3000";
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 12_000;
+// The journal keeps every entry (owner's decision, 22 November 2026): the per-chat cap of 10 000
+// held ten days of the busiest group. At ~1.3 KB an entry the journal grows ~0.6 GB a year at the
+// pace measured that day, its alias table (`telegram_group_message_ids`) about a fifth more.
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES = 100;
-export const TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES = 10_000;
+
 // An existing session sees only journal entries it has not seen, because its own turns live in
 // Eve history. Since delivery context of past turns is dropped from the prompt, a message that
 // never started a turn was visible for exactly one turn. A small recent window rides along with

@@ -2,16 +2,17 @@
  * Shared Telegram group message persistence primitives.
  *
  * Exports:
- * - Message field normalizers for trusted PostgreSQL writes.
+ * - Message field normalizers for trusted PostgreSQL writes; the stored text is `journalText`: a
+ *   message that tells a secret in words keeps no text, a key is masked («FAL_KEY=[СКРЫТО]») for
+ *   a later turn, history search or memory review.
  * - `telegramForumTopicId`: verified forum topic isolation separate from reply routing.
- * - `lockTelegramGroupJournal` and `pruneTelegramGroupJournal` transaction helpers.
+ * - `lockTelegramGroupJournal`: the transaction lock of a group's journal.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import type { PoolClient } from "pg";
 
-import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
-import { memoryContentRejectionCode } from "./memory-content-policy.js";
 import { lockApplicationConversation } from "./conversation-lock.js";
+import { journalText } from "./secret-redaction.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -89,8 +90,7 @@ export function telegramMessageKind(message: TelegramMessage): string {
 
 export function telegramMessageContent(message: TelegramMessage): string | null {
   const content = [message.text, message.caption].filter(Boolean).join("\n").trim();
-  if (!content || memoryContentRejectionCode(content)) return null;
-  return content;
+  return content ? journalText(content) : null;
 }
 
 export function telegramSenderDisplayName(message: TelegramMessage): string | null {
@@ -111,26 +111,4 @@ export async function lockTelegramGroupJournal(client: PoolClient, groupId: stri
     throw new Error("AGENT_APPLICATION_CONVERSATION_NOT_FOUND: Для группы не найден разговор");
   }
   await lockApplicationConversation(client, conversationId);
-}
-
-export async function pruneTelegramGroupJournal(
-  client: PoolClient,
-  groupId: string,
-): Promise<void> {
-  await client.query(
-    `DELETE FROM telegram_group_messages
-     WHERE id IN (
-       SELECT id FROM telegram_group_messages
-       WHERE group_id = $1
-       ORDER BY sequence_id DESC
-       OFFSET $2
-        ) AND NOT EXISTS (
-          SELECT 1 FROM memory_review_batch_sources AS source
-          WHERE source.timeline_entry_id = telegram_group_messages.id
-        ) AND NOT EXISTS (
-         SELECT 1 FROM memory_turn_sources AS source
-         WHERE source.timeline_entry_id = telegram_group_messages.id
-       )`,
-    [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
-  );
 }

@@ -2,14 +2,20 @@
  * Safe Markdown-to-HTML rendering for Telegram file captions.
  *
  * Export:
- * - `renderTelegramMarkdownHtml`: converts the supported caption subset to Telegram HTML.
+ * - `renderTelegramMarkdownHtml`: converts the supported caption subset to Telegram HTML, or to
+ *   plain text when the tags it made are ones Telegram refuses.
  */
+import { placeholderMarker, restorePlaceholders } from "./text-placeholders.js";
+
 const TELEGRAM_MESSAGE_MAX_CHARACTERS = 4_096;
 const TELEGRAM_LINK_MAX_CHARACTERS = 2_048;
 const REPEATED_EMOJI_MINIMUM = 8;
-const INLINE_PLACEHOLDER_START = 0xe000;
-const INLINE_PLACEHOLDER_END = 0xf8ff;
 const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tg:"]);
+const WEB_LINK_PROTOCOLS = new Set(["http:", "https:"]);
+/** Telegram keeps the first 100 entities of a text and drops the rest, a link's address with it. */
+const TELEGRAM_MAX_ENTITIES = 100;
+// oxlint-disable-next-line no-control-regex -- the check is for control characters themselves
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 
 function escapeHtml(value: string): string {
   return value
@@ -20,25 +26,30 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function placeholderMarker(value: string): string {
-  for (
-    let codePoint = INLINE_PLACEHOLDER_START;
-    codePoint <= INLINE_PLACEHOLDER_END;
-    codePoint += 1
-  ) {
-    const marker = String.fromCodePoint(codePoint);
-    if (!value.includes(marker)) return marker;
+function inlineMarker(markdown: string): string {
+  const marker = placeholderMarker(markdown);
+  if (marker === null) {
+    throw new Error(
+      "AGENT_TELEGRAM_MARKDOWN_PLACEHOLDER_UNAVAILABLE: Input exhausts reserved markers",
+    );
   }
-  throw new Error(
-    "AGENT_TELEGRAM_MARKDOWN_PLACEHOLDER_UNAVAILABLE: Input exhausts reserved markers",
-  );
+  return marker;
 }
 
+/**
+ * The escaped address, or null when it stays text. Telegram reads a NUL as the end of the attribute
+ * and refuses the caption whole, and drops a link to an http host without a dot (other than IPv6),
+ * the address with it (repeat review, 23 November 2026).
+ */
 function safeLink(rawUrl: string): string | null {
-  if (rawUrl.length > TELEGRAM_LINK_MAX_CHARACTERS) return null;
+  if (rawUrl.length > TELEGRAM_LINK_MAX_CHARACTERS || CONTROL_CHARACTER.test(rawUrl)) return null;
   if (!URL.canParse(rawUrl)) return null;
   const url = new URL(rawUrl);
   if (!ALLOWED_LINK_PROTOCOLS.has(url.protocol)) return null;
+  const host = url.hostname;
+  if (WEB_LINK_PROTOCOLS.has(url.protocol) && !host.includes(".") && !host.startsWith("[")) {
+    return null;
+  }
 
   // Escaping can expand ampersands enough to make the indivisible opening tag invalid.
   const escaped = escapeHtml(rawUrl);
@@ -71,7 +82,7 @@ function isTableSeparator(line: string): boolean {
 }
 
 function renderInline(markdown: string): string {
-  const marker = placeholderMarker(markdown);
+  const marker = inlineMarker(markdown);
   const replacements: string[] = [];
   const reserve = (html: string): string => {
     const index = replacements.push(html) - 1;
@@ -79,12 +90,20 @@ function renderInline(markdown: string): string {
   };
 
   // Protect code and validated links before escaping and interpreting emphasis markers.
-  let source = markdown.replace(/`([^`\n]+)`/gu, (_match, code: string) =>
-    reserve(`<code>${escapeHtml(code)}</code>`),
-  );
+  const code: string[] = [];
+  let source = markdown.replace(/`([^`\n]+)`/gu, (_match, text: string) => {
+    code.push(text);
+    return reserve(`<code>${escapeHtml(text)}</code>`);
+  });
+  // Every placeholder so far is code, its index that of `code`. Telegram nests no code entity in a
+  // link, so a label's code stays literal plain text, and an address's backticks are characters of
+  // it, as CommonMark reads them.
   source = source.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/gu, (match, label: string, url: string) => {
-    const href = safeLink(url);
-    return href === null ? match : reserve(`<a href="${href}">${renderInline(label)}</a>`);
+    const href = safeLink(restorePlaceholders(url, marker, (index) => `\`${code[index]}\``));
+    if (href === null) return match;
+    const plain = restorePlaceholders(label, marker, (index) => reserve(escapeHtml(code[index]!)));
+    const text = restorePlaceholders(renderInline(plain), marker, (index) => replacements[index]!);
+    return reserve(`<a href="${href}">${text}</a>`);
   });
   source = collapseRepeatedEmoji(source);
 
@@ -96,10 +115,7 @@ function renderInline(markdown: string): string {
   html = html.replace(/(^|[^\p{L}\p{N}])_([^_\n]+)_(?=$|[^\p{L}\p{N}])/gu, "$1<i>$2</i>");
 
   // Restore only placeholders created by this invocation; raw model HTML remains escaped.
-  for (const [index, replacement] of replacements.entries()) {
-    html = html.replaceAll(`${marker}${index}${marker}`, replacement);
-  }
-  return html;
+  return restorePlaceholders(html, marker, (index) => replacements[index]!);
 }
 
 function isSpecialBlockStart(line: string): boolean {
@@ -111,7 +127,49 @@ function isSpecialBlockStart(line: string): boolean {
   );
 }
 
+/** Tags that hold text Telegram shows as is: nothing else goes inside them, nor them inside a link. */
+const LITERAL_TAGS = new Set(["code", "pre"]);
+
+/**
+ * Whether Telegram takes the rendered tags: every tag closes in order (crossing emphasis is refused
+ * whole, «Unmatched end tag»), no code or preformatted text inside a link or a link inside them (the
+ * link is dropped), no quotation inside a quotation, at most 100 of them. Only `<pre><code>` nests a
+ * literal tag, as the Bot API writes a code block.
+ */
+function telegramAcceptsTags(html: string): boolean {
+  const open: string[] = [];
+  let opened = 0;
+  for (const [, closing, name] of html.matchAll(/<(\/?)([a-z]+)[^>]*>/gu)) {
+    const tag = name!;
+    if (closing) {
+      if (open.pop() !== tag) return false;
+      continue;
+    }
+    opened += 1;
+    if (opened > TELEGRAM_MAX_ENTITIES) return false;
+    const inside = open.at(-1);
+    if (inside !== undefined && LITERAL_TAGS.has(inside) && !(inside === "pre" && tag === "code")) {
+      return false;
+    }
+    // Nothing opens inside a literal tag (above), so a link or a literal one under a link is the case.
+    if ((tag === "a" || LITERAL_TAGS.has(tag)) && open.includes("a")) return false;
+    if (tag === "blockquote" && open.includes("blockquote")) return false;
+    open.push(tag);
+  }
+  return open.length === 0;
+}
+
+/**
+ * The caption as Telegram HTML; a caption whose tags Telegram would refuse or mangle goes as plain
+ * text instead, so the file still goes (repeat review, 23 November 2026: `**сумма _1 200** ₽_` made
+ * crossing tags, and the delivery failed).
+ */
 export function renderTelegramMarkdownHtml(markdown: string): string {
+  const html = renderMarkdownHtml(markdown);
+  return telegramAcceptsTags(html) ? html : escapeHtml(markdown);
+}
+
+function renderMarkdownHtml(markdown: string): string {
   const lines = markdown.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
   const blocks: string[] = [];
 
@@ -147,9 +205,11 @@ export function renderTelegramMarkdownHtml(markdown: string): string {
       blocks.push(`<pre>${escapeHtml(table)}</pre>`);
       continue;
     }
-    const heading = /^#{1,6}\s+(.+)$/u.exec(line);
+    // A marker with nothing after it is a heading with no text: nothing to show.
+    const heading = /^#{1,6}\s+(.*)$/u.exec(line);
     if (heading) {
-      blocks.push(`<b>${renderInline(heading[1]!)}</b>`);
+      const title = heading[1]!.trim();
+      if (title.length > 0) blocks.push(`<b>${renderInline(title)}</b>`);
       index += 1;
       continue;
     }
@@ -174,7 +234,10 @@ export function renderTelegramMarkdownHtml(markdown: string): string {
       continue;
     }
 
-    const paragraph: string[] = [];
+    // The first line always goes into the paragraph: a line some branch above did not take but
+    // that still reads as a block start (a heading over U+2028, say) looped here forever.
+    const paragraph: string[] = [lines[index]!];
+    index += 1;
     while (
       index < lines.length &&
       lines[index]!.trim().length > 0 &&

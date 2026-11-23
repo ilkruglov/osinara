@@ -174,11 +174,12 @@ describe("unavailable image generation", () => {
     const generate = vi.fn();
     const tool = createGenerateImageTool({
       readImage: vi.fn(),
-      client: { assertConfigured: vi.fn(), assertSupportsEditing: vi.fn(), generate },
+      client: { assertConfigured: vi.fn(), generate },
       series: { previous: () => [], remember: vi.fn() },
       operations: {
         begin,
         complete: vi.fn(),
+        exists: vi.fn(),
         markAmbiguous: vi.fn(),
         markFailed: vi.fn(),
         recordProviderJob: vi.fn(),

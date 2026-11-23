@@ -3,13 +3,12 @@
  *
  * Exports:
  * - `ImageGenerationRequest`, `GeneratedImage`: strict transport contracts.
- * - `imageGenerationClient`: the configured provider chain (PlusVibe → NeuralDeep → Cloudflare);
- *   editing uses only the providers that support it.
+ * - `imageGenerationClient`: the configured provider (fal.ai), for generation and editing alike.
  */
 import { AppError } from "../app-error.js";
-import { createFallbackImageClient } from "./flux-image-clients.js";
-import { resolveImageProviders } from "./image-generation-availability.js";
-import { editingUnavailable } from "./image-editing-input.js";
+import { resolveImageProvider } from "./image-generation-availability.js";
+import type { ImageProviderClient } from "./image-provider.js";
+import type { VisionImageMediaType } from "../attachments/telegram-vision-attachment.js";
 
 export type ImageBackground = "auto" | "opaque" | "transparent";
 export type ImageQuality = "auto" | "high" | "low" | "medium";
@@ -39,7 +38,8 @@ export interface ImageReference {
   mediaType: string;
 }
 
-export type ImageMediaType = "image/jpeg" | "image/png" | "image/webp";
+/** The formats `validateVisionImageBytes` admits; a generated picture is checked by it. */
+export type ImageMediaType = VisionImageMediaType;
 
 export interface GeneratedImage {
   bytes: Buffer;
@@ -48,33 +48,23 @@ export interface GeneratedImage {
   revisedPrompt?: string;
 }
 
-function productionClient(editing = false): {
-  assertConfigured(): void;
-  generate(input: ImageGenerationRequest): Promise<GeneratedImage>;
-} {
-  if (editing) {
-    const clients = resolveImageProviders(process.env).filter((client) => client.supportsEditing);
-    if (clients.length === 0) throw editingUnavailable();
-    return createFallbackImageClient(clients);
-  }
-  const chain = resolveImageProviders(process.env);
-  if (chain.length === 0) {
+function productionClient(): ImageProviderClient {
+  const client = resolveImageProvider(process.env);
+  if (client === null) {
     throw new AppError(
       "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
-      "Не настроен ни один сервис генерации изображений",
+      "Не настроен сервис генерации изображений",
     );
   }
-  return createFallbackImageClient(chain);
+  return client;
 }
 
 export const imageGenerationClient = {
-  assertSupportsEditing(): void {
-    productionClient(true).assertConfigured();
-  },
+  /** fal edits wherever it generates: one check covers both. */
   assertConfigured(): void {
-    productionClient().assertConfigured();
+    productionClient();
   },
-  generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
-    return productionClient(Boolean(input.referenceImages?.length)).generate(input);
+  async generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
+    return productionClient().generate(input);
   },
 };

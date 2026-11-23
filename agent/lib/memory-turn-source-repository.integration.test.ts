@@ -296,11 +296,6 @@ describeWithDatabase("turn-bound memory source repository", () => {
       }),
     ).rejects.toMatchObject({ code: "AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH" });
 
-    // Active turn bindings retain source rows across ordinary timeline pruning/deletion attempts.
-    await expect(
-      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [delta.rows[0]!.id]),
-    ).rejects.toThrow();
-
     await memoryTurnSourceRepository.release(binding.eveSessionId, binding.eveTurnId);
     await expect(
       memoryTurnSourceRepository.resolve({

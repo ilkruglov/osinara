@@ -34,6 +34,7 @@ import { telegramForumTopicId } from "../telegram-group-message-storage.js";
 import { composeTelegramTurnMessage } from "../telegram-group-turn-context.js";
 import type { TelegramInboundActor } from "../telegram-inbound-actor.js";
 import { telegramProfileName, telegramSessionScope } from "../telegram-on-message-context.js";
+import { fitReplyParts } from "../telegram-reply-fit.js";
 import {
   telegramReplyTargetProjection,
   type TelegramReplyTargetProjection,
@@ -55,7 +56,7 @@ import {
 export interface TelegramWhisperTurnDependencies {
   conversations: Pick<typeof conversationRepository, "getByGroupId">;
   currentTime: Pick<typeof currentTimeRepository, "findTurnTimezone">;
-  journal: Pick<TelegramGroupJournalRepository, "listRecent">;
+  journal: Pick<TelegramGroupJournalRepository, "listRecentPage">;
   session: Pick<typeof sessionRepository, "prepareTurn">;
   telegram: Pick<TelegramRepository, "findGroup" | "findIdentity">;
   whisper: Pick<TelegramWhisperGate, "close"> & {
@@ -66,13 +67,19 @@ export interface TelegramWhisperTurnDependencies {
 function whisperEnvelope(input: {
   question: string;
   reply: TelegramReplyTargetProjection;
+  replying: boolean;
   senderDisplayName: string | null;
   senderUsername: string | null;
 }): string {
   // A whisper sent as a reply asks about that message: its text and the selected fragment come
-  // along, in the same fields an ordinary group turn uses for a reply.
+  // along, in the same fields an ordinary group turn uses for a reply; a target with no text to
+  // show is named unavailable, so the model asks instead of guessing what was meant.
   const current = escapeUntrustedContextJson({
-    ...(input.reply.snapshot === null ? {} : { replyTargetSnapshot: input.reply.snapshot }),
+    ...(input.reply.snapshot !== null
+      ? { replyTargetSnapshot: input.reply.snapshot }
+      : input.replying
+        ? { replyTargetUnavailable: true }
+        : {}),
     ...(input.reply.quotedText === null ? {} : { replyQuotedText: input.reply.quotedText }),
     senderDisplayName: input.senderDisplayName,
     senderUsername: input.senderUsername,
@@ -141,11 +148,22 @@ export async function prepareTelegramWhisperTurn(input: {
   }
 
   // The latest timeline of the whisper's topic, the same history a turn there starts from.
-  const envelope = whisperEnvelope({
+  const whisper = {
     question: command.question,
-    reply: telegramReplyTargetProjection(message),
+    // Telegram makes every message of a forum topic a reply to the topic's creation, a service
+    // message without text whose id is the topic's: that is the topic, not a message asked about.
+    replying:
+      message.replyToMessage !== undefined && message.replyToMessage.messageId !== forumTopicId,
     senderDisplayName: actor.displayName ?? telegramProfileName(message),
     senderUsername: actor.username,
+  };
+  // The target's copy and the fragment give way to the timeline, as in an ordinary turn.
+  const envelope = whisperEnvelope({
+    ...whisper,
+    reply: fitReplyParts(
+      telegramReplyTargetProjection(message),
+      (reply) => whisperEnvelope({ ...whisper, reply }).length,
+    ),
   });
   const timelineBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS - envelope.length - 2;
   if (timelineBudget <= 0) {
@@ -154,7 +172,7 @@ export async function prepareTelegramWhisperTurn(input: {
       "Текущее сообщение превышает допустимый размер контекста разговора",
     );
   }
-  const recent = await dependencies.journal.listRecent({
+  const recent = await dependencies.journal.listRecentPage({
     anchorEntryId: null,
     beforeSequence: null,
     groupId: group.groupId,
@@ -162,9 +180,9 @@ export async function prepareTelegramWhisperTurn(input: {
     messageThreadId: forumTopicId,
   });
   const timeline = selectTelegramGroupJournalContext(
-    recent.map((entry) => visibleTelegramTimelineEntry(entry, "none")),
+    recent.entries.map((entry) => visibleTelegramTimelineEntry(entry, "none")),
     timelineBudget,
-    null,
+    recent.omittedBeforeSequence,
     null,
     TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
     timezone,

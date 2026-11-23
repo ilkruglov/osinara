@@ -62,10 +62,14 @@ describeWithDatabase("image generation operation repository", () => {
       workspaceId,
     };
 
+    await expect(imageGenerationOperationRepository.exists(input.operationKey)).resolves.toBe(
+      false,
+    );
     await expect(imageGenerationOperationRepository.begin(input)).resolves.toEqual({
       state: "execute",
       workspaceId,
     });
+    await expect(imageGenerationOperationRepository.exists(input.operationKey)).resolves.toBe(true);
     await imageGenerationOperationRepository.complete(input.operationKey, FILE);
     await expect(imageGenerationOperationRepository.begin(input)).resolves.toEqual({
       file: FILE,
@@ -83,8 +87,8 @@ describeWithDatabase("image generation operation repository", () => {
     });
     await imageGenerationOperationRepository.recordProviderJob("image-call-job", {
       jobId: "cmvbdeekj0073zx013f2euglr",
-      model: "nano-banana-2",
-      provider: "plusvibe",
+      model: "bytedance/seedream/v5.5/text-to-image",
+      provider: "fal",
     });
     await imageGenerationOperationRepository.markAmbiguous(
       "image-call-job",
@@ -98,9 +102,9 @@ describeWithDatabase("image generation operation repository", () => {
       "SELECT provider, provider_job_id, provider_model FROM image_generation_operations WHERE operation_key = 'image-call-job'",
     );
     expect(settled.rows[0]).toEqual({
-      provider: "plusvibe",
+      provider: "fal",
       provider_job_id: "cmvbdeekj0073zx013f2euglr",
-      provider_model: "nano-banana-2",
+      provider_model: "bytedance/seedream/v5.5/text-to-image",
     });
     // A settled operation keeps the job it had: a late report never rewrites history.
     await imageGenerationOperationRepository.recordProviderJob("image-call-job", {

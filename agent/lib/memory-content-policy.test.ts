@@ -3,18 +3,18 @@
  *
  * Constructs covered:
  * - Credentials, private keys, one-time codes, and valid payment card numbers are rejected.
- * - Exact coordinates of where a person was are rejected for memory writes with their own message,
- *   but not from the group journal: a pair named as a location, or one as precise as a phone's fix.
+ * - The refusal reads the journal's secret rules: a machine form (a provider key, a Bearer token,
+ *   a `NAME_KEY=` assignment) and a secret told in words (a password, a card with its expiry, a
+ *   CVV) are refused alike; a masked machine value, speech about a password and code that only
+ *   names a key are not.
+ * - Exact coordinates of where a person was are rejected for memory writes with their own message:
+ *   a pair named as a location, or one as precise as a phone's fix.
  *   A version, a price, a rounded coordinate, exchange rates and model weights are not coordinates.
  * - Ordinary durable facts pass without transforming user content.
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  memoryContentRejectionCode,
-  memoryWriteRejectionCode,
-  requireAllowedMemoryContent,
-} from "./memory-content-policy.js";
+import { memoryWriteRejectionCode, requireAllowedMemoryContent } from "./memory-content-policy.js";
 
 describe("requireAllowedMemoryContent", () => {
   it.each([
@@ -30,6 +30,20 @@ describe("requireAllowedMemoryContent", () => {
   });
 
   it.each([
+    ["ключ sk-proj-abcdefgh12", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["Authorization: Bearer abcdefghijklmnop1234", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["FAL_KEY=abcdefghij0123456789", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["CVV: 123", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["Карта 4242 4242 4242 4242 12/27", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["Пароль: «Qwerty123»", "AGENT_MEMORY_SECRET_REJECTED"],
+    ["FAL_KEY=[СКРЫТО], сменить в пятницу", null],
+    ["Сбросила пароль администратора.", null],
+    ["cache_key = make_key(chat, day)", null],
+  ])("classifies %j by the shared secret table", (content, code) => {
+    expect(memoryWriteRejectionCode(content)).toBe(code);
+  });
+
+  it.each([
     "Геолокация: 55.753900, 37.620800, точность 20 м",
     "Дом у Анны, координаты 55.7539 37.6208",
     "живёт около -33.86881;151.20935",
@@ -39,7 +53,6 @@ describe("requireAllowedMemoryContent", () => {
   ])("rejects exact coordinates: %s", (content) => {
     expect(memoryWriteRejectionCode(content)).toBe("AGENT_MEMORY_LOCATION_REJECTED");
     expect(() => requireAllowedMemoryContent(content)).toThrowError(/Координаты/u);
-    expect(memoryContentRejectionCode(content)).toBeNull();
   });
 
   it.each([

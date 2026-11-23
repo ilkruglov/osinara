@@ -4,6 +4,8 @@
  * Constructs covered:
  * - Queue payloads become bounded summaries: rich text is flattened, media gets a placeholder,
  *   unparsable rows are skipped, and the list stops at the cap.
+ * - A message that tells a secret in words shows a placeholder instead of its text; a key is masked
+ *   before the text is cut to its bound.
  * - The marker round-trips through the raw message and a malformed marker reads as nothing.
  * - The context block is untrusted data with one line per message and no raw angle brackets.
  */
@@ -33,6 +35,27 @@ function payload(messageId: number, text: string | null, extra: Record<string, u
 }
 
 describe("pendingMessagesFromPayloads", () => {
+  it("shows a placeholder instead of a message that tells a password", () => {
+    const [pending] = pendingMessagesFromPayloads([
+      {
+        payload: payload(21, "Вайфай: пароль Qwerty123"),
+        receivedAt: new Date("2026-09-05T22:10:00Z"),
+      },
+    ]);
+
+    expect(pending?.text).toBe("[текст скрыт: секрет]");
+  });
+
+  it("masks a key before cutting the text", () => {
+    const text = `${"ж".repeat(480)} FAL_KEY=abcdefgh12345`;
+    const [pending] = pendingMessagesFromPayloads([
+      { payload: payload(21, text), receivedAt: new Date("2026-09-05T22:10:00Z") },
+    ]);
+
+    expect(pending?.text).toContain("FAL_KEY=[СК");
+    expect(pending?.text).not.toContain("abcd");
+  });
+
   it("summarizes text, rich blocks and media in arrival order and stops at the cap", () => {
     const rows = [
       {

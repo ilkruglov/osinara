@@ -4,24 +4,27 @@
  * Exports:
  * - `TelegramGroupJournalRepository`: inbound, agent-delivery, context, and search contract.
  * - `TelegramGroupHistorySearchInput`: bounded model-history query after trusted authorization.
- * - `telegramGroupJournalRepository`: monotonic timeline with chunk aliases and retention.
+ * - `telegramGroupJournalRepository`: monotonic timeline with chunk aliases; every entry is kept,
+ *   and every entry is read as `journalText` (rows stored before these rules included); the
+ *   history search matches only what it shows.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
 import { TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES } from "../config.js";
 import { database } from "./database.js";
+import { journalText } from "./secret-redaction.js";
 import {
   nextTelegramGroupSequence,
   recordTelegramAgentResponse,
   type RecordTelegramAgentResponseInput,
 } from "./telegram-agent-timeline-repository.js";
-import type {
-  TelegramGroupAttachmentSummary,
-  TelegramGroupJournalEntry,
+import {
+  REPLY_ANCESTRY_DEPTH,
+  type TelegramGroupAttachmentSummary,
+  type TelegramGroupJournalEntry,
 } from "./telegram-group-journal-context.js";
 import {
   lockTelegramGroupJournal,
-  pruneTelegramGroupJournal,
   requireTelegramPositiveBigint,
   telegramForumTopicId,
   telegramMessageContent,
@@ -74,6 +77,10 @@ export interface TelegramGroupJournalRepository {
     messageThreadId: string | null;
   }): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }>;
   listRecent(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]>;
+  /** The same page and where the journal goes on before it, when the page did not reach its start. */
+  listRecentPage(
+    input: ListRecentInput,
+  ): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }>;
   /** Sequences of this author's journaled messages, by Telegram message id, in timeline order. */
   findSeriesSequences(input: {
     actorId: string;
@@ -116,9 +123,7 @@ interface TimelineRow {
   telegram_message_id: string;
   telegram_sender_chat_id: string | null;
   telegram_user_id: string | null;
-  selected_boundary?: string;
-  selected_count?: string;
-  total_count?: string;
+  omitted_before_sequence?: string | null;
 }
 
 const TIMELINE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
@@ -147,7 +152,8 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
     ...(summary === undefined ? {} : { attachment: summary }),
     actorId: row.actor_id,
     actorKind: row.actor_kind,
-    contentText: row.content_text,
+    // Rows stored before these rules are read by them.
+    contentText: journalText(row.content_text),
     entryId: row.id,
     messageKind: row.message_kind,
     messageThreadId: row.message_thread_id,
@@ -165,6 +171,19 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
   };
 }
 
+/**
+ * Whether a row the text query found still matches as shown. SQL matched the stored text, and an
+ * old row may hold a secret the journal now hides: a match there would confirm a guess at its start.
+ */
+function matchesShownText(
+  entry: TelegramGroupJournalEntry,
+  stored: string | null,
+  query: string | null | undefined,
+): boolean {
+  if (!query || entry.contentText === stored) return true;
+  return entry.contentText?.toLowerCase().includes(query.toLowerCase()) ?? false;
+}
+
 function validateList(input: ListRecentInput, maxLimit: number): void {
   if (!Number.isSafeInteger(input.limit) || input.limit <= 0 || input.limit > maxLimit) {
     throw new Error(
@@ -177,16 +196,23 @@ function validateList(input: ListRecentInput, maxLimit: number): void {
     requireTelegramPositiveBigint(input.messageThreadId, "message_thread_id");
 }
 
-async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]> {
+async function listRows(
+  input: ListRecentInput,
+): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }> {
   validateList(input, TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES);
-  // Recursive ancestors are bounded to two trusted reply edges and may cross the recent window.
-  const result = await database().query<TimelineRow>(
-    `WITH RECURSIVE recent AS (
-       SELECT id FROM telegram_group_messages
+  // Ancestors are bounded to two trusted reply edges and may cross the recent window; one row
+  // beyond the page tells whether older history exists (a first turn never said so).
+  const result = await database().query<TimelineRow & { omitted_before_sequence: string | null }>(
+    `WITH RECURSIVE page AS (
+       SELECT id, sequence_id FROM telegram_group_messages
        WHERE group_id = $1
-         AND message_thread_id IS NOT DISTINCT FROM $2::bigint
+         -- Not IS NOT DISTINCT FROM: that keeps the general topic (NULL) off the index, and every
+         -- turn would read the group's whole journal.
+         AND (message_thread_id = $2::bigint OR ($2::bigint IS NULL AND message_thread_id IS NULL))
          AND ($3::bigint IS NULL OR sequence_id < $3)
-       ORDER BY sequence_id DESC LIMIT $4
+       ORDER BY sequence_id DESC LIMIT $4 + 1
+     ), recent AS (
+       SELECT id, sequence_id FROM page ORDER BY sequence_id DESC LIMIT $4
      ), ancestry(id, depth) AS (
        SELECT id, 0 FROM recent
        UNION
@@ -197,18 +223,30 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
        FROM ancestry
         JOIN telegram_group_messages child ON child.id = ancestry.id
         JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
-        WHERE ancestry.depth < 2
+        WHERE ancestry.depth < $6
           AND parent.group_id = $1
           AND parent.message_thread_id IS NOT DISTINCT FROM $2::bigint
      )
-     SELECT ${TIMELINE_COLUMNS}
+     SELECT ${TIMELINE_COLUMNS},
+            CASE WHEN (SELECT count(*) FROM page) > $4
+                 THEN (SELECT min(sequence_id)::text FROM recent) END AS omitted_before_sequence
      FROM telegram_group_messages message
      WHERE message.id IN (SELECT id FROM ancestry)
        AND ($5::uuid IS NULL OR message.id <> $5)
      ORDER BY message.sequence_id`,
-    [input.groupId, input.messageThreadId, input.beforeSequence, input.limit, input.anchorEntryId],
+    [
+      input.groupId,
+      input.messageThreadId,
+      input.beforeSequence,
+      input.limit,
+      input.anchorEntryId,
+      REPLY_ANCESTRY_DEPTH,
+    ],
   );
-  return result.rows.map(project);
+  return {
+    entries: result.rows.map(project),
+    omittedBeforeSequence: result.rows[0]?.omitted_before_sequence ?? null,
+  };
 }
 
 export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
@@ -230,16 +268,20 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       );
     }
     const result = await database().query<TimelineRow>(
-      `WITH RECURSIVE eligible AS (
-         SELECT message.id, message.sequence_id, count(*) OVER () AS total_count
+      `WITH RECURSIVE page AS (
+         -- One row past the page says whether history was left out, without counting the range.
+         SELECT message.id, message.sequence_id
            FROM telegram_group_messages message
           WHERE message.group_id = $1
-            AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
+            AND (message.message_thread_id = $2::bigint
+                 OR ($2::bigint IS NULL AND message.message_thread_id IS NULL))
             AND message.sequence_id > $3::bigint
             AND message.sequence_id < $4::bigint
             AND message.application_session_id IS DISTINCT FROM $5::uuid
           ORDER BY message.sequence_id DESC
-          LIMIT $6
+          LIMIT $6 + 1
+        ), eligible AS (
+          SELECT id, sequence_id FROM page ORDER BY sequence_id DESC LIMIT $6
         ), ancestry(id, depth) AS (
           SELECT id, 0 FROM eligible
           UNION
@@ -250,14 +292,13 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
            FROM ancestry
            JOIN telegram_group_messages child ON child.id = ancestry.id
            JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
-          WHERE ancestry.depth < 2
+          WHERE ancestry.depth < $8
             AND parent.group_id = $1
             AND parent.message_thread_id IS NOT DISTINCT FROM $2::bigint
        )
        SELECT ${TIMELINE_COLUMNS},
-              (SELECT max(total_count)::text FROM eligible) AS total_count,
-              (SELECT count(*)::text FROM eligible) AS selected_count,
-              (SELECT min(sequence_id)::text FROM eligible) AS selected_boundary
+              CASE WHEN (SELECT count(*) FROM page) > $6
+                   THEN (SELECT min(sequence_id)::text FROM eligible) END AS omitted_before_sequence
          FROM telegram_group_messages message
          WHERE message.id IN (SELECT id FROM ancestry)
            AND message.id <> $7::uuid
@@ -270,16 +311,12 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         input.applicationSessionId,
         input.limit,
         input.anchorEntryId,
+        REPLY_ANCESTRY_DEPTH,
       ],
     );
-    const totalCount = Number(result.rows[0]?.total_count ?? 0);
-    const selectedCount = Number(result.rows[0]?.selected_count ?? 0);
     return {
       entries: result.rows.map(project),
-      omittedBeforeSequence:
-        totalCount > selectedCount
-          ? (result.rows[0]?.selected_boundary ?? input.beforeSequence)
-          : null,
+      omittedBeforeSequence: result.rows[0]?.omitted_before_sequence ?? null,
     };
   },
 
@@ -288,11 +325,15 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
     const messageIds = input.telegramMessageIds.map((id) =>
       requireTelegramPositiveBigint(id, "message_id"),
     );
+    // Through the Telegram id aliases and their key: the journal's own rows have no index by
+    // Telegram id within a conversation, and a scan of them grows with the chat (11.7 ms at 300 000).
     const result = await database().query<{ sequence_id: string }>(
-      `SELECT sequence_id::text
-       FROM telegram_group_messages
-       WHERE conversation_id = $1 AND actor_id = $2 AND telegram_message_id = ANY($3::bigint[])
-       ORDER BY sequence_id`,
+      `SELECT message.sequence_id::text
+       FROM telegram_group_message_ids AS alias
+       JOIN telegram_group_messages AS message ON message.id = alias.entry_id
+       WHERE alias.conversation_id = $1 AND alias.telegram_message_id = ANY($3::bigint[])
+         AND message.actor_id = $2
+       ORDER BY message.sequence_id`,
       [input.conversationId, input.actorId, messageIds],
     );
     return result.rows.map((row) => row.sequence_id);
@@ -389,23 +430,12 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         "INSERT INTO telegram_group_message_ids (group_id, telegram_message_id, entry_id) VALUES ($1, $2, $3)",
         [groupId, messageId, entryId],
       );
-      await pruneTelegramGroupJournal(client, groupId);
-      // Pruning can remove an old target in this transaction; only retained targets are model-visible.
-      const retainedReplyTarget =
-        replyTarget === null
-          ? null
-          : ((
-              await client.query<{ id: string }>(
-                "SELECT id FROM telegram_group_messages WHERE id = $1 AND group_id = $2",
-                [replyTarget.entry_id, groupId],
-              )
-            ).rows[0] ?? null);
       await client.query("COMMIT");
       return {
         entryId,
         replyToAgent: replyTarget?.actor_kind === "agent_self",
-        replyTargetUnavailable: replyId !== null && retainedReplyTarget === null,
-        replyToSequenceId: retainedReplyTarget === null ? null : (replyTarget?.sequence_id ?? null),
+        replyTargetUnavailable: replyId !== null && replyTarget === null,
+        replyToSequenceId: replyTarget?.sequence_id ?? null,
         sequenceId,
         status: "inserted",
       };
@@ -419,7 +449,10 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
 
   recordAgentResponse: recordTelegramAgentResponse,
 
-  listRecent: listRows,
+  async listRecent(input) {
+    return (await listRows(input)).entries;
+  },
+  listRecentPage: listRows,
 
   async search(input) {
     validateList(input, HISTORY_MAX_LIMIT);
@@ -454,7 +487,14 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       ],
     );
     const hasMore = result.rows.length > input.limit;
-    const page = result.rows.slice(0, input.limit).reverse().map(project);
-    return { entries: page, nextBeforeSequence: hasMore ? page[0]!.sequenceId : null };
+    const rows = result.rows.slice(0, input.limit);
+    const page = rows
+      .flatMap((row) => {
+        const entry = project(row);
+        return matchesShownText(entry, row.content_text, input.query) ? [entry] : [];
+      })
+      .reverse();
+    // The next page starts below every row read, shown or not.
+    return { entries: page, nextBeforeSequence: hasMore ? rows.at(-1)!.sequence_id : null };
   },
 };

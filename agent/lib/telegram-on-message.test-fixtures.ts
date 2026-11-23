@@ -129,6 +129,7 @@ export function repositories() {
       findSeriesSequences: vi.fn().mockResolvedValue([]),
       listBefore: vi.fn().mockResolvedValue([]),
       listRecent: vi.fn().mockResolvedValue([]),
+      listRecentPage: vi.fn().mockResolvedValue({ entries: [], omittedBeforeSequence: null }),
       record: vi.fn().mockResolvedValue({
         entryId: "00000000-0000-4000-8000-000000000010",
         replyToAgent: false,

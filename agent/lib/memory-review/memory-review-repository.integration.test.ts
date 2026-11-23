@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Passive user messages form one immutable batch when one lane reaches 50 sources; personal lanes are claimable.
  * - Agent responses and other forum topics do not count toward that lane's batch.
- * - Active source rows prevent timeline pruning until terminal completion.
+ * - Active source rows stay bound until terminal completion (the journal is no longer pruned).
  * - Successful review advances the lane cursor; failure leaves the lane blocked at its predecessor.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -224,10 +224,6 @@ describeWithDatabase("memory review repository", () => {
     expect(first?.sourceEntryIds).toHaveLength(8);
     expect(first?.sourceEntryIds.at(-1)).toBe(firstSource.id);
 
-    await expect(
-      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [firstSource.id]),
-    ).rejects.toThrow();
-
     await memoryReviewRepository.bindEveTurn({
       applicationSessionId: session.rows[0]!.id,
       batchId: first!.batchId,
@@ -259,9 +255,12 @@ describeWithDatabase("memory review repository", () => {
         messageThreadId: null,
       }),
     ).resolves.toBe("9");
+    // Completion releases the batch's sources; the journal's delete cascade would hide a leak.
     await expect(
-      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [firstSource.id]),
-    ).resolves.toMatchObject({ rowCount: 1 });
+      database().query("SELECT 1 FROM memory_review_batch_sources WHERE batch_id = $1", [
+        first!.batchId,
+      ]),
+    ).resolves.toMatchObject({ rowCount: 0 });
   });
 
   it("leaves a tail shorter than eight messages to idle review", async () => {

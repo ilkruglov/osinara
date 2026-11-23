@@ -5,6 +5,9 @@
  * - A claimed owner-approved external schedule reads one fixed retained-history window.
  * - Subsequent timeline writes cannot change already materialized chunks.
  * - Terminal failure removes run-bound snapshot data.
+ * - Entries are stored by the journal's secret rules: a key masked, a card told in words without
+ *   text; a long entry is masked before it is cut, so no part shows a key's tail or a part of an
+ *   entry that tells a password (22 November 2026).
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -72,6 +75,21 @@ async function createClaimedSchedule() {
     userId: null,
   });
   return { groupId: group.rows[0]!.id, job: jobs[0]!, scheduledFor, sessionId: session.id };
+}
+
+async function readAllTimelines(groupId: string, runId: string): Promise<string[]> {
+  const timelines: string[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const chunk = await scheduledGroupHistorySnapshotRepository.readChunk({
+      cursor,
+      groupId,
+      runId,
+    });
+    timelines.push(chunk.timeline);
+    if (chunk.done) return timelines;
+    cursor = chunk.nextCursor;
+  }
 }
 
 async function insertTimelineEntry(input: {
@@ -142,6 +160,83 @@ describeWithDatabase("scheduled group history snapshot repository", () => {
     );
     expect(persisted.rowCount).toBe(0);
     expect(scheduledFor.toISOString()).toBe(job.nextRunAt);
+  });
+
+  it("stores chunks by the journal's secret rules", async () => {
+    const { groupId, job, sessionId } = await createClaimedSchedule();
+    for (const [sequence, content] of [
+      [1, "ключ FAL_KEY=abcdefghij0123456789, не теряй"],
+      [2, "Карта 4242 4242 4242 4242 12/27, оплати"],
+    ] as const) {
+      await insertTimelineEntry({
+        content,
+        groupId,
+        sentAt: new Date(`2026-08-16T0${sequence}:00:00.000Z`),
+        sequence,
+      });
+    }
+    await scheduledGroupHistorySnapshotRepository.prepare({
+      groupId,
+      runId: job.runId,
+      scheduleId: job.id,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(job, {
+      applicationSessionId: sessionId,
+    });
+
+    const stored = await database().query<{ entries: { content: string | null }[] }>(
+      "SELECT entries FROM agent_schedule_history_chunks WHERE run_id = $1",
+      [job.runId],
+    );
+    expect(stored.rows[0]?.entries.map((entry) => entry.content)).toEqual([
+      "ключ FAL_KEY=[СКРЫТО], не теряй",
+      null,
+    ]);
+    const chunk = await scheduledGroupHistorySnapshotRepository.readChunk({
+      cursor: null,
+      groupId,
+      runId: job.runId,
+    });
+    expect(chunk.timeline).toContain("ключ FAL_KEY=[СКРЫТО], не теряй");
+    expect(chunk.timeline).not.toContain("abcdefghij");
+    expect(chunk.timeline).not.toContain("4242");
+  });
+
+  it("hides a secret of a long entry in every part it is cut into", async () => {
+    const { groupId, job, sessionId } = await createClaimedSchedule();
+    const pemLine = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj";
+    // About 9 750 characters of key: the cut of a 9 000-character chunk falls inside it.
+    const pem = `-----BEGIN PRIVATE KEY-----\n${Array.from({ length: 150 }, () => pemLine).join("\n")}\n-----END PRIVATE KEY-----`;
+    for (const [sequence, content] of [
+      [1, `Ключи сервера, не теряй:\n${pem}\nпосле ключа`],
+      [2, `${"Рассказ про дачу и грядки. ".repeat(400)}Вайфай на даче, пароль: Qwerty-12345`],
+      [3, "Обычное сообщение"],
+    ] as const) {
+      await insertTimelineEntry({
+        content,
+        groupId,
+        sentAt: new Date(`2026-08-16T0${sequence}:00:00.000Z`),
+        sequence,
+      });
+    }
+    await scheduledGroupHistorySnapshotRepository.prepare({
+      groupId,
+      runId: job.runId,
+      scheduleId: job.id,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(job, {
+      applicationSessionId: sessionId,
+    });
+
+    const timelines = await readAllTimelines(groupId, job.runId);
+    const all = timelines.join("\n");
+    expect(all).toContain("после ключа");
+    expect(all).toContain("Обычное сообщение");
+    for (const timeline of timelines) {
+      expect(timeline).not.toContain(pemLine);
+      expect(timeline).not.toContain("Рассказ про дачу");
+      expect(timeline).not.toContain("Qwerty");
+    }
   });
 
   it("cleans a recovered pre-handoff snapshot when owner authorization was revoked", async () => {

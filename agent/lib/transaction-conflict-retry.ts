@@ -3,7 +3,8 @@
  * serialization failure (40001).
  *
  * Exports:
- * - `retryOnTransactionConflict`: runs `run`, and once more when it failed with one of those.
+ * - `retryOnTransactionConflict`: runs `run`, and again when it failed with one of those, up to
+ *   `attempts` runs (two by default).
  * - `sqlState`: PostgreSQL's SQLSTATE of an error, or null (node-pg names every database error
  *   just "error").
  *
@@ -14,12 +15,16 @@
  *   record and its hidden repeats, a person card publish, the undo of its cleanup) can deadlock;
  *   PostgreSQL then aborts one side, and the side it aborts retries.
  */
-export async function retryOnTransactionConflict<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (!isTransactionConflict(error)) throw error;
-    return run();
+export async function retryOnTransactionConflict<T>(
+  run: () => Promise<T>,
+  attempts = 2,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= attempts || !isTransactionConflict(error)) throw error;
+    }
   }
 }
 

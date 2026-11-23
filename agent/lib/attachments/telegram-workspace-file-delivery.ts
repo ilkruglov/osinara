@@ -11,11 +11,10 @@ import {
   TELEGRAM_MAX_OUTBOUND_DOCUMENT_BYTES,
 } from "../../config.js";
 import { AppError } from "../app-error.js";
-import { renderTelegramMarkdownHtml } from "../telegram-markdown.js";
 import { postTelegramMultipart } from "../telegram-multipart-send.js";
+import { renderTelegramMarkdownHtml } from "../telegram-markdown.js";
 
 const TELEGRAM_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
-const TELEGRAM_CAPTION_MAX_CHARACTERS = 1_024;
 const TELEGRAM_PHOTO_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 interface TelegramSendResponse {
@@ -82,13 +81,8 @@ export async function deliverWorkspaceFile(
     form.set("message_thread_id", String(input.messageThreadId));
   }
   if (input.caption !== undefined) {
+    // The tools' caption schema bounds it by what Telegram shows (`telegram-caption.ts`).
     const caption = renderTelegramMarkdownHtml(input.caption);
-    if (caption.length > TELEGRAM_CAPTION_MAX_CHARACTERS) {
-      throw new AppError(
-        "AGENT_TELEGRAM_CAPTION_TOO_LONG",
-        "Подпись превышает лимит Telegram 1024 символа. Сократите подпись или отправьте текст отдельно",
-      );
-    }
     form.set("caption", caption);
     form.set("parse_mode", "HTML");
   }

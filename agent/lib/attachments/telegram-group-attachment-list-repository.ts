@@ -16,6 +16,7 @@ import {
 import type { TelegramGroupAttachmentSummary } from "../telegram-group-journal-context.js";
 import { requireTelegramPositiveBigint } from "../telegram-group-message-storage.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
+import { journalText } from "../secret-redaction.js";
 
 interface AttachmentListAccessRow {
   attachment_file_id: string | null;
@@ -78,7 +79,8 @@ function listItem(row: AuthorizedAttachmentListRow): TelegramGroupAttachmentList
     kind: row.attachment_kind,
     ...(row.attachment_media_type === null ? {} : { mediaType: row.attachment_media_type }),
     ...(row.attachment_size === null ? {} : { size: Number(row.attachment_size) }),
-    contentText: row.content_text,
+    // A caption written before the journal's secret rules carries its secret still.
+    contentText: journalText(row.content_text),
     senderDisplayName: row.sender_display_name,
     sentAt: row.sent_at.toISOString(),
     telegramMessageId: row.telegram_message_id,

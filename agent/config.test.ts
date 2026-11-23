@@ -7,11 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  requireRuntimeEnvironment,
-  TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
-  TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES,
-} from "./config.js";
+import { requireRuntimeEnvironment, TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES } from "./config.js";
 
 function stubRequiredEnvironment(): void {
   vi.stubEnv("AGENT_INTERNAL_TOKEN", "agent-internal-test-token-0123456789");
@@ -78,8 +74,7 @@ describe("requireRuntimeEnvironment", () => {
 });
 
 describe("Telegram timeline limits", () => {
-  it("retains ten thousand messages and admits one hundred per turn context", () => {
-    expect(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES).toBe(10_000);
+  it("admits one hundred messages per turn context", () => {
     expect(TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES).toBe(100);
   });
 });

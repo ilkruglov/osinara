@@ -13,6 +13,7 @@ import { AppError, isAppError } from "../app-error.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import {
   createWorkspaceImageReader,
+  unsuitableImageSource,
   workspaceImageReaderDependencies,
   type WorkspaceImageLocation,
   type WorkspaceImageReaderDependencies,
@@ -57,6 +58,35 @@ async function analyzeImage(
   }
 }
 
+/**
+ * Reads the image to inspect. A file the reader refuses (over 10 MB, not a still image) is an input
+ * the model corrects with another file; it reached the model as an operation of unknown outcome,
+ * «do not retry» (repeat review, 23 November 2026).
+ */
+async function readSource(
+  dependencies: WorkspaceImageInspectorDependencies,
+  auth: WorkspaceAuthorization,
+  input: WorkspaceImageLocation,
+) {
+  try {
+    return await createWorkspaceImageReader(dependencies)(auth, input);
+  } catch (error) {
+    const refusal = unsuitableImageSource(error);
+    if (refusal === null) throw error;
+    throw new ModelFacingError({
+      category: "input",
+      code: refusal.code,
+      correction:
+        "Возьми другой файл: статическое изображение JPEG, PNG или WebP не больше 10 МБ; или опиши задачу текстом.",
+      field:
+        "path" in input ? "path" : "attachmentId" in input ? "attachmentId" : "telegramMessageId",
+      reason: refusal.reason,
+      retryable: true,
+      sideEffectStatus: "not_started",
+    });
+  }
+}
+
 export function createWorkspaceImageInspector(dependencies: WorkspaceImageInspectorDependencies) {
   return async (
     auth: WorkspaceAuthorization,
@@ -75,10 +105,7 @@ export function createWorkspaceImageInspector(dependencies: WorkspaceImageInspec
       };
     }
 
-    const { bytes, mediaType, ...location } = await createWorkspaceImageReader(dependencies)(
-      auth,
-      input,
-    );
+    const { bytes, mediaType, ...location } = await readSource(dependencies, auth, input);
     const analysis = await analyzeImage(dependencies, {
       ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
       bytes,

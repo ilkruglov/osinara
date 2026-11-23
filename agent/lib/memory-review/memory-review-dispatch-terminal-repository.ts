@@ -15,6 +15,7 @@ import {
   MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
   MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS,
 } from "./memory-review-config.js";
+import { discardUnreachableReviewBatches } from "./memory-review-lane-restart.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
 import {
@@ -92,14 +93,16 @@ async function terminalizeStaleDispatchingBatches(client: PoolClient, now: Date)
   }
 }
 
+/** Returns how many unreachable batches it dropped, for the caller to log after its commit. */
 export async function terminalizeStaleMemoryReviewBatches(
   client: PoolClient,
   now: Date,
-): Promise<void> {
+): Promise<number> {
   await terminalizeStaleInteractiveBatches(client, now);
   await terminalizeStaleDispatchingBatches(client, now);
   await terminalizeAbandonedReviewTurns(client, now);
   await terminalizeBlockedReviewHeads(client, now);
+  return discardUnreachableReviewBatches(client, now);
 }
 
 export const memoryReviewDispatchTerminalRepository = {

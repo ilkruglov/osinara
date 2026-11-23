@@ -7,6 +7,8 @@
  * - `assertAuthoredSkillDraft`: throws a coded AppError listing every rubric problem at once.
  * - `isReservedSkillName`, `stepToolNames`: helpers shared with tests and the tool description.
  * - `externalGroupMissingTools`: step tools an external group's allowlist does not cover.
+ * - `SKILL_SECRET_PROBLEM`: why a text with a key is refused, here and in `skill-input-secrets.ts`,
+ *   which checks the rest of the `manage_skill` input (examples, trials, protocols).
  *
  * Key constructs:
  * - The rubric checks structure only: sections exist, tool names in the steps are real, referenced
@@ -17,6 +19,7 @@
  */
 import { AppError } from "../app-error.js";
 import { KNOWLEDGE_SKILL_NAMES } from "../group-skills/knowledge-skills.js";
+import { containsSecret } from "../secret-redaction.js";
 import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES } from "../tool-policy/group-tool-catalog.js";
 
 export const AUTHORED_SKILL_LIMITS = Object.freeze({
@@ -75,8 +78,6 @@ const RESERVED_PREFIXES = ["authored-", "gws-"] as const;
 
 const UNTRUSTED_BLOCK_PATTERN =
   /<\/?(?:untrusted[a-z_]*|retrieved_long_term_memory|existing_memory|preceding_context|memory_review_source_selection)\b/iu;
-const SECRET_PATTERN =
-  /\b(?:sk-[A-Za-z0-9_-]{8,}|cfat_[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{16,})/u;
 const REFERENCE_MENTION_PATTERN = /references\/[a-z0-9][a-z0-9-]{0,39}\.md/gu;
 const STEP_TOOL_PATTERN = /`([a-z]+(?:_[a-z0-9]+)+|agent|bash|glob|grep|todo)`/gu;
 
@@ -195,6 +196,9 @@ function sizeProblems(draft: AuthoredSkillDraft): string[] {
   return problems;
 }
 
+export const SKILL_SECRET_PROBLEM =
+  "в тексте есть строка, похожая на ключ, токен или пароль; навык не хранит секреты";
+
 function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<string>): string[] {
   const problems: string[] = [];
   if (/^---\s*\n/u.test(draft.markdown)) {
@@ -209,8 +213,8 @@ function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<s
   if (unknown.length > 0) {
     problems.push(`в шагах названы инструменты, которых нет в этом режиме: ${unknown.join(", ")}`);
   }
-  // An image skill without a prompt template makes the model translate a Russian paragraph into a
-  // Flux prompt on every run; the template belongs in a reference file.
+  // An image skill without a prompt template makes the model compose an image prompt from scratch
+  // on every run; the template belongs in a reference file.
   if (
     stepToolNames(draft.markdown).includes("generate_image") &&
     Object.keys(draft.files).length === 0
@@ -227,9 +231,10 @@ function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<s
   if (texts.some((text) => UNTRUSTED_BLOCK_PATTERN.test(text))) {
     problems.push("в тексте есть служебный блок недоверенного контекста; перескажи своими словами");
   }
-  if (texts.some((text) => SECRET_PATTERN.test(text))) {
-    problems.push("в тексте есть строка, похожая на ключ или токен; навык не хранит секреты");
-  }
+  // The description reaches external groups' context, the change note and the trial summary stay
+  // in the version history: none of them may carry a key either.
+  const stored = [...texts, draft.description, draft.changeNote, draft.trialSummary];
+  if (stored.some(containsSecret)) problems.push(SKILL_SECRET_PROBLEM);
   return problems;
 }
 

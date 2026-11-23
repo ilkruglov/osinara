@@ -12,7 +12,7 @@
  * - The handoff of a retired session opens the first turn that claims it, inside the same
  *   character budget, with nothing in it that could pass for a context tag.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
 import {
@@ -40,15 +40,33 @@ function entry(sequenceId: string, contentText: string): TelegramGroupJournalEnt
   };
 }
 
+/** A repository double whose page read is its `listRecent`, uncut, unless a test sets it. */
+function recentPages<T extends { listRecent: Mock }>(repository: T) {
+  return {
+    ...repository,
+    listRecentPage: vi.fn(
+      async (
+        input: unknown,
+      ): Promise<{
+        entries: TelegramGroupJournalEntry[];
+        omittedBeforeSequence: string | null;
+      }> => ({
+        entries: (await repository.listRecent(input)) as TelegramGroupJournalEntry[],
+        omittedBeforeSequence: null,
+      }),
+    ),
+  };
+}
+
 function dependencies(cursor: string | null, handoff: string | null = null) {
   return {
     handoff: {
       read: vi.fn().mockResolvedValue(handoff),
     },
-    journal: {
+    journal: recentPages({
       listIncremental: vi.fn().mockResolvedValue({ entries: [], omittedBeforeSequence: null }),
       listRecent: vi.fn().mockResolvedValue([]),
-    },
+    }),
     sessions: {
       currentGroupTimelineCursor: vi.fn().mockResolvedValue(cursor),
     },
@@ -129,6 +147,26 @@ describe("Telegram group turn context", () => {
     expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
     expect(result.currentMessageEnvelope).toContain('"replyTargetUnavailable":true');
     expect(result.handoffBlock).not.toBeNull();
+  });
+
+  // Final review, 22 November 2026: Telegram's copy of a target and the selected fragment, each
+  // 1 024 characters of `<`, escape to six times that and failed the turn.
+  it("shortens an oversized reply snapshot and quote instead of failing the turn", async () => {
+    const result = await createTelegramGroupTurnContextPreparer(dependencies("7"))({
+      ...input,
+      currentSequence: "12",
+      replyQuotedText: "<".repeat(1_024),
+      replyTargetSnapshot: {
+        contentText: "<".repeat(1_024),
+        senderDisplayName: "Пух",
+        senderUsername: null,
+      },
+      replyTargetUnavailable: true,
+      replyToSequenceId: null,
+    });
+    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.currentMessageEnvelope.length).toBeLessThanOrEqual(10_000);
+    expect(result.currentMessageEnvelope).toContain("replyTargetSnapshot");
   });
 
   it("fits the handoff into the budget: whole, shortened or left for the next turn", () => {
@@ -235,16 +273,47 @@ describe("Telegram group turn context", () => {
     expect([...order].sort((left, right) => left - right)).toEqual(order);
   });
 
+  // Final review, 22 November 2026: every call of a personal timeline brings the current
+  // message's reply chain, the unseen page and the recent window alike.
+  it("anchors every personal timeline read on the current message", async () => {
+    const timeline = recentPages({
+      listIncremental: vi.fn().mockResolvedValue({ entries: [], omittedBeforeSequence: null }),
+      listRecent: vi.fn().mockResolvedValue([]),
+    });
+    const prepare = createTelegramGroupTurnContextPreparer({ ...dependencies("90"), timeline });
+
+    await prepare({ ...input, conversationId: "conversation-personal-1", groupId: null });
+
+    const anchored = expect.objectContaining({ anchorEntryId: input.currentEntryId });
+    expect(timeline.listIncremental).toHaveBeenCalledExactlyOnceWith(anchored);
+    expect(timeline.listRecent).toHaveBeenCalledExactlyOnceWith(anchored);
+  });
+
+  // Repeat review, 23 November 2026: the first turn of a session read a full page of the journal
+  // and never said older history existed; the page's own cut now reaches the selection.
+  it("marks the history before the first turn's page", async () => {
+    const deps = dependencies(null);
+    deps.journal.listRecentPage.mockResolvedValue({
+      entries: [entry("98", "Первое"), entry("99", "Второе")],
+      omittedBeforeSequence: "98",
+    });
+
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+
+    expect(result.timelineOmission).toEqual({ beforeSequence: "98" });
+    expect(result.durableMessage).toContain("Часть истории пропущена перед #98");
+  });
+
   it("uses the same bounded context contract for a private conversation", async () => {
     const deps = dependencies(null);
     const privateEntry = {
       ...entry("98", "Личный контекст"),
       entryId: "00000000-0000-4000-8000-000000000098",
     };
-    const timeline = {
+    const timeline = recentPages({
       listIncremental: vi.fn(),
       listRecent: vi.fn().mockResolvedValue([privateEntry]),
-    };
+    });
     const prepare = createTelegramGroupTurnContextPreparer({ ...deps, timeline });
 
     const result = await prepare({
@@ -254,6 +323,7 @@ describe("Telegram group turn context", () => {
     });
 
     expect(timeline.listRecent).toHaveBeenCalledWith({
+      anchorEntryId: input.currentEntryId,
       beforeSequence: "100",
       conversationId: "conversation-personal-1",
       limit: 99,

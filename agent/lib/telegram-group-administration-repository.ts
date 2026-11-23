@@ -21,6 +21,11 @@ import type {
   TelegramGroupMessageMode,
 } from "./family-access.js";
 import { requireLockedOwner } from "./family-repository-checks.js";
+import { restartMemoryReviewAtJournalEnd } from "./memory-review/memory-review-lane-restart.js";
+import { retryOnTransactionConflict } from "./transaction-conflict-retry.js";
+
+/** Runs of an owner's group command that PostgreSQL aborted on a deadlock with a review turn. */
+const GROUP_COMMAND_ATTEMPTS = 3;
 
 interface TelegramGroupRegistrationBase {
   familyId: string;
@@ -82,6 +87,122 @@ export interface TelegramGroupAdministrationRepository {
   updatePolicy(input: TelegramGroupPolicyUpdate): Promise<{ groupId: string }>;
 }
 
+type GroupRemoval = Parameters<TelegramGroupAdministrationRepository["removeRegistration"]>[0];
+
+async function registerGroupOnce(input: TelegramGroupRegistration): Promise<{ groupId: string }> {
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+
+    // Lock current ownership so a parked HITL action cannot outlive role revocation.
+    await requireLockedOwner(client, input.familyId, input.requestedBy);
+
+    // Receipt-time media policy and trust-zone replacement share this chat-level lock.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+      input.telegramChatId,
+      TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+    ]);
+
+    // A type change crosses a trust boundary, so replace the row and cascade all scoped data.
+    const existing = await client.query<{
+      family_id: string;
+      id: string;
+      type: RegisteredGroupType;
+    }>(
+      `SELECT id, family_id, type
+     FROM telegram_groups
+     WHERE telegram_chat_id = $1
+     FOR UPDATE`,
+      [input.telegramChatId],
+    );
+    const current = existing.rows[0];
+    if (current && current.family_id !== input.familyId) {
+      throw new AppError(
+        "AGENT_GROUP_REGISTRATION_CONFLICT",
+        "Группа уже принадлежит другой семье",
+      );
+    }
+    if (current && current.type !== input.type) {
+      await client.query("DELETE FROM telegram_groups WHERE id = $1", [current.id]);
+    }
+
+    // A conflicting chat owned by another family is never reassigned through an upsert.
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO telegram_groups
+       (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (telegram_chat_id)
+     DO UPDATE SET title = EXCLUDED.title,
+                   type = EXCLUDED.type,
+                   tool_allowlist = EXCLUDED.tool_allowlist,
+                   message_mode = EXCLUDED.message_mode
+     WHERE telegram_groups.family_id = EXCLUDED.family_id
+     RETURNING id`,
+      [
+        input.familyId,
+        input.telegramChatId,
+        input.title,
+        input.type,
+        input.toolAllowlist,
+        input.messageMode,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new AppError(
+        "AGENT_GROUP_REGISTRATION_CONFLICT",
+        "Группа уже принадлежит другой семье",
+      );
+    }
+
+    await client.query("COMMIT");
+    return { groupId: row.id };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function removeRegistrationOnce(input: GroupRemoval): Promise<{ groupId: string }> {
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+
+    // Keep authorization and deletion in one transaction to close the HITL revocation race.
+    await requireLockedOwner(client, input.familyId, input.requestedBy);
+
+    // Prevent removal from overtaking an in-flight media trust-zone decision.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
+      input.telegramChatId,
+      TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+    ]);
+
+    // Both group keys remain mandatory so another family's registration is never deleted.
+    const result = await client.query<{ id: string }>(
+      `DELETE FROM telegram_groups
+     WHERE family_id = $1 AND telegram_chat_id = $2
+     RETURNING id`,
+      [input.familyId, input.telegramChatId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new AppError(
+        "AGENT_GROUP_NOT_FOUND",
+        "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
+      );
+    }
+    await client.query("COMMIT");
+    return { groupId: row.id };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export const telegramGroupAdministrationRepository: TelegramGroupAdministrationRepository = {
   async listStatuses(input) {
     const client = await database().connect();
@@ -124,80 +245,12 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
     }
   },
 
-  async registerGroup(input) {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-
-      // Lock current ownership so a parked HITL action cannot outlive role revocation.
-      await requireLockedOwner(client, input.familyId, input.requestedBy);
-
-      // Receipt-time media policy and trust-zone replacement share this chat-level lock.
-      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
-        input.telegramChatId,
-        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
-      ]);
-
-      // A type change crosses a trust boundary, so replace the row and cascade all scoped data.
-      const existing = await client.query<{
-        family_id: string;
-        id: string;
-        type: RegisteredGroupType;
-      }>(
-        `SELECT id, family_id, type
-         FROM telegram_groups
-         WHERE telegram_chat_id = $1
-         FOR UPDATE`,
-        [input.telegramChatId],
-      );
-      const current = existing.rows[0];
-      if (current && current.family_id !== input.familyId) {
-        throw new AppError(
-          "AGENT_GROUP_REGISTRATION_CONFLICT",
-          "Группа уже принадлежит другой семье",
-        );
-      }
-      if (current && current.type !== input.type) {
-        await client.query("DELETE FROM telegram_groups WHERE id = $1", [current.id]);
-      }
-
-      // A conflicting chat owned by another family is never reassigned through an upsert.
-      const result = await client.query<{ id: string }>(
-        `INSERT INTO telegram_groups
-           (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (telegram_chat_id)
-         DO UPDATE SET title = EXCLUDED.title,
-                       type = EXCLUDED.type,
-                       tool_allowlist = EXCLUDED.tool_allowlist,
-                       message_mode = EXCLUDED.message_mode
-         WHERE telegram_groups.family_id = EXCLUDED.family_id
-         RETURNING id`,
-        [
-          input.familyId,
-          input.telegramChatId,
-          input.title,
-          input.type,
-          input.toolAllowlist,
-          input.messageMode,
-        ],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new AppError(
-          "AGENT_GROUP_REGISTRATION_CONFLICT",
-          "Группа уже принадлежит другой семье",
-        );
-      }
-
-      await client.query("COMMIT");
-      return { groupId: row.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+  registerGroup(input) {
+    // A review turn failing meanwhile holds its batch and lane, then alerts the owner with a row
+    // referencing this group, while the type change's cascade waits for that lane: PostgreSQL aborts one
+    // side with 40P01, and the owner's command runs again (repeat review, 23 November 2026); the
+    // retry itself may meet the same turn's next lock, so up to three runs.
+    return retryOnTransactionConflict(() => registerGroupOnce(input), GROUP_COMMAND_ATTEMPTS);
   },
 
   async requestGroupSessionRotation(input) {
@@ -263,42 +316,9 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
     }
   },
 
-  async removeRegistration(input) {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-
-      // Keep authorization and deletion in one transaction to close the HITL revocation race.
-      await requireLockedOwner(client, input.familyId, input.requestedBy);
-
-      // Prevent removal from overtaking an in-flight media trust-zone decision.
-      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", [
-        input.telegramChatId,
-        TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
-      ]);
-
-      // Both group keys remain mandatory so another family's registration is never deleted.
-      const result = await client.query<{ id: string }>(
-        `DELETE FROM telegram_groups
-         WHERE family_id = $1 AND telegram_chat_id = $2
-         RETURNING id`,
-        [input.familyId, input.telegramChatId],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new AppError(
-          "AGENT_GROUP_NOT_FOUND",
-          "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
-        );
-      }
-      await client.query("COMMIT");
-      return { groupId: row.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+  removeRegistration(input) {
+    // The cascade meets a failing review turn as `registerGroup` does.
+    return retryOnTransactionConflict(() => removeRegistrationOnce(input), GROUP_COMMAND_ATTEMPTS);
   },
 
   async updatePolicy(input) {
@@ -315,16 +335,20 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
       ]);
 
-      // Lock the existing identity in place; policy updates never replace a trust-zone row.
+      // Lock the existing identity in place; policy updates never replace a trust-zone row. No key
+      // changes, so the lock leaves rows that reference the group (a review's owner alert) free to
+      // be inserted: `FOR UPDATE` deadlocked a failing review turn that holds its lane while the
+      // restart below waits on that lane (final review, 22 November 2026).
       const existing = await client.query<{
         family_id: string;
         id: string;
+        memory_review_enabled: boolean;
         type: RegisteredGroupType;
       }>(
-        `SELECT id, family_id, type
+        `SELECT id, family_id, type, memory_review_enabled
          FROM telegram_groups
          WHERE telegram_chat_id = $1
-         FOR UPDATE`,
+         FOR NO KEY UPDATE`,
         [input.telegramChatId],
       );
       const group = existing.rows[0];
@@ -357,6 +381,11 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
           "AGENT_GROUP_POLICY_UPDATE_FAILED",
           "Не удалось обновить политику группы. Повторите попытку",
         );
+      }
+      // Review turned back on starts from now (owner, 22 November 2026): the journal keeps every
+      // entry, and the period it was off would otherwise be reviewed, and paid for, in full.
+      if (input.memoryReview === true && group.memory_review_enabled === false) {
+        await restartMemoryReviewAtJournalEnd(client, group.id);
       }
 
       await client.query("COMMIT");

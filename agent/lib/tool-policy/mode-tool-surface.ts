@@ -17,6 +17,7 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { telegramCaptionSchema } from "../attachments/telegram-caption.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { EXTERNAL_IMAGE_GENERATION_TOOL_PRESENTATION } from "../image-generation/image-generation-tool-presentation.js";
 import { wrapModelFacingToolMap } from "../model-facing-tool.js";
@@ -105,13 +106,12 @@ type DirectExternalToolName = Exclude<
 
 const EXTERNAL_IMAGE_PATH_MAX_LENGTH = 512;
 const EXTERNAL_MODEL_TEXT_MAX_LENGTH = 4_000;
-const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
 
 /** Both senders take the same input; the Telegram presentation belongs to the tool, not the model. */
 function externalWorkspaceSendInputSchema(pathExample: string) {
   return z
     .object({
-      caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
+      caption: telegramCaptionSchema.optional(),
       path: z
         .string()
         .min(1)

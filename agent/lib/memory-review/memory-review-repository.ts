@@ -17,6 +17,7 @@ import {
 } from "./memory-review-config.js";
 import { memoryReviewTerminalRepository } from "./memory-review-terminal-repository.js";
 import { lockApplicationConversation } from "../conversation-lock.js";
+import { projectReviewSource, type ReviewSourceRow } from "./memory-review-source.js";
 
 export interface MemoryReviewBatchSummary {
   batchId: string;
@@ -52,42 +53,10 @@ interface LaneRow {
   processed_through_sequence: string;
 }
 
-interface SourceRow {
-  actor_id: string;
-  actor_kind: "agent_self" | "telegram_bot" | "user";
-  content_text: string | null;
-  id: string;
-  message_kind: string;
-  message_thread_id: string | null;
-  reply_to_sequence_id: string | null;
-  sender_display_name: string | null;
-  sender_tag: string | null;
-  sender_username: string | null;
-  sent_at: Date;
-  sequence_id: string;
-}
-
 const SOURCE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
   message.actor_id, message.message_thread_id::text, message.sender_username,
   message.sender_display_name, message.sender_tag, message.message_kind, message.content_text,
   message.reply_to_sequence_id::text, message.sent_at`;
-
-function projectSource(row: SourceRow): TelegramGroupJournalEntry {
-  return {
-    actorId: row.actor_id,
-    actorKind: row.actor_kind,
-    contentText: row.content_text,
-    entryId: row.id,
-    messageKind: row.message_kind,
-    messageThreadId: row.message_thread_id,
-    replyToSequenceId: row.reply_to_sequence_id,
-    senderDisplayName: row.sender_display_name,
-    senderTag: row.sender_tag,
-    senderUsername: row.sender_username,
-    sentAt: row.sent_at.toISOString(),
-    sequenceId: row.sequence_id,
-  };
-}
 
 async function laneForUpdate(
   client: PoolClient,
@@ -160,8 +129,8 @@ async function sourceRows(
     throughSequence: string;
     upperSequence: string;
   },
-): Promise<SourceRow[]> {
-  const result = await client.query<SourceRow>(
+): Promise<ReviewSourceRow[]> {
+  const result = await client.query<ReviewSourceRow>(
     `SELECT ${SOURCE_COLUMNS}
        FROM telegram_group_messages AS message
       WHERE message.conversation_id = $1 AND message.actor_kind IN ('user', 'telegram_bot')
@@ -187,7 +156,7 @@ async function insertBatch(
     batchKind: "background" | "interactive";
     lane: LaneRow;
     predecessorSequence: string;
-    sources: readonly SourceRow[];
+    sources: readonly ReviewSourceRow[];
   },
 ): Promise<MemoryReviewBatchSummary> {
   const first = input.sources[0];
@@ -234,7 +203,7 @@ async function insertBatch(
   );
   return {
     batchId,
-    entries: input.sources.map(projectSource),
+    entries: input.sources.map(projectReviewSource),
     messageThreadId: input.lane.message_thread_id,
     sourceCount: input.sources.length,
     sourceEntryIds: input.sources.map((source) => source.id),

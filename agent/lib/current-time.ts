@@ -5,6 +5,7 @@
  * - `CurrentTimeResult`: JSON-safe UTC and optional local civil-time snapshot.
  * - `formatCurrentTimeContext`: serializes the turn-start clock for inbound context.
  * - `resolveCurrentTime`: validates a timezone and formats one current-time snapshot.
+ * - `utcOffsetOfZoneName`: the offset Intl's `longOffset` names, shared with the timeline clock.
  */
 import { AppError } from "./app-error.js";
 
@@ -56,10 +57,15 @@ function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTyp
   return value;
 }
 
-function utcOffset(parts: Intl.DateTimeFormatPart[]): string {
-  const value = part(parts, "timeZoneName");
+/** Intl's `longOffset` name (`GMT`, `GMT+03:00`) as an offset (`+00:00`, `+03:00`), else null. */
+export function utcOffsetOfZoneName(value: string): string | null {
   if (value === "GMT") return "+00:00";
-  if (/^GMT[+-]\d{2}:\d{2}$/u.test(value)) return value.slice(3);
+  return /^GMT[+-]\d{2}:\d{2}$/u.test(value) ? value.slice(3) : null;
+}
+
+function utcOffset(parts: Intl.DateTimeFormatPart[]): string {
+  const offset = utcOffsetOfZoneName(part(parts, "timeZoneName"));
+  if (offset !== null) return offset;
   throw new AppError(
     "AGENT_CURRENT_TIME_FORMAT_FAILED",
     "Не удалось определить смещение локального времени относительно UTC",

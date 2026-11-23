@@ -258,6 +258,68 @@ describeWithDatabase("Telegram group journal repositories", () => {
       ["9", "девять"],
       ["10", "десять"],
     ]);
+
+    // A page that does not reach the topic's start says where it goes on (repeat review,
+    // 23 November 2026: a first turn never told the model older history existed).
+    const cut = await telegramGroupJournalRepository.listRecentPage({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: group.groupId,
+      limit: 1,
+      messageThreadId: "7",
+    });
+    expect(cut.entries.map((entry) => entry.telegramMessageId)).toEqual(["10"]);
+    expect(cut.omittedBeforeSequence).toBe(cut.entries[0]!.sequenceId);
+    const whole = await telegramGroupJournalRepository.listRecentPage({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: group.groupId,
+      limit: 2,
+      messageThreadId: "7",
+    });
+    expect(whole.omittedBeforeSequence).toBeNull();
+  });
+
+  // A series of one author is found by Telegram ids through their aliases (22 November 2026).
+  it("finds one author's messages in a conversation by their Telegram ids", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("series");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "all",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Группа",
+      toolAllowlist: [],
+      type: "external",
+    });
+    for (const id of ["21", "22", "23"]) {
+      await telegramGroupJournalRepository.record(
+        group.groupId,
+        message({ id, text: `серия ${id}` }),
+      );
+    }
+    await telegramGroupJournalRepository.record(group.groupId, {
+      ...message({ id: "24", text: "чужое" }),
+      from: { firstName: "Борис", id: "102", isBot: false },
+    });
+    const conversation = await database().query<{ id: string }>(
+      "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
+      [group.groupId],
+    );
+    const expected = await database().query<{ sequence_id: string }>(
+      `SELECT sequence_id::text FROM telegram_group_messages
+       WHERE group_id = $1 AND telegram_message_id IN (21, 23) ORDER BY sequence_id`,
+      [group.groupId],
+    );
+
+    await expect(
+      telegramGroupJournalRepository.findSeriesSequences({
+        actorId: "telegram:101",
+        conversationId: conversation.rows[0]!.id,
+        telegramMessageIds: ["21", "23", "24", "99"],
+      }),
+    ).resolves.toEqual(expected.rows.map((row) => row.sequence_id));
+    expect(expected.rows).toHaveLength(2);
   });
 
   // 2 October 2026: members' tags («Батя», «Token Burner») never reached the timeline Mia reads.

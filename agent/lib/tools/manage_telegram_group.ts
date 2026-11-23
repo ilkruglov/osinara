@@ -114,7 +114,7 @@ const manageTelegramGroupSchema = z
       .enum(MEMORY_REVIEW_MODES)
       .optional()
       .describe(
-        "Только при action=update_policy внешней группы: enabled или disabled включает или выключает тихую проверку памяти по сообщениям этой группы. Без поля текущее значение не меняется.",
+        "Только при action=update_policy внешней группы: enabled или disabled включает или выключает тихую проверку памяти по сообщениям этой группы; enabled начинает с текущего момента, выключенный период не разбирается. Без поля текущее значение не меняется.",
       ),
     messageMode: z
       .enum(EXTERNAL_MESSAGE_MODES)
@@ -328,7 +328,7 @@ const TOOL_DESCRIPTION = [
   "Управлять Telegram-группами семьи из личного чата владельца: status, register, update_policy, start_new_context, remove.",
   'Выбери один action и передавай только его payload; лишние поля других actions не заполняй, telegramChatId бери из status, не угадывай. Status не требует подтверждения: {"action":"status"}.',
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для смены прав используй update_policy: он сохраняет ID, название, тип и все данные. Register сработает, только если владелец создатель или администратор этой группы в Telegram, а бот уже состоит в ней. Remove не выводит бота из чата. Start_new_context не удаляет timeline, память, файлы и pending tasks: следующая реплика в main-чате и каждой теме начнёт новую canonical generation.",
-  "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют. memoryReview=disabled в update_policy выключает тихую проверку памяти по сообщениям внешней группы (сообщения всё равно пишутся в журнал), enabled включает обратно; без поля не меняется.",
+  "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют. memoryReview=disabled в update_policy выключает тихую проверку памяти по сообщениям внешней группы (сообщения всё равно пишутся в журнал), enabled включает обратно с текущего момента: сообщения за время выключения тихая проверка не разбирает (явная просьба «запомни» работает и при выключенной проверке, если группе выдано право remember и сообщение начинает ход: при owner_only — только от владельца); без поля не меняется.",
   "Enums: action=register | remove | start_new_context | status | update_policy; type=family_private | external; messageMode=addressed_only | all | owner_only.",
   'Register: {"action":"register","registration":{"type":"family_private","telegramChatId":"-1001234567890","title":"Семейный чат","messageMode":"addressed_only"}}; для external добавь в registration "toolAllowlist":["search_memories"].',
   'Update_policy: {"action":"update_policy","telegramChatId":"-1001234567890","messageMode":"all","toolAllowlist":["search_memories"]} без type и title. Start_new_context: {"action":"start_new_context","telegramChatId":"-1001234567890"}. Remove: {"action":"remove","telegramChatId":"-1001234567890"}.',

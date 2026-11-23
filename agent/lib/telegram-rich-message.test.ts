@@ -6,6 +6,10 @@
  * - Quotations, lists, tables and media captions contribute their text; unknown blocks are skipped.
  * - Rich text given as an array of parts (strings and link entities) is joined, not dropped.
  * - An update with plain text is left untouched; one without rich content stays as it is.
+ * - A quote's rich texts: one element per quoted block, joined by a line break.
+ * - Blocks and rich texts in the shapes the Bot API documents (10.4): `heading`, `pre`, `pullquote`,
+ *   a table's `cells`, a formula's `expression`, collage and slideshow captions, nested styles,
+ *   custom emoji; a key in any of them must reach the secret check of a quote.
  */
 import type { TelegramUpdate } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -14,8 +18,10 @@ import {
   normalizeRichMessage,
   richMediaIsLifted,
   richMessagePlainText,
-  withoutRichMediaBlocks,
+  richQuotableText,
+  richQuoteText,
   withRichMessageText,
+  withoutRichMediaBlocks,
 } from "./telegram-rich-message.js";
 
 describe("richMessagePlainText", () => {
@@ -80,7 +86,7 @@ describe("richMessagePlainText", () => {
           ],
         },
       }),
-    ).toBe("Цитата.\n\nпункт один\n\nпункт два\n\nа | б\n\nподпись к фото");
+    ).toBe("Цитата.\n\nпункт один\n\nпункт два\n\nа\tб\n\nподпись к фото");
   });
 
   it("keeps a paragraph whose rich text is a list of parts with inline links", () => {
@@ -323,5 +329,122 @@ describe("normalizeRichMessage", () => {
     expect(normalized.message.text).toBe("подпись к фото\n\nпост про эвалы");
     expect(normalized.message.attachments).toEqual([]);
     expect(richMediaIsLifted(normalized.message.raw)).toBe(false);
+  });
+});
+
+describe("richQuoteText", () => {
+  it("joins the quoted blocks by a line break and the parts of each block as they are", () => {
+    expect(richQuoteText([["отоз", { text: "ван", type: "bold" }], "  и заменён "])).toBe(
+      "отозван\nи заменён",
+    );
+  });
+
+  it("has nothing of an empty or malformed list", () => {
+    expect(richQuoteText([])).toBeNull();
+    expect(richQuoteText("строка")).toBeNull();
+  });
+});
+
+// Repeat review, 23 November 2026: the parser knew older names; a key in a code block, a heading or
+// a table never reached the quote's secret check, and the quoted value came through open.
+describe("Bot API rich shapes", () => {
+  it("reads every documented text-bearing block", () => {
+    const raw = {
+      rich_message: {
+        blocks: [
+          { size: 1, text: "Заголовок", type: "heading" },
+          { language: "sh", text: "FAL_KEY=abcdefghij0123456789", type: "pre" },
+          { credit: "автор", text: "Цитата в центре", type: "pullquote" },
+          {
+            cells: [
+              [{ text: "ключ" }, { text: "значение" }],
+              [{ text: "a" }, {}],
+            ],
+            type: "table",
+          },
+          { expression: "a^2+b^2", type: "mathematical_expression" },
+          {
+            blocks: [{ photo: [{ file_id: "p" }], type: "photo" }],
+            caption: { text: "Подпись коллажа" },
+            type: "collage",
+          },
+          { text: "Развёрнутая цитата", type: "expandable_blockquote" },
+        ],
+      },
+    };
+
+    expect(richMessagePlainText(raw, "\n")).toBe(
+      [
+        "Заголовок",
+        "FAL_KEY=abcdefghij0123456789",
+        "Цитата в центре",
+        // A quotation's credit is quotable text too (Bot API, `quote_rich_texts`).
+        "автор",
+        "ключ\tзначение",
+        "a",
+        "a^2+b^2",
+        "Подпись коллажа",
+        "Развёрнутая цитата",
+      ].join("\n"),
+    );
+  });
+
+  // Repeat review, 23 November 2026: a map's caption, a caption's credit and a button's label were
+  // lost, and the first line of code lost its indent to the trim.
+  it("reads map captions, credits, button labels and the indent of code", () => {
+    const raw = {
+      rich_message: {
+        blocks: [
+          { caption: { credit: "Анна", text: "Точка встречи" }, type: "map" },
+          {
+            blocks: [{ photo: [{ file_id: "p" }], type: "photo" }],
+            caption: { credit: "Анна", text: "Эскиз" },
+            type: "slideshow",
+          },
+          {
+            text: ["Действие: ", { button: { text: "Готово" }, type: "button" }],
+            type: "paragraph",
+          },
+          { text: "  first: 1\n  second: 2", type: "pre" },
+        ],
+      },
+    };
+
+    expect(richMessagePlainText(raw, "\n")).toBe(
+      [
+        "Точка встречи",
+        "Анна",
+        "Эскиз",
+        "Анна",
+        "Действие: Готово",
+        "  first: 1\n  second: 2",
+      ].join("\n"),
+    );
+  });
+
+  // Telegram counts each quotable text on its own, joined by one line feed, untrimmed: a table's
+  // caption and each cell, a caption's text and credit (Bot API, `quote_rich_texts`).
+  it("joins the quotable texts in Telegram's form", () => {
+    const raw = {
+      rich_message: {
+        blocks: [
+          { text: "первый  ", type: "paragraph" },
+          { text: "  второй", type: "paragraph" },
+          { caption: "Погода", cells: [[{ text: "утро" }, { text: "вечер" }]], type: "table" },
+        ],
+      },
+    };
+
+    expect(richQuotableText(raw)).toBe("первый  \n  второй\nПогода\nутро\nвечер");
+  });
+
+  it("reads nested styles, custom emoji and formulas inside rich text", () => {
+    expect(
+      richQuoteText([
+        { text: { text: "срок", type: "italic" }, type: "bold" },
+        { alternative_text: "🏠", custom_emoji_id: "1", type: "custom_emoji" },
+        { expression: "a+b", type: "mathematical_expression" },
+      ]),
+    ).toBe("срок\n🏠\na+b");
   });
 });

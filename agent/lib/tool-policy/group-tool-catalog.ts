@@ -35,7 +35,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     name: "generate_image",
     requiresImageGeneration: true,
     usage:
-      "создавать изображения и редактировать доступные исходники через Cloudflare, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
+      "создавать изображения и редактировать доступные исходники, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
   },
   {
     name: "fetch_telegram_avatars",

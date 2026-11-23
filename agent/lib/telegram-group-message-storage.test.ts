@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - `telegramForumTopicId`: distinguishes real forum topics from ordinary reply threads.
- * - Secret text keeps a logical event but never enters durable timeline content.
+ * - Durable timeline content: a secret told in words keeps no text of the message, its caption
+ *   included; a machine form is masked and the rest of the text stays.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -27,13 +28,24 @@ function message(input: { isTopicMessage?: boolean; threadId?: number }): Telegr
 }
 
 describe("telegramForumTopicId", () => {
-  it("redacts credentials from durable timeline content", () => {
+  it("keeps no text of a message that tells a password", () => {
     expect(
       telegramMessageContent({
         ...message({}),
+        caption: "это от роутера",
         text: "Пароль: correct-horse-battery-staple",
       }),
     ).toBeNull();
+  });
+
+  it("masks a key in durable timeline content and keeps the rest", () => {
+    expect(
+      telegramMessageContent({
+        ...message({}),
+        caption: "это от сервера",
+        text: "ключ FAL_KEY=abcdefghij0123456789",
+      }),
+    ).toBe("ключ FAL_KEY=[СКРЫТО]\nэто от сервера");
   });
 
   it("ignores a delivery thread on an ordinary supergroup reply", () => {

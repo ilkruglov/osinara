@@ -439,7 +439,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         })
       : null;
     // One verification of the reply target serves both projections: its full text is needed only
-    // when the timeline cannot resolve the target, the selected fragment whenever there is one.
+    // when the journal has no target (a journaled one joins the timeline through its reply chain),
+    // the selected fragment whenever there is one.
     const replyTarget = telegramReplyTargetProjection(message);
     const replyTargetSnapshot = inboundTimeline?.replyTargetUnavailable
       ? replyTarget.snapshot

@@ -26,7 +26,7 @@ import { isAppError } from "../app-error.js";
 import { conversationTimelineRepository } from "../conversation-timeline-repository.js";
 import { sessionHandoffModel } from "../model-registry.js";
 import {
-  renderTelegramGroupJournalContext,
+  journalBlockRenderer,
   type TelegramGroupJournalEntry,
 } from "../telegram-group-journal-context.js";
 import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
@@ -128,14 +128,14 @@ export function renderHandoffSource(
   timezone: string | null,
   maxCharacters: number = SESSION_HANDOFF_SOURCE_MAX_CHARACTERS,
 ): { entries: TelegramGroupJournalEntry[]; rendered: string } {
+  // Each entry is rendered once and the block joined once: drawing the whole block anew on every
+  // drop cost ~49 ms a rotation in a timezone (repeat review, 23 November 2026).
+  const block = journalBlockRenderer(source, timezone);
   let entries = [...source];
-  let rendered = renderTelegramGroupJournalContext(entries, null, timezone);
-  while (rendered.length > maxCharacters && entries.length > 0) {
+  while (entries.length > 0 && block(entries, null).length > maxCharacters) {
     entries = entries.slice(1);
-    rendered =
-      entries.length === 0 ? "" : renderTelegramGroupJournalContext(entries, null, timezone);
   }
-  return { entries, rendered };
+  return { entries, rendered: entries.length === 0 ? "" : block(entries, null).text() };
 }
 
 async function generateWithModel(prompt: SessionHandoffPrompt): Promise<string> {
@@ -181,6 +181,7 @@ export async function prepareSessionHandoff(
     const entries =
       input.conversationId !== null
         ? await dependencies.listPrivate({
+            anchorEntryId: null,
             beforeSequence: input.beforeSequence,
             conversationId: input.conversationId,
             limit: SESSION_HANDOFF_SOURCE_MAX_ENTRIES,

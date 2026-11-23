@@ -10,9 +10,11 @@
  * - Non-image and provider-oversized files fail before a paid model call.
  * - Provider failures are normalized for persisted and ephemeral Telegram images.
  */
+import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 
 import { VISION_MAX_FILE_BYTES } from "../../config.js";
+import { AppError } from "../app-error.js";
 import { createWorkspaceImageInspector } from "./workspace-image-inspection.js";
 
 const auth = {
@@ -24,6 +26,18 @@ const auth = {
   userId: "user-1",
 };
 const authorizeScope = vi.fn(async () => undefined);
+/** A PNG signature: the reader judges an image by its bytes, not by its recorded type. */
+const PNG_BYTES = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+
+// Repeat review, 23 November 2026: a file the reader refuses reached the model as an operation of
+// unknown outcome, «do not retry»; it is an input the model corrects with another file.
+const SOURCE_REFUSAL = {
+  category: "input",
+  correction: expect.stringContaining("другой файл"),
+  field: "path",
+  retryable: true,
+  sideEffectStatus: "not_started",
+};
 
 describe("createWorkspaceImageInspector", () => {
   it("analyzes an authorized persisted image", async () => {
@@ -33,7 +47,7 @@ describe("createWorkspaceImageInspector", () => {
       authorizeScope,
       supportsImageInput: true,
       readBinary: vi.fn().mockResolvedValue({
-        bytes: Buffer.from("image"),
+        bytes: PNG_BYTES,
         file: { mediaType: "image/png", path: "photos/calendar.png" },
         workspaceId: "workspace-1",
       }),
@@ -79,7 +93,10 @@ describe("createWorkspaceImageInspector", () => {
         question: "Что внутри?",
         scope: "personal",
       }),
-    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    ).rejects.toMatchObject({
+      code: "AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED",
+      contract: SOURCE_REFUSAL,
+    });
     expect(analyze).not.toHaveBeenCalled();
   });
 
@@ -105,14 +122,133 @@ describe("createWorkspaceImageInspector", () => {
         question: "Что изображено?",
         scope: "personal",
       }),
-    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_FILE_TOO_LARGE/);
+    ).rejects.toMatchObject({
+      code: "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE",
+      contract: SOURCE_REFUSAL,
+    });
     expect(analyze).not.toHaveBeenCalled();
+  });
+
+  // Repeat review, 23 November 2026: any image type of a workspace file went to the vision model,
+  // and a TIFF failed there as the provider's fault.
+  it("refuses a workspace image the vision model cannot read before a paid call", async () => {
+    const analyze = vi.fn();
+    const tiff = await sharp({ create: { background: "red", channels: 3, height: 1, width: 1 } })
+      .tiff()
+      .toBuffer();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      authorizeScope,
+      supportsImageInput: true,
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: tiff,
+        file: { mediaType: "image/tiff", path: "scans/page.tiff" },
+        workspaceId: "workspace-1",
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+    });
+
+    await expect(
+      inspect(auth, { path: "scans/page.tiff", question: "Что внутри?", scope: "personal" }),
+    ).rejects.toMatchObject({
+      code: "AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED",
+      contract: SOURCE_REFUSAL,
+    });
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
+  // Narrow final review, 23 November 2026: the vision model reads GIF (DeepSeek: JPEG, PNG, GIF and
+  // WebP), and the check of the bytes above refused it, as it had not before.
+  it("sends a workspace GIF to the vision model", async () => {
+    const analyze = vi.fn().mockResolvedValue("Анимация с котом.");
+    const gif = await sharp({ create: { background: "red", channels: 3, height: 2, width: 2 } })
+      .gif()
+      .toBuffer();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      authorizeScope,
+      supportsImageInput: true,
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: gif,
+        file: { mediaType: "image/gif", path: "media/cat.gif" },
+        workspaceId: "workspace-1",
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+    });
+
+    await expect(
+      inspect(auth, { path: "media/cat.gif", question: "Что там?", scope: "personal" }),
+    ).resolves.toMatchObject({ analysis: "Анимация с котом." });
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ mediaType: "image/gif" }));
+  });
+
+  // The storage (50 MB) and the Telegram download (20 MB) check the size before the reader does;
+  // nothing has started either way (repeat review, 23 November 2026).
+  it("tells the model to take another file when storage refuses its size", async () => {
+    const inspect = createWorkspaceImageInspector({
+      analyze: vi.fn(),
+      authorizeScope,
+      supportsImageInput: true,
+      readBinary: vi
+        .fn()
+        .mockRejectedValue(new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл больше 50 МБ")),
+      readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+    });
+    await expect(
+      inspect(auth, { path: "huge.png", question: "Что изображено?", scope: "personal" }),
+    ).rejects.toMatchObject({ code: "AGENT_WORKSPACE_FILE_TOO_LARGE", contract: SOURCE_REFUSAL });
+  });
+
+  it("tells the model to take another file when the Telegram download refuses its size", async () => {
+    const inspect = createWorkspaceImageInspector({
+      analyze: vi.fn(),
+      authorizeScope,
+      supportsImageInput: true,
+      downloadTelegramAttachment: vi
+        .fn()
+        .mockRejectedValue(
+          new AppError("AGENT_ATTACHMENT_DOWNLOAD_TOO_LARGE", "Файл больше 20 МБ"),
+        ),
+      findTelegramAttachment: vi.fn().mockResolvedValue({
+        attachment: { fileId: "file-id", fileName: "scheme.png", kind: "document" },
+        chatId: "-1001",
+        messageId: "41",
+      }),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+    await expect(
+      inspect(
+        {
+          ...auth,
+          groupId: "group-1",
+          groupType: "external",
+          role: "external",
+          telegramChatType: "supergroup",
+          userId: null,
+        },
+        {
+          attachmentId: "00000000-0000-4000-8000-000000000041",
+          question: "Что изображено?",
+          scope: "group",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "AGENT_ATTACHMENT_DOWNLOAD_TOO_LARGE",
+      contract: { ...SOURCE_REFUSAL, field: "attachmentId" },
+    });
   });
 
   it("resolves a Telegram image by message ID without copying its untrusted filename", async () => {
     const analyze = vi.fn().mockResolvedValue("На изображении человек.");
     const readTelegramInboxAttachment = vi.fn().mockResolvedValue({
-      bytes: Buffer.from("image"),
+      bytes: PNG_BYTES,
       file: {
         mediaType: "image/jpeg",
         path: "inbox/773/очень-длинное-имя.jpg",
@@ -310,7 +446,10 @@ describe("createWorkspaceImageInspector", () => {
           scope: "group",
         },
       ),
-    ).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    ).rejects.toMatchObject({
+      code: "AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED",
+      contract: { ...SOURCE_REFUSAL, field: "attachmentId" },
+    });
     expect(analyze).not.toHaveBeenCalled();
   });
 
@@ -379,7 +518,7 @@ describe("createWorkspaceImageInspector", () => {
       downloadTelegramAttachment: vi.fn(),
       findTelegramAttachment: vi.fn(),
       readBinary: vi.fn().mockResolvedValue({
-        bytes: Buffer.from("image"),
+        bytes: PNG_BYTES,
         file: { mediaType: "image/png", path: "image.png", scope: "personal" },
       }),
       readTelegramInboxAttachment: vi.fn(),

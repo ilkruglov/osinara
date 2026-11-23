@@ -6,6 +6,8 @@
  * - The canonical external group type is supported, while an absent registration is never created.
  * - Existing group identity, metadata, timeline, workspace, memory, and sessions remain attached.
  * - Family trust zones and callers whose owner role was revoked are rejected transactionally.
+ * - Turning silent review back on starts it from the end of the journal: the period it was off is
+ *   not reviewed (and not paid for); turning on what is already on moves nothing.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -138,6 +140,70 @@ describeWithDatabase("Telegram group policy update repository", () => {
         rowCount: 1,
       });
     }
+  });
+
+  it("starts silent review from the end of the journal when it is turned back on", async () => {
+    const fixture = await ownedFamily();
+    const group = await database().query<{ id: string }>(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist,
+          memory_review_enabled, next_timeline_sequence)
+       VALUES ($1, '-100-review', 'Тихая', 'external', 'all', '{}', false, 4)
+       RETURNING id`,
+      [fixture.familyId],
+    );
+    const groupId = group.rows[0]!.id;
+    await database().query(
+      `INSERT INTO telegram_group_messages
+         (group_id, message_thread_id, sequence_id, actor_kind, actor_id, telegram_message_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       SELECT $1, thread, value, 'user', 'telegram:review-user', 500 + value, 'review-user',
+              'Участник', false, 'text', 'пока проверка выключена', now()
+         FROM (VALUES (1, NULL::bigint), (2, NULL), (3, NULL), (4, 7)) AS seed(value, thread)`,
+      [groupId],
+    );
+    const conversation = await database().query<{ id: string }>(
+      "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
+      [groupId],
+    );
+    const conversationId = conversation.rows[0]!.id;
+    // The general topic was reviewed through the first message before review was switched off.
+    await database().query(
+      `INSERT INTO memory_review_lanes (conversation_id, message_thread_id, processed_through_sequence)
+       VALUES ($1, NULL, 1)`,
+      [conversationId],
+    );
+    const lanes = async () =>
+      (
+        await database().query<{ processed: string; thread: string | null }>(
+          `SELECT message_thread_id::text AS thread, processed_through_sequence::text AS processed
+             FROM memory_review_lanes WHERE conversation_id = $1
+            ORDER BY message_thread_id NULLS FIRST`,
+          [conversationId],
+        )
+      ).rows;
+    const update = (memoryReview: boolean) =>
+      telegramGroupAdministrationRepository.updatePolicy({
+        familyId: fixture.familyId,
+        memoryReview,
+        messageMode: "all",
+        requestedBy: fixture.ownerId,
+        telegramChatId: "-100-review",
+        toolAllowlist: [],
+      });
+
+    await update(true);
+    expect(await lanes()).toEqual([
+      { processed: "3", thread: null },
+      { processed: "4", thread: "7" },
+    ]);
+
+    // Turning on what is already on is not a restart: the cursor stays where review left it.
+    await database().query(
+      "UPDATE memory_review_lanes SET processed_through_sequence = 2 WHERE message_thread_id IS NULL",
+    );
+    await update(true);
+    expect((await lanes())[0]).toEqual({ processed: "2", thread: null });
   });
 
   it("rejects a family group without changing its policy", async () => {

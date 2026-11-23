@@ -1,21 +1,25 @@
 /**
- * Telegram group journal retention against memory evidence integration tests.
+ * Telegram group journal against memory evidence integration tests.
  *
  * Constructs covered:
- * - Retention prunes the source message of soft-deleted memory, and the group keeps accepting
- *   messages (upstream nyxandro/osinara #306; on 5 October 2026 two production groups already sat
- *   at the cap, one with three such sources 2 500 messages from it).
- * - Retention prunes a source message whose author was linked to a user after the evidence was
- *   saved.
+ * - A group past the old cap of 10 000 entries keeps accepting messages and keeps the source
+ *   message of soft-deleted memory live (upstream nyxandro/osinara #306 was pruning blocked by such
+ *   sources; the cap is gone since 22 November 2026).
+ * - The same for a source message whose author was linked to a user after the evidence was saved.
+ * - Removing the group, which now cascades every entry, clears such evidence instead of failing
+ *   on its author link (migration 127; journal pruning used to exercise that path).
+ * - Deleting the source entry of soft-deleted memory clears its evidence link instead of failing
+ *   on the claim's provenance (migration 127's other branch; group removal cannot reach it yet,
+ *   since it fails earlier on soft-deleted memory for a reason of its own).
  * - `claim_evidence` still rejects evidence inserted for or moved to deleted memory, and authors
  *   that differ from their participant's user link.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { closeDatabase, database } from "./database.js";
 import { memoryRepository } from "./memory-repository.js";
+import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
 import {
   createThreadRepositoryFixture,
   type ThreadRepositoryFixture,
@@ -41,8 +45,11 @@ function groupMessage(id: string): TelegramMessage {
   };
 }
 
-// The fixture's evidence source is sequence 1; the seed makes it the oldest row beyond the cap.
-async function fillJournalToRetention(groupId: string): Promise<void> {
+/** The per-chat cap the journal had until 22 November 2026. */
+const OLD_CAP = 10_000;
+
+// The fixture's evidence source is sequence 1; the seed fills the journal to the old cap after it.
+async function fillJournalToOldCap(groupId: string): Promise<void> {
   await database().query(
     `INSERT INTO telegram_group_messages
        (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
@@ -50,7 +57,7 @@ async function fillJournalToRetention(groupId: string): Promise<void> {
      SELECT $1, value, 'user', 'telegram:thread-owner', 100000 + value, 'thread-owner', 'Owner',
             false, 'text', 'seed', now()
      FROM generate_series(2, $2) AS value`,
-    [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
+    [groupId, OLD_CAP],
   );
 }
 
@@ -76,16 +83,13 @@ async function insertUnsourcedClaim(fixture: ThreadRepositoryFixture): Promise<s
   return claim.rows[0]!.id;
 }
 
-async function expectJournalPrunedToCap(groupId: string): Promise<void> {
+async function expectJournalKeptWhole(groupId: string): Promise<void> {
   const journal = await database().query<{ count: string; minimum: string }>(
     `SELECT count(*)::text AS count, min(sequence_id)::text AS minimum
      FROM telegram_group_messages WHERE group_id = $1`,
     [groupId],
   );
-  expect(journal.rows[0]).toEqual({
-    count: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES),
-    minimum: "2",
-  });
+  expect(journal.rows[0]).toEqual({ count: String(OLD_CAP + 1), minimum: "1" });
 }
 
 async function evidenceOf(claimId: string) {
@@ -103,7 +107,7 @@ async function evidenceOf(claimId: string) {
   return evidence.rows;
 }
 
-describeWithDatabase("Telegram group journal retention against memory evidence", () => {
+describeWithDatabase("Telegram group journal against memory evidence", () => {
   beforeEach(async () => {
     await database().query(
       `TRUNCATE memory_items_all, telegram_group_messages, telegram_groups,
@@ -115,28 +119,28 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
     await closeDatabase();
   });
 
-  it("keeps accepting group messages when retention reaches a source of deleted memory", async () => {
+  it("keeps accepting group messages past the old cap with a source of deleted memory", async () => {
     const fixture = await createThreadRepositoryFixture();
     await deleteClaim(fixture, fixture.claimId);
-    await fillJournalToRetention(fixture.groupId);
+    await fillJournalToOldCap(fixture.groupId);
 
     await expect(
       recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900001")),
     ).resolves.toMatchObject({ status: "inserted" });
 
-    await expectJournalPrunedToCap(fixture.groupId);
-    // Deleted memory stays recoverable: its evidence loses only the live link to the pruned row.
+    await expectJournalKeptWhole(fixture.groupId);
+    // Deleted memory stays recoverable, and its evidence keeps the live link to its message.
     expect(await evidenceOf(fixture.claimId)).toEqual([
       {
         author_user_id: fixture.userId,
         source_message_id: "701",
-        timeline_entry_id: null,
+        timeline_entry_id: expect.any(String),
         timeline_sequence: "1",
       },
     ]);
   });
 
-  it("keeps accepting group messages when a source author was linked to a user later", async () => {
+  it("keeps accepting group messages past the old cap when a source author was linked later", async () => {
     const fixture = await createThreadRepositoryFixture();
     // Evidence was saved while the participant had no application user; the link appeared later,
     // as the participant upsert does once that Telegram user registers.
@@ -151,16 +155,66 @@ describeWithDatabase("Telegram group journal retention against memory evidence",
       "UPDATE conversation_participants SET linked_user_id = $2 WHERE conversation_id = $1",
       [fixture.conversationId, fixture.userId],
     );
-    await fillJournalToRetention(fixture.groupId);
+    await fillJournalToOldCap(fixture.groupId);
 
     await expect(
       recordVerifiedHumanTelegramMessage(fixture.groupId, groupMessage("900002")),
     ).resolves.toMatchObject({ status: "inserted" });
 
-    await expectJournalPrunedToCap(fixture.groupId);
+    await expectJournalKeptWhole(fixture.groupId);
     expect(await evidenceOf(fixture.claimId)).toEqual([
       {
         author_user_id: null,
+        source_message_id: "701",
+        timeline_entry_id: expect.any(String),
+        timeline_sequence: "1",
+      },
+    ]);
+  });
+
+  it("removes a group whose memory source's author was linked after the evidence", async () => {
+    const fixture = await createThreadRepositoryFixture();
+    await database().query(
+      "UPDATE conversation_participants SET linked_user_id = NULL WHERE conversation_id = $1",
+      [fixture.conversationId],
+    );
+    await database().query("UPDATE claim_evidence SET author_user_id = NULL WHERE claim_id = $1", [
+      fixture.claimId,
+    ]);
+    await database().query(
+      "UPDATE conversation_participants SET linked_user_id = $2 WHERE conversation_id = $1",
+      [fixture.conversationId, fixture.userId],
+    );
+
+    await expect(
+      telegramGroupAdministrationRepository.removeRegistration({
+        familyId: fixture.familyId,
+        requestedBy: fixture.userId,
+        telegramChatId: "-100-thread-repository",
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      database().query("SELECT 1 FROM telegram_group_messages WHERE group_id = $1", [
+        fixture.groupId,
+      ]),
+    ).resolves.toMatchObject({ rowCount: 0 });
+  });
+
+  it("clears the evidence link of soft-deleted memory when its source entry goes", async () => {
+    const fixture = await createThreadRepositoryFixture();
+    await deleteClaim(fixture, fixture.claimId);
+    const [evidence] = await evidenceOf(fixture.claimId);
+
+    // The foreign key's ON DELETE SET NULL is an UPDATE of the evidence row: the trigger checked
+    // the claim on every UPDATE before migration 127, and deleted memory failed that check.
+    await expect(
+      database().query("DELETE FROM telegram_group_messages WHERE id = $1", [
+        evidence!.timeline_entry_id,
+      ]),
+    ).resolves.toMatchObject({ rowCount: 1 });
+    expect(await evidenceOf(fixture.claimId)).toEqual([
+      {
+        author_user_id: fixture.userId,
         source_message_id: "701",
         timeline_entry_id: null,
         timeline_sequence: "1",

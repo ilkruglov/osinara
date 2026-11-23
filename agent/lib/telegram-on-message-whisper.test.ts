@@ -53,21 +53,24 @@ function familyGroup() {
     role: "member",
     userId: "user-1",
   });
-  repository.journal.listRecent.mockResolvedValue([
-    {
-      actorId: "telegram:102",
-      actorKind: "user",
-      contentText: "Мия, кто прав про отпуск?",
-      entryId: "00000000-0000-4000-8000-000000000020",
-      messageKind: "text",
-      messageThreadId: null,
-      replyToSequenceId: null,
-      senderDisplayName: "Илья",
-      senderUsername: "ilya",
-      sentAt: "2026-11-06T18:00:00.000Z",
-      sequenceId: "40",
-    },
-  ]);
+  repository.journal.listRecentPage.mockResolvedValue({
+    entries: [
+      {
+        actorId: "telegram:102",
+        actorKind: "user",
+        contentText: "Мия, кто прав про отпуск?",
+        entryId: "00000000-0000-4000-8000-000000000020",
+        messageKind: "text",
+        messageThreadId: null,
+        replyToSequenceId: null,
+        senderDisplayName: "Илья",
+        senderUsername: "ilya",
+        sentAt: "2026-11-06T18:00:00.000Z",
+        sequenceId: "40",
+      },
+    ],
+    omittedBeforeSequence: null,
+  });
   return repository;
 }
 
@@ -130,6 +133,66 @@ describe("createTelegramMessageHandler whisper", () => {
     expect(repository.whisper.close).not.toHaveBeenCalled();
   });
 
+  // Final review, 22 November 2026: Telegram makes every message of a forum topic a reply to the
+  // topic's creation, which has no text; the whisper took it for a reply to a missing message.
+  it("does not take a whisper in a forum topic for a reply", async () => {
+    const repository = familyGroup();
+    const handler = createTelegramMessageHandler(repository);
+    const message = whisper();
+    const topicMessage: TelegramMessage = {
+      ...message,
+      messageThreadId: 12,
+      raw: {
+        ...message.raw,
+        is_topic_message: true,
+        message_thread_id: 12,
+        reply_to_message: {
+          chat: { id: "group-101", type: "supergroup" },
+          forum_topic_created: { icon_color: 7322096, name: "Отпуск" },
+          message_id: 12,
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", title: "Группа", type: "supergroup" as const },
+        messageId: "12",
+      },
+    };
+
+    const result = await handler(telegramContext().context, topicMessage);
+
+    expect(result?.message).not.toContain("replyTargetUnavailable");
+  });
+
+  // A reply thread outside forum topics carries `message_thread_id` too: only a topic (proved by
+  // `is_topic_message`) has a root that is no reply.
+  it("still takes a whisper in an ordinary reply thread for a reply", async () => {
+    const repository = familyGroup();
+    const handler = createTelegramMessageHandler(repository);
+    const message = whisper();
+    const threaded: TelegramMessage = {
+      ...message,
+      raw: {
+        ...message.raw,
+        message_thread_id: 12,
+        reply_to_message: {
+          chat: { id: "group-101", type: "supergroup" },
+          from: { first_name: "Илья", id: 102, is_bot: false },
+          message_id: 12,
+          sticker: { file_id: "sticker" },
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", title: "Группа", type: "supergroup" as const },
+        from: { firstName: "Илья", id: "102", isBot: false },
+        messageId: "12",
+      },
+    };
+
+    const result = await handler(telegramContext().context, threaded);
+
+    expect(result?.message).toContain('"replyTargetUnavailable":true');
+  });
+
   it("reads the recent timeline of the whisper's own topic", async () => {
     const repository = familyGroup();
     const handler = createTelegramMessageHandler(repository);
@@ -142,7 +205,7 @@ describe("createTelegramMessageHandler whisper", () => {
 
     await handler(telegramContext().context, topicMessage);
 
-    expect(repository.journal.listRecent).toHaveBeenCalledWith(
+    expect(repository.journal.listRecentPage).toHaveBeenCalledWith(
       expect.objectContaining({
         anchorEntryId: null,
         beforeSequence: null,
@@ -213,6 +276,41 @@ describe("createTelegramMessageHandler whisper", () => {
       '"replyTargetSnapshot":{"contentText":"Ну это решается по-логистически","senderDisplayName":"Илья","senderUsername":"ilya"}',
     );
     expect(result?.message).toContain('"replyQuotedText":"по-логистически"');
+  });
+
+  // Final review, 22 November 2026: a reply whose target has no usable text said nothing about
+  // being a reply, and an oversized target and fragment failed the whisper.
+  it.each([
+    ["a target without text", undefined, undefined],
+    ["an oversized target and fragment", "<".repeat(1_024), "<".repeat(1_024)],
+  ])("answers a reply to %s within the budget, naming what it lacks", async (_, text, quote) => {
+    const repository = familyGroup();
+    const handler = createTelegramMessageHandler(repository);
+    const message = whisper("/whisper что это?");
+    const reply: TelegramMessage = {
+      ...message,
+      raw: {
+        ...message.raw,
+        ...(quote === undefined ? {} : { quote: { text: quote } }),
+        reply_to_message: {
+          chat: { id: "group-101", type: "supergroup" },
+          from: { first_name: "Илья", id: 102, is_bot: false, username: "ilya" },
+          message_id: 77,
+          ...(text === undefined ? { sticker: { file_id: "sticker" } } : { text }),
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", title: "Группа", type: "supergroup" as const },
+        from: { firstName: "Илья", id: "102", isBot: false, username: "ilya" },
+        messageId: "77",
+      },
+    };
+
+    const result = await handler(telegramContext().context, reply);
+
+    expect(result?.message?.length).toBeLessThanOrEqual(12_000);
+    if (text === undefined) expect(result?.message).toContain('"replyTargetUnavailable":true');
+    else expect(result?.message).toContain("replyTargetSnapshot");
   });
 
   it("gives the whisper memory without consuming the group's skill hint", async () => {

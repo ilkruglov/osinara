@@ -4,7 +4,7 @@
  * Exports:
  * - `bindMemoryTurnSources`: persists the immutable source set at `turn.started`.
  * - `resolveMemoryTurnSource`: resolves current, visible-delta, or review-batch source for `remember`.
- * - `releaseMemoryTurnSources`: releases timeline retention at the terminal turn boundary.
+ * - `releaseMemoryTurnSources`: releases the turn's bound sources at the terminal turn boundary.
  */
 import type { SessionContext } from "eve/context";
 

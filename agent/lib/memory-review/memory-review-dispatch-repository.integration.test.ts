@@ -6,8 +6,8 @@
  * - A lane locked by a running turn is skipped, not waited for, and picked up on a later tick.
  * - Codex review, 6 November 2026: a group whose owner switched review off keeps its pending batch
  *   unclaimed and refuses a dispatch already leased; the in-flight cap counts leased and
- *   dispatching batches, and one claim pass runs at a time; a topic first seen while review was off
- *   is reviewed once it is on again.
+ *   dispatching batches, and one claim pass runs at a time. Review turned back on is covered in
+ *   `memory-review-lane-restart.integration.test.ts`.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,80 +17,25 @@ import { memoryReviewDispatchRepository } from "./memory-review-dispatch-reposit
 import { memoryReviewOwnerAlertRepository } from "./memory-review-owner-alert-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewSessionRepository } from "./memory-review-session-repository.js";
+import { observe, setReview } from "./memory-review-dispatch.integration-fixtures.js";
+import { insertReviewUserMessage } from "./memory-review.integration-fixtures.js";
 import {
   isClaimedTurnWork,
   pauseBeingSet,
   stillPendingAfter,
 } from "../deploy/claimed-turn-work.test-support.js";
 
-const describeWithDatabase =
-  process.env.RUN_DATABASE_INTEGRATION_TESTS === "true" ? describe : describe.skip;
-
-async function insertUserMessage(input: {
-  conversationId: string;
-  groupId: string;
-  sequence: number;
-  /** A forum topic: its own review lane. */
-  thread?: number;
-}) {
-  return (
-    await database().query<{ id: string }>(
-      `INSERT INTO telegram_group_messages
-       (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
-        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at,
-        message_thread_id)
-     VALUES ($1, $2, $3, $3, 'user', 'telegram:agent-memory-author',
-             'agent-memory-author', 'Анна', false, 'text', $4, now(), $5) RETURNING id`,
-      [
-        input.conversationId,
-        input.groupId,
-        input.sequence,
-        `Сообщение памяти ${input.sequence}`,
-        input.thread ?? null,
-      ],
-    )
-  ).rows[0]!;
+const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
+const url = process.env.DATABASE_URL;
+// Each test truncates users and families: only a database named *_test may take that.
+if (enabled && (!url || !new URL(url).pathname.endsWith("_test"))) {
+  throw new Error("AGENT_TEST_DATABASE_UNSAFE: Для integration-тестов нужна отдельная БД *_test");
 }
-
-async function observe(
-  fixture: { conversationId: string; groupId: string },
-  from: number,
-  to: number,
-  thread?: number,
-) {
-  for (let sequence = from; sequence <= to; sequence += 1) {
-    const source = await insertUserMessage({
-      conversationId: fixture.conversationId,
-      groupId: fixture.groupId,
-      sequence,
-      thread,
-    });
-    await memoryReviewRepository.observePassiveMessage({
-      groupId: fixture.groupId,
-      timelineEntryId: source.id,
-    });
-  }
-}
-
-const setReview = (groupId: string, enabled: boolean) =>
-  database().query("UPDATE telegram_groups SET memory_review_enabled = $2 WHERE id = $1", [
-    groupId,
-    enabled,
-  ]);
+const describeWithDatabase = enabled ? describe : describe.skip;
 
 async function claimBackgroundBatch() {
   const fixture = await createMainAgentMemoryFixture();
-  for (let sequence = 2; sequence <= 51; sequence += 1) {
-    const source = await insertUserMessage({
-      conversationId: fixture.conversationId,
-      groupId: fixture.groupId,
-      sequence,
-    });
-    await memoryReviewRepository.observePassiveMessage({
-      groupId: fixture.groupId,
-      timelineEntryId: source.id,
-    });
-  }
+  await observe(fixture, 2, 51);
   const [claim] = await memoryReviewDispatchRepository.claimPending({
     leaseMilliseconds: 60_000,
     limit: 1,
@@ -110,17 +55,7 @@ describeWithDatabase("memory review dispatch repository", () => {
   // at 20 000 chats a turn waited 30-100 s for its own lane and replicas queued behind each other.
   it("skips a lane another transaction holds and takes it on the next tick", async () => {
     const fixture = await createMainAgentMemoryFixture();
-    for (let sequence = 2; sequence <= 16; sequence += 1) {
-      const source = await insertUserMessage({
-        conversationId: fixture.conversationId,
-        groupId: fixture.groupId,
-        sequence,
-      });
-      await memoryReviewRepository.observePassiveMessage({
-        groupId: fixture.groupId,
-        timelineEntryId: source.id,
-      });
-    }
+    await observe(fixture, 2, 16);
     const holder = await database().connect();
     try {
       await holder.query("BEGIN");
@@ -297,22 +232,6 @@ describeWithDatabase("memory review dispatch repository", () => {
         now: new Date(),
       }),
     ).resolves.toHaveLength(1);
-  });
-
-  it("reviews a quiet topic first seen while review was off once it is on again", async () => {
-    const fixture = await createMainAgentMemoryFixture();
-    await setReview(fixture.groupId, false);
-    await observe(fixture, 2, 16, 11);
-    await setReview(fixture.groupId, true);
-
-    // Seven hours later, without a new message: the lane is due by its idle rule.
-    const [claim] = await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000,
-      limit: 5,
-      now: new Date(Date.now() + 7 * 60 * 60 * 1000),
-    });
-    expect(claim?.sourceCount).toBe(15);
-    expect(claim?.messageThreadId).toBe("11");
   });
 
   it("retires a prepared background session when its Eve handoff is ambiguous", async () => {
@@ -639,7 +558,7 @@ describeWithDatabase("memory review dispatch repository", () => {
     let source: { id: string } | null = null;
     // Eight passive messages: the shortest tail an addressed turn still reviews inline.
     for (let sequence = 2; sequence <= 9; sequence += 1) {
-      source = await insertUserMessage({
+      source = await insertReviewUserMessage({
         conversationId: fixture.conversationId,
         groupId: fixture.groupId,
         sequence,

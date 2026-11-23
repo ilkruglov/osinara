@@ -8,11 +8,15 @@
  * Key constructs:
  * - One PostgreSQL statement reads the complete retained timeline window under one MVCC snapshot.
  * - Later model calls read only durable snapshot chunks and never query Telegram history again.
+ * - Every entry is read by the journal's secret rules (`journalText`) before it is cut: masked
+ *   after the cut, a key across a cut left its tail visible in the next part, and a password told at
+ *   the end of a long entry hid only the last part.
  */
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import { journalText } from "../secret-redaction.js";
 import {
   chunkScheduledGroupHistory,
   serializeScheduledGroupHistoryChunk,
@@ -162,7 +166,9 @@ export const scheduledGroupHistorySnapshotRepository = {
           "Запуск больше не имеет доступа к истории внешней группы",
         );
       }
-      const chunks = chunkScheduledGroupHistory(snapshot.entries);
+      const chunks = chunkScheduledGroupHistory(
+        snapshot.entries.map((entry) => ({ ...entry, content: journalText(entry.content) })),
+      );
       const inserted = await client.query(
         `INSERT INTO agent_schedule_history_snapshots
            (run_id, schedule_id, family_id, group_id, window_start, window_end,

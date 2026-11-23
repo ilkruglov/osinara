@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 
 import type { ToolContext } from "eve/tools";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./image-generation/image-generation-availability.js", () => ({
   IMAGE_GENERATION_AVAILABLE: true,
@@ -18,6 +18,7 @@ vi.mock("./image-generation/image-generation-availability.js", () => ({
 
 import { AppError } from "./app-error.js";
 import { createImagePromptSeries } from "./image-generation/image-prompt-series.js";
+import { rejected, unavailable } from "./image-generation/image-provider.js";
 import { ModelFacingError } from "./model-facing-error.js";
 import { createGenerateImageTool } from "./tools/generate_image.js";
 
@@ -73,7 +74,6 @@ function dependencies() {
       .mockResolvedValue({ bytes: Buffer.from("original"), mediaType: "image/png" }),
     client: {
       assertConfigured: vi.fn(),
-      assertSupportsEditing: vi.fn(),
       generate: vi.fn().mockResolvedValue({
         bytes: Buffer.from("generated"),
         mediaType: "image/webp",
@@ -84,6 +84,7 @@ function dependencies() {
     operations: {
       begin: vi.fn().mockResolvedValue({ state: "execute", workspaceId: "workspace-1" }),
       complete: vi.fn().mockResolvedValue(undefined),
+      exists: vi.fn().mockResolvedValue(false),
       markAmbiguous: vi.fn().mockResolvedValue(undefined),
       markFailed: vi.fn().mockResolvedValue(undefined),
       recordProviderJob: vi.fn().mockResolvedValue(undefined),
@@ -109,7 +110,9 @@ function dependencies() {
 }
 
 describe("generate_image", () => {
-  it.each(["AGENT_IMAGE_EDITING_INPUT_INVALID", "AGENT_IMAGE_EDITING_UNAVAILABLE"])(
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["AGENT_IMAGE_EDITING_INPUT_INVALID", "AGENT_IMAGE_GENERATION_CONFIG_INVALID"])(
     "records %s as a definite failure",
     async (code) => {
       const deps = dependencies();
@@ -128,9 +131,9 @@ describe("generate_image", () => {
   it("records the provider job in the ledger and still delivers when the record fails", async () => {
     const deps = dependencies();
     const job = {
-      jobId: "cmvbdeekj0073zx013f2euglr",
-      model: "nano-banana-2:white",
-      provider: "plusvibe",
+      jobId: "01a202d3-0b06-7d63-bcdc-2e758507e698",
+      model: "bytedance/seedream/v5.5/text-to-image",
+      provider: "fal",
     };
     deps.operations.recordProviderJob.mockRejectedValueOnce(new Error("ledger down"));
     deps.client.generate.mockImplementation(
@@ -138,8 +141,8 @@ describe("generate_image", () => {
         await input.onProviderJob?.(job);
         return {
           bytes: Buffer.from("generated"),
-          mediaType: "image/webp",
-          model: "plusvibe/nano-banana-2:white",
+          mediaType: "image/jpeg",
+          model: "fal/bytedance/seedream/v5.5/text-to-image",
         };
       },
     );
@@ -168,17 +171,17 @@ describe("generate_image", () => {
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
   });
 
-  it("rejects unavailable editing before reading a source or creating a reservation", async () => {
+  it("rejects an unconfigured service before reading a source or creating a reservation", async () => {
     const deps = dependencies();
-    deps.client.assertSupportsEditing.mockImplementation(() => {
-      throw new AppError("AGENT_IMAGE_EDITING_UNAVAILABLE", "Недоступно");
+    deps.client.assertConfigured.mockImplementation(() => {
+      throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Недоступно");
     });
     await expect(
       createGenerateImageTool(deps as never).execute(
         { ...INPUT, images: [{ path: "photo.png", scope: "group" }] },
         context(),
       ),
-    ).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    ).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_CONFIG_INVALID" });
     expect(deps.readImage).not.toHaveBeenCalled();
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
@@ -212,6 +215,66 @@ describe("generate_image", () => {
         context(),
       ),
     ).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_DENIED" });
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+    expect(deps.client.generate).not.toHaveBeenCalled();
+  });
+
+  // Repeat review, 23 November 2026: the workspace reader refuses a source over 10 MB or of a type it
+  // cannot read before the provider sees it; the model got an operation of unknown outcome and gave
+  // up instead of taking another source.
+  it.each([
+    ["AGENT_WORKSPACE_VISION_FILE_TOO_LARGE", "Изображение должно быть размером не более 10 МБ"],
+    ["AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED", "Формат изображения не поддерживается"],
+  ])("tells the model to take another source when the reader refuses %s", async (code, message) => {
+    const deps = dependencies();
+    deps.readImage
+      .mockResolvedValueOnce({ bytes: Buffer.from("first"), mediaType: "image/png" })
+      .mockRejectedValueOnce(new AppError(code, message));
+
+    // Which of several sources to replace is part of the advice (repeat review, 23 November 2026).
+    await expect(
+      createGenerateImageTool(deps as never).execute(
+        {
+          ...INPUT,
+          images: [
+            { path: "first.png", scope: "personal" },
+            { path: "photo.jpg", scope: "personal" },
+          ],
+        },
+        context(),
+      ),
+    ).rejects.toMatchObject({
+      code: "AGENT_IMAGE_EDITING_INPUT_INVALID",
+      contract: {
+        category: "input",
+        field: "images[1]",
+        reason: `Исходник 2: ${message}`,
+        retryable: true,
+        sideEffectStatus: "not_started",
+      },
+    });
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+    expect(deps.client.generate).not.toHaveBeenCalled();
+  });
+
+  // Repeat review, 23 November 2026: a replay of a call the ledger already holds, its source since
+  // replaced by a file the reader refuses, was told to take another source; doing so under a new
+  // call ordered a second paid picture. The replay answers as a refused read did before.
+  it("does not advise another source on a replay of a recorded call", async () => {
+    const deps = dependencies();
+    deps.operations.exists.mockResolvedValue(true);
+    deps.readImage.mockRejectedValue(
+      new AppError(
+        "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE",
+        "Изображение должно быть не более 10 МБ",
+      ),
+    );
+    const failure: unknown = await createGenerateImageTool(deps as never)
+      .execute({ ...INPUT, images: [{ path: "edit.png", scope: "personal" }] }, context())
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE" });
+    expect(failure).not.toHaveProperty("contract.retryable", true);
+    expect(deps.operations.exists).toHaveBeenCalledWith("call-image-1");
     expect(deps.operations.begin).not.toHaveBeenCalled();
     expect(deps.client.generate).not.toHaveBeenCalled();
   });
@@ -332,25 +395,30 @@ describe("generate_image", () => {
     expect(deps.operations.complete).toHaveBeenCalledWith("call-image-1", FILE);
   });
 
-  it("records a rejected prompt as a definitive failure", async () => {
-    const deps = dependencies();
-    deps.client.generate.mockRejectedValue(
-      new AppError(
-        "AGENT_IMAGE_GENERATION_REJECTED",
-        "Сервис генерации изображений отклонил запрос. Измените описание и попробуйте снова",
-      ),
-    );
-    const tool = createGenerateImageTool(deps as never);
+  it.each([
+    ["a refusal", () => rejected("fal", "422 content_policy_violation", "content"), "input"],
+    ["an outage", () => unavailable("fal", "submit 403"), "dependency"],
+  ])(
+    "records %s from the provider as failed and hands the model its contract",
+    async (_name, failure, category) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const deps = dependencies();
+      const error = failure();
+      deps.client.generate.mockRejectedValue(error);
+      const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
-      /AGENT_IMAGE_GENERATION_REJECTED/u,
-    );
-    expect(deps.operations.markFailed).toHaveBeenCalledWith(
-      "call-image-1",
-      "AGENT_IMAGE_GENERATION_REJECTED",
-    );
-    expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
-  });
+      const thrown: unknown = await tool
+        .execute(INPUT, context())
+        .catch((caught: unknown) => caught);
+      expect(thrown).toBeInstanceOf(ModelFacingError);
+      expect(thrown).toMatchObject({
+        contract: { category, code: error.code, sideEffectStatus: "not_started" },
+      });
+      expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-1", error.code);
+      expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
+      expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
+    },
+  );
 
   it("records uncertain provider completion as ambiguous without retrying", async () => {
     const deps = dependencies();
@@ -410,17 +478,34 @@ describe("generate_image", () => {
     consoleError.mockRestore();
   });
 
-  it.each([
-    { errorCode: "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN", state: "ambiguous" as const },
-    { errorCode: "AGENT_IMAGE_GENERATION_REJECTED", state: "failed" as const },
-  ])("does not regenerate a terminal $state reservation", async (reservation) => {
+  it("does not regenerate an ambiguous reservation, which may have been billed", async () => {
     const deps = dependencies();
-    deps.operations.begin.mockResolvedValue(reservation);
+    deps.operations.begin.mockResolvedValue({
+      errorCode: "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
+      state: "ambiguous",
+    });
     const tool = createGenerateImageTool(deps as never);
 
-    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
-      new RegExp(reservation.errorCode, "u"),
-    );
+    const thrown: unknown = await tool.execute(INPUT, context()).catch((caught: unknown) => caught);
+    expect(thrown).toMatchObject({ code: "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN" });
+    expect(thrown).not.toBeInstanceOf(ModelFacingError);
+    expect(deps.client.generate).not.toHaveBeenCalled();
+  });
+
+  // A failed call made nothing, replayed or not; a refusal stays correctable once, as it was.
+  it.each([
+    ["AGENT_IMAGE_GENERATION_REJECTED", { category: "input", retryable: true }],
+    ["AGENT_IMAGE_EDITING_INPUT_INVALID", { category: "input", retryable: true }],
+    ["AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE", { category: "operation", retryable: false }],
+  ])("does not regenerate a failed %s reservation", async (errorCode, contract) => {
+    const deps = dependencies();
+    deps.operations.begin.mockResolvedValue({ errorCode, state: "failed" });
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute(INPUT, context())).rejects.toMatchObject({
+      code: errorCode,
+      contract: { ...contract, sideEffectStatus: "not_started" },
+    });
     expect(deps.client.generate).not.toHaveBeenCalled();
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
   });

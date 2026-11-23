@@ -3,6 +3,9 @@
  *
  * Exports:
  * - `richMessagePlainText`: flattens `rich_message.blocks` of a raw Telegram message into text.
+ * - `richQuotableText`: the message as Telegram counts quotable texts, for matching a quote.
+ * - `richQuoteText`: the text of a quote chosen from a rich message (`quote.rich_texts`, one
+ *   element per quoted block, joined by a line break as Telegram counts them).
  * - `withRichMessageText`: fills an inbound update's empty `text` from its rich blocks.
  * - `richMessageMedia`: the one photo or document a rich message carries, in Telegram's shape.
  * - `normalizeRichMessage`: text from blocks plus that file lifted into `raw.photo` or
@@ -25,93 +28,156 @@ import { asRecord as record } from "./json-value.js";
 type JsonRecord = Record<string, unknown>;
 
 /**
- * RichText arrives as a string, as `{ text, entities }`, or as an array of parts: plain strings
- * mixed with typed entities such as `{ type: "url", text, url }`. Only the readable text matters,
- * so parts are joined in order; an array that was ignored here dropped every paragraph with a link.
+ * RichText arrives as a string, as an array of parts, or as a typed object (`bold`, `url`, …) whose
+ * `text` is itself RichText; a custom emoji reads as its `alternative_text`, a formula as its
+ * `expression`. Only the readable text matters, so parts are joined in order; an array that was
+ * ignored here dropped every paragraph with a link, a nested style or an emoji dropped its words.
  */
 function richText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(richText).join("");
-  const text = record(value)?.text;
-  return typeof text === "string" || Array.isArray(text) ? richText(text) : "";
+  const part = record(value);
+  if (!part) return "";
+  if (part.text !== undefined) return richText(part.text);
+  // A button inside a text reads as its label.
+  const button = record(part.button);
+  if (button) return richText(button.text);
+  if (typeof part.alternative_text === "string") return part.alternative_text;
+  return typeof part.expression === "string" ? part.expression : "";
 }
 
-function blocksText(value: unknown): string[] {
+/**
+ * How the texts of a message are read: as a reader sees them (a table row in one line, its caption
+ * after it), or as Telegram counts quotable texts (each cell and the table's caption on its own,
+ * the caption first), which quote positions and `quote.rich_texts` follow.
+ */
+type Form = "reader" | "telegram";
+
+function blocksText(value: unknown, form: Form): string[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((block) => blockText(record(block)));
+  return value.flatMap((block) => blockText(record(block), form));
 }
 
-function blockText(block: JsonRecord | null): string[] {
+/** The readable text of a rich text as a block's part, or nothing when it is empty. */
+function texts(value: unknown): string[] {
+  const text = richText(value);
+  return text ? [text] : [];
+}
+
+/** A block's caption: its text, then its credit (`RichBlockCaption`); a bare rich text reads whole. */
+function captionTexts(caption: unknown): string[] {
+  const parts = record(caption);
+  if (!parts || Array.isArray(caption)) return texts(caption);
+  return [...texts(parts.text), ...texts(parts.credit)];
+}
+
+/** A table's rows: Bot API 10.4 sends `cells` as rows of cells, the earlier shape `rows[].cells`. */
+function tableRows(block: JsonRecord): unknown[][] {
+  const rows = Array.isArray(block.cells)
+    ? block.cells
+    : Array.isArray(block.rows)
+      ? block.rows.map((row) => record(row)?.cells)
+      : [];
+  return rows.filter((cells): cells is unknown[] => Array.isArray(cells));
+}
+
+/**
+ * The text of one block in the Bot API's shapes (10.4: `heading`, `pre`, `pullquote`, a table's
+ * `cells`, a formula's `expression`, captions with their credit on media, collages, slideshows and
+ * maps) and the earlier names this parser was written for. A key in a block left out here never
+ * reached the secret check of a quote of it, and the quoted value came through open (repeat review,
+ * 23 November 2026).
+ */
+function blockText(block: JsonRecord | null, form: Form): string[] {
   if (!block) return [];
   switch (block.type) {
     case "paragraph":
+    case "heading":
     case "section_heading":
+    case "pre":
     case "preformatted":
     case "footer":
     case "thinking":
-    case "mathematical_expression": {
-      const text = richText(block.text);
-      return text ? [text] : [];
-    }
-    case "details": {
-      const summary = richText(block.summary ?? block.header);
-      return [...(summary ? [summary] : []), ...blocksText(block.blocks)];
-    }
+      return texts(block.text);
+    case "mathematical_expression":
+      return texts(block.expression ?? block.text);
+    case "details":
+      return [...texts(block.summary ?? block.header), ...blocksText(block.blocks, form)];
     // Bot API 10.1 names a quotation block `blockquote`; the long names are kept for the earlier shape.
     case "blockquote":
     case "expandable_blockquote":
     case "block_quotation":
     case "expandable_block_quotation":
-      return blocksText(block.blocks);
-    case "pull_quotation": {
-      const text = richText(block.text);
-      return [...(text ? [text] : []), ...blocksText(block.blocks)];
-    }
+    case "pullquote":
+    case "pull_quotation":
+      return [...texts(block.text), ...blocksText(block.blocks, form), ...texts(block.credit)];
     case "list":
       return Array.isArray(block.items)
         ? block.items.flatMap((item) => {
             const entry = record(item);
             const text = richText(entry?.text);
-            return text ? [text] : blocksText(entry?.blocks);
+            return text ? [text] : blocksText(entry?.blocks, form);
           })
         : [];
-    case "table":
-      return Array.isArray(block.rows)
-        ? block.rows
-            .flatMap((row) => {
-              const cells = record(row)?.cells;
-              return Array.isArray(cells)
-                ? [
-                    cells
-                      .map((cell) => richText(record(cell)?.text ?? cell))
-                      .filter(Boolean)
-                      .join(" | "),
-                  ]
-                : [];
-            })
-            .filter(Boolean)
-        : [];
+    case "table": {
+      const rows = tableRows(block);
+      if (form === "telegram") return [...texts(block.caption), ...rows.flat().flatMap(texts)];
+      return [
+        // A tab, not « | »: the password rule reads «Пароль:» and its value across white space only,
+        // and a bar it stepped over hid Markdown tables naming a password column (owner, «Ячейки
+        // через табуляцию», 23 November 2026).
+        ...rows.flatMap((cells) => texts(cells.map(richText).filter(Boolean).join("\t"))),
+        ...texts(block.caption),
+      ];
+    }
+    case "collage":
+    case "slideshow":
+      return [...blocksText(block.blocks, form), ...captionTexts(block.caption)];
     case "animation":
     case "audio":
     case "photo":
     case "video":
     case "voice_note":
-    case "document": {
-      const caption = richText(record(block.caption)?.text ?? block.caption);
-      return caption ? [caption] : [];
-    }
+    case "document":
+    case "map":
+      return captionTexts(block.caption);
     default:
       return [];
   }
 }
 
-export function richMessagePlainText(raw: JsonRecord): string | null {
+/**
+ * A rich message as Telegram counts the quotable texts of it: each on its own, untrimmed, joined by
+ * one line feed (Bot API, `TextQuote.position`, `quote_rich_texts`). A quote is matched against this.
+ */
+export function richQuotableText(raw: JsonRecord): string | null {
   const rich = record(raw.rich_message);
   if (!rich) return null;
-  const fromBlocks = blocksText(rich.blocks)
-    .map((part) => part.trim())
+  const quotable = blocksText(rich.blocks, "telegram").filter((part) => part !== "");
+  return quotable.length > 0 ? quotable.join("\n") : null;
+}
+
+export function richQuoteText(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const text = value
+    .map((part) => richText(part).trim())
     .filter(Boolean)
-    .join("\n\n");
+    .join("\n");
+  return text || null;
+}
+
+/**
+ * `separator` joins the blocks: an empty line by default, as a reader sees them; one line feed is
+ * Telegram's own form, the one quote positions count in.
+ */
+export function richMessagePlainText(raw: JsonRecord, separator = "\n\n"): string | null {
+  const rich = record(raw.rich_message);
+  if (!rich) return null;
+  // Blank lines around a part go, the indent of its first line stays (code keeps its shape).
+  const fromBlocks = blocksText(rich.blocks, "reader")
+    .map((part) => part.replace(/^(?:[ \t]*\n)+/u, "").trimEnd())
+    .filter(Boolean)
+    .join(separator);
   if (fromBlocks) return fromBlocks;
   return typeof rich.text === "string" && rich.text.trim() ? rich.text.trim() : null;
 }
@@ -293,8 +359,7 @@ function stripMediaBlocks(blocks: readonly unknown[]): unknown[] {
     const block = record(entry);
     if (block === null) return [entry];
     if (isMediaBlock(block)) {
-      const caption = richText(record(block.caption)?.text ?? block.caption);
-      return caption ? [{ text: caption, type: "paragraph" }] : [];
+      return captionTexts(block.caption).map((text) => ({ text, type: "paragraph" }));
     }
     const nested = Object.fromEntries(
       NESTED_BLOCK_KEYS.filter((key) => Array.isArray(block[key])).map((key) => [

@@ -1,5 +1,5 @@
 /**
- * Durable exactly-once ledger for subscription image generation.
+ * Durable exactly-once ledger for image generation.
  *
  * Exports:
  * - `ImageGenerationReservation`: execute, replay, in-flight, or terminal failure state.
@@ -96,6 +96,15 @@ export const imageGenerationOperationRepository = {
     return { errorCode: row.error_code, state: row.status };
   },
 
+  /** Whether this call already holds an operation, whatever its state. */
+  async exists(operationKey: string): Promise<boolean> {
+    const found = await database().query(
+      `SELECT 1 FROM image_generation_operations WHERE operation_key = $1`,
+      [operationKey],
+    );
+    return found.rowCount === 1;
+  },
+
   async complete(operationKey: string, file: WorkspaceFileRecord): Promise<void> {
     const result = await database().query(
       `UPDATE image_generation_operations
@@ -118,8 +127,8 @@ export const imageGenerationOperationRepository = {
 
   /**
    * Names the provider job an operation is waiting on. Only a started operation takes it: a settled
-   * row keeps the job it had, and a late report (the chain moved to another provider after a
-   * settlement) never rewrites history. Nothing to update is not an error.
+   * row keeps the job it had, and a late report (the ledger answered after its bounded wait, when
+   * the operation had already settled) never rewrites history. Nothing to update is not an error.
    */
   async recordProviderJob(operationKey: string, job: ProviderJob): Promise<void> {
     await database().query(

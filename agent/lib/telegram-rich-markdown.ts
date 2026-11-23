@@ -13,6 +13,7 @@
  * - Explicit rejection of over-wide tables, excessive nesting, and indivisible long blocks.
  */
 import { AppError } from "./app-error.js";
+import { placeholderMarker, restorePlaceholders } from "./text-placeholders.js";
 import {
   estimateTelegramRichBlocks,
   splitTelegramRichBlockByCount,
@@ -22,8 +23,6 @@ import {
 const TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS = 32_768;
 const TELEGRAM_RICH_MESSAGE_MAX_TABLE_COLUMNS = 20;
 const TELEGRAM_RICH_MESSAGE_MAX_NESTING = 16;
-const PLACEHOLDER_START = 0xe000;
-const PLACEHOLDER_END = 0xf8ff;
 const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 const ALLOWED_HTML_TAG_NAMES = new Set(["details", "summary", "u", "ins", "sub", "sup"]);
 const DETAILS_TAG_NAME = "details";
@@ -34,15 +33,15 @@ const HTML_CLOSE_TAG_PATTERN = /^<\/([a-z]+)\s*>$/iu;
 // Telegram documents exactly one attribute for a rich collapsible block: `open`.
 const DETAILS_OPEN_ATTRIBUTE_PATTERN = /^open(?:\s*=\s*"(?:|open|true)")?$/iu;
 
-function placeholderMarker(value: string): string {
-  for (let codePoint = PLACEHOLDER_START; codePoint <= PLACEHOLDER_END; codePoint += 1) {
-    const marker = String.fromCodePoint(codePoint);
-    if (!value.includes(marker)) return marker;
+function richMarker(value: string): string {
+  const marker = placeholderMarker(value);
+  if (marker === null) {
+    throw new AppError(
+      "AGENT_TELEGRAM_RICH_PLACEHOLDER_UNAVAILABLE",
+      "Не удалось безопасно подготовить форматирование ответа",
+    );
   }
-  throw new AppError(
-    "AGENT_TELEGRAM_RICH_PLACEHOLDER_UNAVAILABLE",
-    "Не удалось безопасно подготовить форматирование ответа",
-  );
+  return marker;
 }
 
 function htmlTagName(tag: string): { closing: boolean; name: string } {
@@ -178,7 +177,7 @@ function protectMarkdownCode(markdown: string): {
   protectedMarkdown: string;
   restore(value: string): string;
 } {
-  const marker = placeholderMarker(markdown);
+  const marker = richMarker(markdown);
   const code: string[] = [];
   // Complete inline spans and fenced blocks are inert Markdown content; an unfinished fence is
   // protected to the end because model truncation must not turn code examples into active HTML.
@@ -188,13 +187,7 @@ function protectMarkdownCode(markdown: string): {
   });
   return {
     protectedMarkdown,
-    restore(value) {
-      let restored = value;
-      for (const [index, codeBlock] of code.entries()) {
-        restored = restored.replaceAll(`${marker}${index}${marker}`, codeBlock);
-      }
-      return restored;
-    },
+    restore: (value) => restorePlaceholders(value, marker, (index) => code[index]!),
   };
 }
 
@@ -309,7 +302,7 @@ function sanitizeTelegramRichMarkdownInternal(
   validateTableWidths(protectedCode.protectedMarkdown);
 
   // Rich Markdown accepts arbitrary HTML and remote media, so reserve only reviewed text tags.
-  const marker = placeholderMarker(protectedCode.protectedMarkdown);
+  const marker = richMarker(protectedCode.protectedMarkdown);
   const allowedTags: string[] = [];
   let sanitized = protectedCode.protectedMarkdown.replace(/<[^>\n]*>/gu, (tag) => {
     if (!preserveAllowedHtml) return tag;
@@ -325,9 +318,7 @@ function sanitizeTelegramRichMarkdownInternal(
   sanitized = neutralizeUnsafeLinks(sanitized);
   sanitized = sanitized.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-  for (const [index, tag] of allowedTags.entries()) {
-    sanitized = sanitized.replaceAll(`${marker}${index}${marker}`, tag);
-  }
+  sanitized = restorePlaceholders(sanitized, marker, (index) => allowedTags[index]!);
 
   // A recovered closing tag belongs on its own block line so chunking still sees complete blocks.
   if (missingClosingTags.length > 0) {

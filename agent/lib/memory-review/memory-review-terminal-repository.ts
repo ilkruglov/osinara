@@ -6,6 +6,7 @@
  * - `resolveAbandonedReviewBatch`: the one terminal decision for a turn that never reports.
  * - `terminalizeAbandonedReviewTurns`: last-resort time bound for a turn that went silent.
  * - `terminalizeBlockedReviewHeads`: the same bound for a failed or ambiguous head at the cursor.
+ * - `retireAbandonedReviewSession`: closes a background review session nothing will close, audited.
  */
 import type { PoolClient } from "pg";
 
@@ -101,14 +102,14 @@ async function terminalizeApplicationSession(
   );
 }
 
-async function retireAbandonedReviewSession(
+export async function retireAbandonedReviewSession(
   client: PoolClient,
   applicationSessionId: string,
   now: Date,
 ): Promise<void> {
   // Only the background review session is orphaned by an abandoned turn: `retireAbandonedTasks`
   // covers `task` kinds and retention covers retired rows, so nothing else would ever close it,
-  // and its bound sources would hold the group timeline against pruning forever. An interactive
+  // and its bound sources would stay bound forever. An interactive
   // batch shares the live chat session, whose lifecycle belongs to the Telegram channel.
   const retired = await client.query(
     `UPDATE conversation_sessions

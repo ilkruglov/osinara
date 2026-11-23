@@ -15,10 +15,11 @@ for an inbox photo in the current chat, or path for a saved image. Never invent 
 the reference with a text description. External groups can use only their own `group` scope.
 
 Describe the requested change and what should stay the same (subject, face, pose, composition,
-style). When there are multiple references, identify them by image index starting at 0.
+style). When there are multiple references, refer to them as Figure 1, Figure 2 and so on, in
+the order passed: Figure 1 is the first source.
 To refine a generated draft, pass its returned path as a source on the next call.
-References are reduced to at most 1536 px on the longer side before upload (the last fallback
-provider reduces them below 512x512), so fine details may change.
+References are reduced to at most 1536 px on the longer side before upload, so fine details may
+change. With `size: auto` the model picks the proportions, usually those of the source.
 This is generative editing, not exact pixel-preserving retouching.
 If editing is unavailable or fails, do not omit `images` and silently generate a replacement.
 
@@ -27,7 +28,7 @@ If editing is unavailable or fails, do not omit `images` and silently generate a
 When the picture should show people from this chat (a cover about chat events, a caricature, a
 scene with them) and `fetch_telegram_avatars` is available here, call it first with up to four participants named as the
 chat shows them, then pass the returned paths as `images` references and name each person by
-image index in the prompt. An avatar is a photo of a real person: draw an illustration or a
+figure number in the prompt. An avatar is a photo of a real person: draw an illustration or a
 friendly caricature, never a photorealistic likeness, never something demeaning, and never
 present the result as a real photo. A participant listed in `missing` with reason
 `no_photo_or_private` has no visible photo: describe them neutrally without inventing looks;
@@ -43,11 +44,11 @@ present the result as a real photo. A participant listed in `missing` with reaso
 4. Put exact in-image text in straight quotes and require verbatim rendering with no extra text.
 5. State important exclusions explicitly, including no watermark, no logo, or no additional objects
    when applicable.
-6. Use `size=auto`, `quality=auto`, and `background=auto` unless the user or intended layout requires
-   an explicit value.
+6. Use `size=auto` and `background=auto` unless the user or intended layout requires an explicit
+   value. Always pass `quality=auto`: the server sets the quality itself.
 7. Use one `generate_image` call for one requested final. For variants, make one call per variant.
 
-The tool saves a new image file (WebP, PNG or JPEG depending on the provider) in the authorized
+The tool saves a new image file (JPEG, or PNG for a transparent background) in the authorized
 workspace, leaving the source intact. It does not send the image automatically.
 To show the result, call `send_workspace_image` with the returned path and scope.
 Only claim delivery after that tool confirms it. Inspect a draft with `inspect_workspace_image`

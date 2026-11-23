@@ -8,6 +8,7 @@
  *
  * Key constructs:
  * - A skill adds procedure, never rights: the rubric refuses tool names outside the current mode.
+ * - No key anywhere in the input: one walk refuses it first, naming the field.
  * - Mutations run only after the exact Eve tool call was approved by the owner and the owner role
  *   was re-read from the database; the same call replayed after approval creates nothing twice.
  * - Published content is visible from the next turn: the dynamic resolver reads the library on
@@ -35,6 +36,7 @@ import {
 } from "../authored-skills/authored-skill-example-repository.js";
 import { authoredSkillGrantRepository } from "../authored-skills/authored-skill-grant-repository.js";
 import { authoredSkillRepository } from "../authored-skills/authored-skill-repository.js";
+import { assertNoSecretInSkillInput } from "../authored-skills/skill-input-secrets.js";
 import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../family-context.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
@@ -253,6 +255,8 @@ export default defineTool({
   description: TOOL_DESCRIPTION,
   inputSchema: manageSkillSchema,
   async execute(input, ctx) {
+    // Before authorization and the database: every text here is stored or sent on.
+    assertNoSecretInSkillInput(input);
     const owner = requireTrustedTelegramOwner(ctx);
     const caller = { familyId: owner.familyId, role: owner.role, userId: owner.userId };
     const provenance = { eveSessionId: ctx.session.id, eveTurnId: ctx.session.turn.id };

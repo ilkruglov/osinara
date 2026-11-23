@@ -36,39 +36,12 @@ import {
   type ReviewSubjectSlots,
 } from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
+import { projectReviewSource as project, type ReviewSourceRow } from "./memory-review-source.js";
 import { TURN_START_LOCK_SQL, TURN_START_PAUSED_SQL } from "../deploy/turn-start-pause.js";
+import { MEMORY_REVIEW_CLAIM_LOCK } from "./memory-review-lane-restart.js";
 
-interface SourceRow {
-  actor_id: string;
-  actor_kind: "agent_self" | "telegram_bot" | "user";
-  content_text: string | null;
-  id: string;
-  message_kind: string;
-  message_thread_id: string | null;
-  reply_to_sequence_id: string | null;
-  sender_display_name: string | null;
-  sender_tag: string | null;
-  sender_username: string | null;
-  sent_at: Date;
-  sequence_id: string;
+interface SourceRow extends ReviewSourceRow {
   telegram_user_id: string | null;
-}
-
-function project(row: SourceRow): TelegramGroupJournalEntry {
-  return {
-    actorId: row.actor_id,
-    actorKind: row.actor_kind,
-    contentText: row.content_text,
-    entryId: row.id,
-    messageKind: row.message_kind,
-    messageThreadId: row.message_thread_id,
-    replyToSequenceId: row.reply_to_sequence_id,
-    senderDisplayName: row.sender_display_name,
-    senderTag: row.sender_tag,
-    senderUsername: row.sender_username,
-    sentAt: row.sent_at.toISOString(),
-    sequenceId: row.sequence_id,
-  };
 }
 
 interface LaneRow {
@@ -313,6 +286,8 @@ async function loadReviewSubjectSlots(
 async function precedingContext(
   client: PoolClient,
   input: {
+    /** The lane's `context_floor_sequence`: where review was last turned back on. */
+    contextFloorSequence: string;
     conversationId: string;
     firstSequence: string;
     messageThreadId: string | null;
@@ -328,12 +303,15 @@ async function precedingContext(
       WHERE message.conversation_id = $1
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id < $3::bigint AND message.content_text IS NOT NULL
+        -- Nothing from before review was last turned back on: that time was never reviewed.
+        AND message.sequence_id > $5::bigint
       ORDER BY message.sequence_id DESC LIMIT $4`,
     [
       input.conversationId,
       input.messageThreadId,
       input.firstSequence,
       MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT,
+      input.contextFloorSequence,
     ],
   );
   return result.rows.reverse().map(project);
@@ -409,16 +387,18 @@ export const memoryReviewDispatchRepository = {
       // looked free and doubled it (Codex review, 6 November 2026). A pass that finds another one
       // under way leaves this tick to it.
       const pass = await client.query<{ acquired: boolean }>(
-        "SELECT pg_try_advisory_xact_lock(hashtext('osinara.memory_review_claim')) AS acquired",
+        "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired",
+        [MEMORY_REVIEW_CLAIM_LOCK],
       );
       if (pass.rows[0]?.acquired !== true) {
         await client.query("COMMIT");
         return [];
       }
-      await terminalizeStaleMemoryReviewBatches(client, input.now);
+      const discarded = await terminalizeStaleMemoryReviewBatches(client, input.now);
       await materializeReadyBatches(client, input.now, laneLimit);
       await materializeIdleBatches(client, input.now, laneLimit);
       const claimed = await client.query<{
+        context_floor_sequence: string;
         conversation_chat_id: string;
         conversation_id: string;
         family_id: string;
@@ -484,6 +464,7 @@ export const memoryReviewDispatchRepository = {
             AND sponsors.conversation_id = conversation.id AND sponsor.id = sponsors.user_id
          RETURNING batch.id, batch.conversation_id, batch.through_sequence::text,
                    batch.source_count, batch.lease_token::text, lane.message_thread_id::text,
+                   lane.context_floor_sequence::text,
                    conversation.family_id, conversation.scope::text,
                    conversation.scope_partition_key,
                    conversation.telegram_chat_id AS conversation_chat_id,
@@ -521,6 +502,7 @@ export const memoryReviewDispatchRepository = {
           );
         const entries = sources.rows.map(project);
         const preceding = await precedingContext(client, {
+          contextFloorSequence: row.context_floor_sequence,
           conversationId: row.conversation_id,
           firstSequence: sources.rows[0]!.sequence_id,
           messageThreadId: row.message_thread_id,
@@ -583,6 +565,11 @@ export const memoryReviewDispatchRepository = {
         });
       }
       await client.query("COMMIT");
+      if (discarded > 0) {
+        console.info(
+          JSON.stringify({ code: "AGENT_MEMORY_REVIEW_BATCHES_DISCARDED", batches: discarded }),
+        );
+      }
       return claims;
     } catch (error) {
       await client.query("ROLLBACK");
@@ -600,6 +587,10 @@ export const memoryReviewDispatchRepository = {
       `UPDATE memory_review_batches AS batch
           SET status = 'dispatching', application_session_id = $3, updated_at = now()
         WHERE batch.id = $1 AND batch.status = 'leased' AND batch.lease_token = $2
+          -- Review turned back on moved the cursor past it: the batch is behind for good.
+          AND batch.predecessor_sequence = (SELECT lane.processed_through_sequence
+                                              FROM memory_review_lanes AS lane
+                                             WHERE lane.id = batch.lane_id)
           -- Switched off after the lease: nothing starts (Codex review, 6 November 2026).
           AND COALESCE((SELECT telegram_group.memory_review_enabled
                           FROM application_conversations AS conversation

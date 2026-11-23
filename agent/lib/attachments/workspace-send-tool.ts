@@ -19,6 +19,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { AppError, isAppError } from "../app-error.js";
+import { telegramCaptionSchema } from "./telegram-caption.js";
 import { deliverWorkspaceFile } from "./telegram-workspace-file-delivery.js";
 import {
   requireTelegramDeliveryTarget,
@@ -50,7 +51,7 @@ export function createWorkspaceSendTool(options: {
     description: options.description,
     inputSchema: z
       .object({
-        caption: z.string().max(1_024).optional().describe("Необязательная подпись Telegram"),
+        caption: telegramCaptionSchema.optional(),
         path: z
           .string()
           .min(1)

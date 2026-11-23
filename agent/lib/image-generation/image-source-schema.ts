@@ -29,6 +29,6 @@ export function imageSourcesSchema(external = false) {
     .max(4)
     .optional()
     .describe(
-      "Для правки передай исходники в порядке упоминания в prompt; в каждом ровно один attachmentId, path или telegramMessageId. Для новой картинки поле опусти. Правки поддерживает Cloudflare",
+      "Для правки передай исходники в порядке упоминания в prompt; в каждом ровно один attachmentId, path или telegramMessageId. Для новой картинки поле опусти",
     );
 }
