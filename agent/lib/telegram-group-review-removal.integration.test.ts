@@ -12,9 +12,12 @@
  * - While a review turn of the group fails (`failRunning`, or the claim pass resolving an abandoned
  *   turn), the failure holds its batch and lane and then alerts the owner with a row referencing
  *   the group, and the removal holds the group and then waits for the lane in its cascade: one of
- *   them is aborted with `40P01`. The removal and the type change retry once, so the owner's
- *   command goes through. The interleaving is forced by a third connection, and repeated until the
- *   command, not the review, is the side aborted: the retry itself is what is proven.
+ *   them is aborted with `40P01`. The removal and the type change run up to three times, so the
+ *   owner's command goes through. The interleaving is forced by a third connection and repeated;
+ *   every round the command must succeed. PostgreSQL picks the side it aborts, and in CI it never
+ *   picked the command in 40 rounds (release 1.8.67), so the test cannot require the retry to have
+ *   run: that it does is the retry helper's unit test, and the three runs are checked here (owner,
+ *   «Только «команда успешна»», 23 November 2026).
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,21 +34,15 @@ import { memoryReviewTerminalRepository } from "./memory-review/memory-review-te
 import { waitForLockWaiters } from "./person-cards/person-card-cleanup.integration-fixtures.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
 
-/**
- * Runs of the owner's command in a round (two prove the retry ran, not just a lucky race) and the
- * runs it allows: the retry may meet the review's next lock again (repeat review, 23 November 2026).
- */
-const retries = vi.hoisted(() => ({ allowed: 0, attempts: 0 }));
+/** The runs the owner's command allows: its retry may meet the review's next lock again. */
+const retries = vi.hoisted(() => ({ allowed: 0 }));
 vi.mock("./transaction-conflict-retry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./transaction-conflict-retry.js")>();
   return {
     ...actual,
     retryOnTransactionConflict: <T>(run: () => Promise<T>, attempts?: number): Promise<T> => {
       retries.allowed = attempts ?? 2;
-      return actual.retryOnTransactionConflict(() => {
-        retries.attempts += 1;
-        return run();
-      }, attempts);
+      return actual.retryOnTransactionConflict(run, attempts);
     },
   };
 });
@@ -137,8 +134,8 @@ function ownerCommand(action: "remove" | "retype", familyId: string, ownerId: st
       });
 }
 
-/** Rounds a race may take before the command is the side aborted: odds of none ~0.7^40. */
-const RACE_ROUNDS = 40;
+/** Rounds of the race; each takes about a second. */
+const RACE_ROUNDS = 8;
 
 /**
  * One forced interleaving: a third connection holds the failure after its lane lock, at the release
@@ -214,23 +211,15 @@ describeWithDatabase("a group whose journal review and a turn still hold", () =>
 
   for (const action of ["remove", "retype"] as const) {
     for (const failure of ["turn failure", "claim pass"] as const) {
-      // PostgreSQL picks which side of the deadlock it aborts; when it picks the review, the
-      // command passes with no retry at all. The race runs until the command was the one aborted
-      // and retried, so the test fails without the retry (repeat review, 23 November 2026: one run
-      // in ten passed with the retry removed).
       it(`${action}s it while a ${failure} of its review turn alerts the owner`, async () => {
-        let retried = false;
-        for (let round = 0; round < RACE_ROUNDS && !retried; round += 1) {
+        for (let round = 0; round < RACE_ROUNDS; round += 1) {
           await database().query(
             "TRUNCATE telegram_groups, family_memberships, users, families CASCADE",
           );
-          retries.attempts = 0;
           expect(await raceOnce(action, failure)).toBe("ok");
-          retried = retries.attempts > 1;
         }
-        expect(retried).toBe(true);
         expect(retries.allowed).toBe(3);
-      }, 120_000);
+      }, 60_000);
     }
   }
 });
