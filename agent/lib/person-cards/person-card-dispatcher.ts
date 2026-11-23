@@ -13,8 +13,12 @@
  *   pending, so one long build would hold the second slot and the next ticks for minutes. Each
  *   build records its own outcome and never throws; a process that ends mid-build leaves a lease
  *   the next process reclaims.
+ * - Nothing is claimed in DeepSeek's peak hours (twice the price) nor with cards switched off: the
+ *   switch stopped showing them but left paid builds going (Fable review, 23 November 2026). The
+ *   queue is kept either way; a build claimed before the peak finishes in it.
  */
-import { PERSON_CARD_MAX_RUNNING_BUILDS } from "./person-card-config.js";
+import { isDeepSeekPeakHour } from "../deepseek/deepseek-peak-hours.js";
+import { PERSON_CARD_MAX_RUNNING_BUILDS, personCardsEnabled } from "./person-card-config.js";
 import {
   personCardDispatchRepository,
   type ClaimedPersonCardBuild,
@@ -22,6 +26,7 @@ import {
 import { runPersonCardBuild } from "./person-card-builder.js";
 
 export interface PersonCardDispatcherDependencies {
+  enabled(): boolean;
   queue: Pick<
     typeof personCardDispatchRepository,
     "claim" | "enqueueDue" | "purgeOrphans" | "reclaimExpired"
@@ -31,9 +36,11 @@ export interface PersonCardDispatcherDependencies {
 
 export async function dispatchPersonCards(
   dependencies: PersonCardDispatcherDependencies = {
+    enabled: () => personCardsEnabled(),
     queue: personCardDispatchRepository,
     run: (build) => runPersonCardBuild(build),
   },
+  now = new Date(),
 ): Promise<void> {
   const reclaimed = await dependencies.queue.reclaimExpired();
   const queued = await dependencies.queue.enqueueDue();
@@ -50,6 +57,7 @@ export async function dispatchPersonCards(
       }),
     );
   }
+  if (!dependencies.enabled() || isDeepSeekPeakHour(now)) return;
   const claimed = await dependencies.queue.claim(PERSON_CARD_MAX_RUNNING_BUILDS);
   for (const build of claimed) void dependencies.run(build);
 }

@@ -3,14 +3,12 @@
  *
  * Constructs covered:
  * - Items keep only given sources; episodes count only under positions; sourceless items drop.
- * - Cleanup entries are refused for protected records, other partitions, chains and for removing
- *   the person's own words in favour of someone else's; a cleaned record is not cited: an item
- *   citing a repeat cites its kept record, one citing a refuted record loses it.
+ * - Cards no longer clean memory: a `cleanup` in the answer is ignored and changes no item's
+ *   sources (owner, 23 November 2026).
  * - The character budget counts escaped text and drops whole items; an empty card and a non-JSON
  *   answer fail.
- * - "Refuted" needs the kept record to be newer; NUL characters are dropped and lone surrogates
- *   repaired; extra sources are cut after the invalid ones, not the item; an item too long on its
- *   own does not take the short ones with it.
+ * - NUL characters are dropped and lone surrogates repaired; extra sources are cut after the
+ *   invalid ones, not the item; an item too long on its own does not take the short ones with it.
  */
 import { describe, expect, it } from "vitest";
 
@@ -23,7 +21,6 @@ function source(id: string, overrides: Partial<PersonCardSource> = {}): PersonCa
   return {
     attribute: null,
     authorLabel: "Юрий (yura_k)",
-    cleanable: true,
     content: `запись ${id}`,
     createdAt: new Date("2026-11-01T10:00:00Z"),
     evidenceKind: "firsthand",
@@ -34,6 +31,7 @@ function source(id: string, overrides: Partial<PersonCardSource> = {}): PersonCa
     occurredAt: null,
     scope: "group",
     scopePartitionKey: "group-a",
+    selfDirect: false,
     selfStatement: false,
     version: "2026-11-01 10:00:00.123456+00",
     ...overrides,
@@ -45,10 +43,10 @@ const records = numberPersonCardRecords(
     source("1"),
     source("2"),
     source("3", { selfStatement: true }),
-    source("4", { cleanable: false }),
+    source("4"),
     source("5", { scopePartitionKey: "group-b" }),
   ],
-  [source("9", { kind: "episode", cleanable: false })],
+  [source("9", { kind: "episode" })],
 );
 
 function card(body: Record<string, unknown>): string {
@@ -83,80 +81,25 @@ describe("parsePersonCardResponse", () => {
     expect(parsed.cited.map((cited) => cited.id).sort()).toEqual(["1", "2", "9"]);
   });
 
-  it("refuses unsafe cleanup and never cites a cleaned record", () => {
+  // An answer of the former prompt proposing a cleanup moved an item's source to the kept record
+  // and dropped one citing a refuted record; now nothing is hidden, so the sources stand as cited.
+  it("ignores a cleanup in the answer and keeps every cited source", () => {
     const parsed = parsePersonCardResponse(
       card({
         facts: [{ text: "Ездит на E60", scope: "всегда", sources: ["r1", "r2"] }],
         cleanup: [
           { record: "r1", kind: "duplicate", keep: "r2", reason: "то же самое" },
-          { record: "r4", kind: "duplicate", keep: "r2", reason: "защищена" },
-          { record: "r5", kind: "duplicate", keep: "r2", reason: "другая группа" },
-          { record: "r3", kind: "refuted", keep: "r2", reason: "его слова против чужих" },
-          { record: "e1", kind: "duplicate", keep: "r2", reason: "эпизод" },
-          { record: "r2", kind: "duplicate", keep: "r2", reason: "сам на себя" },
+          { record: "r2", kind: "refuted", keep: "r3", reason: "новее" },
         ],
       }),
       records,
     );
-    expect(parsed.cleanup).toEqual([
-      {
-        explanation: "то же самое",
-        keptMemoryItemId: "2",
-        memoryItemId: "1",
-        reason: "duplicate",
-        readVersion: records[0]!.source.version,
-      },
+    expect(parsed.sections.facts[0]!.sourceRefs).toEqual([
+      records[0]!.source.memoryRef,
+      records[1]!.source.memoryRef,
     ]);
-    expect(parsed.droppedCleanup).toBe(5);
-    expect(parsed.sections.facts[0]!.sourceRefs).toEqual([records[1]!.source.memoryRef]);
-  });
-
-  it("moves an item citing a repeat to its kept record and drops one citing a refuted one", () => {
-    const dated = numberPersonCardRecords(
-      [
-        source("1"),
-        source("2", { createdAt: new Date("2026-11-02T10:00:00Z") }),
-        source("3"),
-        source("4", { createdAt: new Date("2026-11-03T10:00:00Z") }),
-      ],
-      [],
-    );
-    const parsed = parsePersonCardResponse(
-      card({
-        facts: [
-          { text: "Пьёт эспрессо", scope: "всегда", sources: ["r1"] },
-          { text: "Живёт в Москве", scope: "всегда", sources: ["r3"] },
-          { text: "Живёт в Казани", scope: "всегда", sources: ["r4"] },
-        ],
-        cleanup: [
-          { record: "r1", kind: "duplicate", keep: "r2", reason: "повтор" },
-          { record: "r3", kind: "refuted", keep: "r4", reason: "переехал" },
-        ],
-      }),
-      dated,
-    );
-    // The kept record is the same fact and the card read it: without the move the fact would
-    // leave both the card and the profile block.
-    expect(parsed.sections.facts).toEqual([
-      { scope: "всегда", sourceRefs: [dated[1]!.source.memoryRef], text: "Пьёт эспрессо" },
-      { scope: "всегда", sourceRefs: [dated[3]!.source.memoryRef], text: "Живёт в Казани" },
-    ]);
-    expect(parsed.cited.map((cited) => cited.id).sort()).toEqual(["2", "4"]);
-  });
-
-  it("drops a cleanup whose kept record is removed too", () => {
-    const parsed = parsePersonCardResponse(
-      card({
-        facts: [{ text: "Факт", scope: "всегда", sources: ["r1"] }],
-        cleanup: [
-          { record: "r1", kind: "duplicate", keep: "r2", reason: "повтор" },
-          { record: "r2", kind: "duplicate", keep: "r3", reason: "повтор" },
-        ],
-      }),
-      records,
-    );
-    expect(parsed.cleanup.map((entry) => entry.memoryItemId)).toEqual(["2"]);
-    expect(parsed.sections.facts).toHaveLength(1);
+    expect(parsed.cited.map((cited) => cited.id)).toEqual(["1", "2"]);
+    expect(parsed).not.toHaveProperty("cleanup");
   });
 
   it("keeps the card within the character budget by dropping whole items", () => {
@@ -171,29 +114,6 @@ describe("parsePersonCardResponse", () => {
     expect(parsed.characters).toBeLessThanOrEqual(PERSON_CARD_ITEMS_MAX_CHARACTERS);
     expect(parsed.sections.interests).toHaveLength(1);
     expect(parsed.sections.facts.length).toBeLessThan(8);
-  });
-
-  it("lets only a newer record refute an older one", () => {
-    const dated = numberPersonCardRecords(
-      [
-        source("10", { createdAt: new Date("2026-01-01T00:00:00Z") }),
-        source("11", { createdAt: new Date("2026-11-01T00:00:00Z") }),
-      ],
-      [],
-    );
-    const parsed = parsePersonCardResponse(
-      card({
-        facts: [{ text: "Живёт в Казани", scope: "всегда", sources: ["r2"] }],
-        cleanup: [
-          { record: "r2", kind: "refuted", keep: "r1", reason: "старое опровергает новое" },
-          { record: "r1", kind: "refuted", keep: "r2", reason: "переехал" },
-        ],
-      }),
-      dated,
-    );
-    expect(parsed.cleanup.map((entry) => [entry.memoryItemId, entry.keptMemoryItemId])).toEqual([
-      ["10", "11"],
-    ]);
   });
 
   it("counts escaped text, drops NUL characters and cuts extra sources", () => {
@@ -290,7 +210,6 @@ describe("parsePersonCardResponse", () => {
       records,
     );
     expect(parsed.sections.facts[0]!.sourceRefs).toEqual([records[0]!.source.memoryRef]);
-    expect(parsed.cleanup).toEqual([]);
   });
 
   it("fails on an empty card and on an answer without JSON", () => {

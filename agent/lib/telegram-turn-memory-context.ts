@@ -17,8 +17,9 @@
  *   exist before Eve starts the turn; Eve turn identity is not known at this boundary.
  * - Any failure degrades to an explicit unavailability notice: prompt assembly never fails a turn.
  * - Person cards go first: the author's card in every turn, then the people replied to, mentioned
- *   and found by retrieval; the profile block leaves out what those cards read and gets the budget
- *   the cards left. The switch `AGENT_PERSON_CARDS_ENABLED=false` shows none.
+ *   and found by retrieval; the profile block leaves out what those cards read, except records
+ *   released by items that left the turn and whatever a card left with no item read, and gets the
+ *   budget the cards left. The switch `AGENT_PERSON_CARDS_ENABLED=false` shows none.
  */
 import type { ConversationAccess } from "./family-access.js";
 import type { MemoryAuthorization } from "./memory-context.js";
@@ -40,9 +41,11 @@ import type { CreateProfileViewInput, ProfileView } from "./profile-view.js";
 import type { TelegramActorKind } from "./telegram-inbound-actor.js";
 import { personCardsEnabled } from "./person-cards/person-card-config.js";
 import { PROFILE_CONTEXT_MAX_CHARACTERS } from "./memory-config.js";
-import { personCardsBlock, type ShownPersonCard } from "./person-cards/person-card-render.js";
+import { hasItems, personCardsBlock } from "./person-cards/person-card-render.js";
 import {
   loadPersonCardsForTurn,
+  personCardsForProfile,
+  type TurnPersonCard,
   type LoadPersonCardsInput,
 } from "./person-cards/person-card-view-repository.js";
 
@@ -86,7 +89,7 @@ interface TelegramMemoryContextDependencies {
   loadPersonCards?(
     auth: MemoryAuthorization,
     input: LoadPersonCardsInput,
-  ): Promise<ShownPersonCard[]>;
+  ): Promise<TurnPersonCard[]>;
   /** Pending repeat-task hint for this conversation; consumed once shown. */
   takeSkillHint?(conversationId: string): Promise<SkillHint | null>;
   retrieve(
@@ -192,7 +195,7 @@ export function createTelegramMemoryContextBuilder(
                   ...input.explicitMentionTelegramUserIds,
                 ],
               })
-              .catch(unavailable<ShownPersonCard[]>("person_cards", []))
+              .catch(unavailable<TurnPersonCard[]>("person_cards", []))
           : [];
       const cardsMs = Math.round(performance.now() - cardsStartedAt);
       // The cards and the profile block share the block's budget, the cards first.
@@ -201,8 +204,11 @@ export function createTelegramMemoryContextBuilder(
         PROFILE_CONTEXT_MAX_CHARACTERS,
       );
       // The author's card is in every turn, and with it what the card did not read: the "shown
-      // recently" suppression is for the author's records shown without a card.
-      const authorHasCard = cards.some((card) => card.subjectTelegramUserId === input.actor.id);
+      // recently" suppression is for the author's records shown without a card. A card left with
+      // no item hides nothing, so the suppression stays (review, 23 November 2026).
+      const authorHasCard = cards.some(
+        (card) => card.subjectTelegramUserId === input.actor.id && hasItems(card.sections),
+      );
       const suppressCurrentAuthor =
         isUser &&
         !authorHasCard &&
@@ -227,7 +233,7 @@ export function createTelegramMemoryContextBuilder(
                 : { replyTimelineSequence: input.replyTimelineSequence }),
               retrievalClaimIds: [...context.retrievedClaimIds],
               suppressCurrentAuthor,
-              personCardIds: cards.map((card) => card.cardId),
+              personCards: personCardsForProfile(cards),
               maxCharacters: Math.max(
                 0,
                 PROFILE_CONTEXT_MAX_CHARACTERS - (cardsBlock?.length ?? 0),
@@ -290,11 +296,13 @@ export function createTelegramMemoryContextBuilder(
       );
       const profileBlock = profile == null ? null : formatProfileViewContext(profile);
       // The reminder sits right after the records: the rule in the mode block alone was ignored.
-      const memoryBlock = retrievalFailed
+      // Cards and the profile are read apart from retrieval: what they showed still asks for the
+      // marker, which the card block no longer explains (review, 23 November 2026).
+      const records = retrievalFailed
         ? MEMORY_UNAVAILABLE_BLOCK
-        : shownMemoryRefs.length === 0
-          ? formatRetrievedMemoryInstructions(context.memories, context.threads)
-          : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`;
+        : formatRetrievedMemoryInstructions(context.memories, context.threads);
+      const memoryBlock =
+        shownMemoryRefs.length === 0 ? records : `${records}\n${MEMORY_USED_REMINDER}`;
       // Why a record was or was not shown, joined to AGENT_MEMORY_REINFORCED by the turn's timeline
       // entry (a failed turn leaves the session turn number to the next one; Codex review):
       // shown-to-used precision per kind and the cut that kept a record out (6 October 2026).

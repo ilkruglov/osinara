@@ -10,6 +10,7 @@
  * - A completed digest records the balance the next one reads back; the balance alert claim
  *   follows the same day rule, and an abandoned one is never taken again that day.
  * - Both databases have a measurable size.
+ * - Person cards: built and failed builds, cards shown per turn and used, within the window.
  */
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -77,7 +78,40 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
       [lane.rows[0]!.id, conversation.rows[0]!.id],
     );
 
+    // Person cards of the window: two built (one failed), three shown over two turns, one used;
+    // a show and a use before the window do not count.
+    const view = (cardIds: readonly string[], at: Date) =>
+      database().query(
+        `INSERT INTO profile_views (family_id, viewer_conversation_id, subject_count, claim_count,
+           total_characters, created_at, person_card_ids)
+         VALUES ($1, $2, 0, 0, 0, $3, $4::uuid[])`,
+        [family.familyId, conversation.rows[0]!.id, at, cardIds],
+      );
+    const cardA = "00000000-0000-4000-8000-0000000000a1";
+    const cardB = "00000000-0000-4000-8000-0000000000b2";
+    const earlier = new Date(windowStart.getTime() - 60_000);
+    await view([cardA, cardB], now);
+    await view([cardA], now);
+    await view([cardA, cardB], earlier);
+    const use = (at: Date) =>
+      database().query(
+        `INSERT INTO person_card_uses (family_id, card_ref, card_version, application_session_id,
+           session_turn, used_at) VALUES ($1, $2, 1, gen_random_uuid(), 1, $3)`,
+        [family.familyId, `pcard_${"a".repeat(32)}`, at],
+      );
+    await use(now);
+    await use(earlier);
+    for (const status of ["succeeded", "failed"]) {
+      await database().query(
+        `INSERT INTO person_card_builds (family_id, area, area_key, subject_telegram_user_id,
+           reason, status, attempts, started_at, finished_at)
+         VALUES ($1, 'family', $1, $2, 'new_records', $3, 1, now(), now())`,
+        [family.familyId, `subject-${status}`, status],
+      );
+    }
+
     const report = await ownerHealthDigestRepository.report(family.familyId, windowStart, now);
+    expect(report.personCards).toEqual({ built: 1, failed: 1, shown: 3, used: 1 });
     expect(report.rotations.count).toBe(1);
     expect(report.memoryWritten).toContainEqual(
       expect.objectContaining({ count: 1, scope: "family" }),

@@ -31,7 +31,7 @@ import {
 } from "./memory-review/memory-review-dispatch.integration-fixtures.js";
 import { memoryReviewDispatchRepository } from "./memory-review/memory-review-dispatch-repository.js";
 import { memoryReviewTerminalRepository } from "./memory-review/memory-review-terminal-repository.js";
-import { waitForLockWaiters } from "./person-cards/person-card-cleanup.integration-fixtures.js";
+import { waitForLockWaiters } from "./database-lock.integration-fixtures.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
 
 /** The runs the owner's command allows: its retry may meet the review's next lock again. */

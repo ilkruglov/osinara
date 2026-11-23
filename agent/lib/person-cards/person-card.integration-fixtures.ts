@@ -38,13 +38,14 @@ export interface PersonCardFixture {
 
 export async function resetPersonCardTables(): Promise<void> {
   await database().query(
-    `TRUNCATE person_card_uses, person_card_cleanups, person_card_sources, person_card_builds,
+    `TRUNCATE person_card_uses, person_card_sources, person_card_builds,
        person_cards, deploy_turn_pause, claim_conflicts, claim_evidence, memory_items_all,
        telegram_group_messages, telegram_groups, family_memberships, users, families CASCADE`,
   );
 }
 
-async function participant(input: {
+/** A participant of a conversation of the fixture; returns its id. */
+export async function insertPersonCardParticipant(input: {
   conversationId: string;
   displayName: string;
   linkedUserId?: string;
@@ -97,40 +98,40 @@ export async function createPersonCardFixture(): Promise<PersonCardFixture> {
   const familyConversation = await conversationRepository.getByGroupId(groupId("-1009401"));
   const groupA = await conversationRepository.getByGroupId(groupId("-1009402"));
   const groupB = await conversationRepository.getByGroupId(groupId("-1009403"));
-  const ownerInFamily = await participant({
+  const ownerInFamily = await insertPersonCardParticipant({
     conversationId: familyConversation.id,
     displayName: "Илья",
     linkedUserId: ownerId,
     telegramUserId: OWNER_TELEGRAM_ID,
     username: "ilya_k",
   });
-  const ownerInA = await participant({
+  const ownerInA = await insertPersonCardParticipant({
     conversationId: groupA.id,
     displayName: "Илья",
     linkedUserId: ownerId,
     telegramUserId: OWNER_TELEGRAM_ID,
     username: "ilya_k",
   });
-  const yuraInA = await participant({
+  const yuraInA = await insertPersonCardParticipant({
     conversationId: groupA.id,
     displayName: "Юра",
     telegramUserId: YURA_TELEGRAM_ID,
     username: "yura_k",
   });
-  const yuraInB = await participant({
+  const yuraInB = await insertPersonCardParticipant({
     conversationId: groupB.id,
     displayName: "Юра",
     telegramUserId: YURA_TELEGRAM_ID,
     username: "yura_k",
   });
-  const alexInA = await participant({
+  const alexInA = await insertPersonCardParticipant({
     conversationId: groupA.id,
     displayName: "Лёша",
     telegramUserId: ALEX_TELEGRAM_ID,
     username: "alex_x",
   });
   for (const telegramUserId of ["9405", "9406"]) {
-    await participant({
+    await insertPersonCardParticipant({
       conversationId: groupA.id,
       displayName: "Близнец",
       telegramUserId,
@@ -169,6 +170,8 @@ export interface PersonCardRecordInput {
     authorParticipantId?: string;
     authorUserId?: string;
     kind: "firsthand" | "inferred" | "reported";
+    /** Who took it down; absent like evidence written before migration 155. */
+    recordedBy?: "review" | "turn";
   };
   groupId?: string;
   kind?: MemoryKind;
@@ -237,11 +240,12 @@ export async function insertPersonCardRecord(
          (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
           origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
           author_participant_id, author_user_id, author_label_snapshot, observed_at,
-          evidence_snippet, timeline_sequence, source_message_id, source_snapshot, created_at)
+          evidence_snippet, timeline_sequence, source_message_id, source_snapshot, created_at,
+          recorded_by)
        SELECT item.id, item.family_id, item.scope, item.scope_partition_key, 'primary', $2,
               item.origin_conversation_id, 'Источник', conversation.telegram_group_id, $3, $4,
               'Автор', item.created_at, item.content, 1, 1, jsonb_build_object('content', item.content),
-              item.created_at
+              item.created_at, $5
        FROM memory_items AS item
        JOIN application_conversations AS conversation ON conversation.id = item.origin_conversation_id
        WHERE item.id = $1`,
@@ -250,6 +254,7 @@ export async function insertPersonCardRecord(
         input.evidence.kind,
         input.evidence.authorParticipantId ?? null,
         input.evidence.authorUserId ?? null,
+        input.evidence.recordedBy ?? null,
       ],
     );
   }

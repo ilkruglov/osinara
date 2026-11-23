@@ -6,15 +6,14 @@
  * - `personCardDispatchRepository`: reclaim, purge, enqueue due cards, claim, release for retry.
  *
  * Key constructs:
- * - Due (the owner's decisions of 21 November 2026): ten or more records about the person the card
- *   did not read (`person_card_reads`), at most once a day counted from the end of the last build;
- *   the person's own words about themselves (a firsthand statement or confirmation) after the card's
- *   snapshot and after the last request, quiet for two minutes, rebuild an existing card at once (a
- *   failed request stops counting after a back-off, so the words are not lost); a card with a cited
- *   record that no longer stands is rebuilt once a day (meanwhile the turn drops just the items
- *   citing it). Ten failed builds in a week stop the person's builds until the week has passed,
- *   counting a build when any of its attempts may have been paid.
- *   One open build per person and area (a partial unique index).
+ * - Due: one build of a card a day at most, counted from the end of its last build, failed or not
+ *   (owner, 23 November 2026: the person's own words rebuilt the card at once, 72 of 147 builds a
+ *   day on production). After the day: the person's own words about themselves (a firsthand
+ *   statement or confirmation) after the card's snapshot, quiet for two minutes; a cited record
+ *   that no longer stands (meanwhile the turn drops just the items citing it); ten or more records
+ *   the card did not read (`person_card_reads`). The weekly count of possibly paid failures is gone:
+ *   the day bounds every card, a failing one included. One open build per card (a partial unique
+ *   index); its attempts on an unclear model outcome are one build.
  * - A lease that ran out means the process is gone: the build published nothing and goes back to
  *   pending until its attempts run out.
  * - Claims serialize on an advisory lock so two overlapping minute ticks never run more builds
@@ -25,8 +24,6 @@
 import { database } from "../database.js";
 import { TURN_START_LOCK_SQL, TURN_START_PAUSED_SQL } from "../deploy/turn-start-pause.js";
 import {
-  PERSON_CARD_FAILED_RETRY_BACKOFF_MILLISECONDS,
-  PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK,
   PERSON_CARD_LEASE_MILLISECONDS,
   PERSON_CARD_MAX_ATTEMPTS,
   PERSON_CARD_NEW_RECORDS_THRESHOLD,
@@ -79,7 +76,7 @@ const WITHOUT_JIT = { setup: ["SET LOCAL jit = off"] };
 export const LEASED_BUILD_SQL =
   "id = $1 AND status = 'running' AND lease_token = $2 AND lease_expires_at > clock_timestamp()";
 
-// A finished build without a cleanup row is history the queue no longer reads after a day.
+// A finished build is history the queue no longer reads after a day.
 const BUILD_HISTORY_DAYS = 30;
 
 export const personCardDispatchRepository = {
@@ -91,8 +88,6 @@ export const personCardDispatchRepository = {
          finished_at = CASE WHEN attempts >= $1 THEN now() END,
          error_code = CASE WHEN attempts >= $1 THEN 'AGENT_PERSON_CARD_BUILD_ABANDONED'
                            ELSE error_code END,
-         -- The run may have died in the middle of a model call (a deploy).
-         possibly_paid = true,
          lease_token = NULL, lease_expires_at = NULL
        WHERE status = 'running' AND lease_expires_at <= now()
        RETURNING status`,
@@ -104,14 +99,11 @@ export const personCardDispatchRepository = {
 
   /**
    * Cards none of whose cited records still stand (nothing is left to show or to rebuild from), and
-   * finished builds older than a month that cleaned nothing.
+   * finished builds older than a month.
    */
   async purgeOrphans(): Promise<number> {
     await database().query(
-      `DELETE FROM person_card_builds AS build
-       WHERE build.finished_at < now() - make_interval(days => $1)
-         AND NOT EXISTS (SELECT 1 FROM person_card_cleanups AS cleanup
-                         WHERE cleanup.build_id = build.id)`,
+      "DELETE FROM person_card_builds WHERE finished_at < now() - make_interval(days => $1)",
       [BUILD_HISTORY_DAYS],
     );
     const result = await database().query(
@@ -158,8 +150,10 @@ export const personCardDispatchRepository = {
                   card.id, card.sources_as_of, card.source_count
        ),
        candidates AS (
-         SELECT subjects.*, last_build.active_at AS last_active, last_build.self_requested_at,
-                last_build.failed_this_week,
+         SELECT subjects.*,
+                (SELECT max(COALESCE(build.finished_at, build.requested_at))
+                 FROM person_card_builds AS build
+                 WHERE ${KEY_MATCH("build", "subjects")}) AS last_active,
                 (subjects.card_id IS NOT NULL AND (
                   SELECT count(*) FROM person_cards AS card
                   JOIN person_card_sources AS source ON source.card_id = card.id
@@ -168,21 +162,6 @@ export const personCardDispatchRepository = {
                     AND ${personCardSourceAliveSql({ card: "card", cited: "cited", source: "source" })}
                 ) < subjects.source_count) AS invalid
          FROM subjects
-         LEFT JOIN LATERAL (
-           SELECT max(COALESCE(build.finished_at, build.requested_at)) AS active_at,
-                  -- A failed build stops answering the person's words only for the back-off.
-                  max(build.requested_at) FILTER (
-                    WHERE build.status <> 'failed' OR build.finished_at > now() - $5::interval
-                  ) AS self_requested_at,
-                  (SELECT count(*) FROM person_card_builds AS failed
-                   WHERE failed.family_id = subjects.family_id
-                     AND failed.subject_telegram_user_id = subjects.telegram_user_id
-                     AND failed.status = 'failed'
-                     AND failed.finished_at > now() - interval '7 days'
-                     AND failed.possibly_paid) AS failed_this_week
-           FROM person_card_builds AS build
-           WHERE ${KEY_MATCH("build", "subjects")}
-         ) AS last_build ON true
          WHERE NOT EXISTS (
            SELECT 1 FROM person_card_builds AS open_build
            WHERE ${KEY_MATCH("open_build", "subjects")} AND open_build.status IN ('pending', 'running')
@@ -190,15 +169,11 @@ export const personCardDispatchRepository = {
        ),
        due AS (
          SELECT family_id, area, area_key, telegram_user_id, CASE
-           -- A person whose builds keep failing waits for next week: each attempt is paid.
-           WHEN failed_this_week >= $6 THEN NULL
-           WHEN card_id IS NOT NULL
-             AND newest_self > GREATEST(sources_as_of, COALESCE(self_requested_at, '-infinity'::timestamptz))
+           WHEN last_active > now() - $3::interval THEN NULL
+           WHEN card_id IS NOT NULL AND newest_self > sources_as_of
              AND newest_self <= now() - $2::interval THEN 'self_statement'
-           WHEN invalid AND (last_active IS NULL OR last_active <= now() - $3::interval)
-             THEN 'invalidated'
-           WHEN new_records >= $4
-             AND (last_active IS NULL OR last_active <= now() - $3::interval) THEN 'new_records'
+           WHEN invalid THEN 'invalidated'
+           WHEN new_records >= $4 THEN 'new_records'
          END AS reason
          FROM candidates
        )
@@ -211,8 +186,6 @@ export const personCardDispatchRepository = {
             `${PERSON_CARD_SELF_STATEMENT_QUIET_MILLISECONDS} milliseconds`,
             `${PERSON_CARD_REBUILD_INTERVAL_MILLISECONDS} milliseconds`,
             PERSON_CARD_NEW_RECORDS_THRESHOLD,
-            `${PERSON_CARD_FAILED_RETRY_BACKOFF_MILLISECONDS} milliseconds`,
-            PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK,
           ],
         ),
       WITHOUT_JIT,
@@ -262,8 +235,6 @@ export const personCardDispatchRepository = {
     buildId: string;
     errorCode: string;
     leaseToken: string;
-    /** The attempt may have cost a model call (`possibly_paid`, the weekly cap). */
-    possiblyPaid: boolean;
   }): Promise<"failed" | "lost" | "retry"> {
     const result = await database().query<{ status: string }>(
       `UPDATE person_card_builds SET
@@ -271,17 +242,11 @@ export const personCardDispatchRepository = {
          finished_at = CASE WHEN attempts >= $3 THEN now() END,
          retry_after = CASE WHEN attempts >= $3 THEN NULL
                             ELSE now() + attempts * interval '5 minutes' END,
-         error_code = $4, possibly_paid = possibly_paid OR $5,
+         error_code = $4,
          lease_token = NULL, lease_expires_at = NULL
        WHERE ${LEASED_BUILD_SQL}
        RETURNING status`,
-      [
-        input.buildId,
-        input.leaseToken,
-        PERSON_CARD_MAX_ATTEMPTS,
-        input.errorCode,
-        input.possiblyPaid,
-      ],
+      [input.buildId, input.leaseToken, PERSON_CARD_MAX_ATTEMPTS, input.errorCode],
     );
     const status = result.rows[0]?.status;
     return status === undefined ? "lost" : status === "pending" ? "retry" : "failed";

@@ -14,6 +14,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { closeDatabase, database } from "./database.js";
+import { waitForLockWaiters } from "./database-lock.integration-fixtures.js";
 import { MEMORY_SCOPE_QUOTAS } from "./memory-config.js";
 import { memoryOperationHash } from "./memory-record.js";
 import { memoryRepository } from "./memory-repository.js";
@@ -597,4 +598,64 @@ describeWithDatabase("memoryRepository", () => {
     expect(retained.rowCount).toBe(1);
     expect(audit.rows[0]?.metadata).not.toHaveProperty("content");
   });
+  // Review of the fixes, 23 November 2026: the delete and the undo of a create lock the record, then
+  // drop its indexing job; a failing indexer holds the job and then marks the record. PostgreSQL
+  // aborts one; an aborted delete runs again instead of leaving the fact visible.
+  it.each([
+    { kind: "delete", name: "deletes" },
+    { kind: "undo", name: "undoes a create" },
+  ] as const)(
+    "$name after losing a deadlock to the indexer marking the record failed",
+    async ({ kind }) => {
+      const family = await createFamily(`${kind}-race`);
+      const provenance = { sessionId: `session-${kind}-race`, turnId: `turn-${kind}-race` };
+      const record = await memoryRepository.create(
+        family.owner,
+        createInput("personal", `${kind}-race-create`, "Любит длинные прогулки", provenance),
+      );
+      const indexer = await database().connect();
+      try {
+        // `memoryIndexRepository.fail`: the job first, the record second.
+        await indexer.query("BEGIN");
+        await indexer.query(
+          "UPDATE memory_embedding_jobs SET last_error_code = 'X' WHERE memory_item_id = $1",
+          [record.id],
+        );
+        const removing = (
+          kind === "delete"
+            ? memoryRepository.deleteByRef(family.owner, record.memoryRef, `${kind}-race-call`)
+            : memoryRepository.undoCreate(family.owner, record.memoryRef, {
+                operationKey: `${kind}-race-call`,
+                ...provenance,
+              })
+        ).then(
+          () => "removed",
+          (error: { code?: string }) => `remove ${error.code}`,
+        );
+        await waitForLockWaiters(1);
+        const marking = indexer
+          .query("UPDATE memory_items SET embedding_status = 'failed' WHERE id = $1", [record.id])
+          .then(
+            async () => {
+              await indexer.query("COMMIT");
+              return "marked";
+            },
+            async (error: { code?: string }) => {
+              await indexer.query("ROLLBACK");
+              return `mark ${error.code}`;
+            },
+          );
+        // PostgreSQL aborted the removal (it waited first); it ran again after the indexer.
+        expect(await Promise.all([removing, marking])).toEqual(["removed", "marked"]);
+        const hidden = await database().query("SELECT 1 FROM memory_items WHERE id = $1", [
+          record.id,
+        ]);
+        expect(hidden.rowCount).toBe(0);
+      } finally {
+        await indexer.query("ROLLBACK").catch(() => undefined);
+        indexer.release();
+      }
+    },
+    30_000,
+  );
 });

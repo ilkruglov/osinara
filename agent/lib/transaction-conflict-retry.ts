@@ -11,9 +11,11 @@
  * Key constructs:
  * - `run` must open, commit or roll back its own transaction: the retry starts it over from the
  *   locks, so nothing of the aborted attempt is left.
- * - Writers of memory records that lock several of them in different orders (a person deleting a
- *   record and its hidden repeats, a person card publish, the undo of its cleanup) can deadlock;
- *   PostgreSQL then aborts one side, and the side it aborts retries.
+ * - Writers that lock the same rows in opposite orders can deadlock; PostgreSQL then aborts one
+ *   side, and that side runs again: an owner's group command (removal, type change) against a
+ *   failing review turn of the group (the group and the review lane), a person deleting a memory
+ *   record against a failing indexer (the record and its indexing job), a person card publish
+ *   against a memory conflict resolution (the records they both read).
  */
 export async function retryOnTransactionConflict<T>(
   run: () => Promise<T>,

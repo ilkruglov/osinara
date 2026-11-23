@@ -2,14 +2,14 @@
  * Outcomes of one person card build.
  *
  * Constructs covered:
- * - An unclear model outcome returns the build to the queue and publishes nothing.
- * - An answer that is not a card, or no records, fails the build.
- * - A lost lease records nothing; a published card passes the switch to the cleanup.
+ * - An unclear model outcome returns the build to the queue and publishes nothing (the queue
+ *   fails it on the third attempt: `person-card-queue.integration.test.ts`).
+ * - An answer that is not a card fails the build; no records retire the card.
+ * - A lost lease records nothing; a published card counts every loaded record as read.
  * - Only a network, timeout or provider-side error is unclear; a rejected request, an exhausted
  *   balance or a truncated answer fails at once, with the transport's code even when wrapped.
  * - A build whose lease was taken does not pay for a model call.
- * - A failure before the model call is named by its stage (lease, retire) and is not paid; from
- *   the model call on a build is possibly paid, unless the provider refused before any work.
+ * - A failure before the model call is named by its stage (lease, retire).
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,7 +17,6 @@ import { APICallError } from "@ai-sdk/provider";
 
 import { AppError } from "../app-error.js";
 import { runPersonCardBuild, type PersonCardBuildDependencies } from "./person-card-builder.js";
-import { PersonCardAnswerInterrupted } from "./person-card-generation.js";
 import type { ClaimedPersonCardBuild } from "./person-card-dispatch-repository.js";
 import type { PersonCardSource } from "./person-card-sources-repository.js";
 
@@ -32,7 +31,6 @@ const build: ClaimedPersonCardBuild = {
 const record: PersonCardSource = {
   attribute: null,
   authorLabel: null,
-  cleanable: true,
   content: "Любит короткие ответы",
   createdAt: new Date("2026-11-01T00:00:00Z"),
   evidenceKind: "firsthand",
@@ -43,13 +41,13 @@ const record: PersonCardSource = {
   occurredAt: null,
   scope: "group",
   scopePartitionKey: "group-a",
+  selfDirect: true,
   selfStatement: true,
   version: "2026-11-01 00:00:00+00",
 };
 
 function dependencies(overrides: Partial<PersonCardBuildDependencies> = {}) {
   const deps: PersonCardBuildDependencies = {
-    cleanupEnabled: () => true,
     fail: vi.fn(async () => true),
     generate: vi.fn(async () => ({
       inputTokens: 1,
@@ -67,7 +65,7 @@ function dependencies(overrides: Partial<PersonCardBuildDependencies> = {}) {
       subjectLabel: "Юра (yura_k)",
       totalRecords: 1,
     })),
-    publish: vi.fn(async () => ({ cardVersion: 1, cleaned: 0, cleanupSkipped: 0 })),
+    publish: vi.fn(async () => ({ cardVersion: 1 })),
     releaseForRetry: vi.fn(async () => "retry" as const),
     retire: vi.fn(async () => undefined),
     stillLeased: vi.fn(async () => true),
@@ -133,7 +131,7 @@ describe("runPersonCardBuild", () => {
     });
   });
 
-  it("names a failure before the model call by its stage, and does not count it as paid", async () => {
+  it("names a failure before the model call by its stage", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const broken = new Error("connection terminated");
     const lease = dependencies({
@@ -144,7 +142,7 @@ describe("runPersonCardBuild", () => {
     await runPersonCardBuild(build, lease);
     expect(lease.generate).not.toHaveBeenCalled();
     expect(lease.fail).toHaveBeenCalledWith(
-      expect.objectContaining({ errorCode: "AGENT_PERSON_CARD_LEASE_FAILED", possiblyPaid: false }),
+      expect.objectContaining({ errorCode: "AGENT_PERSON_CARD_LEASE_FAILED" }),
     );
     const retire = dependencies({
       loadSources: vi.fn(async () => ({
@@ -163,60 +161,8 @@ describe("runPersonCardBuild", () => {
     expect(retire.fail).toHaveBeenCalledWith(
       expect.objectContaining({
         errorCode: "AGENT_PERSON_CARD_RETIRE_FAILED",
-        possiblyPaid: false,
       }),
     );
-  });
-
-  it("marks a build possibly paid from the model call on, unless the provider refused first", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const status = (statusCode: number) =>
-      new APICallError({
-        isRetryable: true,
-        message: "status",
-        requestBodyValues: {},
-        statusCode,
-        url: "https://api.deepseek.com/responses",
-      });
-    const paid = async (error: unknown) => {
-      const deps = dependencies({
-        generate: vi.fn(async () => {
-          throw error;
-        }),
-      });
-      await runPersonCardBuild(build, deps);
-      const [call] = [
-        ...vi.mocked(deps.releaseForRetry).mock.calls,
-        ...vi.mocked(deps.fail).mock.calls,
-      ];
-      return call?.[0].possiblyPaid;
-    };
-    expect(await paid(status(429))).toBe(false);
-    expect(await paid(status(503))).toBe(false);
-    expect(await paid(new AppError("AGENT_MODEL_BALANCE_EXHAUSTED", "402"))).toBe(false);
-    for (const code of [
-      "AGENT_MODEL_REQUEST_INVALID",
-      "AGENT_MODEL_API_KEY_INVALID",
-      "AGENT_MODEL_PARAMETERS_INVALID",
-    ]) {
-      expect(await paid(new AppError(code, "refused"))).toBe(false);
-    }
-    expect(await paid({ isRetryable: false, statusCode: 429, type: "error" })).toBe(false);
-    expect(await paid(status(500))).toBe(true);
-    expect(await paid(new TypeError("terminated"))).toBe(true);
-    expect(
-      await paid(new PersonCardAnswerInterrupted({ isRetryable: true, statusCode: 429 })),
-    ).toBe(true);
-    const notCard = dependencies({
-      generate: vi.fn(async () => ({
-        inputTokens: 1,
-        outputTokens: 1,
-        reasoningTokens: 0,
-        text: "не могу",
-      })),
-    });
-    await runPersonCardBuild(build, notCard);
-    expect(notCard.fail).toHaveBeenCalledWith(expect.objectContaining({ possiblyPaid: true }));
   });
 
   it("does not pay for a model call once the lease is gone, and logs a lost lease as such", async () => {
@@ -248,7 +194,6 @@ describe("runPersonCardBuild", () => {
       buildId: "build-1",
       errorCode: "AGENT_PERSON_CARD_GENERATE_FAILED",
       leaseToken: "lease-1",
-      possiblyPaid: true,
     });
     expect(deps.publish).not.toHaveBeenCalled();
     expect(deps.fail).not.toHaveBeenCalled();
@@ -290,7 +235,7 @@ describe("runPersonCardBuild", () => {
     expect(empty.fail).not.toHaveBeenCalled();
   });
 
-  it("records nothing after a lost lease and passes the switch to the cleanup", async () => {
+  it("records nothing after a lost lease and publishes what the build read", async () => {
     const lost = dependencies({
       publish: vi.fn(async () => {
         throw new AppError("AGENT_PERSON_CARD_LEASE_LOST", "lost");
@@ -300,12 +245,11 @@ describe("runPersonCardBuild", () => {
     expect(lost.fail).not.toHaveBeenCalled();
     expect(lost.releaseForRetry).not.toHaveBeenCalled();
 
-    const off = dependencies({ cleanupEnabled: () => false });
-    await runPersonCardBuild(build, off);
+    const published = dependencies();
+    await runPersonCardBuild(build, published);
     // What the card counts as read comes from the sources, over the input cap included.
-    expect(off.publish).toHaveBeenCalledWith(
+    expect(published.publish).toHaveBeenCalledWith(
       expect.objectContaining({
-        cleanupEnabled: false,
         leaseToken: "lease-1",
         readIds: [record.id],
       }),

@@ -3,12 +3,14 @@
  *
  * Exports:
  * - Rebuild thresholds, lease and model bounds, card and input budgets.
- * - `personCardsEnabled`: the environment switch that turns off showing cards and the cleanup.
+ * - `personCardsEnabled`: the environment switch that turns off showing and building cards.
  *
- * Key constructs (the owner's decisions of 21 November 2026):
- * - A card is rebuilt after ten new records about the person, at most once a day; a record the
- *   person wrote about themselves rebuilds it at once. Waiting two minutes after such a record
- *   folds the records of one silent review batch, written together, into one build.
+ * Key constructs (the owner's decisions of 21 and 23 November 2026):
+ * - A card is built at most once a day, a failed build included; it is rebuilt after ten new
+ *   records about the person, after any new record of the person's own words, or when a record an
+ *   item cites no longer stands. A build for the person's own words waits two minutes, so the
+ *   records of one silent review batch, written together, fold into one build; ten new records
+ *   do not wait.
  * - A card's items are at most 1 250 rendered characters; cards and the profile block share the
  *   block's 6 000.
  */
@@ -16,12 +18,6 @@
 export const PERSON_CARD_NEW_RECORDS_THRESHOLD = 10;
 export const PERSON_CARD_REBUILD_INTERVAL_MILLISECONDS = 24 * 60 * 60 * 1_000;
 export const PERSON_CARD_SELF_STATEMENT_QUIET_MILLISECONDS = 2 * 60 * 1_000;
-// A build of the person's own words that failed is tried again after this long.
-export const PERSON_CARD_FAILED_RETRY_BACKOFF_MILLISECONDS = 6 * 60 * 60 * 1_000;
-// Every attempt may be paid: a person whose builds keep failing waits out the week. Ten, not three
-// (the owner, 22 November 2026): an outage the failures misread as paid stops a person only after
-// about 2.5 days; a person whose builds always fail costs at most 30 calls a week.
-export const PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK = 10;
 
 // Builds run beside the chat on one small server: two at a time, each with a lease well past the
 // model's own deadline, so a lease runs out only when the process is gone.

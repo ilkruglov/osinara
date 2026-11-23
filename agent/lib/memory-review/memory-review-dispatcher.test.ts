@@ -9,6 +9,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { MEMORY_REVIEW_DISPATCH_BATCH_SIZE } from "./memory-review-config.js";
 import {
   createMemoryReviewDispatcher,
   type ClaimedMemoryReviewBatch,
@@ -67,6 +68,22 @@ function dependencies(overrides: Record<string, unknown> = {}) {
 }
 
 describe("memory review dispatcher", () => {
+  // DeepSeek is twice as dear in its peak hours: the pass still materializes and tidies batches,
+  // but takes none to review (owner, 23 November 2026).
+  it("claims no batch in DeepSeek's peak hours", async () => {
+    const fixture = dependencies({ claimPending: vi.fn().mockResolvedValue([]) });
+
+    await expect(
+      createMemoryReviewDispatcher(fixture.dependencies as never)(
+        new Date("2026-11-24T07:00:00.000Z"),
+      ),
+    ).resolves.toBe(0);
+
+    expect(fixture.dependencies.claimPending).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 0 }),
+    );
+  });
+
   it("starts exactly one internal task turn for one 50-message batch", async () => {
     const fixture = dependencies();
 
@@ -76,6 +93,11 @@ describe("memory review dispatcher", () => {
       ),
     ).resolves.toBe(1);
 
+    // Outside DeepSeek's peak hours the pass takes a full batch of work.
+    expect(fixture.dependencies.claimPending).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: MEMORY_REVIEW_DISPATCH_BATCH_SIZE }),
+    );
+    expect(MEMORY_REVIEW_DISPATCH_BATCH_SIZE).toBeGreaterThan(0);
     expect(fixture.dependencies.to).toHaveBeenCalledWith(expect.any(Object), {
       batchId: batch.batchId,
     });

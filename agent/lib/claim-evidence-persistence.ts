@@ -23,9 +23,9 @@ export async function insertClaimEvidence(
           origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
           author_participant_id, author_user_id, author_label_snapshot, observed_at,
           evidence_snippet, timeline_entry_id, timeline_sequence, source_message_id,
-          message_thread_id, source_snapshot)
+          message_thread_id, source_snapshot, recorded_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-               $14, $15, $16, $17, $18, $19)`,
+               $14, $15, $16, $17, $18, $19, $20)`,
       [
         claimId,
         prepared.familyId,
@@ -46,6 +46,7 @@ export async function insertClaimEvidence(
         source.sourceMessageId,
         source.messageThreadId,
         source.sourceSnapshot,
+        prepared.recordedBy,
       ],
     );
   }
@@ -64,9 +65,9 @@ export async function insertClaimReinforcement(
           origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
           author_participant_id, author_user_id, author_label_snapshot, observed_at,
           evidence_snippet, timeline_entry_id, timeline_sequence, source_message_id,
-          message_thread_id, source_snapshot)
+          message_thread_id, source_snapshot, recorded_by)
        VALUES ($1, $2, $3, $4, 'reinforcement', $5, $6, $7, $8, $9, $10, $11, $12,
-               $13, $14, $15, $16, $17, $18)`,
+               $13, $14, $15, $16, $17, $18, $19)`,
       [
         claimId,
         prepared.familyId,
@@ -86,6 +87,7 @@ export async function insertClaimReinforcement(
         source.sourceMessageId,
         source.messageThreadId,
         source.sourceSnapshot,
+        prepared.recordedBy,
       ],
     );
   }

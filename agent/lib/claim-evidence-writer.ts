@@ -31,6 +31,12 @@ export interface PreparedClaimEvidence {
   familyId: string;
   primaryAuthorTelegramUserId: string;
   primaryAuthorUserId: string | null;
+  /**
+   * Who took the evidence down: Mia in the turn of the message's author (`turn`), or someone
+   * reading the chat afterwards (`review`: the silent review, or another person's turn); a person
+   * card ranks the first above the second (owner, 23 November 2026).
+   */
+  recordedBy: "review" | "turn";
   scope: "family" | "group" | "personal";
   scopePartitionKey: string;
   sources: PreparedEvidenceSource[];

@@ -8,15 +8,15 @@
  * Key constructs:
  * - Outcomes: published (`AGENT_PERSON_CARD_BUILT`); a model call with an unclear outcome
  *   (timeout, network, provider-side error, `person-card-generation.ts`) goes back to the queue
- *   (`AGENT_PERSON_CARD_RETRY`) and publishes nothing; anything definite fails the build
- *   (`AGENT_PERSON_CARD_FAILED`); a lost lease does nothing (`AGENT_PERSON_CARD_LEASE_LOST`), its
- *   replacement owns the build, and a build that lost it before the model call does not pay. A
- *   failure from the model call on marks the build as possibly paid, unless the provider refused
- *   the request before any work.
+ *   (`AGENT_PERSON_CARD_RETRY`) and publishes nothing, on the third attempt (an expired lease
+ *   counts too) it fails the build; no records left retires the card (`AGENT_PERSON_CARD_RETIRED`);
+ *   anything definite fails the build (`AGENT_PERSON_CARD_FAILED`); a lost lease does nothing
+ *   (`AGENT_PERSON_CARD_LEASE_LOST`), its replacement owns the build, and a build that lost it
+ *   before the model call does not pay. A failed build counts toward the card's one build a day
+ *   like a published one.
  * - Logs carry ids, counts and codes only, never record or card text.
  */
 import { sqlState } from "../transaction-conflict-retry.js";
-import { personCardsEnabled } from "./person-card-config.js";
 import {
   personCardDispatchRepository,
   type ClaimedPersonCardBuild,
@@ -39,7 +39,6 @@ import {
 } from "./person-card-generation.js";
 
 export interface PersonCardBuildDependencies {
-  cleanupEnabled(): boolean;
   /** False when the build no longer held its lease. */
   fail(input: Parameters<typeof failPersonCardBuild>[0]): Promise<boolean>;
   generate(input: { prompt: string; system: string }): Promise<PersonCardGeneration>;
@@ -60,15 +59,12 @@ class StageError extends Error {
     readonly cause: unknown,
     /** Only a model call can end unclearly: the same request may still succeed. */
     readonly unclear = false,
-    /** Only a model call can be refused before any work. */
-    readonly refusedBeforeWork = false,
   ) {
     super(code);
   }
 }
 
 export const personCardBuildDependencies: PersonCardBuildDependencies = {
-  cleanupEnabled: () => personCardsEnabled(),
   fail: failPersonCardBuild,
   generate: generatePersonCard,
   loadSources: loadPersonCardSources,
@@ -84,13 +80,7 @@ async function stage<T>(name: StageError["stage"], run: () => Promise<T> | T): P
   } catch (error) {
     const failure = describeModelFailure(error, `AGENT_PERSON_CARD_${name.toUpperCase()}_FAILED`);
     const generate = name === "generate";
-    throw new StageError(
-      failure.code,
-      name,
-      error,
-      generate && failure.unclear,
-      generate && failure.refusedBeforeWork,
-    );
+    throw new StageError(failure.code, name, error, generate && failure.unclear);
   }
 }
 
@@ -110,7 +100,6 @@ export async function runPersonCardBuild(
     reason: build.reason,
   };
   let inputRecords: number | null = null;
-  let modelCalled = false;
   try {
     const sources = await stage("load", () => dependencies.loadSources(build.key));
     if (sources.records.length === 0) {
@@ -130,17 +119,13 @@ export async function runPersonCardBuild(
     if (!(await stage("lease", () => dependencies.stillLeased(build)))) {
       throw new StageError("AGENT_PERSON_CARD_LEASE_LOST", "lease", null);
     }
-    modelCalled = true;
     const generation = await stage("generate", () => dependencies.generate({ prompt, system }));
     const parsed = await stage("parse", () => parsePersonCardResponse(generation.text, records));
-    const cleanupEnabled = dependencies.cleanupEnabled();
     const published = await stage("publish", () =>
       dependencies.publish({
         buildId: build.id,
         characters: parsed.characters,
         cited: parsed.cited,
-        cleanup: parsed.cleanup,
-        cleanupEnabled,
         inputRecords: records.length,
         key: build.key,
         leaseToken: build.leaseToken,
@@ -155,11 +140,6 @@ export async function runPersonCardBuild(
         ...base,
         characters: parsed.characters,
         cited: parsed.cited.length,
-        cleaned: published.cleaned,
-        cleanupEnabled,
-        cleanupProposed: parsed.cleanup.length,
-        cleanupRefused: parsed.droppedCleanup,
-        cleanupSkipped: published.cleanupSkipped,
         code: "AGENT_PERSON_CARD_BUILT",
         episodes: sources.episodes.length,
         inputTokens: generation.inputTokens,
@@ -177,9 +157,6 @@ export async function runPersonCardBuild(
       error instanceof StageError
         ? error
         : new StageError("AGENT_PERSON_CARD_BUILD_FAILED", "publish", error);
-    // From the model call on, a failure may have cost money, unless the provider turned the
-    // request away before any work: the weekly cap counts only those (`possibly_paid`).
-    const possiblyPaid = modelCalled && !failure.refusedBeforeWork;
     const details = {
       ...base,
       errorName: errorName(failure.cause),
@@ -199,7 +176,6 @@ export async function runPersonCardBuild(
           buildId: build.id,
           errorCode: failure.code,
           leaseToken: build.leaseToken,
-          possiblyPaid,
         });
         const code = {
           failed: "AGENT_PERSON_CARD_FAILED",
@@ -214,7 +190,6 @@ export async function runPersonCardBuild(
         errorCode: failure.code,
         inputRecords,
         leaseToken: build.leaseToken,
-        possiblyPaid,
       });
       console.warn(
         JSON.stringify({

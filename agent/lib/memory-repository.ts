@@ -7,7 +7,7 @@
  */
 import type { PoolClient } from "pg";
 import { AppError } from "./app-error.js";
-import { softDeleteMemoryWithRepeats } from "./memory-soft-delete.js";
+import { softDeleteMemory } from "./memory-soft-delete.js";
 import { retryOnTransactionConflict } from "./transaction-conflict-retry.js";
 import { MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE } from "./memory-config.js";
 import { database } from "./database.js";
@@ -218,7 +218,7 @@ async function hasImmediateUndoProvenance(
   );
   return Boolean(result.rowCount);
 }
-async function deleteMemoryOnce(
+async function deleteMemory(
   auth: MemoryAuthorization,
   memoryRef: string,
   operationKey: string,
@@ -251,7 +251,7 @@ async function deleteMemoryOnce(
                jsonb_build_object('scope', $4::text, 'kind', $5::text))`,
       [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
     );
-    await softDeleteMemoryWithRepeats(client, auth, memory.id);
+    await softDeleteMemory(client, memory.id);
     await client.query("COMMIT");
     return { deleted: true };
   } catch (error) {
@@ -262,7 +262,7 @@ async function deleteMemoryOnce(
   }
 }
 
-async function undoCreateOnce(
+async function undoCreateMemory(
   auth: MemoryAuthorization,
   memoryRef: string,
   input: MemoryUndoInput,
@@ -320,7 +320,7 @@ async function undoCreateOnce(
                jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
       [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
     );
-    await softDeleteMemoryWithRepeats(client, auth, memory.id);
+    await softDeleteMemory(client, memory.id);
     await client.query("COMMIT");
     return { deleted: true };
   } catch (error) {
@@ -387,8 +387,9 @@ export const memoryRepository = {
     memoryRef: string,
     operationKey: string,
   ): Promise<{ deleted: true }> {
-    // Takes the record before its hidden repeats: a lost deadlock is retried once.
-    return retryOnTransactionConflict(() => deleteMemoryOnce(auth, memoryRef, operationKey));
+    // Locks the record, then drops its indexing job; a failing indexer holds the job and then
+    // marks the record, so a lost deadlock is retried once (review, 23 November 2026).
+    return retryOnTransactionConflict(() => deleteMemory(auth, memoryRef, operationKey));
   },
 
   list: memoryListRepository.list,
@@ -398,8 +399,8 @@ export const memoryRepository = {
     memoryRef: string,
     input: MemoryUndoInput,
   ): Promise<{ deleted: true }> {
-    // Deletes repeats like `deleteByRef`, so it retries a lost deadlock the same way.
-    return retryOnTransactionConflict(() => undoCreateOnce(auth, memoryRef, input));
+    // Drops the indexing job like `deleteByRef`, so it retries a lost deadlock the same way.
+    return retryOnTransactionConflict(() => undoCreateMemory(auth, memoryRef, input));
   },
 
   async updateByRef(

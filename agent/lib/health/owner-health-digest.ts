@@ -177,7 +177,7 @@ export function ownerHealthDigestSections(
   const cards = report.personCards;
   // A failed build is a failure of the day, so the header does not say "no failures".
   if (cards.failed > 0) lines.push(`Карточки собеседников: упавших сборок ${cards.failed}.`);
-  const cardsLine = ` Карточки: собрано ${cards.built}, сбоев ${cards.failed}, записей убрано ${cards.cleaned}.`;
+  const cardsLine = ` Карточки: собрано ${cards.built}, сбоев ${cards.failed}, показано ${cards.shown}, использовано ${cards.used}.`;
   const memory =
     (written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`) +
     cardsLine;

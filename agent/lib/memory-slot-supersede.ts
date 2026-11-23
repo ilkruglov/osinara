@@ -37,8 +37,7 @@ export interface MemorySlotIdentity {
 
 /**
  * Locks one slot, empty or not, until the transaction ends. Every writer of the slot takes it before
- * reading it: memory writes and the undo of the person card cleanup. Row locks alone miss
- * first-write races.
+ * reading it. Row locks alone miss first-write races.
  */
 export async function lockMemorySlot(
   client: Pick<PoolClient, "query">,

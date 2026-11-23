@@ -39,6 +39,16 @@ export interface ProfileView {
   totalCharacters: number;
 }
 
+/** What the profile block needs of the turn's person cards (`personCardsForProfile`). */
+export interface PersonCardsInProfile {
+  /** The shown cards: their people are subjects of the block. */
+  personCardIds: readonly string[];
+  /** The shown cards whose items stand: the records they read leave the block. */
+  readHidingPersonCardIds: readonly string[];
+  /** Records a card read that stand only in its items that left the turn: shown here again. */
+  releasedMemoryItemIds: readonly string[];
+}
+
 export interface CreateProfileViewInput {
   conversationId: string;
   currentTelegramUserId: string;
@@ -50,11 +60,8 @@ export interface CreateProfileViewInput {
   retrievalClaimIds: readonly string[];
   /** The author's own card was shown recently; include them only as a reply or mention subject. */
   suppressCurrentAuthor?: boolean;
-  /**
-   * The person cards this turn shows: their people are subjects of the block, and the records the
-   * cards read stay out of it.
-   */
-  personCardIds?: readonly string[];
+  /** The person cards this turn shows; none when absent. */
+  personCards?: PersonCardsInProfile;
   /** The block's budget once the person cards took theirs. */
   maxCharacters?: number;
 }

@@ -6,9 +6,7 @@
  * - Only a stream that finished with `stop` is an answer: length and the filter are definite,
  *   anything else is unclear; a stream error surfaces as thrown and is not logged by the SDK.
  * - Failures are described by the transport's code on the cause chain, unclear only when the same
- *   request may still succeed (the SDK's "do not retry" kept); a stream error after the answer
- *   began, DeepSeek's reasoning included (checked through the real transport), is no refusal
- *   before work.
+ *   request may still succeed (the SDK's "do not retry" kept), through the real transport too.
  */
 import { APICallError } from "@ai-sdk/provider";
 import { simulateReadableStream } from "ai";
@@ -17,11 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../app-error.js";
 import { createConfiguredLanguageModel } from "../model-transport.js";
-import {
-  describeModelFailure,
-  generatePersonCard,
-  PersonCardAnswerInterrupted,
-} from "./person-card-generation.js";
+import { describeModelFailure, generatePersonCard } from "./person-card-generation.js";
 
 const usage = {
   inputTokens: { cacheRead: 0, cacheWrite: 0, noCache: 100, total: 100 },
@@ -115,11 +109,7 @@ describe("describeModelFailure", () => {
       statusCode,
       url: "https://api.deepseek.com/responses",
     });
-  const failure = (code: string, unclear: boolean, refusedBeforeWork = false) => ({
-    code,
-    refusedBeforeWork,
-    unclear,
-  });
+  const failure = (code: string, unclear: boolean) => ({ code, unclear });
 
   it("takes the transport's code from the cause chain and retries only what may succeed", () => {
     const wrapped = new APICallError({
@@ -132,7 +122,7 @@ describe("describeModelFailure", () => {
       failure("AGENT_MODEL_RESPONSE_TIMEOUT", true),
     );
     expect(describeModelFailure(new AppError("AGENT_MODEL_BALANCE_EXHAUSTED", "402"), "F")).toEqual(
-      failure("AGENT_MODEL_BALANCE_EXHAUSTED", false, true),
+      failure("AGENT_MODEL_BALANCE_EXHAUSTED", false),
     );
     expect(describeModelFailure(new TypeError("fetch failed"), "F")).toEqual(failure("F", true));
     expect(describeModelFailure(new Error("boom"), "F")).toEqual(failure("F", false));
@@ -158,23 +148,23 @@ describe("describeModelFailure", () => {
     ).toEqual(failure("AGENT_MODEL_OUTPUT_FILTERED", false));
   });
 
-  it("names a status the transport passed on, so a refusal before work is told apart", () => {
+  it("names a status the transport passed on", () => {
     expect(describeModelFailure(status(429), "F")).toEqual(
-      failure("AGENT_MODEL_RATE_LIMITED", true, true),
+      failure("AGENT_MODEL_RATE_LIMITED", true),
     );
     expect(describeModelFailure(status(503), "F")).toEqual(
-      failure("AGENT_MODEL_PROVIDER_OVERLOADED", true, true),
+      failure("AGENT_MODEL_PROVIDER_OVERLOADED", true),
     );
     expect(describeModelFailure(status(500), "F")).toEqual(
       failure("AGENT_MODEL_PROVIDER_ERROR", true),
     );
     // `insufficient_quota` arrives as a 429 the SDK will not retry.
     expect(describeModelFailure(status(429, false), "F")).toEqual(
-      failure("AGENT_MODEL_RATE_LIMITED", false, true),
+      failure("AGENT_MODEL_RATE_LIMITED", false),
     );
   });
 
-  it("tells a stream error after the answer began from a refusal before it", async () => {
+  it("keeps the provider's code of a stream error, before or after the answer began", async () => {
     const plain429 = (isRetryable: boolean) => ({
       code: "insufficient_quota",
       isRetryable,
@@ -204,17 +194,13 @@ describe("describeModelFailure", () => {
         ...started,
         { error: plain429(true), type: "error" },
       ]);
-      expect(error).toBeInstanceOf(PersonCardAnswerInterrupted);
-      // The provider's code stays for the logs; the call did work.
       expect(describeModelFailure(error, "F")).toEqual(failure("AGENT_MODEL_RATE_LIMITED", true));
     }
     const refused = await failed([
       { type: "stream-start", warnings: [] },
       { error: plain429(false), type: "error" },
     ]);
-    expect(describeModelFailure(refused, "F")).toEqual(
-      failure("AGENT_MODEL_RATE_LIMITED", false, true),
-    );
+    expect(describeModelFailure(refused, "F")).toEqual(failure("AGENT_MODEL_RATE_LIMITED", false));
   });
 });
 
@@ -249,7 +235,7 @@ describe("generatePersonCard through the DeepSeek transport", () => {
       (error: unknown) => describeModelFailure(error, "F"),
     );
 
-  it("takes DeepSeek's reasoning as the answer begun, and a refusal before it as free", async () => {
+  it("describes a failed DeepSeek stream by its code", async () => {
     expect(
       await failure([
         created,
@@ -273,12 +259,12 @@ describe("generatePersonCard through the DeepSeek transport", () => {
           type: "response.failed",
         },
       ]),
-    ).toEqual({ code: "AGENT_MODEL_RATE_LIMITED", refusedBeforeWork: false, unclear: true });
+    ).toEqual({ code: "AGENT_MODEL_RATE_LIMITED", unclear: true });
     expect(
       await failure([
         created,
         { code: "insufficient_quota", message: "q", sequence_number: 1, type: "error" },
       ]),
-    ).toEqual({ code: "AGENT_MODEL_RATE_LIMITED", refusedBeforeWork: true, unclear: false });
+    ).toEqual({ code: "AGENT_MODEL_RATE_LIMITED", unclear: false });
   });
 });

@@ -12,7 +12,7 @@ export const MEMORY_DEEPENING_PROTOCOL = `## Углубление контекс
 
 // Reinforcement needs the model's own claim of use; it applies wherever memory is shown at all,
 // including an external group that can remember but not search.
-export const MEMORY_USED_DIRECTIVE_RULE = `Когда в ходе показаны записи памяти (\`<retrieved_long_term_memory>\`, карточка профиля или выдача \`search_memories\`), заканчивай ответ строкой \`<memory-used>ref,ref</memory-used>\` с memoryRef записей, на которые ответ опёрся; если ни одна не пригодилась, поставь \`<memory-used></memory-used>\`. Строка идёт после текста ответа, не вместо него: сервер её вырезает, люди её не видят.`;
+export const MEMORY_USED_DIRECTIVE_RULE = `Когда в ходе показаны записи памяти (\`<retrieved_long_term_memory>\`, \`<person_cards>\`, \`<verified_profile_view>\` или выдача \`search_memories\`), заканчивай ответ строкой \`<memory-used>ref,ref</memory-used>\` с memoryRef записей и cardRef карточек собеседников, на которые ответ опёрся; если ни одна не пригодилась, поставь \`<memory-used></memory-used>\`. Строка идёт после текста ответа, не вместо него: сервер её вырезает, люди её не видят.`;
 
 // One wording of the reply fields of `<current_telegram_message>` for every live chat mode: the
 // selected quote (Telegram `quote`) arrives in private chats and groups alike.

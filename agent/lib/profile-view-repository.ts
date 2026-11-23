@@ -175,7 +175,7 @@ async function loadClaims(
   auth: MemoryAuthorization,
   conversation: ProfileConversationBoundary,
   subjects: readonly SubjectRow[],
-  personCardIds: readonly string[],
+  hidingCards: { cardIds: readonly string[]; releasedMemoryItemIds: readonly string[] },
 ): Promise<ClaimRow[]> {
   const subjectUserIds = subjects.flatMap((subject) =>
     subject.subject_user_id ? [subject.subject_user_id] : [],
@@ -225,11 +225,12 @@ async function loadClaims(
          ($2::memory_scope = 'group' AND claim.scope = 'group' AND claim.group_id = $5
            AND claim.subject_participant_id = ANY($6::uuid[]))
        )
-       -- A person shown by a card keeps here only what the card did not read.
-       AND NOT EXISTS (
+       -- A person shown by a card keeps here only what the card did not read, and what stands
+       -- only in the card's items that left the turn.
+       AND (NOT EXISTS (
          SELECT 1 FROM person_card_reads AS known
          WHERE known.card_id = ANY($7::uuid[]) AND known.memory_item_id = claim.id
-       )
+       ) OR claim.id = ANY($8::uuid[]))
      ORDER BY claim.id`,
     [
       auth.familyId,
@@ -238,7 +239,8 @@ async function loadClaims(
       subjectUserIds,
       auth.groupId,
       subjectParticipantIds,
-      personCardIds,
+      hidingCards.cardIds,
+      hidingCards.releasedMemoryItemIds,
     ],
   );
   return result.rows;
@@ -250,9 +252,12 @@ export const profileViewRepository = {
     try {
       await client.query("BEGIN");
       const conversation = await requireConversationAccess(client, auth, input.conversationId);
-      const personCardIds = input.personCardIds ?? [];
+      const personCardIds = input.personCards?.personCardIds ?? [];
       const subjects = await loadSubjects(client, auth, input, conversation, personCardIds);
-      const claims = await loadClaims(client, auth, conversation, subjects, personCardIds);
+      const claims = await loadClaims(client, auth, conversation, subjects, {
+        cardIds: input.personCards?.readHidingPersonCardIds ?? [],
+        releasedMemoryItemIds: input.personCards?.releasedMemoryItemIds ?? [],
+      });
       const subjectByUser = new Map(
         subjects.flatMap((subject) =>
           subject.subject_user_id ? [[subject.subject_user_id, subject] as const] : [],

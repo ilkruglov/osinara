@@ -182,6 +182,12 @@ const POST_V0101_MIGRATIONS = [
   "149_memory_review_context_floor.sql",
   "150_journal_source_delete_cascade.sql",
   "151_drop_journal_retention_index.sql",
+  "152_person_card_builds_without_paid_failures.sql",
+  "153_person_card_cleanup_returned.sql",
+  "154_person_card_cleanup_dropped.sql",
+  "155_claim_evidence_recorded_by.sql",
+  "156_conversation_participant_label_key.sql",
+  "157_claim_evidence_recorded_by_backfill.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -226,11 +232,17 @@ function testDatabaseUrlForSchema(): string {
   return url.toString();
 }
 
-async function runMigrationRunner(): Promise<void> {
-  await execFileAsync(process.execPath, ["--experimental-strip-types", "scripts/migrate.ts"], {
-    cwd: resolve("."),
-    env: { ...process.env, DATABASE_URL: testDatabaseUrlForSchema() },
-  });
+/** The runner's `MIGRATION_NOTICE` lines. */
+async function runMigrationRunner(): Promise<unknown[]> {
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    ["--experimental-strip-types", "scripts/migrate.ts"],
+    { cwd: resolve("."), env: { ...process.env, DATABASE_URL: testDatabaseUrlForSchema() } },
+  );
+  return stdout
+    .split("\n")
+    .filter((line) => line.includes('"MIGRATION_NOTICE"'))
+    .map((line): unknown => JSON.parse(line));
 }
 
 describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrations", () => {
@@ -286,7 +298,20 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         POST_V0101_MIGRATIONS,
       );
 
-      await runMigrationRunner();
+      const notices = await runMigrationRunner();
+      // A data migration's counts reach the log under its name once it committed (review of the
+      // fixes, 23 November 2026).
+      expect(notices).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ migration: "153_person_card_cleanup_returned.sql" }),
+          expect.objectContaining({ migration: "157_claim_evidence_recorded_by_backfill.sql" }),
+        ]),
+      );
+      expect(notices).not.toContainEqual(expect.objectContaining({ rolledBack: true }));
+      // The ledger's own «already exists, skipping» is no migration's.
+      for (const notice of notices) {
+        expect(notice).toMatchObject({ migration: expect.stringMatching(/^\d{3}_.+\.sql$/u) });
+      }
 
       // The ledger delta proves the real runner skipped all shipped migrations and applied the rest once.
       const after = await client.query<{ name: string }>(
@@ -328,6 +353,29 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
            FROM memory_review_batches LIMIT 0`,
         ),
       ).resolves.toBeDefined();
+      // The person card release: the paid-failure flag and the cleanup journal are gone, the
+      // participant's label and the evidence origin are there.
+      const columns = async (table: string) =>
+        (
+          await client.query<{ column_name: string }>(
+            `SELECT column_name FROM information_schema.columns
+             WHERE table_schema = $1 AND table_name = $2`,
+            [TEST_SCHEMA, table],
+          )
+        ).rows.map(({ column_name }) => column_name);
+      expect(await columns("person_card_builds")).toContain("id");
+      expect(await columns("person_card_builds")).not.toContain("possibly_paid");
+      expect(await columns("person_card_builds")).not.toContain("cleaned_records");
+      expect(await columns("person_card_cleanups")).toEqual([]);
+      expect(await columns("conversation_participants")).toContain("label_key");
+      // The label holder is an index lookup, not a scan of the partition (1 000 participants, 150
+      // label sources: 383 ms → 1.9 ms).
+      const labelIndex = await client.query<{ indexdef: string }>(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND indexname = $2",
+        [TEST_SCHEMA, "conversation_participants_label_key"],
+      );
+      expect(labelIndex.rows[0]?.indexdef).toContain("(family_id, scope_partition_key, label_key)");
+      expect(await columns("claim_evidence")).toContain("recorded_by");
     } finally {
       try {
         await client.query("RESET search_path");

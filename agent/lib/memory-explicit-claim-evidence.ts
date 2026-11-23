@@ -224,6 +224,15 @@ export async function prepareExplicitClaimEvidence(
     familyId: auth.familyId,
     primaryAuthorTelegramUserId: row.telegram_user_id,
     primaryAuthorUserId: row.author_user_id,
+    // Told to Mia: the author's own message in their own turn. The silent review (`systemActor`,
+    // a background batch, as `remember` resolves it) and anyone's message saved in another
+    // person's turn took the words down from the chat (review, 23 November 2026).
+    recordedBy:
+      !input.systemActor &&
+      auth.telegramActorKind !== "telegram_channel" &&
+      row.telegram_user_id === auth.telegramActorId
+        ? "turn"
+        : "review",
     scope: input.scope,
     scopePartitionKey: row.scope_partition_key,
     sources: [

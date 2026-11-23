@@ -26,10 +26,11 @@ import { personCardDispatchRepository } from "./person-card-dispatch-repository.
 import type { PersonCardKey } from "./person-card-links.js";
 import { publishPersonCard, retirePersonCard } from "./person-card-publish-repository.js";
 import { loadPersonCardSources } from "./person-card-sources-repository.js";
-import { loadPersonCardsForTurn } from "./person-card-view-repository.js";
+import { loadPersonCardsForTurn, personCardsForProfile } from "./person-card-view-repository.js";
 import {
   ALEX_TELEGRAM_ID,
   createPersonCardFixture,
+  insertPersonCardParticipant,
   insertPersonCardRecord,
   OWNER_TELEGRAM_ID,
   resetPersonCardTables,
@@ -52,8 +53,6 @@ async function publishFor(key: PersonCardKey): Promise<void> {
     buildId: claimed!.id,
     characters: 20,
     cited: sources.records,
-    cleanup: [],
-    cleanupEnabled: true,
     inputRecords: sources.records.length,
     key,
     leaseToken: claimed!.leaseToken,
@@ -67,6 +66,37 @@ async function publishFor(key: PersonCardKey): Promise<void> {
           text: `Карточка ${key.area}`,
         },
       ],
+      interests: [],
+      positions: [],
+    },
+    sourcesAsOf: sources.sourcesAsOf,
+    subjectLabel: sources.subjectLabel,
+  });
+}
+
+/** Builds the person's card with these facts, citing the given records and reading all loaded. */
+async function publish(
+  key: PersonCardKey,
+  facts: ReadonlyArray<{ refs: string[]; text: string }>,
+): Promise<void> {
+  await database().query(
+    `INSERT INTO person_card_builds (family_id, area, area_key, subject_telegram_user_id, reason)
+     VALUES ($1, $2, $3, $4, 'new_records')`,
+    [key.familyId, key.area, key.areaKey, key.subjectTelegramUserId],
+  );
+  const [claimed] = await personCardDispatchRepository.claim(4);
+  const sources = await loadPersonCardSources(key);
+  await publishPersonCard({
+    buildId: claimed!.id,
+    characters: 20,
+    cited: sources.records,
+    inputRecords: sources.records.length,
+    key,
+    leaseToken: claimed!.leaseToken,
+    readIds: sources.readIds,
+    sections: {
+      communication: [],
+      facts: facts.map((fact) => ({ scope: "всегда", sourceRefs: fact.refs, text: fact.text })),
       interests: [],
       positions: [],
     },
@@ -219,7 +249,7 @@ describeWithDatabase("person cards in a turn", () => {
       currentTelegramUserId: OWNER_TELEGRAM_ID,
       explicitMentionTelegramUserIds: [],
       now: new Date(),
-      personCardIds: [card!.cardId],
+      personCards: personCardsForProfile([card!]),
       provenance: { sessionId: "session-1", turnId: "turn-1" },
       replyTelegramUserId: null,
       retrievalClaimIds: [],
@@ -234,12 +264,30 @@ describeWithDatabase("person cards in a turn", () => {
       explicitMentionTelegramUserIds: [],
       maxCharacters: 10,
       now: new Date(),
-      personCardIds: [card!.cardId],
+      personCards: personCardsForProfile([card!]),
       provenance: { sessionId: "session-1", turnId: "turn-2" },
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
     expect(squeezed.subjects).toEqual([]);
+    // A shown card that hides nothing (left with no item) keeps the read records in the block.
+    const bare = await profileViewRepository.create(fixture.ownerAuth, {
+      conversationId: fixture.personalConversationId,
+      currentTelegramUserId: OWNER_TELEGRAM_ID,
+      explicitMentionTelegramUserIds: [],
+      now: new Date(),
+      personCards: {
+        personCardIds: [card!.cardId],
+        readHidingPersonCardIds: [],
+        releasedMemoryItemIds: [],
+      },
+      provenance: { sessionId: "session-1", turnId: "turn-3" },
+      replyTelegramUserId: null,
+      retrievalClaimIds: [],
+    });
+    expect(
+      bare.subjects.flatMap((subject) => subject.claims.map((claim) => claim.content)).sort(),
+    ).toEqual(["Новое о себе", "Старое о себе"]);
     const stored = await database().query(
       "SELECT person_card_ids FROM profile_views WHERE profile_view_ref = $1",
       [view.profileViewRef],
@@ -291,13 +339,15 @@ describeWithDatabase("person cards in a turn", () => {
       });
     expect(await shown()).toHaveLength(1);
 
-    // The username now belongs to two people: the label no longer names Юра alone.
+    // The label now belongs to two people: it no longer names Юра alone.
     await database().query(
-      "UPDATE conversation_participants SET username_snapshot = 'yura_k' WHERE telegram_user_id = '9403'",
+      `UPDATE conversation_participants SET username_snapshot = 'yura_k', display_name_snapshot = 'Юра'
+       WHERE telegram_user_id = '9403'`,
     );
     expect(await shown()).toEqual([]);
     await database().query(
-      "UPDATE conversation_participants SET username_snapshot = 'alex_x' WHERE telegram_user_id = '9403'",
+      `UPDATE conversation_participants SET username_snapshot = 'alex_x', display_name_snapshot = 'Лёша'
+       WHERE telegram_user_id = '9403'`,
     );
     expect(await shown()).toHaveLength(1);
 
@@ -314,7 +364,10 @@ describeWithDatabase("person cards in a turn", () => {
       "UPDATE memory_items_all SET claim_status = 'superseded', superseded_by = $2 WHERE id = $1",
       [groupRecord.id, sensitive.id],
     );
-    expect(await shown()).toEqual([]);
+    // The one item cited it and leaves; its standing label record comes with the bare card.
+    const [bare] = await shown();
+    expect(bare!.sections.facts).toEqual([]);
+    expect(bare!.freshRecords.map((record) => record.content)).toEqual(["Юра любит турбины"]);
     // The rebuild waits for the day; meanwhile the item citing it stays out.
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
     await database().query(
@@ -450,7 +503,7 @@ describeWithDatabase("person cards in a turn", () => {
         currentTelegramUserId: YURA_TELEGRAM_ID,
         explicitMentionTelegramUserIds: [],
         now: new Date(),
-        personCardIds: cards.map((card) => card.cardId),
+        personCards: personCardsForProfile(cards),
         provenance: { sessionId: "session-retrieval", turnId: "turn-retrieval" },
         replyTelegramUserId: null,
         retrievalClaimIds: [aboutAlex.id],
@@ -488,8 +541,6 @@ describeWithDatabase("person cards in a turn", () => {
       buildId: claimed!.id,
       characters: 20,
       cited: sources.records,
-      cleanup: [],
-      cleanupEnabled: true,
       inputRecords: 2,
       key,
       leaseToken: claimed!.leaseToken,
@@ -567,8 +618,6 @@ describeWithDatabase("person cards in a turn", () => {
       buildId: alexBuild!.id,
       characters: 20,
       cited: alexSources.records,
-      cleanup: [],
-      cleanupEnabled: true,
       inputRecords: 1,
       key: alexKey,
       leaseToken: alexBuild!.leaseToken,
@@ -657,8 +706,6 @@ describeWithDatabase("person cards in a turn", () => {
       buildId: claimed!.id,
       characters: 20,
       cited: sources.records.filter((record) => record.id === cited.id),
-      cleanup: [],
-      cleanupEnabled: true,
       inputRecords: sources.records.length,
       key,
       leaseToken: claimed!.leaseToken,
@@ -684,7 +731,7 @@ describeWithDatabase("person cards in a turn", () => {
         currentTelegramUserId: OWNER_TELEGRAM_ID,
         explicitMentionTelegramUserIds: [],
         now: new Date(),
-        personCardIds: [shown!.cardId],
+        personCards: personCardsForProfile([shown!]),
         provenance: { sessionId: "session-1", turnId },
         replyTelegramUserId: null,
         retrievalClaimIds: [],
@@ -717,6 +764,264 @@ describeWithDatabase("person cards in a turn", () => {
     expect(
       (await database().query("SELECT count(*)::int AS cards FROM person_cards")).rows,
     ).toEqual([{ cards: 0 }]);
+  });
+
+  // Fable review, 23 November 2026: an item every source of which had to stand left the turn when
+  // one went, and the profile block kept hiding its other records as read by the card, so a trait
+  // backed by several records (the most reliable kind) vanished whole until the daily rebuild.
+  it("shows the standing records of an item that lost a source, with or without other items", async () => {
+    const remove = (id: string) =>
+      database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [id]);
+
+    // A group card: «E60» stands on two label records, «Турбины» on a third.
+    const inA = {
+      conversationId: fixture.groupA.conversationId,
+      createdAt: new Date(Date.now() - 10 * 60_000),
+      groupId: fixture.groupA.id,
+      scope: "group" as const,
+      subjectLabel: "Юра (yura_k)",
+    };
+    const drives = await insertPersonCardRecord(fixture, { ...inA, content: "Юра водит E60" });
+    const fixes = await insertPersonCardRecord(fixture, { ...inA, content: "Юра сам чинит E60" });
+    const turbines = await insertPersonCardRecord(fixture, {
+      ...inA,
+      content: "Юра любит турбины",
+    });
+    const yura: PersonCardKey = {
+      area: "group",
+      areaKey: fixture.groupA.id,
+      familyId: fixture.familyId,
+      subjectTelegramUserId: YURA_TELEGRAM_ID,
+    };
+    await publish(yura, [
+      { refs: [drives.memoryRef, fixes.memoryRef], text: "E60, чинит сам" },
+      { refs: [turbines.memoryRef], text: "Турбины" },
+    ]);
+    const load = () =>
+      loadPersonCardsForTurn(groupAuth(fixture, fixture.groupA.id, ALEX_TELEGRAM_ID), {
+        conversationId: fixture.groupA.conversationId,
+        replyTimelineSequence: null,
+        retrievalClaimIds: [],
+        telegramUserIds: [YURA_TELEGRAM_ID],
+      });
+    expect((await load())[0]!.freshRecords).toEqual([]);
+    await remove(drives.id);
+    const [card] = await load();
+    expect(card!.sections.facts.map((item) => item.text)).toEqual(["Турбины"]);
+    expect(card!.freshRecords.map((record) => record.content)).toEqual(["Юра сам чинит E60"]);
+    // With no item left the card still brings its standing label records.
+    await remove(turbines.id);
+    const [bare] = await load();
+    expect(bare!.sections.facts).toEqual([]);
+    expect(bare!.freshRecords.map((record) => record.content)).toEqual(["Юра сам чинит E60"]);
+
+    // A personal card: the standing record of the item comes back to the profile block.
+    const personal = (content: string) =>
+      insertPersonCardRecord(fixture, {
+        content,
+        conversationId: fixture.personalConversationId,
+        createdAt: new Date(Date.now() - 60 * 60_000),
+        evidence: { authorUserId: fixture.ownerId, kind: "firsthand" },
+        ownerUserId: fixture.ownerId,
+        scope: "personal",
+        subjectUserId: fixture.ownerId,
+      });
+    const moscow = await personal("Живёт в Москве с 2010");
+    const flat = await personal("Купил квартиру в Москве");
+    const coffee = await personal("Любит кофе");
+    await database().query(
+      `INSERT INTO profile_subjects
+         (conversation_id, family_id, subject_user_id, display_label_snapshot, last_verified_at)
+       VALUES ($1, $2, $3, 'Илья', now())`,
+      [fixture.personalConversationId, fixture.familyId, fixture.ownerId],
+    );
+    const owner: PersonCardKey = {
+      area: "personal",
+      areaKey: fixture.ownerId,
+      familyId: fixture.familyId,
+      subjectTelegramUserId: OWNER_TELEGRAM_ID,
+    };
+    await publish(owner, [
+      { refs: [moscow.memoryRef, flat.memoryRef], text: "Москвич" },
+      { refs: [coffee.memoryRef], text: "Кофе" },
+    ]);
+    const profile = async (turnId: string) => {
+      const cards = await loadPersonCardsForTurn(fixture.ownerAuth, {
+        conversationId: fixture.personalConversationId,
+        replyTimelineSequence: null,
+        retrievalClaimIds: [],
+        telegramUserIds: [OWNER_TELEGRAM_ID],
+      });
+      const view = await profileViewRepository.create(fixture.ownerAuth, {
+        conversationId: fixture.personalConversationId,
+        currentTelegramUserId: OWNER_TELEGRAM_ID,
+        explicitMentionTelegramUserIds: [],
+        now: new Date(),
+        personCards: personCardsForProfile(cards),
+        provenance: { sessionId: "session-1", turnId },
+        replyTelegramUserId: null,
+        retrievalClaimIds: [],
+      });
+      return {
+        claims: view.subjects.flatMap((subject) => subject.claims.map((claim) => claim.content)),
+        facts: cards[0]?.sections.facts.map((item) => item.text) ?? [],
+      };
+    };
+    expect(await profile("turn-a")).toEqual({ claims: [], facts: ["Москвич", "Кофе"] });
+    await remove(moscow.id);
+    expect(await profile("turn-b")).toEqual({
+      claims: ["Купил квартиру в Москве"],
+      facts: ["Кофе"],
+    });
+  });
+
+  // Review of the fixes, 23 November 2026: released records came after newer unread ones and fell
+  // off the five, a long one was dropped whole, and a person without a username, whose label the
+  // build ties, got no label records with the card (the turn searched by their own usernames).
+  it("brings released records first and whole, and the label records of a person without a username", async () => {
+    const inA = (label: string, minutesAgo: number) => ({
+      conversationId: fixture.groupA.conversationId,
+      createdAt: new Date(Date.now() - minutesAgo * 60_000),
+      groupId: fixture.groupA.id,
+      scope: "group" as const,
+      subjectLabel: label,
+    });
+    const card = async (telegramUserId: string) =>
+      (
+        await loadPersonCardsForTurn(groupAuth(fixture, fixture.groupA.id, ALEX_TELEGRAM_ID), {
+          conversationId: fixture.groupA.conversationId,
+          replyTimelineSequence: null,
+          retrievalClaimIds: [],
+          telegramUserIds: [telegramUserId],
+        })
+      )[0]!;
+
+    const drives = await insertPersonCardRecord(fixture, {
+      ...inA("Юра (yura_k)", 60),
+      content: "Юра водит E60",
+    });
+    const repairs = `Юра сам чинит E60: ${"подвеска, ".repeat(60)}`;
+    const fixes = await insertPersonCardRecord(fixture, {
+      ...inA("Юра (yura_k)", 60),
+      content: repairs,
+    });
+    const turbines = await insertPersonCardRecord(fixture, {
+      ...inA("Юра (yura_k)", 60),
+      content: "Юра любит турбины",
+    });
+    // More released records than the five unread ones a card brings: all of them come.
+    const details = [];
+    for (let index = 1; index <= 5; index += 1) {
+      details.push(
+        await insertPersonCardRecord(fixture, {
+          ...inA("Юра (yura_k)", 60 - index),
+          content: `Юра: деталь ${index}`,
+        }),
+      );
+    }
+    await publish(
+      {
+        area: "group",
+        areaKey: fixture.groupA.id,
+        familyId: fixture.familyId,
+        subjectTelegramUserId: YURA_TELEGRAM_ID,
+      },
+      [
+        {
+          refs: [drives.memoryRef, fixes.memoryRef, ...details.map((detail) => detail.memoryRef)],
+          text: "E60, чинит сам",
+        },
+        { refs: [turbines.memoryRef], text: "Турбины" },
+      ],
+    );
+    for (let index = 1; index <= 5; index += 1) {
+      await insertPersonCardRecord(fixture, {
+        ...inA("Юра (yura_k)", 10 - index),
+        content: `Юра: новое ${index}`,
+      });
+    }
+    // An unread record within 500 characters but longer in UTF-16 comes whole.
+    const cars = `${"а".repeat(488)}🚗🚗🚗🚗 нельзя`;
+    await insertPersonCardRecord(fixture, { ...inA("Юра (yura_k)", 2), content: cars });
+    await database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [
+      drives.id,
+    ]);
+    const yura = await card(YURA_TELEGRAM_ID);
+    expect(yura.freshRecords.map((record) => record.content)).toEqual([
+      "Юра: деталь 5",
+      "Юра: деталь 4",
+      "Юра: деталь 3",
+      "Юра: деталь 2",
+      "Юра: деталь 1",
+      `${repairs.slice(0, 499).trimEnd()}…`,
+      cars,
+      "Юра: новое 5",
+      "Юра: новое 4",
+      "Юра: новое 3",
+      "Юра: новое 2",
+    ]);
+
+    // A label carrying Юра's username names someone else: it does not come with Юра's card.
+    await insertPersonCardParticipant({
+      conversationId: fixture.groupA.conversationId,
+      displayName: "Вася (yura_k)",
+      telegramUserId: "9416",
+      username: null,
+    });
+    await insertPersonCardRecord(fixture, {
+      ...inA("Вася (yura_k)", 0),
+      content: "Вася продал велосипед",
+    });
+    expect(
+      (await card(YURA_TELEGRAM_ID)).freshRecords.map((record) => record.content),
+    ).not.toContain("Вася продал велосипед");
+
+    // Вася has no username; his display name carries one, and his label is tied to him.
+    await insertPersonCardParticipant({
+      conversationId: fixture.groupA.conversationId,
+      displayName: "Вася (vasya_v)",
+      telegramUserId: "9422",
+      username: null,
+    });
+    const bikes = await insertPersonCardRecord(fixture, {
+      ...inA("Вася (vasya_v)", 60),
+      content: "Вася катает на велосипеде",
+    });
+    const rides = [];
+    for (let index = 1; index <= 5; index += 1) {
+      rides.push(
+        await insertPersonCardRecord(fixture, {
+          ...inA("Вася (vasya_v)", 60 - index),
+          content: `Вася: заезд ${index}`,
+        }),
+      );
+    }
+    await publish(
+      {
+        area: "group",
+        areaKey: fixture.groupA.id,
+        familyId: fixture.familyId,
+        subjectTelegramUserId: "9422",
+      },
+      [{ refs: [bikes.memoryRef, ...rides.map((ride) => ride.memoryRef)], text: "Велосипед" }],
+    );
+    // An unread record older than every released one (it became visible after the build) still
+    // comes: the unread ones are counted apart from the released.
+    await insertPersonCardRecord(fixture, {
+      ...inA("Вася (vasya_v)", 120),
+      content: "Вася купил шоссейник",
+    });
+    await database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [
+      bikes.id,
+    ]);
+    expect((await card("9422")).freshRecords.map((record) => record.content)).toEqual([
+      "Вася: заезд 5",
+      "Вася: заезд 4",
+      "Вася: заезд 3",
+      "Вася: заезд 2",
+      "Вася: заезд 1",
+      "Вася купил шоссейник",
+    ]);
   });
 
   it("loads cards while the chat's journal writes its sequence", async () => {

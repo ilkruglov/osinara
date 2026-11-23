@@ -11,11 +11,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  personCardsBlock,
-  renderPersonCard,
-  type ShownPersonCard,
-} from "./person-cards/person-card-render.js";
+import { personCardsBlock, renderPersonCard } from "./person-cards/person-card-render.js";
+import type { TurnPersonCard } from "./person-cards/person-card-view-repository.js";
 import { PROFILE_CONTEXT_MAX_CHARACTERS } from "./memory-config.js";
 import { createTelegramMemoryContextBuilder } from "./telegram-turn-memory-context.js";
 
@@ -52,11 +49,12 @@ const emptyRetrieval = {
 };
 
 describe("person cards in the turn", () => {
-  const card: ShownPersonCard = {
+  const card: TurnPersonCard = {
     builtAt: new Date("2026-11-21T10:00:00.000Z"),
     cardId: "card-1",
     cardRef: `pcard_${"b".repeat(32)}`,
     freshRecords: [{ content: "Купил E39", memoryRef: `mem_${"f".repeat(32)}` }],
+    releasedMemoryItemIds: ["claim-released"],
     sections: {
       communication: [{ scope: "всегда", sourceRefs: ["mem_1"], text: "Любит короткие ответы" }],
       facts: [{ scope: "всегда", sourceRefs: ["mem_2"], text: "Ездит на E60" }],
@@ -104,7 +102,11 @@ describe("person cards in the turn", () => {
     // The author has a card: their unread records are not suppressed as "shown recently".
     expect(ledger.authorCardShownRecently).not.toHaveBeenCalled();
     expect(createProfile.mock.calls[0]![1]).toMatchObject({
-      personCardIds: ["card-1"],
+      personCards: {
+        personCardIds: ["card-1"],
+        readHidingPersonCardIds: ["card-1"],
+        releasedMemoryItemIds: ["claim-released"],
+      },
       suppressCurrentAuthor: false,
     });
     expect(ledger.record).toHaveBeenCalledWith(
@@ -113,8 +115,47 @@ describe("person cards in the turn", () => {
     expect(blocks.join("\n")).toContain("<memory-used>");
   });
 
+  // Review of the fixes, 23 November 2026: a card left with no item hides nothing, so it must not
+  // lift the "shown recently" suppression either, or the author's whole profile came every turn.
+  it("suppresses the author's recently shown records when their card hides nothing", async () => {
+    const ledger = exposures();
+    const createProfile = vi.fn().mockResolvedValue(null);
+    const itemless: TurnPersonCard = {
+      ...card,
+      releasedMemoryItemIds: [],
+      sections: { communication: [], facts: [], interests: [], positions: [] },
+    };
+    await createTelegramMemoryContextBuilder({
+      createProfile,
+      exposures: ledger,
+      loadPersonCards: vi.fn().mockResolvedValue([itemless]),
+      retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
+    })(input());
+    expect(ledger.authorCardShownRecently).toHaveBeenCalled();
+    expect(createProfile.mock.calls[0]![1]).toMatchObject({
+      personCards: { personCardIds: ["card-1"], readHidingPersonCardIds: [] },
+      suppressCurrentAuthor: true,
+    });
+  });
+
+  // Review of the fixes, 23 November 2026: the card block no longer says how to mark a card used,
+  // and a failed retrieval replaced the reminder that does, while the cards were still shown.
+  it("tells how to mark a shown card used when retrieval failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const blocks = await createTelegramMemoryContextBuilder({
+      createProfile: vi.fn().mockResolvedValue(null),
+      exposures: exposures(),
+      loadPersonCards: vi.fn().mockResolvedValue([card]),
+      retrieve: vi.fn().mockRejectedValue(new Error("retrieval down")),
+    })(input());
+    const text = blocks.join("\n");
+    expect(text.indexOf("AGENT_MEMORY_UNAVAILABLE")).toBeGreaterThan(-1);
+    // The reminder follows the notice, as it follows the records when retrieval works.
+    expect(text.indexOf("<memory-used>")).toBeGreaterThan(text.indexOf("AGENT_MEMORY_UNAVAILABLE"));
+  });
+
   it("keeps the cards within the profile block's budget, the author's first", async () => {
-    const full = (id: string, mark: string): ShownPersonCard => ({
+    const full = (id: string, mark: string): TurnPersonCard => ({
       ...card,
       cardId: `card-${id}`,
       cardRef: `pcard_${mark.repeat(32)}`,
@@ -145,11 +186,11 @@ describe("person cards in the turn", () => {
     // One escaped card is over 8 000 characters: only the author's is shown.
     expect(cardsBlock).toContain(`pcard_${"1".repeat(32)}`);
     expect(cardsBlock).not.toContain(`pcard_${"2".repeat(32)}`);
-    expect(createProfile.mock.calls[0]![1].personCardIds).toEqual(["card-101"]);
+    expect(createProfile.mock.calls[0]![1].personCards.personCardIds).toEqual(["card-101"]);
   });
 
   it("keeps the whole cards block, frame included, within 6 000 and gives the rest to the profile", async () => {
-    const realistic = (id: string): ShownPersonCard => ({
+    const realistic = (id: string): TurnPersonCard => ({
       ...card,
       cardId: `card-${id}`,
       cardRef: `pcard_${id.repeat(32)}`,
@@ -185,8 +226,8 @@ describe("person cards in the turn", () => {
   });
 
   it("shows every card of a block that fills the budget exactly, line breaks counted", async () => {
-    const sized = (id: string, characters: number): ShownPersonCard => {
-      const withText = (text: string): ShownPersonCard => ({
+    const sized = (id: string, characters: number): TurnPersonCard => {
+      const withText = (text: string): TurnPersonCard => ({
         ...card,
         cardId: `card-${id}`,
         cardRef: `pcard_${id.repeat(32)}`,
@@ -205,7 +246,7 @@ describe("person cards in the turn", () => {
       personCardsBlock([card], Number.POSITIVE_INFINITY).block!.length -
       renderPersonCard(card).length;
     // The profile block's calls for a turn showing `cards`.
-    const run = async (cards: ShownPersonCard[]) => {
+    const run = async (cards: TurnPersonCard[]) => {
       const createProfile = vi.fn().mockResolvedValue(null);
       const blocks = await createTelegramMemoryContextBuilder({
         createProfile,
@@ -228,11 +269,11 @@ describe("person cards in the turn", () => {
       expect(exact.cardsBlock.length).toBe(PROFILE_CONTEXT_MAX_CHARACTERS);
       expect(exact.profile).toMatchObject({
         maxCharacters: 0,
-        personCardIds: cards.map((shown) => shown.cardId),
+        personCards: { personCardIds: cards.map((shown) => shown.cardId) },
       });
       // One character more and the last card no longer fits.
       const over = await run([...first, sized(String(count), last + 1)]);
-      expect(over.profile.personCardIds).toEqual(first.map((shown) => shown.cardId));
+      expect(over.profile.personCards.personCardIds).toEqual(first.map((shown) => shown.cardId));
     }
   });
 
@@ -251,7 +292,7 @@ describe("person cards in the turn", () => {
     expect(blocks.join("\n")).not.toContain("<person_cards>");
     expect(createProfile.mock.calls[0]![1]).toMatchObject({
       maxCharacters: 6_000,
-      personCardIds: [],
+      personCards: { personCardIds: [] },
     });
   });
 

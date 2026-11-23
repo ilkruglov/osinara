@@ -11,6 +11,7 @@ import type { ScheduleToFn } from "eve/schedules";
 import memoryReviewChannel from "../../channels/memory-review.js";
 import type { PreparedSession } from "../sessions/session-repository.js";
 import { conversationRepository } from "../conversation-repository.js";
+import { isDeepSeekPeakHour } from "../deepseek/deepseek-peak-hours.js";
 import {
   MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
   MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS,
@@ -130,10 +131,11 @@ async function dispatchOne(
 export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatcherDependencies) {
   return async function dispatchMemoryReviews(now = new Date()): Promise<number> {
     // While a deploy waits for running turns the claim takes nothing (TURN_START_PAUSED_SQL in
-    // claimPending itself), and a ready batch goes on the minute after it.
+    // claimPending itself), and a ready batch goes on the minute after it. In DeepSeek's peak
+    // hours it takes nothing either, at twice the price; the pass still tidies and materializes.
     const batches = await dependencies.claimPending({
       leaseMilliseconds: MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS,
-      limit: MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
+      limit: isDeepSeekPeakHour(now) ? 0 : MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
       now,
     });
     // Each handoff is its own session preparation and Eve enqueue; the claimed batches are

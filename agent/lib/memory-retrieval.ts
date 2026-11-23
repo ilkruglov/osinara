@@ -107,7 +107,7 @@ async function retrievalEmbedding(query: string): Promise<number[] | null> {
  * hence the explicit "after the answer, not instead of it".
  */
 export const MEMORY_USED_REMINDER =
-  "Ответь как обычно, а последней строкой после текста добавь `<memory-used>ref,ref</memory-used>` с memoryRef записей, на которые опёрся ответ; если ни одна не пригодилась, `<memory-used></memory-used>`. Строка идёт после ответа, не вместо него: сервер её вырезает, люди её не видят.";
+  "Ответь как обычно, а последней строкой после текста добавь `<memory-used>ref,ref</memory-used>` с memoryRef записей и cardRef карточек собеседников, на которые опёрся ответ; если ни одна не пригодилась, `<memory-used></memory-used>`. Строка идёт после ответа, не вместо него: сервер её вырезает, люди её не видят.";
 
 export function formatRetrievedMemoryInstructions(
   memories: readonly ModelMemoryContextItem[],

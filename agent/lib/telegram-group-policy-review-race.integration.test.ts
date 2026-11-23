@@ -23,7 +23,7 @@ import {
 } from "./memory-review/memory-review-dispatch.integration-fixtures.js";
 import { memoryReviewDispatchRepository } from "./memory-review/memory-review-dispatch-repository.js";
 import { memoryReviewTerminalRepository } from "./memory-review/memory-review-terminal-repository.js";
-import { waitForLockWaiters } from "./person-cards/person-card-cleanup.integration-fixtures.js";
+import { waitForLockWaiters } from "./database-lock.integration-fixtures.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";

@@ -34,8 +34,7 @@ interface ExactClaimIdentity {
 
 /**
  * Locks one text about one subject until the transaction ends: it closes the race between the
- * exact lookup and a new insert without a global lock. The undo of the person card cleanup takes
- * it too, after the slot's lock, like memory writes.
+ * exact lookup and a new insert without a global lock. Writers take it after the slot's lock.
  */
 export async function lockExactMemoryDuplicate(
   client: Pick<PoolClient, "query">,

@@ -2,24 +2,21 @@
  * Person card queue and publishing against PostgreSQL.
  *
  * Constructs covered:
- * - Due: 9 new records no, 10 yes, a second build within a day no, the person's own record about
- *   themselves at once (after a quiet window), a deleted cited record once a day; a failed build of
- *   the person's own words is retried after a back-off, not lost; the day counts from the end of
- *   the last build, not from its request.
+ * - Due: 9 new records no, 10 yes, a second build within a day no, whatever the reason: the
+ *   person's own words, written as the silent review writes them, only lift the ten-records rule
+ *   (after a quiet window), and a failed build counts toward the day; a deleted cited record
+ *   rebuilds once a day; the day counts from the end of the last build, not from its request.
  * - Leases: an expired lease returns the build to pending, spent attempts fail it; a retry waits
  *   for its pause; a deploy pause claims nothing.
- * - New means unread: records the card read never count again, however recent; the week's limit
- *   of failed builds stops the person's builds, counting a build when any attempt may have been
- *   paid; the person confirming someone else's record about them counts as their own words.
+ * - New means unread: records the card read never count again, however recent; the person
+ *   confirming someone else's record about them counts as their own words.
  * - Publishing: versions and sources; a lost or expired lease publishes nothing, fails nothing and
- *   retries nothing; the cleanup marks repeats and skips confirmed, changed, other-area, kept and
- *   switched-off cases; a journal row left open by a purged kept record does not break the next
- *   cleanup.
+ *   retries nothing.
  */
+
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
-import { PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK } from "./person-card-config.js";
 import { personCardDispatchRepository } from "./person-card-dispatch-repository.js";
 import type { PersonCardKey } from "./person-card-links.js";
 import type { PersonCardSections } from "./person-card-parse.js";
@@ -69,19 +66,13 @@ async function addYuraRecords(fixture: PersonCardFixture, count: number, created
 }
 
 /** Claims the queued build and publishes a card citing every record the build reads. */
-async function buildCard(
-  fixture: PersonCardFixture,
-  cleanup: Parameters<typeof publishPersonCard>[0]["cleanup"] = [],
-  readAllLoaded = false,
-) {
+async function buildCard(fixture: PersonCardFixture, readAllLoaded = false) {
   const [claimed] = await personCardDispatchRepository.claim(2);
   const sources = await loadPersonCardSources(yuraKey(fixture));
   const result = await publishPersonCard({
     buildId: claimed!.id,
     characters: 7,
     cited: sources.records,
-    cleanup,
-    cleanupEnabled: true,
     inputRecords: sources.records.length,
     key: yuraKey(fixture),
     leaseToken: claimed!.leaseToken,
@@ -103,20 +94,6 @@ async function ageBuilds(hours: number): Promise<void> {
     `UPDATE person_cards SET built_at = built_at - $1::interval,
        sources_as_of = sources_as_of - $1::interval`,
     [`${hours} hours`],
-  );
-}
-
-/** Failed builds of Юра in group A that may have cost a model call, finished a day ago. */
-async function seedPaidFailures(fixture: PersonCardFixture, count: number) {
-  const key = yuraKey(fixture);
-  await database().query(
-    `INSERT INTO person_card_builds
-       (family_id, area, area_key, subject_telegram_user_id, reason, status, attempts,
-        requested_at, started_at, finished_at, error_code, possibly_paid)
-     SELECT $1, $2, $3, $4, 'new_records', 'failed', 1, now() - interval '27 hours',
-            now() - interval '27 hours', now() - interval '26 hours', 'AGENT_X', true
-     FROM generate_series(1, $5)`,
-    [key.familyId, key.area, key.areaKey, key.subjectTelegramUserId, count],
   );
 }
 
@@ -158,57 +135,70 @@ describeWithDatabase("person card queue", () => {
     expect(card.rows).toEqual([{ source_count: 20, version: 2 }]);
   });
 
-  it("rebuilds at once on the person's own words, once a day on a deleted source", async () => {
+  // Fable review, 23 November 2026: the person's own words rebuilt the card at once, and the
+  // silent review writes them for every message of an active person (72 of 147 builds a day on
+  // production, up to 7 for one person). They now only lift the ten-records rule; one build a day.
+  it("lifts the ten-records rule on the person's own words, once a day", async () => {
     const [first] = await addYuraRecords(fixture, 10);
     await personCardDispatchRepository.enqueueDue();
     await buildCard(fixture);
     await ageBuilds(1);
-    const own = {
-      content: "Я теперь живу в Казани",
+    const own = (content: string) => ({
+      content,
       conversationId: fixture.groupA.conversationId,
+      createdAt: new Date(Date.now() - 3 * 60_000),
       evidence: { authorParticipantId: fixture.participants.yuraInA, kind: "firsthand" as const },
       groupId: fixture.groupA.id,
       scope: "group" as const,
       subjectLabel: "Юра (yura_k)",
-    };
-    await insertPersonCardRecord(fixture, own);
-    // Quiet for two minutes first: a review batch writes its records together.
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-    await database().query(
-      "UPDATE memory_items_all SET created_at = now() - interval '3 minutes' WHERE content = $1",
-      [own.content],
-    );
-    await database().query(
-      `UPDATE claim_evidence SET created_at = now() - interval '3 minutes'
-       WHERE claim_id IN (SELECT id FROM memory_items_all WHERE content = $1)`,
-      [own.content],
-    );
+    });
+    // As the silent review writes them: one record of his own words after another.
+    for (let index = 0; index < 6; index += 1) {
+      await insertPersonCardRecord(fixture, own(`Я теперь живу в Казани ${index}`));
+      expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
+    }
+    await ageBuilds(24);
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([
       { key: yuraKey(fixture), reason: "self_statement" },
     ]);
     await buildCard(fixture);
+    // A day on, not the card's snapshot: the words are older than it.
+    await database().query(
+      `UPDATE person_card_builds SET requested_at = requested_at - interval '25 hours',
+         finished_at = finished_at - interval '25 hours'`,
+    );
     // The same words do not rebuild twice.
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
 
     // A deleted source takes only the items citing it out of the turn; the rebuild is daily.
     await database().query("UPDATE memory_items_all SET deleted_at = now() WHERE id = $1", [first]);
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-    await database().query(
-      `UPDATE person_card_builds SET requested_at = requested_at - interval '25 hours',
-         finished_at = finished_at - interval '25 hours'`,
-    );
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([
       { key: yuraKey(fixture), reason: "invalidated" },
     ]);
   });
 
-  it("retries a failed build of the person's own words after a back-off", async () => {
+  it("counts a failed build toward the day", async () => {
     await addYuraRecords(fixture, 10);
     await personCardDispatchRepository.enqueueDue();
     await buildCard(fixture);
-    await ageBuilds(1);
+    await ageBuilds(25);
+    await addYuraRecords(fixture, 10);
+    expect(await personCardDispatchRepository.enqueueDue()).toEqual([
+      { key: yuraKey(fixture), reason: "new_records" },
+    ]);
+    const [claimed] = await personCardDispatchRepository.claim(2);
+    await failPersonCardBuild({
+      buildId: claimed!.id,
+      errorCode: "AGENT_PERSON_CARD_RESPONSE_INVALID",
+      inputRecords: 20,
+      leaseToken: claimed!.leaseToken,
+    });
+    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
+    // Seven hours on (a failed build used to wait six), the person's own words do not build again
+    // within the day either.
+    await ageBuilds(7);
     await insertPersonCardRecord(fixture, {
-      content: "Я переехал в Казань",
+      content: "Я теперь живу в Казани",
       conversationId: fixture.groupA.conversationId,
       createdAt: new Date(Date.now() - 3 * 60_000),
       evidence: { authorParticipantId: fixture.participants.yuraInA, kind: "firsthand" },
@@ -216,21 +206,8 @@ describeWithDatabase("person card queue", () => {
       scope: "group",
       subjectLabel: "Юра (yura_k)",
     });
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([
-      { key: yuraKey(fixture), reason: "self_statement" },
-    ]);
-    const [claimed] = await personCardDispatchRepository.claim(2);
-    await failPersonCardBuild({
-      buildId: claimed!.id,
-      errorCode: "AGENT_PERSON_CARD_PUBLISH_FAILED",
-      inputRecords: 11,
-      leaseToken: claimed!.leaseToken,
-      possiblyPaid: true,
-    });
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-    await database().query(
-      "UPDATE person_card_builds SET finished_at = now() - interval '7 hours' WHERE status = 'failed'",
-    );
+    await ageBuilds(18);
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([
       { key: yuraKey(fixture), reason: "self_statement" },
     ]);
@@ -252,35 +229,16 @@ describeWithDatabase("person card queue", () => {
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
   });
 
-  it("counts only unread records as new and stops at the week's failed builds", async () => {
+  it("counts only unread records as new", async () => {
     // Ten records the build reads seconds before its snapshot are known, not new, a day later.
     await addYuraRecords(fixture, 10);
     await personCardDispatchRepository.enqueueDue();
     await buildCard(fixture);
     await ageBuilds(25);
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-
-    await addYuraRecords(fixture, 10);
-    await seedPaidFailures(fixture, PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK - 1);
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([
-      { key: yuraKey(fixture), reason: "new_records" },
-    ]);
-    const [claimed] = await personCardDispatchRepository.claim(2);
-    await failPersonCardBuild({
-      buildId: claimed!.id,
-      errorCode: "AGENT_PERSON_CARD_RESPONSE_INVALID",
-      inputRecords: 20,
-      leaseToken: claimed!.leaseToken,
-      possiblyPaid: true,
-    });
-    await database().query(
-      `UPDATE person_card_builds SET requested_at = requested_at - interval '25 hours',
-         finished_at = finished_at - interval '25 hours' WHERE status = 'failed'`,
-    );
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
   });
 
-  it("counts records over the input cap as read, and refusals before work not as failures", async () => {
+  it("counts records over the input cap as read", async () => {
     const long = "ж".repeat(3_990);
     for (let index = 0; index < 80; index += 1) {
       await insertPersonCardRecord(fixture, {
@@ -292,32 +250,12 @@ describeWithDatabase("person card queue", () => {
       });
     }
     await personCardDispatchRepository.enqueueDue();
-    const { sources } = await buildCard(fixture, [], true);
+    const { sources } = await buildCard(fixture, true);
     expect(sources.records.length).toBeLessThan(80);
     expect(sources.readIds).toHaveLength(80);
     await ageBuilds(25);
     // Nothing new: the records over the cap were read too, so no paid daily rebuild.
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-
-    // Three refusals before any work (an exhausted balance) do not stop the person's builds.
-    await addYuraRecords(fixture, 10);
-    for (let refused = 0; refused < 3; refused += 1) {
-      expect(await personCardDispatchRepository.enqueueDue()).toEqual([
-        { key: yuraKey(fixture), reason: "new_records" },
-      ]);
-      const [claimed] = await personCardDispatchRepository.claim(2);
-      await failPersonCardBuild({
-        buildId: claimed!.id,
-        errorCode: "AGENT_MODEL_BALANCE_EXHAUSTED",
-        inputRecords: 90,
-        leaseToken: claimed!.leaseToken,
-        possiblyPaid: false,
-      });
-      await ageBuilds(25);
-    }
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([
-      { key: yuraKey(fixture), reason: "new_records" },
-    ]);
   });
 
   it("publishes past a turn's foreign-key lock on a record it read", async () => {
@@ -339,21 +277,6 @@ describeWithDatabase("person card queue", () => {
     }
   });
 
-  it("counts a person's failed builds across all their areas", async () => {
-    await seedPaidFailures(fixture, PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK);
-    // The same person in another group is stopped too.
-    for (let index = 0; index < 10; index += 1) {
-      await insertPersonCardRecord(fixture, {
-        content: `Юра в B ${index}`,
-        conversationId: fixture.groupB.conversationId,
-        groupId: fixture.groupB.id,
-        scope: "group",
-        subjectLabel: "Юра (yura_k)",
-      });
-    }
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
-  });
-
   it("takes the person's confirmation of someone else's record as their own words", async () => {
     await addYuraRecords(fixture, 10);
     await personCardDispatchRepository.enqueueDue();
@@ -368,6 +291,8 @@ describeWithDatabase("person card queue", () => {
       scope: "group",
       subjectLabel: "Юра (yura_k)",
     });
+    await ageBuilds(24);
+    // Someone else's words about him are no reason before ten records gather.
     expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
     await database().query(
       `INSERT INTO claim_evidence
@@ -399,14 +324,12 @@ describeWithDatabase("person card queue", () => {
         ...lease,
         errorCode: "AGENT_X",
         inputRecords: 1,
-        possiblyPaid: true,
       }),
     ).toBe(false);
     expect(
       await personCardDispatchRepository.releaseForRetry({
         ...lease,
         errorCode: "AGENT_X",
-        possiblyPaid: true,
       }),
     ).toBe("lost");
     expect(await personCardDispatchRepository.stillLeased(lease.buildId, lease.leaseToken)).toBe(
@@ -434,49 +357,11 @@ describeWithDatabase("person card queue", () => {
         attempt < 3 ? { failed: 0, retried: 1 } : { failed: 1, retried: 0 },
       );
     }
-    const build = await database().query(
-      "SELECT status, error_code, possibly_paid FROM person_card_builds",
-    );
-    // A run that died with its lease may have died in a model call: it counts as paid.
+    const build = await database().query("SELECT status, error_code FROM person_card_builds");
+    // Three attempts are one build: the third ends it, and the day counts from there.
     expect(build.rows).toEqual([
-      { error_code: "AGENT_PERSON_CARD_BUILD_ABANDONED", possibly_paid: true, status: "failed" },
+      { error_code: "AGENT_PERSON_CARD_BUILD_ABANDONED", status: "failed" },
     ]);
-  });
-
-  it("counts a failed build when any of its attempts may have been paid", async () => {
-    await addYuraRecords(fixture, 10);
-    // One build: whether each attempt may have cost a model call; the last attempt ends it.
-    const fail = async (attempts: readonly boolean[]) => {
-      expect(await personCardDispatchRepository.enqueueDue()).toEqual([
-        { key: yuraKey(fixture), reason: "new_records" },
-      ]);
-      for (const [index, possiblyPaid] of attempts.entries()) {
-        const [claimed] = await personCardDispatchRepository.claim(2);
-        const attempt = {
-          buildId: claimed!.id,
-          errorCode: "AGENT_X",
-          leaseToken: claimed!.leaseToken,
-          possiblyPaid,
-        };
-        if (index < attempts.length - 1 || claimed!.attempts >= 3) {
-          await personCardDispatchRepository.releaseForRetry(attempt);
-          await database().query(
-            "UPDATE person_card_builds SET retry_after = now() - interval '1 second'",
-          );
-        } else {
-          await failPersonCardBuild({ ...attempt, inputRecords: 10 });
-        }
-      }
-      await ageBuilds(25);
-    };
-    // Refusals before any work on every attempt (a rate limit, an overloaded provider).
-    for (let build = 0; build < 3; build += 1) await fail([false, false, false]);
-    // A paid attempt counts, whatever refusal ended the build after it.
-    await seedPaidFailures(fixture, PERSON_CARD_MAX_FAILED_BUILDS_PER_WEEK - 3);
-    await fail([true, false]);
-    await fail([true, false, false]);
-    await fail([false, true]);
-    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
   });
 
   it("keeps a build with an unclear model outcome and retries it after a pause", async () => {
@@ -488,7 +373,6 @@ describeWithDatabase("person card queue", () => {
         buildId: claimed!.id,
         errorCode: "AGENT_PERSON_CARD_GENERATE_FAILED",
         leaseToken: claimed!.leaseToken,
-        possiblyPaid: true,
       }),
     ).toBe("retry");
     expect(await personCardDispatchRepository.claim(2)).toEqual([]);
@@ -502,6 +386,25 @@ describeWithDatabase("person card queue", () => {
         rows: [{ cards: 0 }],
       },
     );
+    // Up to three attempts in all: the third unclear outcome fails the build for the day.
+    const release = (build: { id: string; leaseToken: string }, errorCode: string) =>
+      personCardDispatchRepository.releaseForRetry({
+        buildId: build.id,
+        errorCode,
+        leaseToken: build.leaseToken,
+      });
+    expect(await release(again!, "AGENT_PERSON_CARD_GENERATE_TIMEOUT")).toBe("retry");
+    await database().query(
+      "UPDATE person_card_builds SET retry_after = now() - interval '1 second'",
+    );
+    const [third] = await personCardDispatchRepository.claim(2);
+    expect(third).toMatchObject({ attempts: 3, id: claimed!.id });
+    expect(await release(third!, "AGENT_PERSON_CARD_PROVIDER_FAILED")).toBe("failed");
+    expect(
+      (await database().query("SELECT status, error_code FROM person_card_builds")).rows,
+    ).toEqual([{ error_code: "AGENT_PERSON_CARD_PROVIDER_FAILED", status: "failed" }]);
+    expect(await personCardDispatchRepository.claim(2)).toEqual([]);
+    expect(await personCardDispatchRepository.enqueueDue()).toEqual([]);
   });
 
   it("publishes nothing without the lease", async () => {
@@ -514,8 +417,6 @@ describeWithDatabase("person card queue", () => {
         buildId: claimed!.id,
         characters: 7,
         cited: sources.records,
-        cleanup: [],
-        cleanupEnabled: true,
         inputRecords: 10,
         key: yuraKey(fixture),
         leaseToken: "00000000-0000-4000-8000-000000000000",
@@ -545,8 +446,6 @@ describeWithDatabase("person card queue", () => {
         buildId: claimed!.id,
         characters: 7,
         cited: sources.records,
-        cleanup: [],
-        cleanupEnabled: true,
         inputRecords: 10,
         key: yuraKey(fixture),
         leaseToken: claimed!.leaseToken,
@@ -556,135 +455,5 @@ describeWithDatabase("person card queue", () => {
         subjectLabel: sources.subjectLabel,
       }),
     ).rejects.toMatchObject({ code: "AGENT_PERSON_CARD_LEASE_LOST" });
-  });
-
-  it("cleans past a journal row left open by a purged kept record, never in another area", async () => {
-    const ids = await addYuraRecords(fixture, 10);
-    const inB = {
-      conversationId: fixture.groupB.conversationId,
-      groupId: fixture.groupB.id,
-      scope: "group" as const,
-      subjectLabel: "Юра (yura_k)",
-    };
-    const otherGroup = await insertPersonCardRecord(fixture, { ...inB, content: "Юра в B" });
-    const otherKept = await insertPersonCardRecord(fixture, { ...inB, content: "Юра в B, полнее" });
-    // A journal row still open for a record that is active again (its kept record was purged).
-    await database().query(
-      `INSERT INTO person_card_builds (id, family_id, area, area_key, subject_telegram_user_id, reason,
-         status, finished_at)
-       VALUES ('00000000-0000-4000-8000-000000000001', $1, 'group', $2, '9402', 'new_records',
-               'succeeded', now() - interval '2 days')`,
-      [fixture.familyId, fixture.groupA.id],
-    );
-    await database().query(
-      `INSERT INTO person_card_cleanups (build_id, family_id, memory_item_id, reason, explanation,
-         cleaned_updated_at)
-       VALUES ('00000000-0000-4000-8000-000000000001', $1, $2, 'duplicate', 'старое', now())`,
-      [fixture.familyId, ids[0]],
-    );
-    await personCardDispatchRepository.enqueueDue();
-    const sources = await loadPersonCardSources(yuraKey(fixture));
-    const version = (id: string) => sources.records.find((record) => record.id === id)!.version;
-    const [claimed] = await personCardDispatchRepository.claim(2);
-    const otherVersion = await database().query<{ version: string }>(
-      "SELECT updated_at::text AS version FROM memory_items_all WHERE id = $1",
-      [otherGroup.id],
-    );
-    const result = await publishPersonCard({
-      buildId: claimed!.id,
-      characters: 7,
-      cited: sources.records.filter((record) => record.id !== ids[0]),
-      cleanup: [
-        {
-          explanation: "повтор",
-          keptMemoryItemId: ids[1]!,
-          memoryItemId: ids[0]!,
-          readVersion: version(ids[0]!),
-          reason: "duplicate",
-        },
-        {
-          explanation: "чужая группа",
-          keptMemoryItemId: otherKept.id,
-          memoryItemId: otherGroup.id,
-          readVersion: otherVersion.rows[0]!.version,
-          reason: "duplicate",
-        },
-      ],
-      cleanupEnabled: true,
-      inputRecords: 10,
-      key: yuraKey(fixture),
-      leaseToken: claimed!.leaseToken,
-      readIds: sources.records.map((record) => record.id),
-      sections: SECTIONS,
-      sourcesAsOf: sources.sourcesAsOf,
-      subjectLabel: sources.subjectLabel,
-    });
-    expect(result).toMatchObject({ cleaned: 1, cleanupSkipped: 1 });
-    const open = await database().query(
-      "SELECT build_id FROM person_card_cleanups WHERE memory_item_id = $1 AND undone_at IS NULL",
-      [ids[0]],
-    );
-    expect(open.rows).toEqual([{ build_id: claimed!.id }]);
-  });
-
-  it("cleans repeats only where it is safe and only when switched on", async () => {
-    const ids = await addYuraRecords(fixture, 10);
-    await database().query(
-      "UPDATE memory_items_all SET confirmation = 'user_confirmed' WHERE id = $1",
-      [ids[2]],
-    );
-    await personCardDispatchRepository.enqueueDue();
-    const sources = await loadPersonCardSources(yuraKey(fixture));
-    const byId = new Map(sources.records.map((record) => [record.id, record]));
-    const entry = (memoryItemId: string, keep: string) => ({
-      explanation: "повтор",
-      keptMemoryItemId: keep,
-      memoryItemId,
-      readVersion: byId.get(memoryItemId)!.version,
-      reason: "duplicate" as const,
-    });
-    // Changed after the build read it: skipped.
-    await database().query(
-      "UPDATE memory_items_all SET updated_at = updated_at + interval '1 second' WHERE id = $1",
-      [ids[1]],
-    );
-    const [claimed] = await personCardDispatchRepository.claim(2);
-    const result = await publishPersonCard({
-      buildId: claimed!.id,
-      characters: 7,
-      cited: sources.records.filter((record) => record.id !== ids[0]),
-      cleanup: [entry(ids[0]!, ids[3]!), entry(ids[1]!, ids[3]!), entry(ids[2]!, ids[3]!)],
-      cleanupEnabled: true,
-      inputRecords: 10,
-      key: yuraKey(fixture),
-      leaseToken: claimed!.leaseToken,
-      readIds: sources.records.map((record) => record.id),
-      sections: SECTIONS,
-      sourcesAsOf: sources.sourcesAsOf,
-      subjectLabel: sources.subjectLabel,
-    });
-    expect(result).toMatchObject({ cleaned: 1, cleanupSkipped: 2 });
-    const statuses = await database().query<{
-      claim_status: string;
-      duplicate_of: string | null;
-      id: string;
-    }>("SELECT id, claim_status, duplicate_of FROM memory_items_all WHERE id = ANY($1::uuid[])", [
-      ids.slice(0, 3),
-    ]);
-    expect(
-      new Map(statuses.rows.map((row) => [row.id, [row.claim_status, row.duplicate_of]])),
-    ).toEqual(
-      new Map([
-        [ids[0], ["duplicate", ids[3]]],
-        [ids[1], ["active", null]],
-        [ids[2], ["active", null]],
-      ]),
-    );
-    const log = await database().query(
-      "SELECT reason, explanation, build_id FROM person_card_cleanups",
-    );
-    expect(log.rows).toEqual([
-      { build_id: claimed!.id, explanation: "повтор", reason: "duplicate" },
-    ]);
   });
 });
