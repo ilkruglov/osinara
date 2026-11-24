@@ -17,7 +17,7 @@ vi.mock("./image-generation/image-generation-availability.js", () => ({
 }));
 
 import { AppError } from "./app-error.js";
-import { createImagePromptSeries } from "./image-generation/image-prompt-series.js";
+import { IMAGE_SOURCES_MAX, imageSourcesSchema } from "./image-generation/image-source-schema.js";
 import { rejected, unavailable } from "./image-generation/image-provider.js";
 import { ModelFacingError } from "./model-facing-error.js";
 import { createGenerateImageTool } from "./tools/generate_image.js";
@@ -89,7 +89,6 @@ function dependencies() {
       markFailed: vi.fn().mockResolvedValue(undefined),
       recordProviderJob: vi.fn().mockResolvedValue(undefined),
     },
-    series: createImagePromptSeries(),
     workspaces: {
       findBinaryWrite: vi.fn().mockResolvedValue(null),
       workspaceId: vi.fn().mockResolvedValue("workspace-1"),
@@ -284,7 +283,7 @@ describe("generate_image", () => {
       [],
       [{ scope: "group" }],
       [{ scope: "group", path: "a.png", telegramMessageId: "42" }],
-      Array.from({ length: 5 }, () => ({ scope: "group", path: "a.png" })),
+      Array.from({ length: 11 }, () => ({ scope: "group", path: "a.png" })),
     ].map((images) => ({ images })),
   )("rejects invalid edit sources $images", async ({ images }) => {
     const deps = dependencies();
@@ -510,96 +509,30 @@ describe("generate_image", () => {
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
   });
 
-  const ROBOT =
-    "Вертикальный кадр, стиль ретро-плаката 1950-х, пожелтевшая бумага. Сцена: ретро-робот с ламповыми глазами держит катушку магнитной ленты, за спиной три серверные стойки.";
-  const ECHO =
-    "Обложка журнала в стиле барокко. Центр: ретро-робот с ламповыми глазами на шестерне, в руке катушка магнитной ленты, за спиной три серверные стойки.";
-
-  it("refuses a new picture that echoes the series before anything is reserved, and names the repeats", async () => {
+  // The series check is gone (24 November 2026, owner: «Повторы пока вообще убери»): variants
+  // differ because the imagegen skill plans distinct ideas first, not because the tool refuses.
+  it("draws the same prompt twice in a row: nothing compares a picture with the earlier ones", async () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);
-    await expect(tool.execute({ ...INPUT, prompt: ROBOT }, context())).resolves.toMatchObject({
+    const prompt = "A retro robot with glowing tube eyes holds a reel of magnetic tape.";
+    await expect(tool.execute({ ...INPUT, prompt }, context())).resolves.toMatchObject({
       generated: true,
     });
-    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
-
-    const refusal = await tool
-      .execute({ ...INPUT, prompt: ECHO }, { ...context(), callId: "call-image-2" })
-      .catch((error: unknown) => error);
-    expect(refusal).toBeInstanceOf(ModelFacingError);
-    expect((refusal as ModelFacingError).contract).toMatchObject({
-      category: "input",
-      code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-      field: "prompt",
-      retryable: true,
-      sideEffectStatus: "not_started",
-      reason: expect.stringContaining("ламповыми глазами"),
-      correction: expect.stringContaining("keep"),
-    });
-    // The ledger knows the refusal as a definite failure of that call; the provider was not asked.
-    expect(deps.operations.markFailed).toHaveBeenCalledWith(
-      "call-image-2",
-      "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-    );
-    expect(deps.client.generate).toHaveBeenCalledTimes(1);
-    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
-  });
-
-  it("replays a stored refusal as the same input correction", async () => {
-    const deps = dependencies();
-    deps.operations.begin.mockResolvedValue({
-      errorCode: "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-      state: "failed",
-    });
-    const replayed = await createGenerateImageTool(deps as never)
-      .execute({ ...INPUT, prompt: ECHO }, context())
-      .catch((error: unknown) => error);
-    expect(replayed).toBeInstanceOf(ModelFacingError);
-    expect((replayed as ModelFacingError).contract).toMatchObject({
-      category: "input",
-      retryable: true,
-      sideEffectStatus: "not_started",
-    });
-    expect(deps.client.generate).not.toHaveBeenCalled();
-  });
-
-  it("serves a replay of an earlier call without measuring it against its own prompt", async () => {
-    const deps = dependencies();
-    deps.series.remember("wrun-image", ROBOT);
-    deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
     await expect(
-      createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ROBOT }, context()),
-    ).resolves.toMatchObject({ generated: false, path: FILE.path });
+      tool.execute({ ...INPUT, prompt }, { ...context(), callId: "call-image-2" }),
+    ).resolves.toMatchObject({ generated: true });
+    expect(deps.client.generate).toHaveBeenCalledTimes(2);
     expect(deps.operations.markFailed).not.toHaveBeenCalled();
-    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
   });
 
-  it("lets the declared keep through, remembers the picture, and exempts an edit", async () => {
-    const deps = dependencies();
-    const tool = createGenerateImageTool(deps as never);
-    await tool.execute({ ...INPUT, prompt: ROBOT }, context());
-    await expect(
-      tool.execute(
-        {
-          ...INPUT,
-          keep: [
-            "сюжет: ретро-робот с ламповыми глазами, катушка магнитной ленты, три серверные стойки",
-          ],
-          prompt: ECHO,
-        },
-        { ...context(), callId: "call-image-2" },
-      ),
-    ).resolves.toMatchObject({ generated: true });
-    expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
-    // The provider never sees the declaration.
-    expect(deps.client.generate.mock.calls[1]![0]).not.toHaveProperty("keep");
-
-    await expect(
-      tool.execute(
-        { ...INPUT, images: [{ path: "photo.png", scope: "group" }], prompt: ECHO },
-        { ...context(), callId: "call-image-3" },
-      ),
-    ).resolves.toMatchObject({ generated: true });
-    expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
+  it("takes up to IMAGE_SOURCES_MAX sources in either chat", () => {
+    const sources = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ path: `photo-${index}.png`, scope: "group" }));
+    for (const external of [false, true]) {
+      expect(imageSourcesSchema(external).safeParse(sources(IMAGE_SOURCES_MAX)).success).toBe(true);
+      expect(imageSourcesSchema(external).safeParse(sources(IMAGE_SOURCES_MAX + 1)).success).toBe(
+        false,
+      );
+    }
   });
 });

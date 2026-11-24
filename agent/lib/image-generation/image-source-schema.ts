@@ -1,6 +1,9 @@
 /** Common model-facing image locations; execution still performs live workspace authorization. */
 import { z } from "zod";
 
+/** Sources of one picture, avatars included: Seedream 5.5 edit takes ten and drops the rest silently. */
+export const IMAGE_SOURCES_MAX = 10;
+
 export function imageSourcesSchema(external = false) {
   return z
     .array(
@@ -26,9 +29,9 @@ export function imageSourcesSchema(external = false) {
         .strict(),
     )
     .min(1)
-    .max(4)
+    .max(IMAGE_SOURCES_MAX)
     .optional()
     .describe(
-      "Для правки передай исходники в порядке упоминания в prompt; в каждом ровно один attachmentId, path или telegramMessageId. Для новой картинки поле опусти",
+      "Исходники в порядке упоминания в prompt; в каждом ровно один attachmentId, path или telegramMessageId. Без исходников поле опусти",
     );
 }

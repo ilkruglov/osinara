@@ -281,6 +281,25 @@ describe("fetch_telegram_avatars", () => {
     ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_AVATARS_CONTEXT_INVALID" });
   });
 
+  it("takes up to ten participants in one call", async () => {
+    const deps = dependencies();
+    const tool = createFetchTelegramAvatarsTool(deps as never);
+    const people = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ telegramUserId: String(index + 1) }));
+    const result = (await tool.execute({ participants: people(10) }, context())) as {
+      avatars: unknown[];
+      missing: unknown[];
+    };
+    // Every one of the ten is looked up, in order, and accounted for: none dropped or repeated.
+    expect(
+      deps.participants.findByHandle.mock.calls.map(([, handle]) => handle.telegramUserId),
+    ).toEqual(people(10).map((person) => person.telegramUserId));
+    expect(result.avatars.length + result.missing.length).toBe(10);
+    await expect(tool.execute({ participants: people(11) }, context())).rejects.toMatchObject({
+      code: "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
+    });
+  });
+
   it("requires exactly one handle per participant", async () => {
     const tool = createFetchTelegramAvatarsTool(dependencies() as never);
     await expect(

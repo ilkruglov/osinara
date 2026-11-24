@@ -20,6 +20,7 @@ import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError, isAppError } from "../app-error.js";
+import { IMAGE_SOURCES_MAX } from "../image-generation/image-source-schema.js";
 import {
   telegramAvatarSource,
   type TelegramAvatarSource,
@@ -61,8 +62,8 @@ const inputSchema = z
     participants: z
       .array(participantSchema)
       .min(1)
-      .max(4)
-      .describe("До четырёх участников этого чата; у каждого ровно одно из полей"),
+      .max(IMAGE_SOURCES_MAX)
+      .describe(`До ${IMAGE_SOURCES_MAX} участников этого чата; у каждого ровно одно из полей`),
   })
   .strict();
 
@@ -123,7 +124,7 @@ function parseInput(input: unknown): z.infer<typeof inputSchema> {
   ) {
     throw new AppError(
       "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
-      "Укажи до четырёх участников, у каждого ровно одно из полей: telegramUserId, username или displayName",
+      `Укажи до ${IMAGE_SOURCES_MAX} участников, у каждого ровно одно из полей: telegramUserId, username или displayName`,
     );
   }
   return parsed.data;
@@ -167,7 +168,7 @@ export function createFetchTelegramAvatarsTool(
   return defineTool({
     description: [
       "Когда использовать: перед картинкой, на которой должны быть узнаваемы участники этого чата (обложка про события чата, карикатура, сцена с ними), чтобы передать их аватарки в generate_image как images-референсы.",
-      "Вход: до четырёх участников, каждый по telegramUserId, username или имени из истории чата; доступны только участники текущего разговора.",
+      `Вход: до ${IMAGE_SOURCES_MAX} участников, каждый по telegramUserId, username или имени из истории чата; доступны только участники текущего разговора.`,
       "Результат: для каждого найденного path и scope для images (status cached значит, что файл уже был в workspace); missing перечисляет остальных с причиной: unknown_participant, no_photo_or_private, telegram_unavailable, storage_failed.",
       AVATAR_USAGE_NOTE,
       "Не использовать: без картинки про этих людей и ради любопытства.",

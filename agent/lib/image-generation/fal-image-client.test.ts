@@ -90,7 +90,7 @@ describe("fal image client", () => {
     expect(portrait!.body).toMatchObject({ image_size: { height: 1_944, width: 1_296 } });
   });
 
-  it("edits with every reference as a JPEG data URI, and refuses a fifth before POST", async () => {
+  it("edits with every reference as a JPEG data URI, and refuses an eleventh before POST", async () => {
     const log = vi.mocked(console.log);
     const png = await sharp({
       create: { background: "red", channels: 3, height: 600, width: 2_400 },
@@ -127,14 +127,32 @@ describe("fal image client", () => {
     // The prompt names the first and the second picture: the order is kept.
     expect(await sharp(decoded[1]!).metadata()).toMatchObject({ height: 300, width: 100 });
 
-    const five = falQueue();
+    // The provider takes more than our old four (fal: up to 16 for GPT Image 2.6 Flare edit);
+    // ten is the contract for both models.
+    const ten = falQueue();
+    await client(ten).generate({
+      ...request,
+      referenceImages: Array.from({ length: 10 }, () => ({ bytes: tall, mediaType: "image/png" })),
+    });
+    expect((ten.posts()[0]!.body as { image_urls: string[] }).image_urls).toHaveLength(10);
+    // Seedream bills each source: $0.03 + 10 × $0.012.
+    const billed = log.mock.calls
+      .flat()
+      .map((line) => JSON.parse(String(line)) as { code?: string; estimatedUsd?: number })
+      .filter((line) => line.code === "AGENT_IMAGE_GENERATION_BILLED");
+    expect(billed.at(-1)?.estimatedUsd).toBe(0.15);
+
+    const eleven = falQueue();
     await expect(
-      client(five).generate({
+      client(eleven).generate({
         ...request,
-        referenceImages: Array.from({ length: 5 }, () => ({ bytes: png, mediaType: "image/png" })),
+        referenceImages: Array.from({ length: 11 }, () => ({
+          bytes: tall,
+          mediaType: "image/png",
+        })),
       }),
     ).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_INPUT_INVALID" });
-    expect(five.calls).toEqual([]);
+    expect(eleven.calls).toEqual([]);
 
     // A source the reader took (its signature is JPEG) that does not decode is named by its place
     // (repeat review, 23 November 2026: the advice said «images» with two sources).

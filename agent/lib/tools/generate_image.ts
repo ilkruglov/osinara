@@ -10,9 +10,6 @@
  * - One durable reservation precedes the billable provider call; no failure is retried implicitly.
  * - The image is only saved: sending it is a separate explicit step through `send_workspace_image`,
  *   so a draft never reaches the chat on its own and one picture cannot arrive twice.
- * - A new picture of a series must not echo the previous ones (`image-prompt-series.ts`): the
- *   repeats the model did not declare in `keep` refuse the call before anything is reserved or
- *   billed; an edit of an existing picture repeats on purpose and is exempt.
  */
 import { createHash } from "node:crypto";
 
@@ -36,12 +33,6 @@ import {
   imageGenerationOperationRepository,
   type ImageGenerationReservation,
 } from "../image-generation/image-generation-operation-repository.js";
-import {
-  IMAGE_SERIES_REPEAT_LIMIT,
-  imagePromptSeries,
-  repeatedPromptElements,
-  type ImagePromptSeries,
-} from "../image-generation/image-prompt-series.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/workspace-repository.js";
@@ -53,11 +44,10 @@ import {
 } from "../workspaces/workspace-image-source.js";
 import { imageSourcesSchema } from "../image-generation/image-source-schema.js";
 import {
-  IMAGE_EDIT_SOURCES_RULE,
-  IMAGE_QUALITY_RULE,
-  IMAGE_SERIES_RULE,
+  IMAGE_AUTO_RULE,
+  IMAGE_PROMPT_RULE,
+  IMAGE_SOURCES_RULE,
   IMAGE_UNKNOWN_STATUS_RULE,
-  imageKeepSchema,
 } from "../image-generation/image-generation-tool-presentation.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
@@ -67,7 +57,6 @@ interface GenerateImageDependencies {
     auth: WorkspaceAuthorization,
     input: WorkspaceImageLocation,
   ): Promise<{ bytes: Uint8Array; mediaType: string }>;
-  series: ImagePromptSeries;
   client: {
     assertConfigured(): void;
     generate(input: ImageGenerationRequest): Promise<{
@@ -119,16 +108,12 @@ const inputSchema = z
   .object({
     images: imageSourcesSchema(),
     background: z.enum(IMAGE_BACKGROUNDS).describe("transparent, opaque или auto"),
-    // A declaration, not generation input: neither sent to the provider nor part of the hash. It
-    // tells the series check which repeats the user asked for; everything else that echoes an
-    // earlier prompt of the series is refused before the billable call.
-    keep: imageKeepSchema(),
     prompt: z
       .string()
       .min(1)
       .max(IMAGE_PROMPT_MAX_LENGTH)
       .describe("Полная визуальная спецификация изображения без служебных инструкций"),
-    // No description of its own: the tool's `IMAGE_QUALITY_RULE` says «всегда auto», and a list
+    // No description of its own: the tool's `IMAGE_AUTO_RULE` says «всегда auto», and a list
     // of choices here contradicted it, as the external group's schema already does not.
     quality: z.enum(IMAGE_QUALITIES),
     size: z.enum(IMAGE_SIZES).describe("1024x1024, 1536x1024, 1024x1536 или auto"),
@@ -197,17 +182,6 @@ function inputHash(
       "utf8",
     )
     .digest("hex");
-}
-
-/** The series lives with the application session; a context without one falls back to the Eve session. */
-function seriesKeyOf(ctx: {
-  session: {
-    auth: { current: { attributes: Readonly<Record<string, unknown>> } | null };
-    id: string;
-  };
-}): string {
-  const id = ctx.session.auth.current?.attributes.applicationSessionId;
-  return typeof id === "string" ? id : ctx.session.id;
 }
 
 function currentWorkspaceScope(auth: WorkspaceAuthorization): WorkspaceScope {
@@ -292,16 +266,15 @@ export function createGenerateImageTool(
   return defineTool({
     description: [
       "Когда использовать: создать raster-изображение или отредактировать существующее по просьбе пользователя и сохранить результат новым файлом в workspace.",
-      "Для правки передай images с исходниками из Telegram или workspace; prompt описывает изменения и что сохранить.",
-      IMAGE_EDIT_SOURCES_RULE,
-      "Без images создаётся новая картинка.",
+      "Исходники для images бери из Telegram или workspace.",
+      IMAGE_SOURCES_RULE,
+      "Без images картинка рисуется только по prompt.",
       "Не использовать: для SVG, диаграмм из кода или незапрошенной фоновой генерации.",
-      "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер не задан пользователем, передай auto.",
-      IMAGE_QUALITY_RULE,
+      IMAGE_PROMPT_RULE,
+      IMAGE_AUTO_RULE,
       "Результат: изображение сохраняется без перезаписи в generated-images и НЕ отправляется в чат; чтобы показать его, вызови send_workspace_image с этим path. Черновик можно сначала посмотреть через inspect_workspace_image и переделать, отправив только итог.",
       IMAGE_UNKNOWN_STATUS_RULE,
       "Надписи, особенно кириллицу, модели иногда искажают: важную надпись проверь через inspect_workspace_image или продублируй подписью к файлу.",
-      IMAGE_SERIES_RULE,
     ].join(" "),
     inputSchema,
     async execute(rawInput, ctx) {
@@ -316,7 +289,6 @@ export function createGenerateImageTool(
       const auth = requireWorkspaceAuthorization(ctx);
       const scope = currentWorkspaceScope(auth);
       dependencies.client.assertConfigured();
-      const seriesKey = seriesKeyOf(ctx);
       const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
       const references: NonNullable<ImageGenerationRequest["referenceImages"]>[number][] = [];
       for (const [index, source] of (input.images ?? []).entries()) {
@@ -325,8 +297,7 @@ export function createGenerateImageTool(
         references.push({ bytes: image.bytes, mediaType: image.mediaType });
       }
       const referenceImages = input.images ? references : undefined;
-      // The reflection field stays at the tool boundary: the provider sees the picture spec only.
-      const { images: _images, keep: _keep, ...request } = input;
+      const { images: _images, ...request } = input;
       ctx.abortSignal?.throwIfAborted();
       const path = outputPath(ctx.callId);
       const reservation = await dependencies.operations.begin({
@@ -348,34 +319,6 @@ export function createGenerateImageTool(
       } else if (reservation.state === "failed" || reservation.state === "ambiguous") {
         throw terminalReservationError(reservation);
       } else {
-        // A new picture of a series must not echo the previous ones. Checked only for a fresh
-        // operation, after the ledger said so: a replay of an earlier call is served above and
-        // never measured against its own prompt. A refusal is a definite failure in the ledger
-        // and an input correction for the model, which rewrites or declares what is kept.
-        if (!input.images) {
-          const previous = dependencies.series.previous(seriesKey);
-          const repeated = repeatedPromptElements(input.prompt, previous, input.keep ?? []);
-          const refused = repeated.length >= IMAGE_SERIES_REPEAT_LIMIT;
-          console.info(
-            JSON.stringify({
-              code: "AGENT_IMAGE_PROMPT_SERIES_CHECK",
-              kept: input.keep?.length ?? 0,
-              previous: previous.length,
-              refused,
-              repeated: repeated.length,
-            }),
-          );
-          if (refused) {
-            await dependencies.operations.markFailed(
-              ctx.callId,
-              "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-            );
-            throw correctableInputError(
-              "AGENT_IMAGE_PROMPT_REPEATS_SERIES",
-              `Prompt повторяет прошлые картинки этой серии: ${repeated.slice(0, 8).join(", ")}`,
-            );
-          }
-        }
         let generatedImage: Awaited<ReturnType<GenerateImageDependencies["client"]["generate"]>>;
         try {
           generatedImage = await dependencies.client.generate({
@@ -455,10 +398,6 @@ export function createGenerateImageTool(
         generatedModel = generatedImage.model;
         revisedPrompt = generatedImage.revisedPrompt;
       }
-      // Only a picture that exists joins the series, whether made now or recovered from the ledger:
-      // a failed attempt must not count as a variant the next prompt is measured against.
-      if (!input.images) dependencies.series.remember(seriesKey, input.prompt);
-
       // Saved, not sent. The picture reaches the chat only when the model asks for it, which is
       // what lets it look at a draft, fix it, and deliver one final image instead of every attempt.
       return {
@@ -478,6 +417,5 @@ export default createGenerateImageTool({
   readImage: readWorkspaceImage,
   client: imageGenerationClient,
   operations: imageGenerationOperationRepository,
-  series: imagePromptSeries,
   workspaces: workspaceBinaryRepository,
 });

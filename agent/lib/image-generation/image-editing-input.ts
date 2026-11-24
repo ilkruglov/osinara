@@ -4,18 +4,18 @@ import { AppError } from "../app-error.js";
 import { validateVisionImageBytes } from "../attachments/telegram-vision-attachment.js";
 import type { ImageReference } from "./image-generation-client.js";
 import { correctableInputError } from "./image-generation-failures.js";
+import { IMAGE_SOURCES_MAX } from "./image-source-schema.js";
 
 /** The provider takes the picture as is; this only bounds the upload, not the output. */
 const UPLOAD_MAX_SIDE = 1_536;
 /** The most pixels any picture is decoded at, a reference or a result: past it, a decode bomb. */
 export const IMAGE_DECODE_PIXEL_LIMIT = 40_000_000;
-const MAX_REFERENCE_IMAGES = 4;
 
 export function assertReferenceCount(references: readonly ImageReference[]): void {
-  if (references.length > MAX_REFERENCE_IMAGES) {
+  if (references.length > IMAGE_SOURCES_MAX) {
     throw new AppError(
       "AGENT_IMAGE_EDITING_INPUT_INVALID",
-      "Передайте не больше четырёх исходников",
+      `Передайте не больше ${IMAGE_SOURCES_MAX} исходников`,
     );
   }
 }

@@ -28,12 +28,6 @@ const CORRECTABLE = {
       "Измени prompt или исходник по смыслу отказа и повтори вызов один раз; при новом отказе сообщи пользователю.",
     reason: "Этот вызов уже отклонён: сервис не принял prompt или исходник",
   },
-  AGENT_IMAGE_PROMPT_REPEATS_SERIES: {
-    correction:
-      "Напиши вариант заново по текущей просьбе без повторённых элементов прошлых картинок; то, что пользователь просил сохранить из них, перечисли в keep. Повтори вызов один раз с новым prompt.",
-    field: "prompt",
-    reason: "Этот вызов уже отклонён: prompt повторял прошлые картинки серии",
-  },
 } as const satisfies Readonly<
   Record<string, { correction: string; field?: string; reason: string }>
 >;
