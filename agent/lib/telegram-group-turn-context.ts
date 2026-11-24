@@ -14,8 +14,10 @@ import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
 } from "../config.js";
+import { sliceText } from "./display-text.js";
 import { AppError } from "./app-error.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
@@ -136,14 +138,32 @@ export function fitHandoffBlock(text: string | null, budget: number): string | n
   return renderHandoffBlock(`${trimmed.slice(0, room - 1)}…`);
 }
 
-/** The newest entries that fit the recent-window character cap, in chronological order. */
+/** An entry cut to the window's per-entry cap, its head and a count of what was left out. */
+function windowEntry(entry: TelegramGroupJournalEntry): TelegramGroupJournalEntry {
+  const text = entry.contentText;
+  if (text === null || text.length <= TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS) {
+    return entry;
+  }
+  const head = sliceText(text, TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS).trimEnd();
+  // Counted in characters (an emoji is one), worded without number agreement.
+  let omitted = 0;
+  for (const _character of text.slice(head.length)) omitted += 1;
+  return { ...entry, contentText: `${head}… [ещё знаков: ${omitted}]` };
+}
+
+/**
+ * The newest entries that fit the recent-window character cap, in chronological order. A long
+ * entry comes in shortened, so it never hides the entries before it; the full text of an unseen
+ * entry still wins in `mergeTimelineEntries`.
+ */
 function recentTimelineWindow(
   entries: readonly TelegramGroupJournalEntry[],
   maxCharacters: number = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
 ): TelegramGroupJournalEntry[] {
   const window: TelegramGroupJournalEntry[] = [];
   let used = 0;
-  for (const entry of [...entries].reverse()) {
+  for (const original of [...entries].reverse()) {
+    const entry = windowEntry(original);
     const cost = (entry.contentText ?? "").length + RECENT_WINDOW_ENTRY_OVERHEAD;
     if (used + cost > maxCharacters) break;
     used += cost;
@@ -152,13 +172,22 @@ function recentTimelineWindow(
   return window;
 }
 
-/** Unseen entries plus the recent window, without duplicates, in sequence order. */
+/**
+ * Unseen entries plus the recent window, without duplicates, in sequence order. An unseen entry
+ * comes in full, unless it would take more than half of the timeline: the selection drops an entry
+ * that cannot fit whole, so such a one comes shortened like a window entry instead of not at all
+ * (Codex review, 25 November 2026: a reply target of 24 000 characters was lost with its head).
+ */
 function mergeTimelineEntries(
   unseen: readonly TelegramGroupJournalEntry[],
   window: readonly TelegramGroupJournalEntry[],
 ): TelegramGroupJournalEntry[] {
+  const fitted = (entry: TelegramGroupJournalEntry) =>
+    (entry.contentText?.length ?? 0) > TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS / 2
+      ? windowEntry(entry)
+      : entry;
   const bySequence = new Map<string, TelegramGroupJournalEntry>();
-  for (const entry of [...window, ...unseen]) bySequence.set(entry.sequenceId, entry);
+  for (const entry of [...window, ...unseen.map(fitted)]) bySequence.set(entry.sequenceId, entry);
   return [...bySequence.values()].sort((left, right) =>
     BigInt(left.sequenceId) < BigInt(right.sequenceId) ? -1 : 1,
   );

@@ -14,6 +14,12 @@
  */
 import { describe, expect, it, vi, type Mock } from "vitest";
 
+import {
+  TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS as BUDGET,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+} from "../config.js";
 import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
 import {
   createTelegramGroupTurnContextPreparer,
@@ -121,7 +127,7 @@ describe("Telegram group turn context", () => {
 
   it("shortens the handoff behind a large current message instead of failing the turn", async () => {
     // Text at Telegram's limit plus a long quote: valid before the handoff existed, valid still.
-    const deps = dependencies(null, "с".repeat(2_500));
+    const deps = dependencies(null, "с".repeat(BUDGET));
     deps.journal.listRecent.mockResolvedValue([entry("99", "Последнее")]);
     const large = {
       ...input,
@@ -130,9 +136,9 @@ describe("Telegram group turn context", () => {
       replyQuotedText: "q".repeat(1_024),
     };
     const result = await createTelegramGroupTurnContextPreparer(deps)(large);
-    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
     expect(result.handoffBlock).toContain("…\n</previous_context_summary>");
-    expect(result.handoffBlock!.length).toBeLessThan(2_500);
+    expect(result.handoffBlock!.length).toBeLessThan(BUDGET);
     expect(result.durableMessage).toContain("#99 ");
   });
 
@@ -140,11 +146,11 @@ describe("Telegram group turn context", () => {
     // The reply target is outside the selected timeline, so the envelope grows after selection.
     const deps = dependencies(null, "с".repeat(2_500));
     deps.journal.listRecent.mockResolvedValue(
-      Array.from({ length: 99 }, (_, index) => entry(String(index + 1), "т".repeat(60))),
+      Array.from({ length: 99 }, (_, index) => entry(String(index + 1), "т".repeat(300))),
     );
     const replying = { ...input, messageText: "x".repeat(4_096), replyToSequenceId: "200" };
     const result = await createTelegramGroupTurnContextPreparer(deps)(replying);
-    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
     expect(result.currentMessageEnvelope).toContain('"replyTargetUnavailable":true');
     expect(result.handoffBlock).not.toBeNull();
   });
@@ -155,6 +161,9 @@ describe("Telegram group turn context", () => {
     const result = await createTelegramGroupTurnContextPreparer(dependencies("7"))({
       ...input,
       currentSequence: "12",
+      // Escaped six times: 12 000 for the text, 6 144 each for the quote and the snapshot, past
+      // what the envelope may take before the timeline's reserve.
+      messageText: "<".repeat(2_000),
       replyQuotedText: "<".repeat(1_024),
       replyTargetSnapshot: {
         contentText: "<".repeat(1_024),
@@ -164,9 +173,12 @@ describe("Telegram group turn context", () => {
       replyTargetUnavailable: true,
       replyToSequenceId: null,
     });
-    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
-    expect(result.currentMessageEnvelope.length).toBeLessThanOrEqual(10_000);
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
+    expect(result.currentMessageEnvelope.length).toBeLessThanOrEqual(BUDGET - 2_000);
+    expect(result.currentMessageEnvelope).not.toContain("\\u003c".repeat(1_024 * 2));
+    // Both are shortened, neither dropped: the room after the text holds a part of each.
     expect(result.currentMessageEnvelope).toContain("replyTargetSnapshot");
+    expect(result.currentMessageEnvelope).toContain("replyQuotedText");
   });
 
   it("fits the handoff into the budget: whole, shortened or left for the next turn", () => {
@@ -192,10 +204,10 @@ describe("Telegram group turn context", () => {
   it("charges the handoff to the same character budget as the timeline", async () => {
     const deps = dependencies(null, "с".repeat(2_500));
     deps.journal.listRecent.mockResolvedValue(
-      Array.from({ length: 20 }, (_, index) => entry(String(50 + index), "т".repeat(900))),
+      Array.from({ length: 20 }, (_, index) => entry(String(50 + index), "т".repeat(1_500))),
     );
     const result = await createTelegramGroupTurnContextPreparer(deps)(input);
-    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
     expect(result.durableMessage).toContain("#69 ");
   });
 
@@ -206,7 +218,7 @@ describe("Telegram group turn context", () => {
       omittedBeforeSequence: null,
     });
     deps.journal.listRecent.mockResolvedValue([
-      entry("94", "x".repeat(2_000)),
+      entry("94", "Раньше всех"),
       entry("95", "Пух: слой ограничений снят"),
       entry("96", "y".repeat(1_500)),
       entry("99", "Новое после курсора"),
@@ -219,18 +231,88 @@ describe("Telegram group turn context", () => {
       anchorEntryId: input.currentEntryId,
       beforeSequence: input.currentSequence,
       groupId: input.groupId,
-      limit: 15,
+      limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
       messageThreadId: null,
     });
-    // The 3 000-character window walks back from the newest entry: #99, #96 and #95 fit, the
-    // 2 000-character #94 does not.
-    expect(result.durableMessage).toContain("#96 ");
+    expect(result.durableMessage).toContain("#94 ");
     expect(result.durableMessage).toContain("слой ограничений снят");
-    expect(result.durableMessage).not.toContain("#94 ");
     expect(result.durableMessage.match(/#99 /gu)).toHaveLength(1);
     expect(result.durableMessage.indexOf("#96 ")).toBeLessThan(
       result.durableMessage.indexOf("#99 "),
     );
+  });
+
+  // 25 November 2026, Дизраптим: a 12 KB answer of Mia right before the current message emptied
+  // the window, so the next turn saw neither the request nor that it was answered and answered it
+  // again; a later turn lost the game board behind an 11 KB answer the same way.
+  it("shortens a long entry in the recent window instead of stopping at it", async () => {
+    const deps = dependencies("90");
+    const dossier = "z".repeat(12_000);
+    deps.journal.listRecent.mockResolvedValue([
+      entry("97", "O . O / . X . / . . X"),
+      entry("98", "вываливай всё что есть"),
+      { ...entry("99", dossier), actorKind: "agent_self" },
+    ]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare(input);
+
+    expect(result.durableMessage).toContain("#97 ");
+    expect(result.durableMessage).toContain("O . O");
+    expect(result.durableMessage).toContain("вываливай всё что есть");
+    expect(result.durableMessage).toContain("#99 ");
+    expect(result.durableMessage).not.toContain(dossier);
+    const kept = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS;
+    expect(result.durableMessage).toContain(`ещё знаков: ${12_000 - kept}`);
+  });
+
+  it("stops the recent window at its character budget, newest entries first", async () => {
+    const deps = dependencies("90");
+    const long = (sequence: number) => entry(String(sequence), "w".repeat(5_000));
+    deps.journal.listRecent.mockResolvedValue(
+      Array.from({ length: 9 }, (_, index) => long(90 + index)),
+    );
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare(input);
+
+    // Each shortened entry costs about the entry cap; the budget holds that many, newest kept.
+    const fits = Math.floor(
+      TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS /
+        (TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS + 120),
+    );
+    expect(result.durableMessage).toContain(`#${99 - fits} `);
+    expect(result.durableMessage).not.toContain(`#${98 - fits} `);
+  });
+
+  it("counts the left-out text of a shortened entry in characters, not UTF-16 units", async () => {
+    const deps = dependencies("90");
+    const emoji = "😀".repeat(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS / 2 + 1);
+    deps.journal.listRecent.mockResolvedValue([entry("99", emoji)]);
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+    expect(result.durableMessage).toContain("ещё знаков: 1]");
+  });
+
+  // Codex review, 25 November 2026: an entry both unseen and in the window came in only in full,
+  // and when the full text did not fit the timeline the shortened one was lost with it.
+  it("keeps a reply target shortened when its full text cannot fit the timeline", async () => {
+    const deps = dependencies("100");
+    const huge = { ...entry("102", "x".repeat(BUDGET)), telegramMessageId: "102" };
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [huge],
+      omittedBeforeSequence: null,
+    });
+    deps.journal.listRecent.mockResolvedValue([huge]);
+    const result = await createTelegramGroupTurnContextPreparer(deps)({
+      ...input,
+      currentEntryId: "entry-105",
+      currentSequence: "105",
+      replyToSequenceId: "102",
+    });
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
+    expect(result.durableMessage).toContain("#102 ");
+    expect(result.durableMessage).toContain("ещё знаков:");
+    expect(result.currentMessageEnvelope).not.toContain('"replyTargetUnavailable":true');
   });
 
   it("renders timeline stamps in the turn timezone and remembers the clock it used", async () => {
@@ -329,7 +411,7 @@ describe("Telegram group turn context", () => {
       limit: 99,
     });
     expect(result.durableMessage).toContain("Личный контекст");
-    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.durableMessage.length).toBeLessThanOrEqual(BUDGET);
     expect(result.visibleEntryIds).toEqual([
       "00000000-0000-4000-8000-000000000098",
       input.currentEntryId,
@@ -400,7 +482,9 @@ describe("Telegram group turn context", () => {
       messageThreadId: null,
     });
     // The recent window is the only bootstrap-style read of an existing session.
-    expect(deps.journal.listRecent).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+    expect(deps.journal.listRecent).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES }),
+    );
     expect(result.durableMessage).not.toBeNull();
     if (!result.durableMessage) throw new Error("Test expected a durable group message");
     expect(result.durableMessage).toContain("Новое сообщение участника");

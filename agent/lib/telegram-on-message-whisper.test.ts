@@ -14,6 +14,8 @@
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
 
+import { TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS } from "../config.js";
+
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 import { repositories, telegramContext } from "./telegram-on-message.test-fixtures.js";
 
@@ -286,7 +288,9 @@ describe("createTelegramMessageHandler whisper", () => {
   ])("answers a reply to %s within the budget, naming what it lacks", async (_, text, quote) => {
     const repository = familyGroup();
     const handler = createTelegramMessageHandler(repository);
-    const message = whisper("/whisper что это?");
+    // A long whisper (escaped six times) leaves the target and fragment no room unless they are
+    // shortened to fit the timeline's reserve.
+    const message = whisper(`/whisper ${"<".repeat(2_000)}`);
     const reply: TelegramMessage = {
       ...message,
       raw: {
@@ -308,9 +312,15 @@ describe("createTelegramMessageHandler whisper", () => {
 
     const result = await handler(telegramContext().context, reply);
 
-    expect(result?.message?.length).toBeLessThanOrEqual(12_000);
+    expect(result?.message?.length).toBeLessThanOrEqual(TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS);
+    if (quote !== undefined) {
+      expect(result?.message).not.toContain("\\u003c".repeat(1_024 * 2));
+    }
     if (text === undefined) expect(result?.message).toContain('"replyTargetUnavailable":true');
-    else expect(result?.message).toContain("replyTargetSnapshot");
+    else {
+      expect(result?.message).toContain("replyTargetSnapshot");
+      expect(result?.message).toContain("replyQuotedText");
+    }
   });
 
   it("gives the whisper memory without consuming the group's skill hint", async () => {
