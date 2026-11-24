@@ -9,9 +9,10 @@ Never generate an image merely to decorate an answer.
 ## Writing the prompt
 
 The user asks in Russian; the prompt is written in English. Translate the whole request: keep
-every person, object, detail and wish the user named, and do not invent characters, objects,
-brands, slogans or story elements. For a short request add only details that make the requested
-picture better.
+every person, object, detail and wish the user named. A detailed request is drawn as given, with
+no characters, objects, brands or story added. A short request is filled out with what suits its
+purpose: people doing the thing, details of the place, a mood; but never with text or data the
+user did not give (rule 4).
 
 1. Write plain sentences in this order: scene and background; main subject; key details;
    composition (where things sit in the frame, the viewpoint); style or medium; lighting and mood;
@@ -21,12 +22,14 @@ picture better.
    in bold white letters. In a new picture, any other text it could get by itself (signs, labels,
    screens, packaging) is either given the same way or forbidden. Do not spell words letter by
    letter.
-3. Brands are described in words (a red soda can, a white running sneaker) with: No logos, no brand
-   names, blank labels. This holds when the user names the brand too. A brand name is written only
-   when the user asks for the name itself to appear; then the prompt says only No logos. Famous
-   people and named characters are described by their looks, not by name.
-4. Infographics and cards use only the numbers and labels the user gave or a tool returned, each
-   listed with its place, then: No other numbers or labels.
+3. A brand the user named is drawn as it is, name and logo included. If the service refuses that
+   prompt, try once more with the brand described in words (a red soda can) and: No logos, no
+   brand names, blank labels. Brands you would add on your own are described that way from the
+   start. Famous people and named characters are described by their looks, not by name.
+4. Add nothing that reads as data or text beyond what the user gave or a tool returned: no charts,
+   scales or numbers for values nobody named, and no words of your own unless the user asked you
+   to come up with them. Infographics and cards list every given number and label with its place,
+   then: No other numbers or labels.
 5. Constraints for a new picture, each a separate sentence: No other text. No watermark.
 6. Use `size=auto` and `background=auto` unless the user names a format or a transparent
    background. Always pass `quality=auto`: the server sets the quality itself.
