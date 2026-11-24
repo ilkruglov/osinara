@@ -9,13 +9,19 @@
  * - Unsupported model capability returns a stable tool result before file or provider access.
  * - Non-image and provider-oversized files fail before a paid model call.
  * - Provider failures are normalized for persisted and ephemeral Telegram images.
+ * - The vision call carries the seen/guessed instructions with every question, except a caller whose
+ *   question sets its own format (the browser's JSON), which the inspector passes through.
  */
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 
 import { VISION_MAX_FILE_BYTES } from "../../config.js";
 import { AppError } from "../app-error.js";
-import { createWorkspaceImageInspector } from "./workspace-image-inspection.js";
+import {
+  analyzeWithVision,
+  createWorkspaceImageInspector,
+  VISION_ANSWER_INSTRUCTIONS,
+} from "./workspace-image-inspection.js";
 
 const auth = {
   familyId: "family-1",
@@ -586,5 +592,64 @@ describe("createWorkspaceImageInspector", () => {
         sideEffectStatus: "not_started",
       },
     });
+  });
+});
+
+describe("analyzeWithVision", () => {
+  // 22 November 2026: asked which meme a sweater came from, vision named two different memes as
+  // fact within a minute, and Mia answered with the second one as if it were seen.
+  const model = { modelId: "vision" } as never;
+  const input = { bytes: PNG_BYTES, mediaType: "image/png", question: "Кто на картинке?" };
+
+  it("sends the question and the image to the model with the seen/guessed instructions", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "Видно: ..." });
+    await expect(analyzeWithVision(input, { model, run: run as never })).resolves.toBe(
+      "Видно: ...",
+    );
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          {
+            content: [
+              { text: "Кто на картинке?", type: "text" },
+              { data: PNG_BYTES, mediaType: "image/png", type: "file" },
+            ],
+            role: "user",
+          },
+        ],
+        model,
+        system: VISION_ANSWER_INSTRUCTIONS,
+      }),
+    );
+  });
+
+  it("leaves the format to a question that sets its own", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "{}" });
+    await analyzeWithVision({ ...input, questionSetsFormat: true }, { model, run: run as never });
+    expect(run.mock.calls[0]![0]).not.toHaveProperty("system");
+  });
+
+  it("passes the browser's own format through the inspector", async () => {
+    const analyze = vi.fn().mockResolvedValue("{}");
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      authorizeScope,
+      supportsImageInput: true,
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: PNG_BYTES,
+        file: { mediaType: "image/png", path: "shots/page.png" },
+        workspaceId: "workspace-1",
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+    });
+    await inspect(auth, {
+      path: "shots/page.png",
+      question: "JSON",
+      questionSetsFormat: true,
+      scope: "personal",
+    });
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ questionSetsFormat: true }));
   });
 });

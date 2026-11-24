@@ -89,7 +89,7 @@ export const MEMORY_EXACT_DUPLICATE_HANDLING =
   "Точное совпадение сервер может записать как reinforcement. Не объединяй и не удаляй память из-за похожего поиска; изменяй конкретный `memoryRef` только по явному запросу.";
 
 export const IMAGE_INSPECTION_CONTRACT =
-  "Изображение анализируй только через `inspect_workspace_image`: передай ровно один источник, разрешённый scope и конкретный question. Vision видит вопрос и bytes, но не историю. До успеха не описывай изображение; `AGENT_WORKSPACE_IMAGE_INPUT_INVALID` исправляй по ошибке.";
+  "Изображение анализируй только через `inspect_workspace_image`: передай ровно один источник, разрешённый scope и конкретный question. Vision видит вопрос и bytes, но не историю. До успеха не описывай изображение; `AGENT_WORKSPACE_IMAGE_INPUT_INVALID` исправляй по ошибке. Предположения vision это гипотезы: подтверди источником или назови догадкой.";
 
 export const SEND_WORKSPACE_FILE_RULES =
   "Файл отправляй по явной просьбе только через `send_workspace_file` с актуальным относительным path. `photo` выбирай лишь для показа изображения, иначе `document`; короткую подпись передавай в caption, длинный текст — отдельным сообщением.";

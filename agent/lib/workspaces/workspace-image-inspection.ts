@@ -4,8 +4,16 @@
  * Exports:
  * - `createWorkspaceImageInspector`: validates and submits authorized image bytes.
  * - `inspectWorkspaceImage`: production server-configured protocol-native vision inspector.
+ * - `VISION_ANSWER_INSTRUCTIONS`, `analyzeWithVision`: what the vision model is told with a question.
+ *
+ * Key construct:
+ * - Vision answers keep what is seen apart from what is guessed. On 22 November 2026, asked which
+ *   meme a sweater came from, vision named two different memes as fact within a minute, and Mia
+ *   answered with the second one as if it were seen; the core rule «не называй догадку фактом»
+ *   cannot work when the tool hands over a guess as a fact. A caller whose question sets its own
+ *   answer format (the browser asks for strict JSON) says so with `questionSetsFormat`.
  */
-import { generateText } from "ai";
+import { generateText, type LanguageModel } from "ai";
 
 import { visionModel } from "../model-registry.js";
 import { modelProviderConfig } from "../model-provider-config.js";
@@ -25,6 +33,34 @@ interface ImageAnalysisInput {
   bytes: Uint8Array;
   mediaType: string;
   question: string;
+  /** The question prescribes the answer's format itself, so the sections are not asked for. */
+  questionSetsFormat?: boolean;
+}
+
+export const VISION_ANSWER_INSTRUCTIONS =
+  "Отвечай на вопрос по изображению в двух разделах. «Видно»: только то, что прямо есть на картинке: люди и предметы, одежда, цвета, расположение, видимый текст дословно. «Предположения»: всё, что выводится, а не видно: кто это, что за персонаж или мем, бренд, модель, место, время, назначение; каждое со словом «возможно» и с признаками, на которых оно держится. Не выдавай предположение за факт и не называй уверенность выше, чем дают признаки. Если предполагать нечего, так и напиши.";
+
+/** One vision call: the question and the image, with the sections unless the question sets a format. */
+export async function analyzeWithVision(
+  input: ImageAnalysisInput,
+  vision: { model: LanguageModel; run: typeof generateText },
+): Promise<string> {
+  const result = await vision.run({
+    ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+    maxRetries: 0,
+    messages: [
+      {
+        content: [
+          { text: input.question, type: "text" },
+          { data: input.bytes, mediaType: input.mediaType, type: "file" },
+        ],
+        role: "user",
+      },
+    ],
+    model: vision.model,
+    ...(input.questionSetsFormat === true ? {} : { system: VISION_ANSWER_INSTRUCTIONS }),
+  });
+  return result.text;
 }
 
 interface WorkspaceImageInspectorDependencies extends WorkspaceImageReaderDependencies {
@@ -93,6 +129,7 @@ export function createWorkspaceImageInspector(dependencies: WorkspaceImageInspec
     input: {
       abortSignal?: AbortSignal;
       question: string;
+      questionSetsFormat?: boolean;
     } & WorkspaceImageLocation,
   ) => {
     if (!dependencies.supportsImageInput) {
@@ -111,6 +148,7 @@ export function createWorkspaceImageInspector(dependencies: WorkspaceImageInspec
       bytes,
       mediaType,
       question: input.question,
+      ...(input.questionSetsFormat === true ? { questionSetsFormat: true } : {}),
     });
     if (!analysis.trim()) {
       throw new AppError(
@@ -130,21 +168,7 @@ export const inspectWorkspaceImage = createWorkspaceImageInspector({
         "Конфигурация vision-модели не соответствует заявленной поддержке изображений",
       );
     }
-    const result = await generateText({
-      ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
-      messages: [
-        {
-          content: [
-            { text: input.question, type: "text" },
-            { data: input.bytes, mediaType: input.mediaType, type: "file" },
-          ],
-          role: "user",
-        },
-      ],
-      maxRetries: 0,
-      model: visionModel,
-    });
-    return result.text;
+    return await analyzeWithVision(input, { model: visionModel, run: generateText });
   },
   ...workspaceImageReaderDependencies,
   supportsImageInput: modelProviderConfig.agent.models.vision.supportsImageInput,

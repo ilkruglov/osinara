@@ -34,7 +34,14 @@ export const browserTools = createBrowserTools({
   sandboxSessionId: (ctx) => sandboxSessionId(ctx),
   saveProfileField: saveFormProfileField,
   async vision(auth, scope, path, question, abortSignal) {
-    const result = await inspectWorkspaceImage(auth, { abortSignal, path, question, scope });
+    // The browser's question asks for strict JSON, not the seen/guessed sections.
+    const result = await inspectWorkspaceImage(auth, {
+      abortSignal,
+      path,
+      question,
+      questionSetsFormat: true,
+      scope,
+    });
     return "supported" in result && result.supported === false ? null : result.analysis;
   },
 });
