@@ -9,13 +9,17 @@
  *   key that names the workspace; a removed file is written again under a fresh key.
  * - A concurrent first write loses the key race and takes the winner's record.
  * - No photo, a Telegram failure and a storage failure each get their own reason and leave the
- *   others intact. Input needs exactly one handle per participant.
+ *   others intact. Several handles for one person are cleaned like the repository does, looked up
+ *   one by one from the most exact, and the one that found the person is reported.
  */
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "./app-error.js";
-import { createFetchTelegramAvatarsTool } from "./tools/fetch_telegram_avatars.js";
+import {
+  AVATAR_USAGE_NOTE,
+  createFetchTelegramAvatarsTool,
+} from "./tools/fetch_telegram_avatars.js";
 
 const FILE = {
   byteSize: 12_000,
@@ -172,8 +176,9 @@ describe("fetch_telegram_avatars", () => {
       ],
       scope: "group",
     });
+    // The tool cleans "@" as the repository would.
     expect(deps.participants.findByHandle).toHaveBeenCalledWith("conversation-1", {
-      username: "@vadim_k",
+      username: "vadim_k",
     });
     expect(deps.participants.findByHandle).toHaveBeenCalledWith("conversation-1", {
       telegramUserId: "5",
@@ -188,7 +193,7 @@ describe("fetch_telegram_avatars", () => {
       }),
     );
     expect(deps.source.download).toHaveBeenCalledTimes(2);
-    expect((result as { note: string }).note).toContain("карикатур");
+    expect((result as { note: string }).note).toBe(AVATAR_USAGE_NOTE);
   });
 
   it("skips the download for a photo the workspace still holds, and rewrites a removed one under a fresh key", async () => {
@@ -300,13 +305,76 @@ describe("fetch_telegram_avatars", () => {
     });
   });
 
-  it("requires exactly one handle per participant", async () => {
+  it("looks a participant up by the most exact handle given, then by the others", async () => {
+    // 25 November 2026: the model sent the name and the username together and lost a step on
+    // INPUT_INVALID. The repository matches any given field, so each handle is looked up alone:
+    // the most exact first, and a miss (a guessed username, a bare "@") falls back to the next.
+    const deps = dependencies();
+    const tool = createFetchTelegramAvatarsTool(deps as never);
+    const result = (await tool.execute(
+      {
+        participants: [
+          { displayName: "Vadim", username: "vadim_k" },
+          { displayName: "User 5", telegramUserId: "5", username: "ilya" },
+          { displayName: "Vadim", username: "vadim" },
+          { displayName: "Vadim", username: "@" },
+        ],
+      },
+      context(),
+    )) as { avatars: { telegramUserId: string }[]; missing: unknown[] };
+    expect(deps.participants.findByHandle.mock.calls.map(([, handle]) => handle)).toEqual([
+      { username: "vadim_k" },
+      { telegramUserId: "5" },
+      { username: "vadim" },
+      { displayName: "Vadim" },
+      { displayName: "Vadim" },
+    ]);
+    expect(result.avatars.map((avatar) => avatar.telegramUserId)).toEqual(["7", "5", "7", "7"]);
+    expect(result.missing).toEqual([]);
+  });
+
+  it("names the handle that found the person, or the first one given", async () => {
+    // A bare "@" is no handle at all; a person found by a later field is reported by that field,
+    // so the model can tell who has no photo and who is not in this chat.
+    const deps = dependencies();
+    deps.source.lookup.mockResolvedValue({ status: "none" });
+    const tool = createFetchTelegramAvatarsTool(deps as never);
+    const result = (await tool.execute(
+      {
+        participants: [
+          { displayName: "Vadim", username: "@" },
+          { displayName: "Vadim", username: "ghost" },
+          { displayName: "Nobody", username: "@nobody" },
+        ],
+      },
+      context(),
+    )) as { missing: unknown[] };
+    expect(deps.participants.findByHandle.mock.calls.map(([, handle]) => handle)).toEqual([
+      { displayName: "Vadim" },
+      { username: "ghost" },
+      { displayName: "Vadim" },
+      { username: "nobody" },
+      { displayName: "Nobody" },
+    ]);
+    expect(result.missing).toEqual([
+      { reason: "no_photo_or_private", requested: "Vadim" },
+      { reason: "no_photo_or_private", requested: "Vadim" },
+      { reason: "unknown_participant", requested: "nobody" },
+    ]);
+  });
+
+  it("requires a handle for every participant", async () => {
     const tool = createFetchTelegramAvatarsTool(dependencies() as never);
-    await expect(
-      tool.execute({ participants: [{ telegramUserId: "5", username: "x" }] }, context()),
-    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_AVATARS_INPUT_INVALID" });
-    await expect(tool.execute({ participants: [{}] }, context())).rejects.toMatchObject({
-      code: "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
-    });
+    // Fields that are empty once "@" and spaces are gone name nobody, as in the repository.
+    for (const participant of [
+      {},
+      { username: "@" },
+      { displayName: "   " },
+      { username: " @ " },
+    ]) {
+      await expect(tool.execute({ participants: [participant] }, context())).rejects.toMatchObject({
+        code: "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
+      });
+    }
   });
 });

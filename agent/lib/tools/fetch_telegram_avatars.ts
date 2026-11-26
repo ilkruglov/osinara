@@ -8,11 +8,15 @@
  * Key constructs:
  * - A person is named the way the chat shows them (name, username or Telegram id); every handle,
  *   the id included, resolves through the current conversation's participants, never across chats.
+ *   Several handles for one person are fine: each is looked up alone, the most exact first (id,
+ *   then username, then name), and a miss falls back to the next; the repository matches any given
+ *   field, so two fields at once could name two people. A handle empty once spaces and "@" are gone
+ *   is none, and `missing` names the handle that found the person.
  * - The photo lands in the current workspace as `avatars/<telegramUserId>-<fileUniqueId>.jpg`:
  *   a changed avatar is a new file next to the old one, an unchanged one is never downloaded
  *   twice, and the replay key carries the workspace so one chat's file is never another's.
- * - An avatar is a photo of a real person: the result reminds the model to draw an illustration
- *   or a friendly caricature, never a photorealistic likeness and never something demeaning.
+ * - An avatar is a photo of a real person: the style follows the request, photorealism included
+ *   (owner, 25 November 2026), but never something demeaning and never passed off as a real photo.
  * - One person failing does not fail the others, and the reason says whether the photo is
  *   absent, Telegram was unavailable or the workspace write failed.
  */
@@ -38,7 +42,7 @@ type AnyToolDefinition = ToolDefinition<any, any>;
 
 const AVATAR_MEDIA_TYPE = "image/jpeg";
 export const AVATAR_USAGE_NOTE =
-  "Аватарка это фото живого человека: используй её только как референс для иллюстрации или дружеской карикатуры, не для фотореалистичного портрета и не для унижения. Кто в missing с причиной no_photo_or_private, у того фото нет или оно скрыто: рисуй по описанию, не выдумывая внешность; telegram_unavailable можно повторить позже один раз.";
+  "Аватарка это фото живого человека: стиль по просьбе, без названного стиля реалистичный снимок; не для унижения, и картинку не выдавай за настоящее фото. Кто в missing с причиной no_photo_or_private, у того фото нет или оно скрыто: рисуй по описанию, не выдумывая внешность; telegram_unavailable можно повторить позже один раз.";
 
 const participantSchema = z
   .object({
@@ -63,11 +67,28 @@ const inputSchema = z
       .array(participantSchema)
       .min(1)
       .max(IMAGE_SOURCES_MAX)
-      .describe(`До ${IMAGE_SOURCES_MAX} участников этого чата; у каждого ровно одно из полей`),
+      .describe(
+        `До ${IMAGE_SOURCES_MAX} участников этого чата; у каждого хотя бы одно из полей, при нескольких ищется по самому точному, при промахе по следующему`,
+      ),
   })
   .strict();
 
 type ParticipantHandle = z.infer<typeof participantSchema>;
+
+/**
+ * Each given handle alone, the most exact first: id, then username, then name. A handle is cleaned
+ * as the repository cleans it (spaces and a leading "@" go), and one left empty is no handle.
+ */
+function handlesByExactness(participant: ParticipantHandle): ParticipantHandle[] {
+  const telegramUserId = participant.telegramUserId?.trim();
+  const username = participant.username?.trim().replace(/^@/u, "").trim();
+  const displayName = participant.displayName?.trim();
+  return [
+    ...(telegramUserId ? [{ telegramUserId }] : []),
+    ...(username ? [{ username }] : []),
+    ...(displayName ? [{ displayName }] : []),
+  ];
+}
 
 interface FetchTelegramAvatarsDependencies {
   participants: {
@@ -111,23 +132,16 @@ export interface FetchedAvatar {
 export type MissingAvatarReason =
   "no_photo_or_private" | "storage_failed" | "telegram_unavailable" | "unknown_participant";
 
-function parseInput(input: unknown): z.infer<typeof inputSchema> {
+function parseInput(input: unknown): { participants: ParticipantHandle[][] } {
   const parsed = inputSchema.safeParse(input);
-  if (
-    !parsed.success ||
-    parsed.data.participants.some(
-      (participant) =>
-        [participant.displayName, participant.telegramUserId, participant.username].filter(
-          (value) => value !== undefined,
-        ).length !== 1,
-    )
-  ) {
+  const participants = parsed.success ? parsed.data.participants.map(handlesByExactness) : [];
+  if (!parsed.success || participants.some((handles) => handles.length === 0)) {
     throw new AppError(
       "AGENT_TELEGRAM_AVATARS_INPUT_INVALID",
-      `Укажи до ${IMAGE_SOURCES_MAX} участников, у каждого ровно одно из полей: telegramUserId, username или displayName`,
+      `Укажи до ${IMAGE_SOURCES_MAX} участников, у каждого хотя бы одно из полей: telegramUserId, username или displayName`,
     );
   }
-  return parsed.data;
+  return { participants };
 }
 
 function workspaceScopeOf(auth: WorkspaceAuthorization): WorkspaceScope {
@@ -168,10 +182,10 @@ export function createFetchTelegramAvatarsTool(
   return defineTool({
     description: [
       "Когда использовать: перед картинкой, на которой должны быть узнаваемы участники этого чата (обложка про события чата, карикатура, сцена с ними), чтобы передать их аватарки в generate_image как images-референсы.",
-      `Вход: до ${IMAGE_SOURCES_MAX} участников, каждый по telegramUserId, username или имени из истории чата; доступны только участники текущего разговора.`,
+      `Вход: до ${IMAGE_SOURCES_MAX} участников, каждый по telegramUserId, username или имени из истории чата (при нескольких полях ищется по самому точному: id, username, имя; при промахе по следующему); доступны только участники текущего разговора.`,
       "Результат: для каждого найденного path и scope для images (status cached значит, что файл уже был в workspace); missing перечисляет остальных с причиной: unknown_participant, no_photo_or_private, telegram_unavailable, storage_failed.",
       AVATAR_USAGE_NOTE,
-      "Не использовать: без картинки про этих людей и ради любопытства.",
+      "Не использовать: без картинки про этих людей и ради любопытства. Чьё лицо брать, решает просьба: кто дал своё фото для этой картинки (прислал или указал), того рисуют по фото, если он сам не просит лицо с аватарки.",
     ].join(" "),
     inputSchema,
     async execute(rawInput, ctx) {
@@ -190,8 +204,17 @@ export function createFetchTelegramAvatarsTool(
       const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
       const avatars: FetchedAvatar[] = [];
       const missing: { reason: MissingAvatarReason; requested: string }[] = [];
-      for (const handle of input.participants) {
-        const found = await dependencies.participants.findByHandle(conversationId, handle);
+      for (const handles of input.participants) {
+        // The result names the handle that found the person, or the first one when none did.
+        let handle = handles[0]!;
+        let found: ConversationParticipant | null = null;
+        for (const candidate of handles) {
+          found = await dependencies.participants.findByHandle(conversationId, candidate);
+          if (found !== null) {
+            handle = candidate;
+            break;
+          }
+        }
         if (found === null) {
           missing.push({ reason: "unknown_participant", requested: requested(handle) });
           continue;

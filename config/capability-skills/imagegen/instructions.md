@@ -71,15 +71,25 @@ Sources are reduced to at most 1536 px on the longer side before upload, so fine
 change. With `size: auto` the model picks the proportions, usually those of the source.
 This is generative editing, not exact pixel-preserving retouching.
 
-## Chat participants in a picture
+## Real people in a picture
 
-When the picture should show people from this chat (a cover about chat events, a caricature, a
-scene with them) and `fetch_telegram_avatars` is available here, call it first with up to ten
-participants named as the chat shows them, then pass the returned paths as `images` references. An
-avatar is a photo of a real person: draw an illustration or a friendly caricature, never a
-photorealistic likeness, never something demeaning, and never present the result as a real photo.
-Keep each person recognizable: hairstyle, hair color, glasses, beard and face shape as in the figure.
-The tool's note says what to do about people listed in `missing`.
+The request says where a face comes from. Photos the person sent or pointed at for this picture
+(draw me from this photo, their own snapshots) give the face. For people from this chat with no
+photo here, or when the user asks for avatars, call `fetch_telegram_avatars` first when it is
+available here, with up to ten participants named as the chat shows them, and pass the returned
+paths as references; its note says what to do about people in `missing`. Without it, draw them
+from the user's words without inventing their looks.
+
+- Pass each photo whole and name the person by their place in it: the woman on the right in
+  Figure 1. Do not crop photos yourself.
+- A face from a photo is kept by reference, not by words: Her face and identity are exactly as in
+  Figure 1. Do not describe its eyes, eyebrows, face shape or lips yourself; words pull the face
+  toward a generic one. Features the user names go into the prompt as given.
+- For a person from a photo or from this chat, hair, beard, clothes, glasses and jewellery come
+  from the photos or the user's words only. Invent nothing else about how they look.
+- The style is the one the user asked for. With no style named, a person from a photo is drawn as
+  a realistic photo: natural light, true skin texture.
+- Never draw something demeaning, and never present the result as a real photo.
 
 ## Delivery
 

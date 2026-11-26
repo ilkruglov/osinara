@@ -41,7 +41,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     name: "fetch_telegram_avatars",
     requiresImageGeneration: true,
     usage:
-      "скачивать аватарки участников текущей группы в её workspace как референсы для картинок про них: только иллюстрация или дружеская карикатура",
+      "скачивать аватарки участников текущей группы в её workspace как референсы для картинок про них: стиль по просьбе, без унижения и не выдавая картинку за настоящее фото",
   },
   {
     name: "import_telegram_attachment",
