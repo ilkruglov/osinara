@@ -11,7 +11,7 @@ import { formatCurrentTimeContext } from "./current-time.js";
 import type { ApplicationConversation } from "./conversation-repository.js";
 import type { ConversationAccess, RegisteredGroup } from "./family-access.js";
 import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-context.js";
-import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
+import type { TelegramAttachmentReference } from "./telegram-group-journal-context.js";
 import {
   SESSION_HANDOFF_CARRIED_ATTRIBUTE,
   SESSION_HANDOFF_CARRIED_VALUE,
@@ -30,6 +30,7 @@ import {
   formatTelegramAttachmentReferences,
 } from "./telegram-on-message-context.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
+import { telegramForwardMarker, withForwardMarker } from "./telegram-message-policy.js";
 
 /**
  * Eve 0.40 answers an open question with the raw reply text and drops the prepared envelope
@@ -73,7 +74,7 @@ export function buildTelegramTurnResult(input: {
   conversation: ApplicationConversation;
   forumTopicId: string | null;
   group: RegisteredGroup | null;
-  lazyAttachment: (TelegramGroupAttachmentSummary & { telegramMessageId: string }) | null;
+  lazyAttachments: readonly TelegramAttachmentReference[];
   memoryContext: readonly string[];
   message: TelegramMessage;
   pendingDelivery: { context: string; cursor: string } | null;
@@ -101,19 +102,21 @@ export function buildTelegramTurnResult(input: {
   if (input.storedAttachments.length > 0) {
     context.push(formatStoredTelegramAttachments(input.storedAttachments));
   }
-  if (input.lazyAttachment)
-    context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
+  if (input.lazyAttachments.length > 0)
+    context.push(formatTelegramAttachmentReferences(input.lazyAttachments));
   if (input.pendingDelivery) context.push(input.pendingDelivery.context);
   if (input.shownDuringTurn) context.push(alreadySeenTurnContext(input.shownDuringTurn));
   if (input.shownEarlierInSeries)
     context.push(alreadySeenSeriesContext(input.shownEarlierInSeries));
   if (input.turnInterjectionMarker)
     context.push(turnInterjectionMarkerContext(input.turnInterjectionMarker));
+  const answersOpenQuestion = envelopeReplacedByReplyText(input.message, input.replyHandling);
   // The envelope carries the quote on an ordinary turn; a second copy would read as another quote.
-  if (input.replyQuotedText && envelopeReplacedByReplyText(input.message, input.replyHandling)) {
+  if (input.replyQuotedText && answersOpenQuestion) {
     context.push(formatTelegramReplyQuote(input.replyQuotedText));
   }
   context.push(...input.memoryContext);
+  const forward = telegramForwardMarker(input.message.raw);
 
   return {
     auth: {
@@ -187,5 +190,9 @@ export function buildTelegramTurnResult(input: {
     continuationToken: input.appSession.continuationToken,
     message: input.turnContext.durableMessage,
     ...(input.replyHandling === undefined ? {} : { replyHandling: input.replyHandling }),
+    // A forward answering Mia's question: Eve answers with this text, the mark of the forward kept.
+    ...(forward !== null && answersOpenQuestion
+      ? { replyText: withForwardMarker(forward, input.message.text || input.message.caption) }
+      : {}),
   };
 }

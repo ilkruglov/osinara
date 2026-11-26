@@ -62,3 +62,20 @@ describe("telegramForumTopicId", () => {
     );
   });
 });
+
+describe("telegramMessageContent", () => {
+  it("marks a forward as someone else's words, a captionless one too", () => {
+    const forwarded = {
+      ...message({}),
+      raw: {
+        date: 1_700_000_000,
+        forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+      },
+    };
+    expect(telegramMessageContent({ ...forwarded, text: "встреча в пять" })).toBe(
+      "[переслано от Аноним]\nвстреча в пять",
+    );
+    expect(telegramMessageContent({ ...forwarded, text: "" })).toBe("[переслано от Аноним]");
+    expect(telegramMessageContent(message({}))).toBe("сообщение");
+  });
+});

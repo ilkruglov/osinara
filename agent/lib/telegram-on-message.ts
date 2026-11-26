@@ -20,54 +20,31 @@ import type {
   TelegramMessage,
 } from "eve/channels/telegram";
 
-import type { StoredTelegramAttachment } from "./attachments/telegram-workspace-attachments.js";
-import { AppError, isAppError } from "./app-error.js";
-import { logProcessMemory } from "./process-memory.js";
 import { bindTelegramConversationTimeline } from "./telegram-conversation-timeline.js";
 import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
-import { CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES } from "./memory-config.js";
 import { handleTelegramEnrollmentBoundary } from "./telegram-enrollment-boundary.js";
-import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
   classifyTelegramInboundMedia,
   isMessageAddressedToBot,
   isTelegramSlashCommand,
+  telegramMessageText,
 } from "./telegram-message-policy.js";
 import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
 import { telegramForumTopicId } from "./telegram-group-message-storage.js";
 import { deliverPendingMemoryThreadNotice } from "./telegram-memory-thread-notice.js";
 import { verifiedTelegramProfileSignals } from "./telegram-profile-subjects.js";
 import { sameTelegramGroupPolicy } from "./telegram-group-policy-snapshot.js";
-import {
-  telegramAttachmentScope,
-  telegramProactiveDeliveryAuthorization,
-  telegramProfileName,
-  telegramSessionScope,
-  telegramWorkspaceAuthorization,
-} from "./telegram-on-message-context.js";
-import { buildTelegramTurnResult } from "./telegram-turn-result.js";
-import {
-  telegramBaseContinuationToken,
-  telegramReplyContinuationTokens,
-} from "./telegram-reply-routing.js";
+import { persistPrivateAttachments, prepareTelegramTurn } from "./telegram-turn-preparation.js";
+import { telegramReplyContinuationTokens } from "./telegram-reply-routing.js";
 import { authorizeTelegramReply } from "./telegram-reply-authorization.js";
 import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
-import { telegramReplyTargetProjection } from "./telegram-reply-target-snapshot.js";
 import {
   productionTelegramMessageRepositories,
   type TelegramMessageRepositories,
 } from "./telegram-on-message-repositories.js";
-import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
-import { telegramInboundActor, telegramSenderTag } from "./telegram-inbound-actor.js";
-import { readTelegramSeriesMarker } from "./telegram-message-series.js";
-import {
-  formatPendingMessagesContext,
-  readTelegramPendingMarker,
-} from "./telegram-pending-messages.js";
-import { readTelegramUpdateMarker } from "./telegram-update-marker.js";
-import { createTurnInterjectionMarker } from "./turn-interjection/turn-interjection-block.js";
-import { logTurnTiming } from "./turn-timing.js";
+import { telegramInboundActor } from "./telegram-inbound-actor.js";
+import { readTelegramSeriesMarker, wasAddressedInSeries } from "./telegram-message-series.js";
 import { prepareTelegramWhisperTurn } from "./whisper/telegram-whisper-turn.js";
 import {
   isTelegramEphemeralMessage,
@@ -101,7 +78,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
             message,
           });
     }
-    const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
+    const dispatchText = telegramMessageText(message);
     const routingText = Object.hasOwn(message.raw, "voice") ? message.caption : dispatchText;
     let addressed = isMessageAddressedToBot({ ...message, text: routingText }, botUsername);
     // A series marker comes from the durable ingress, never from Telegram: earlier messages of a
@@ -109,6 +86,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const series = readTelegramSeriesMarker(message.raw);
     const seriesContext = series?.role === "context";
     if (series?.role === "current" && series.addressed) addressed = true;
+    // A member its series returned to the queue alone keeps the address of the caption that called Mia.
+    if (wasAddressedInSeries(message.raw)) addressed = true;
     const unsupportedGroupSlashCommand =
       message.chat.type !== "private" && isTelegramSlashCommand(routingText);
     let verifiedReplyRoute: string | undefined;
@@ -318,6 +297,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           )
         : null;
     const lazyAttachment = currentAttachment ?? replyAttachment;
+    // An earlier message of a series starts no turn, but its file must be there for the last one's.
+    if (seriesContext) await persistPrivateAttachments({ decision, group, message, repositories });
     if (!addressed || journalDuplicate || seriesContext) {
       if (
         !addressed &&
@@ -352,9 +333,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       verifiedReplyRoute,
     });
     if (!replyAuthorization.accepted) return null;
-    const replyHandling = replyAuthorization.replyHandling;
-    const resumesPendingTask = replyAuthorization.resumesPendingTask;
-    verifiedReplyRoute = replyAuthorization.verifiedReplyRoute;
 
     // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
     // proved that this accepted message will continue into an agent turn.
@@ -398,253 +376,24 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       }
     }
 
-    let storedAttachments: StoredTelegramAttachment[] = [];
-    if (message.attachments.length > 0 && message.chat.type === "private") {
-      try {
-        storedAttachments = await repositories.attachments.persist({
-          attachments: message.attachments,
-          auth: telegramWorkspaceAuthorization(decision, group, message),
-          chatId: message.chat.id,
-          messageId: message.messageId,
-          scope: telegramAttachmentScope(decision),
-        });
-      } catch (error) {
-        // The channel boundary informs the user, while rethrowing preserves terminal ingress failure.
-        if (isAppError(error)) await ctx.telegram.sendMessage(error.message);
-        throw error;
-      }
-    }
-    // One instant anchors session rotation, pending-delivery visibility, and model-visible time.
-    const resolvedSessionScope = telegramSessionScope(decision);
-    const verifiedForumTopicId = forumTopicId === null ? null : Number(forumTopicId);
-    const baseContinuationToken = group
-      ? resumesPendingTask
-        ? telegramBaseContinuationToken(message, verifiedReplyRoute ?? exactReplyRoute)
-        : groupCanonicalContinuationToken(group.groupId, verifiedForumTopicId)
-      : telegramBaseContinuationToken(message, verifiedReplyRoute);
-    const appSession = await repositories.session.prepareTurn({
-      baseContinuationToken,
-      familyId: access.familyId,
-      kind: resumesPendingTask ? "task" : "canonical",
-      now: turnStartedAt,
-      telegramForumTopicId: verifiedForumTopicId,
-      ...resolvedSessionScope,
-    });
-    const deliveryAuthorization = telegramProactiveDeliveryAuthorization(decision, message);
-    const pendingDeliveries = deliveryAuthorization
-      ? await repositories.proactiveDeliveries.listPendingContext({
-          ...deliveryAuthorization,
-          applicationSessionId: appSession.id,
-          now: turnStartedAt,
-        })
-      : null;
-    // One verification of the reply target serves both projections: its full text is needed only
-    // when the journal has no target (a journaled one joins the timeline through its reply chain),
-    // the selected fragment whenever there is one.
-    const replyTarget = telegramReplyTargetProjection(message);
-    const replyTargetSnapshot = inboundTimeline?.replyTargetUnavailable
-      ? replyTarget.snapshot
-      : null;
-    const replyQuotedText = replyTarget.quotedText;
-    // Only this author's own journaled messages can be named; a foreign id resolves to nothing.
-    const seriesSequenceIds =
-      series?.role === "current" && series.telegramMessageIds.length > 0
-        ? await repositories.journal.findSeriesSequences({
-            actorId: actor.actorId,
-            conversationId: conversation.id,
-            telegramMessageIds: series.telegramMessageIds,
-          })
-        : [];
-    // Local civil time is a convenience for natural answers and the clock of the timeline stamps;
-    // a lookup failure must not cost the turn. The sender's own timezone wins, else the owner's.
-    let timezone: string | null = null;
-    try {
-      timezone = await repositories.currentTime.findTurnTimezone(
-        access.userId ?? null,
-        access.familyId,
-      );
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    }
-    // The thread of the session the turn limit just retired: summarized now, shown once by the
-    // context preparer below. One turn per fifty waits for it; a miss is a cold start, as before.
-    if (appSession.handoff && inboundTimeline) {
-      await repositories.sessionHandoff.prepare({
-        applicationSessionId: appSession.id,
-        beforeSequence: inboundTimeline.sequenceId,
-        conversationId: group ? null : conversation.id,
-        groupId: group?.groupId ?? null,
-        messageThreadId: forumTopicId,
-        retiredSessionStartedAt: appSession.handoff.retiredSessionStartedAt,
-        timezone,
-      });
-    }
-    const senderTag = telegramSenderTag(message);
-    const preparedGroupTurnContext = inboundTimeline
-      ? await repositories.groupContext.prepare({
-          applicationSessionId: appSession.id,
-          attachmentReferenceAccess:
-            group?.type === "family_private"
-              ? "all"
-              : group?.type === "external"
-                ? {
-                    images: externalAllowlist?.has("inspect_workspace_image") === true,
-                    readableText: externalAllowlist?.has("import_telegram_attachment") === true,
-                  }
-                : "none",
-          currentEntryId: inboundTimeline.entryId,
-          currentSenderDisplayName: actor.displayName ?? telegramProfileName(message),
-          ...(senderTag === null ? {} : { currentSenderTag: senderTag }),
-          currentSenderUsername: actor.username,
-          currentSequence: inboundTimeline.sequenceId,
-          ...(group ? {} : { conversationId: conversation.id }),
-          groupId: group?.groupId ?? null,
-          messageText: dispatchText,
-          messageThreadId: forumTopicId,
-          ...(replyQuotedText === null ? {} : { replyQuotedText }),
-          ...(replyTargetSnapshot === null ? {} : { replyTargetSnapshot }),
-          replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
-          replyToSequenceId: inboundTimeline.replyToSequenceId,
-          ...(seriesSequenceIds.length === 0 ? {} : { seriesSequenceIds }),
-          timezone,
-        })
-      : null;
-    if (!preparedGroupTurnContext) {
-      throw new Error(
-        "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
-      );
-    }
-    const groupTurnContext =
-      group && actor.kind === "telegram_user"
-        ? await prepareTelegramMemoryReviewTurn({
-            applicationSessionId: appSession.id,
-            conversationId: conversation.id,
-            currentEntryId: inboundTimeline.entryId,
-            groupId: group.groupId,
-            preparedContext: preparedGroupTurnContext,
-            repositories: {
-              memoryReview: repositories.memoryReview,
-              syncParticipants: (conversationId, entryIds) =>
-                repositories.conversations.syncTimelineParticipants(conversationId, entryIds),
-            },
-          })
-        : preparedGroupTurnContext;
-    if (!group) {
-      // The current participant was synchronized before context preparation. Remaining private
-      // history can exceed the repository's bounded selection contract, so synchronize it in order.
-      if (
-        groupTurnContext.visibleEntryIds.length === 0 ||
-        new Set(groupTurnContext.visibleEntryIds).size !== groupTurnContext.visibleEntryIds.length
-      ) {
-        throw new AppError(
-          "AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID",
-          "Набор записей разговора пуст или содержит повторы",
-        );
-      }
-      const additionalEntryIds = groupTurnContext.visibleEntryIds.filter(
-        (entryId) => entryId !== inboundTimeline.entryId,
-      );
-      for (
-        let offset = 0;
-        offset < additionalEntryIds.length;
-        offset += CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES
-      ) {
-        await repositories.conversations.syncTimelineParticipants(
-          conversation.id,
-          additionalEntryIds.slice(offset, offset + CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES),
-        );
-      }
-    }
-    // Memory travels with the delivery so the cacheable system prefix never changes between turns.
-    const retrievedMemoryContext = await repositories.memoryContext({
-      access,
-      actor: { id: actor.id, kind: actor.kind },
-      applicationSessionId: appSession.id,
-      conversationId: conversation.id,
-      explicitMentionTelegramUserIds: profileSignals.explicitMentionTelegramUserIds,
-      query: dispatchText,
-      replyTelegramUserId: profileSignals.replyTelegramUserId,
-      replyTimelineSequence: inboundTimeline.replyToSequenceId,
-      timelineEntryId: inboundTimeline.entryId,
-      turnStartedAt,
-    });
-    // What the chat said after this message and still waits in the queue, from the durable ingress.
-    const pendingBlock = formatPendingMessagesContext(readTelegramPendingMarker(message.raw));
-    const memoryContext =
-      pendingBlock === null ? retrievedMemoryContext : [...retrievedMemoryContext, pendingBlock];
-    // A running turn of this same conversation may already have seen this message with a tool result.
-    const currentUpdateId = readTelegramUpdateMarker(message.raw);
-    const shownDuringTurn =
-      currentUpdateId !== null
-        ? await repositories.turnInterjections.findDeliveredContentKind(
-            currentUpdateId,
-            appSession.id,
-          )
-        : null;
-    const earlierInSeries = series?.role === "current" ? (series.earlierUpdateIds ?? []) : [];
-    const shownEarlierInSeries =
-      earlierInSeries.length > 0
-        ? [
-            ...(
-              await repositories.turnInterjections.findDeliveredContentKinds(
-                earlierInSeries,
-                appSession.id,
-              )
-            ).values(),
-          ].filter((kind) => kind !== "notice").length
-        : 0;
-    // Messages its author sends while this turn works can reach it only in the trusted zones.
-    const turnInterjectionMarker =
-      currentUpdateId !== null &&
-      !resumesPendingTask &&
-      actor.kind === "telegram_user" &&
-      (group === null || group.type === "family_private")
-        ? createTurnInterjectionMarker()
-        : null;
-    const turnResult = buildTelegramTurnResult({
-      currentUpdateId,
-      shownDuringTurn,
-      shownEarlierInSeries,
-      turnInterjectionMarker,
-      access,
+    return await prepareTelegramTurn({
       actor,
-      appSession,
       conversation,
+      decision,
+      dispatchText,
+      exactReplyRoute,
+      externalAllowlist,
       forumTopicId,
       group,
+      inboundTimeline,
       lazyAttachment,
-      memoryContext,
       message,
-      pendingDelivery: pendingDeliveries,
       profileSignals,
-      profileReplyTimelineSequence: inboundTimeline.replyToSequenceId,
-      replyHandling,
-      replyQuotedText,
-      storedAttachments,
-      timelineEntryId: inboundTimeline.entryId,
-      timezone,
-      turnContext: groupTurnContext,
+      reply: replyAuthorization,
+      repositories,
+      series,
       turnStartedAt,
     });
-    // Inbound preparation ends here; `AGENT_TURN_TIMING` continues inside the Eve turn.
-    const telegramDate = (message.raw as { date?: unknown }).date;
-    logTurnTiming("inbound_prepared", Date.now() - turnStartedAt.getTime(), {
-      sinceTelegramMs: typeof telegramDate === "number" ? Date.now() - telegramDate * 1000 : null,
-    });
-    logProcessMemory();
-    if (!group) return turnResult;
-    if (!turnResult?.auth) {
-      throw new Error(
-        "AGENT_TELEGRAM_TURN_AUTH_MISSING: Не удалось подготовить авторизацию Telegram-turn",
-      );
-    }
-
-    return turnResult;
   };
 }
 

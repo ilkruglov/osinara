@@ -52,6 +52,11 @@ export interface TelegramGroupAttachmentSummary {
   size?: number;
 }
 
+/** An attachment a turn may name, with the Telegram message it came in. */
+export type TelegramAttachmentReference = TelegramGroupAttachmentSummary & {
+  telegramMessageId: string;
+};
+
 export interface TelegramTimelineOmission {
   beforeSequence: string | null;
 }

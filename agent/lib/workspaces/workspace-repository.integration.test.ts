@@ -198,6 +198,52 @@ describeWithDatabase("workspace repository", () => {
     expect(familyInboxRead.file.path).toBe(familyPath);
   });
 
+  // An earlier photo of a series is found later by the prefix of its replay key (25 November 2026).
+  it("finds a scope's binary writes by the prefix of their replay key, oldest first", async () => {
+    const f = await fixture();
+    const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));
+    roots.push(root);
+    const repository = createWorkspaceRepository(root);
+    const binaries = createWorkspaceBinaryRepository(root, repository);
+    const owner = {
+      familyId: f.familyId,
+      groupId: null,
+      groupType: null,
+      role: "owner" as const,
+      telegramChatType: "private" as const,
+      userId: f.ownerId,
+    };
+    const write = (key: string, path: string) =>
+      binaries.writeBinary(owner, {
+        bytes: Buffer.from("x"),
+        mediaType: "text/plain",
+        operationKey: key,
+        path,
+        scope: "personal",
+      });
+    await write("telegram-attachment:telegram-1:11:first", "inbox/11/a.txt");
+    await write("telegram-attachment:telegram-1:11:second", "inbox/11/b.txt");
+    await write("telegram-attachment:telegram-1:110:other", "inbox/110/c.txt");
+    // A literal prefix, not a pattern: "_" and "%" match only themselves.
+    await write("telegram-attachment:telegram_1:11:pattern", "inbox/11/d.txt");
+
+    const found = await binaries.findBinaryWritesByKeyPrefixes(owner, "personal", [
+      "telegram-attachment:telegram-1:11:",
+      "telegram-attachment:telegram-1:12:",
+      "telegram-attachment:telegram-1:110:",
+    ]);
+
+    expect(found.map((files) => files.map((file) => file.path))).toEqual([
+      ["inbox/11/a.txt", "inbox/11/b.txt"],
+      [],
+      ["inbox/110/c.txt"],
+    ]);
+    expect(
+      await binaries.findBinaryWritesByKeyPrefixes(owner, "family", ["telegram-attachment:"]),
+    ).toEqual([[]]);
+    expect(await binaries.findBinaryWritesByKeyPrefixes(owner, "personal", [])).toEqual([]);
+  });
+
   it("replays a completed Telegram delivery with metadata needed to repair projections", async () => {
     const f = await fixture();
     const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));

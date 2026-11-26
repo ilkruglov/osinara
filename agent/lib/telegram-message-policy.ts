@@ -9,6 +9,8 @@
  * - `isAgentNameMentioned`: recognizes agent-name stems with any suffix at Unicode word boundaries.
  * - `isMessageAddressedToBot`: preserves private, mention, and reply behavior.
  * - `isTelegramSlashCommand`: identifies command-shaped text reserved for application handlers.
+ * - `isTelegramForward`, `telegramForwardMarker`, `withForwardMarker`, `withoutForwardMarker`: a
+ *   forward is someone else's words, marked where the model first reads it.
  * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: prevents direct file delivery to the text-only primary model.
  */
@@ -16,6 +18,9 @@ import type { TelegramMessage } from "eve/channels/telegram";
 
 import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
 import { isReadableTextDocumentCandidate } from "./attachments/attachment-policy.js";
+import { clipText, flattenDisplayText } from "./display-text.js";
+import { asRecord } from "./json-value.js";
+import { journalText } from "./secret-redaction.js";
 import {
   richMediaIsLifted,
   richMessageMedia,
@@ -211,6 +216,92 @@ export function isReplyToBot(
     message.replyToMessage?.from?.isBot &&
     message.replyToMessage.from.username?.toLowerCase() === botUsername.toLowerCase(),
   );
+}
+
+const FORWARD_NAME_MAX_CHARACTERS = 64;
+// The keys Telegram used for forwards before `forward_origin`; old clients may still send them.
+const LEGACY_FORWARD_KEYS = [
+  "forward_from",
+  "forward_from_chat",
+  "forward_sender_name",
+  "forward_date",
+];
+// Every mark `forwardMarker` writes: a name in it is one line with no bracket (`rawText`).
+const FORWARD_MARKER_PREFIX = /^\[переслано[^\]\n]*\]\n?/u;
+
+/** A name from someone else's update, made safe for a one-line mark (review, 26 November 2026). */
+function rawText(value: unknown, key: string): string | null {
+  const field = asRecord(value)?.[key];
+  if (typeof field !== "string") return null;
+  // Masked first, on the name as Telegram gave it: removing brackets or cutting before that would
+  // leave a key or a password in a link in a shape no rule recognizes.
+  const masked = field.trim() === "" ? null : journalText(field);
+  if (!masked) return null;
+  // One line, and no bracket that could close the mark early.
+  const flat = flattenDisplayText(masked.replace(/[[\]]/gu, " "));
+  return flat ? clipText(flat, FORWARD_NAME_MAX_CHARACTERS) : null;
+}
+
+function rawPersonName(user: unknown): string | null {
+  const name = [rawText(user, "first_name"), rawText(user, "last_name")].filter(Boolean).join(" ");
+  const username = rawText(user, "username");
+  if (!name) return username;
+  return username ? `${name} (${username})` : name;
+}
+
+function forwardMarker(origin: "от" | "из чата" | "из канала", name: string | null): string {
+  return name ? `[переслано ${origin} ${name}]` : "[переслано]";
+}
+
+/** Whether a message forwards someone else's words; its mentions are then not the sender's. */
+export function isTelegramForward(raw: Record<string, unknown>): boolean {
+  return (
+    asRecord(raw.forward_origin) !== null ||
+    LEGACY_FORWARD_KEYS.some((key) => Object.hasOwn(raw, key))
+  );
+}
+
+/**
+ * The mark of a forwarded message with its origin as Telegram names it, or null for the sender's
+ * own words. Forwards join a series (25 November 2026), and the model must read them as someone
+ * else's words; routing (addressing, mentions) reads the text without it.
+ */
+export function telegramForwardMarker(raw: Record<string, unknown>): string | null {
+  if (!isTelegramForward(raw)) return null;
+  const origin = asRecord(raw.forward_origin);
+  if (origin !== null) {
+    switch (origin.type) {
+      case "user":
+        return forwardMarker("от", rawPersonName(origin.sender_user));
+      case "hidden_user":
+        return forwardMarker("от", rawText(origin, "sender_user_name"));
+      case "chat":
+        return forwardMarker("из чата", rawText(origin.sender_chat, "title"));
+      case "channel":
+        return forwardMarker("из канала", rawText(origin.chat, "title"));
+      default:
+        return forwardMarker("от", null);
+    }
+  }
+  const person = rawPersonName(raw.forward_from) ?? rawText(raw, "forward_sender_name");
+  if (person) return forwardMarker("от", person);
+  const chat = asRecord(raw.forward_from_chat);
+  return forwardMarker(chat?.type === "channel" ? "из канала" : "из чата", rawText(chat, "title"));
+}
+
+/** A text the model reads with the mark of the forward it came in, if any, before it. */
+export function withForwardMarker(marker: string | null, text: string, separator = "\n"): string {
+  return [marker, text].filter(Boolean).join(separator);
+}
+
+/** The text without the forward mark that opens it (prompt evals read the model's envelope). */
+export function withoutForwardMarker(text: string): string {
+  return text.replace(FORWARD_MARKER_PREFIX, "");
+}
+
+/** What a person wrote in a message: its text and the caption of its media, as one routing text. */
+export function telegramMessageText(message: Pick<TelegramMessage, "caption" | "text">): string {
+  return [message.text, message.caption].filter(Boolean).join("\n");
 }
 
 export function mentionsAnotherUsername(text: string, botUsername: string): boolean {

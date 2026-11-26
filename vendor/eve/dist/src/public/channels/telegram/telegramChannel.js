@@ -303,7 +303,7 @@ async function dispatchMessage(e) {
       username: e.message.from?.username,
     }),
     s = r.context ?? [],
-    l = e.message.text || e.message.caption,
+    l = r.replyText ?? (e.message.text || e.message.caption),
     u =
       r.replyHandling !== `message` &&
       e.message.replyToMessage?.from?.isBot === !0 &&

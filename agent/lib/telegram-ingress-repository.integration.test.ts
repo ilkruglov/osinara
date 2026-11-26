@@ -465,7 +465,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await telegramIngressRepository.enqueue(updateInput("2102", "telegram:private:101", "два"));
 
     expect(await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst)).toBeNull();
-    const wait = await telegramIngressRepository.heldPrivateChatReadyIn!(burst);
+    const wait = await telegramIngressRepository.heldChatReadyIn!(burst);
     expect(wait).toBeGreaterThan(25_000);
     expect(wait).toBeLessThanOrEqual(30_000);
     // Past the cap the head is claimed whatever the chat is doing.
@@ -475,7 +475,33 @@ describeWithDatabase("telegramIngressRepository", () => {
     expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst))?.updateId).toBe(
       "2101",
     );
-    expect(await telegramIngressRepository.heldPrivateChatReadyIn!(burst)).toBeNull();
+    expect(await telegramIngressRepository.heldChatReadyIn!(burst)).toBeNull();
+  });
+
+  // 25 November 2026: an album arrives as separate updates a moment apart. In a group the head
+  // waits while an album of its queue is still arriving, so the series takes the whole album; a
+  // group without an album arriving is not held, and the drain is told when to wake.
+  it("holds a group head while an album of its queue is still arriving", async () => {
+    const burst = { maxWaitMilliseconds: 60_000, quietMilliseconds: 30_000 };
+    await telegramIngressRepository.enqueue(groupInput("2151", 1, false));
+    const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst);
+    expect(first?.updateId).toBe("2151");
+    await telegramIngressRepository.complete("2151", first!.leaseToken);
+
+    await telegramIngressRepository.enqueue(groupInput("2152", 1, false));
+    await telegramIngressRepository.enqueue(groupInput("2153", 1, true));
+    expect(await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst)).toBeNull();
+    const wait = await telegramIngressRepository.heldChatReadyIn!(burst);
+    expect(wait).toBeGreaterThan(25_000);
+    expect(wait).toBeLessThanOrEqual(30_000);
+    // Quiet since the album's last photo: the head goes.
+    await database().query(
+      "UPDATE telegram_ingress_updates SET received_at = now() - interval '31 seconds' WHERE update_id IN (2152, 2153)",
+    );
+    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst))?.updateId).toBe(
+      "2152",
+    );
+    expect(await telegramIngressRepository.heldChatReadyIn!(burst)).toBeNull();
   });
 
   it("lists the pending tail behind a claimed head without leasing it", async () => {
@@ -516,6 +542,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     const followers = await telegramIngressRepository.claimFollowing({
       accept: (payload) => (payload.message as { text: string }).text !== "четыре",
       afterUpdateId: head!.updateId,
+      albumQuietMilliseconds: 0,
       leaseMilliseconds: LEASE_MILLISECONDS,
       limit: 4,
       queueId: head!.queueId,
@@ -535,6 +562,184 @@ describeWithDatabase("telegramIngressRepository", () => {
     ).resolves.toMatchObject({
       updateId: "2104",
     });
+  });
+
+  /** The run behind a claimed head, every candidate accepted. */
+  function follow(
+    head: { queueId: string; updateId: string },
+    limit = 9,
+    albumQuietMilliseconds = 0,
+  ) {
+    return telegramIngressRepository.claimFollowing({
+      accept: () => true,
+      afterUpdateId: head.updateId,
+      albumQuietMilliseconds,
+      leaseMilliseconds: LEASE_MILLISECONDS,
+      limit,
+      queueId: head.queueId,
+    });
+  }
+
+  // Review of the album series, 26 November 2026.
+  function groupInput(updateId: string, author: number, album: boolean) {
+    const input = updateInput(updateId, "telegram:group:-100", "");
+    return {
+      ...input,
+      payload: {
+        ...input.payload,
+        message: {
+          ...input.payload.message,
+          chat: { id: -100, type: "supergroup" },
+          from: { first_name: `user${author}`, id: author, is_bot: false },
+          ...(album ? { media_group_id: `album-${author}` } : { text: "смотрите" }),
+        },
+      },
+    };
+  }
+
+  // The follow-up query sorted the text of `update_id`, so 100 came before 99.
+  it("takes a run in update order across a power of ten", async () => {
+    for (let id = 98; id <= 108; id += 1) {
+      await telegramIngressRepository.enqueue(
+        updateInput(String(id), "telegram:private:101", `m${id}`),
+      );
+    }
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    expect(head?.updateId).toBe("98");
+
+    const followers = await follow(head!);
+
+    expect(followers.map((claim) => claim.updateId)).toEqual([
+      "99",
+      "100",
+      "101",
+      "102",
+      "103",
+      "104",
+      "105",
+      "106",
+      "107",
+    ]);
+  });
+
+  // A restart leaves a leased run `processing` with an expired lease; the follow-up skipped it
+  // and took a later pending message, so the rest of an album went one turn per photo and a later
+  // text was answered before the photos.
+  it("takes the members leased before a restart in order and stops at a live lease", async () => {
+    for (const [id, text] of [
+      ["4001", "раз"],
+      ["4002", "два"],
+      ["4003", "три"],
+      ["4004", "четыре"],
+    ]) {
+      await telegramIngressRepository.enqueue(updateInput(id!, "telegram:private:101", text!));
+    }
+    const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    await follow(first!, 2);
+    await telegramIngressRepository.complete(first!.updateId, first!.leaseToken);
+    await telegramIngressRepository.enqueue(updateInput("4005", "telegram:private:101", "пять"));
+    await telegramIngressRepository.releaseStaleLeases();
+
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    expect(head?.updateId).toBe("4002");
+    const followers = await follow(head!);
+    expect(followers.map((claim) => claim.updateId)).toEqual(["4003", "4004", "4005"]);
+
+    // A member another drain still holds is a barrier: nothing after it is taken.
+    await database().query(
+      "UPDATE telegram_ingress_updates SET status = 'pending', lease_token = NULL, lease_expires_at = NULL WHERE update_id IN (4004, 4005)",
+    );
+    await database().query(
+      "UPDATE telegram_ingress_updates SET status = 'processing', lease_token = gen_random_uuid(), lease_expires_at = now() + interval '1 hour' WHERE update_id = 4004",
+    );
+    await telegramIngressRepository.enqueue(updateInput("4006", "telegram:private:101", "шесть"));
+    const again = await follow({ queueId: head!.queueId, updateId: "4003" });
+    expect(again).toEqual([]);
+  });
+
+  // The mark is ours and lives beside Telegram's update, not inside it (26 November 2026): inside,
+  // a redelivery of the update compared unequal, and the channel answered 500 forever.
+  it("marks the members of an addressed series beside their stored update", async () => {
+    await telegramIngressRepository.enqueue(groupInput("4401", 1, true));
+    await telegramIngressRepository.enqueue(groupInput("4402", 1, false));
+
+    await telegramIngressRepository.markSeriesAddressed(["4401", "4402"]);
+
+    const rows = await database().query<{
+      addressed: boolean;
+      in_payload: boolean;
+      update_id: string;
+    }>(
+      `SELECT update_id::text, series_addressed AS addressed,
+              payload #> '{message,osinara_series_addressed}' IS NOT NULL AS in_payload
+         FROM telegram_ingress_updates WHERE update_id IN (4401, 4402) ORDER BY update_id`,
+    );
+    expect(rows.rows).toEqual([
+      { addressed: true, in_payload: false, update_id: "4401" },
+      { addressed: true, in_payload: false, update_id: "4402" },
+    ]);
+    await expect(telegramIngressRepository.enqueue(groupInput("4401", 1, true))).resolves.toBe(
+      "duplicate",
+    );
+    // The claims carry the mark to the drain.
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    expect(head?.seriesAddressed).toBe(true);
+    expect((await follow(head!)).map((claim) => claim.seriesAddressed)).toEqual([true]);
+  });
+
+  it("leaves an album that is still arriving to its own series", async () => {
+    await telegramIngressRepository.enqueue(groupInput("4101", 1, false));
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    await telegramIngressRepository.enqueue(groupInput("4102", 1, true));
+
+    expect(await follow(head!, 9, 30_000)).toEqual([]);
+  });
+
+  it("lets a button press and another author's message past an arriving album", async () => {
+    const burst = { maxWaitMilliseconds: 60_000, quietMilliseconds: 30_000 };
+    await telegramIngressRepository.enqueue({
+      continuationKey: "telegram:group:-100",
+      payload: {
+        callback_query: {
+          data: "approve",
+          from: { first_name: "user1", id: 1, is_bot: false },
+          id: "cb-1",
+          message: { chat: { id: -100, type: "supergroup" }, message_id: 7 },
+        },
+        update_id: 4201,
+      },
+      updateId: "4201",
+    });
+    await telegramIngressRepository.enqueue(groupInput("4202", 1, true));
+    const button = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst);
+    expect(button?.updateId).toBe("4201");
+    await telegramIngressRepository.complete(button!.updateId, button!.leaseToken);
+    await database().query("DELETE FROM telegram_ingress_updates WHERE update_id = 4202");
+
+    await telegramIngressRepository.enqueue(groupInput("4203", 1, false));
+    await telegramIngressRepository.enqueue(groupInput("4204", 2, true));
+    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst))?.updateId).toBe(
+      "4203",
+    );
+  });
+
+  // The wake-up counted the cap from the earliest arrival in the queue, not from the head, and
+  // gave up on a queue the claim still held when updates arrived out of order.
+  it("counts the wake-up cap from the head of the queue", async () => {
+    const burst = { maxWaitMilliseconds: 20_000, quietMilliseconds: 2_000 };
+    await telegramIngressRepository.enqueue(groupInput("4301", 1, true));
+    await telegramIngressRepository.enqueue(groupInput("4302", 1, false));
+    await database().query(
+      "UPDATE telegram_ingress_updates SET received_at = now() - interval '1 second' WHERE update_id = 4301",
+    );
+    await database().query(
+      "UPDATE telegram_ingress_updates SET received_at = now() - interval '24 seconds' WHERE update_id = 4302",
+    );
+
+    expect(await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, burst)).toBeNull();
+    const wait = await telegramIngressRepository.heldChatReadyIn!(burst);
+    expect(wait).not.toBeNull();
+    expect(wait!).toBeLessThanOrEqual(2_000);
   });
 
   it("persists a monotonic Eve event cursor atomically with ingress completion", async () => {

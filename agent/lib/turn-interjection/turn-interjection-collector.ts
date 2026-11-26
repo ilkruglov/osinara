@@ -16,7 +16,6 @@
  *   message is neither lost to later calls nor reported to its own turn as already seen.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
-import { parseTelegramUpdate } from "eve/channels/telegram";
 import type { ToolContext } from "eve/tools";
 
 import { AppError } from "../app-error.js";
@@ -27,7 +26,11 @@ import {
   classifyTelegramInboundMedia,
   isMessageAddressedToBot,
   isTelegramSlashCommand,
+  telegramForwardMarker,
+  telegramMessageText,
+  withForwardMarker,
 } from "../telegram-message-policy.js";
+import { parseQueuedTelegramUpdate } from "../telegram-queued-update.js";
 import { telegramBaseContinuationToken } from "../telegram-reply-routing.js";
 import {
   formatTurnInterjectionBlock,
@@ -90,6 +93,8 @@ type Plan =
   | { contentKind: "notice" | "text"; entry: TurnInterjectionEntry; updateId: string }
   | {
       contentKind: "voice";
+      /** The mark of a forwarded recording: its words are someone else's. */
+      forward: string | null;
       sentAt: string | null;
       transcript: string | null;
       updateId: string;
@@ -177,16 +182,17 @@ async function plan(
   candidate: TurnInterjectionCandidate,
   collection: Collection,
 ): Promise<Plan | null> {
-  const update = parseTelegramUpdate(candidate.payload);
+  // The same text the drain reads: a Rich Message's blocks and a location become its text.
+  const update = parseQueuedTelegramUpdate(candidate.payload);
   if (update?.kind !== "message") return null;
   const message = update.message;
   // The SQL filter already selected the sender; the parsed identity must agree with it.
   if (message.from?.id !== collection.scope.telegramUserId || message.from.isBot) return null;
   const isVoice = Object.hasOwn(message.raw, "voice");
   // The same text the ordinary dispatch reads: a caption stands in for the text of a media message.
-  const text = isVoice
-    ? message.caption
-    : [message.text, message.caption].filter(Boolean).join("\n");
+  const text = isVoice ? message.caption : telegramMessageText(message);
+  // What the model reads: a forward is marked as someone else's words; routing reads the text.
+  const forward = telegramForwardMarker(message.raw);
   if (!isVoice && isTelegramSlashCommand(text)) return null;
   if (
     !addressed(message, text, collection) ||
@@ -213,6 +219,7 @@ async function plan(
     }
     return {
       contentKind: "voice",
+      forward,
       sentAt: sentAt(message),
       transcript: candidate.voiceTranscript,
       updateId: candidate.updateId,
@@ -221,11 +228,13 @@ async function plan(
   }
 
   if (classifyTelegramInboundMedia(message) !== "none") {
+    const caption = withForwardMarker(forward, text);
     return {
       contentKind: "notice",
       entry: {
         attachment: attachmentKind(message),
-        caption: message.caption ? bounded(message.caption).text : null,
+        // A Rich Message keeps its words in the text, not the caption: the same text routing read.
+        caption: caption ? bounded(caption).text : null,
         count: 1 + candidate.albumMemberCount,
         kind: "attachment",
         sentAt: sentAt(message),
@@ -236,7 +245,7 @@ async function plan(
   if (!text) return null;
   return {
     contentKind: "text",
-    entry: { kind: "text", sentAt: sentAt(message), ...bounded(text) },
+    entry: { kind: "text", sentAt: sentAt(message), ...bounded(withForwardMarker(forward, text)) },
     updateId: candidate.updateId,
   };
 }
@@ -257,7 +266,7 @@ async function voiceEntry(
   collection: Collection,
 ): Promise<TurnInterjectionEntry> {
   const voice = (transcript: string): TurnInterjectionEntry => {
-    const { text, truncated } = bounded(transcript);
+    const { text, truncated } = bounded(withForwardMarker(planned.forward, transcript));
     return { kind: "voice", sentAt: planned.sentAt, transcript: text, truncated };
   };
   if (planned.transcript !== null) return voice(planned.transcript);

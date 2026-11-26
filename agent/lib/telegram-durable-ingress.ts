@@ -35,14 +35,16 @@ import {
   classifyTelegramInboundMedia,
   hasTelegramRawMediaBesidesLifted,
   isMessageAddressedToBot,
+  telegramMessageText,
   type TelegramInboundMediaKind,
 } from "./telegram-message-policy.js";
 import { createTelegramVoiceAuthorizer } from "./telegram-voice-authorization.js";
 import {
-  TELEGRAM_SERIES_MAX_MESSAGES,
   continuesSeries,
   isSeriesEligible,
+  TELEGRAM_SERIES_MAX_MESSAGES,
   type TelegramSeriesMarker,
+  withSeriesAddressed,
   withSeriesMarker,
 } from "./telegram-message-series.js";
 import {
@@ -63,7 +65,7 @@ import {
   richMessagePlainText,
   withoutRichMediaBlocks,
 } from "./telegram-rich-message.js";
-import { withLocationText } from "./telegram-location-message.js";
+import { parseQueuedTelegramUpdate } from "./telegram-queued-update.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -250,9 +252,9 @@ async function waitForSessionBoundary(
   return { nextEventIndex, sessionFailed };
 }
 
-function shouldTranscribeVoice(message: TelegramMessage, botUsername: string): boolean {
-  const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
-  return isMessageAddressedToBot({ ...message, text: dispatchText }, botUsername);
+/** A caption calls Mia as a text does: an album is often addressed only in its first caption. */
+function addressedByTextOrCaption(message: TelegramMessage, botUsername: string): boolean {
+  return isMessageAddressedToBot({ ...message, text: telegramMessageText(message) }, botUsername);
 }
 
 function withCaptionlessAttachmentText(update: TelegramUpdate): TelegramUpdate {
@@ -376,30 +378,24 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     if (await dependencies.repository.hasPendingApprovalsInChat(update.message.chat.id)) return [];
     const followers = await dependencies.repository.claimFollowing({
       accept: (payload) => {
-        const candidate = parseTelegramUpdate(payload);
-        return (
-          candidate !== null &&
-          continuesSeries(
-            update,
-            withLocationText(normalizeRichMessage(candidate)),
-            dependencies.botUsername,
-          )
-        );
+        const candidate = parseQueuedTelegramUpdate(payload);
+        return candidate !== null && continuesSeries(update, candidate, dependencies.botUsername);
       },
       afterUpdateId: head.updateId,
+      albumQuietMilliseconds: privateBurst.quietMilliseconds,
       leaseMilliseconds: dependencies.leaseMilliseconds,
       limit: TELEGRAM_SERIES_MAX_MESSAGES - 1,
       queueId: head.queueId,
     });
     return followers.map((claim) => {
-      const parsed = parseTelegramUpdate(claim.payload);
+      const parsed = parseQueuedTelegramUpdate(claim.payload);
       if (!parsed) {
         throw new AppError(
           "AGENT_TELEGRAM_PAYLOAD_INVALID",
           "Не удалось подготовить сообщение серии для обработки",
         );
       }
-      return { claim, update: withLocationText(normalizeRichMessage(parsed)) };
+      return { claim, update: parsed };
     });
   }
 
@@ -411,8 +407,10 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     if (index < series.length - 1) return { role: "context" };
     const messages = series.map((item) => (item.update as { message: TelegramMessage }).message);
     return {
-      addressed: messages.some((message) =>
-        isMessageAddressedToBot(message, dependencies.botUsername),
+      addressed: series.some(
+        (item, index) =>
+          item.claim.seriesAddressed ||
+          addressedByTextOrCaption(messages[index]!, dependencies.botUsername),
       ),
       // The ordinary turn checks these against messages a running turn already showed to the model.
       earlierUpdateIds: series.slice(0, -1).map((item) => item.claim.updateId),
@@ -435,9 +433,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         privateBurst,
       );
       if (!claim) {
-        // A private chat still receiving a burst is held: sleep until it is ready instead of
-        // leaving its reply to the next poll of the ingress worker.
-        const wait = await dependencies.repository.heldPrivateChatReadyIn?.(privateBurst);
+        // A private chat still receiving a burst, or a group whose album is arriving, is held:
+        // sleep until it is ready instead of leaving its reply to the next poll of the worker.
+        const wait = await dependencies.repository.heldChatReadyIn?.(privateBurst);
         if (wait !== null && wait !== undefined && wait <= privateBurst.maxWaitMilliseconds) {
           await new Promise((resolve) => setTimeout(resolve, wait + HELD_CHAT_WAKE_MARGIN_MS));
           continue;
@@ -478,7 +476,12 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         await dependencies.repository.beginDispatch(leased.updateId, leased.leaseToken);
         // The turn learns its own update id: messages queued after it can then be shown to it.
         const stamped =
-          update.kind === "message" ? withTelegramUpdateMarker(update, leased.updateId) : update;
+          update.kind === "message"
+            ? withTelegramUpdateMarker(
+                leased.seriesAddressed ? withSeriesAddressed(update) : update,
+                leased.updateId,
+              )
+            : update;
         const marked =
           marker !== null && stamped.kind === "message"
             ? withSeriesMarker(stamped, marker)
@@ -537,8 +540,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         let payload = claim.payload;
         // Rich messages (Bot API 10.1) carry their text in blocks, a shared location its
         // coordinates in `raw.location`; Eve reads only `text`.
-        let update = parseTelegramUpdate(payload);
-        if (update) update = withLocationText(normalizeRichMessage(update));
+        let update = parseQueuedTelegramUpdate(payload);
         if (!update) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           pending.shift();
@@ -558,7 +560,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         if (
           claim.voice &&
           update.kind === "message" &&
-          shouldTranscribeVoice(update.message, dependencies.botUsername)
+          addressedByTextOrCaption(update.message, dependencies.botUsername)
         ) {
           const authorized = await dependencies.authorizeVoice(update.message);
           if (authorized) {
@@ -584,8 +586,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
               );
             }
             payload = withTranscript(payload, transcript);
-            update = parseTelegramUpdate(payload);
-            if (update) update = normalizeRichMessage(update);
+            update = parseQueuedTelegramUpdate(payload);
             if (!update) {
               throw new AppError(
                 "AGENT_TELEGRAM_PAYLOAD_INVALID",
@@ -601,6 +602,8 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           pending.push(follower.claim);
           startHeartbeat(follower.claim);
         }
+        const markers = series.map((_, index) => seriesMarker(series, index));
+        const current = markers[markers.length - 1];
         if (series.length > 1) {
           console.info(
             JSON.stringify({
@@ -608,6 +611,13 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
               messages: series.length,
               updateIds: series.map((item) => item.claim.updateId),
             }),
+          );
+        }
+        // First, before anything else can fail: a member a failure or a restart returns to the
+        // queue must stay addressed without the caption that called Mia.
+        if (current?.role === "current" && current.addressed) {
+          await dependencies.repository.markSeriesAddressed(
+            series.map((item) => item.claim.updateId),
           );
         }
         const tail = series[series.length - 1]!;
@@ -627,7 +637,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           await dispatchLeased(
             item.claim,
             item.update,
-            seriesMarker(series, index),
+            markers[index] ?? null,
             last ? pendingAfter : [],
           );
           pending.shift();

@@ -81,6 +81,8 @@ export type TelegramInboundResult = {
   readonly continuationToken?: string;
   readonly message?: string;
   readonly replyHandling?: "message";
+  /** Osinara: the text that answers a pending question in place of the raw text (a forward keeps its mark). */
+  readonly replyText?: string;
   /** Overrides the workflow run title without changing the message sent to the model. */
   readonly title?: string;
 } | null;

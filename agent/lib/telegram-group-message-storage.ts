@@ -13,6 +13,11 @@ import type { PoolClient } from "pg";
 
 import { lockApplicationConversation } from "./conversation-lock.js";
 import { journalText } from "./secret-redaction.js";
+import {
+  telegramForwardMarker,
+  telegramMessageText,
+  withForwardMarker,
+} from "./telegram-message-policy.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -89,7 +94,11 @@ export function telegramMessageKind(message: TelegramMessage): string {
 }
 
 export function telegramMessageContent(message: TelegramMessage): string | null {
-  const content = [message.text, message.caption].filter(Boolean).join("\n").trim();
+  // A forward is someone else's words: the journal keeps the mark with them.
+  const content = withForwardMarker(
+    telegramForwardMarker(message.raw),
+    telegramMessageText(message).trim(),
+  );
   return content ? journalText(content) : null;
 }
 

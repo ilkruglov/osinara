@@ -39,6 +39,8 @@ export interface TelegramIngressClaim {
   leaseToken: string;
   payload: Record<string, unknown>;
   queueId: string;
+  /** A series this update belongs to called Mia (`markSeriesAddressed`). */
+  seriesAddressed: boolean;
   transcript: string | null;
   updateId: string;
   voice: TelegramIngressVoice | null;
@@ -75,17 +77,24 @@ export interface TelegramIngressRepository {
   claimFollowing(input: {
     accept: (payload: Record<string, unknown>) => boolean;
     afterUpdateId: string;
+    /** An album member that arrived within this window is still arriving and ends the run. */
+    albumQuietMilliseconds: number;
     leaseMilliseconds: number;
     limit: number;
     queueId: string;
   }): Promise<TelegramIngressClaim[]>;
+  /** Every member of a series that called Mia keeps that in its stored payload. */
+  markSeriesAddressed(updateIds: readonly string[]): Promise<void>;
   /** The oldest claimable update; a private head still receiving a burst is left alone (`burst`). */
   claimNext(
     leaseMilliseconds: number,
     burst?: TelegramPrivateBurstPolicy,
   ): Promise<TelegramIngressClaim | null>;
-  /** Milliseconds until the earliest held private chat becomes claimable, or null when none is held. */
-  heldPrivateChatReadyIn?(burst: TelegramPrivateBurstPolicy): Promise<number | null>;
+  /**
+   * Milliseconds until the earliest held chat becomes claimable (a private burst, or a group whose
+   * album is arriving), or null when none is held.
+   */
+  heldChatReadyIn?(burst: TelegramPrivateBurstPolicy): Promise<number | null>;
   complete(updateId: string, leaseToken: string): Promise<void>;
   completeWithSession(
     updateId: string,
@@ -139,6 +148,7 @@ export interface ClaimRow {
   lease_token: string;
   payload: Record<string, unknown>;
   queue_id: string;
+  series_addressed: boolean;
   update_id: string;
   voice_file_id: string | null;
   voice_file_size: string | null;
@@ -239,6 +249,7 @@ export function mapTelegramIngressClaim(row: ClaimRow): TelegramIngressClaim {
     leaseToken: row.lease_token,
     payload: row.payload,
     queueId: row.queue_id,
+    seriesAddressed: row.series_addressed,
     transcript: row.voice_transcript,
     updateId: row.update_id,
     voice,

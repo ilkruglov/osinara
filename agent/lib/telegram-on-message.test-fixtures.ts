@@ -6,10 +6,14 @@
  * - `privateMessage` and `groupMessage`: minimal parsed Eve Telegram messages.
  * - `telegramContext`: Telegram channel context with an observable sender.
  * - `repositories`: isolated application repository doubles for message-handler tests.
+ * - `preparedTurnContext`, `journalEntry`: a prepared turn context and a person's journal entry
+ *   with test defaults; a test names only what it changes.
  */
 import type { TelegramContext, TelegramMessage } from "eve/channels/telegram";
 import { vi } from "vitest";
 
+import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
+import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-context.js";
 import { createTelegramMemoryContextBuilder } from "./telegram-turn-memory-context.js";
 
 export const BOT_USERNAME = "osinara_bot";
@@ -77,6 +81,7 @@ export function repositories() {
     },
     attachments: {
       persist: vi.fn().mockResolvedValue([]),
+      stored: vi.fn().mockResolvedValue([]),
     },
     currentTime: {
       findTurnTimezone: vi.fn().mockResolvedValue(null),
@@ -108,15 +113,7 @@ export function repositories() {
       claimInvitation: vi.fn(),
     },
     groupContext: {
-      prepare: vi.fn().mockResolvedValue({
-        cursorSequence: "1",
-        durableMessage: "<current_telegram_message>test</current_telegram_message>",
-        currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
-        omittedBeforeSequence: null,
-        timelineOmission: null,
-        visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
-        visibleTimelineEntries: [],
-      }),
+      prepare: vi.fn().mockResolvedValue(preparedTurnContext()),
     },
     hitl: {
       authorizeReply: vi.fn().mockResolvedValue("not_applicable"),
@@ -189,5 +186,39 @@ export function repositories() {
       close: vi.fn().mockResolvedValue(undefined),
       memoryContext: vi.fn().mockResolvedValue([]),
     },
+  };
+}
+
+export function preparedTurnContext(
+  overrides: Partial<PreparedTelegramGroupTurnContext> = {},
+): PreparedTelegramGroupTurnContext {
+  return {
+    cursorSequence: "1",
+    currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
+    durableMessage: "<current_telegram_message>test</current_telegram_message>",
+    omittedBeforeSequence: null,
+    timelineOmission: null,
+    unseenTimelineEntries: [],
+    visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
+    visibleTimelineEntries: [],
+    ...overrides,
+  };
+}
+
+export function journalEntry(
+  overrides: Partial<TelegramGroupJournalEntry> & { sequenceId: string },
+): TelegramGroupJournalEntry {
+  return {
+    actorId: "telegram-101",
+    actorKind: "user",
+    contentText: null,
+    messageKind: "text",
+    messageThreadId: null,
+    replyToSequenceId: null,
+    senderDisplayName: "Анна",
+    senderUsername: null,
+    sentAt: "2026-11-25T23:27:01.000Z",
+    telegramMessageId: overrides.sequenceId,
+    ...overrides,
   };
 }

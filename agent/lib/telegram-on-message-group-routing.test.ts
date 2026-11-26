@@ -13,6 +13,8 @@ import { describe, expect, it } from "vitest";
 import {
   BOT_USERNAME,
   groupMessage,
+  journalEntry,
+  preparedTurnContext,
   repositories,
   telegramContext,
 } from "./telegram-on-message.test-fixtures.js";
@@ -150,6 +152,29 @@ describe("createTelegramMessageHandler group routing", () => {
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
+  // A series member returned to the queue alone (its series cut by a failure or a restart) keeps
+  // the address of the caption that called Mia in its series (26 November 2026).
+  it("answers a returned series member that was addressed in its series", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: ["remember"],
+      type: "external",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = groupMessage("обычная реплика");
+
+    await handler(telegramContext().context, {
+      ...message,
+      raw: { ...message.raw, osinara_series_addressed: true },
+    });
+
+    expect(repository.telegram.findIdentity).toHaveBeenCalled();
+  });
+
   it("journals an ordinary message in all mode without starting a model turn", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
@@ -239,6 +264,50 @@ describe("createTelegramMessageHandler group routing", () => {
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
+  // An album in a group: the earlier photos of the series reach the last message's turn as
+  // references in its attachment block, only the author's own (26 November 2026).
+  it("lists the author's unseen photo references in an addressed turn", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "all",
+      telegramChatId: "group-101",
+      toolAllowlist: ["remember", "inspect_workspace_image"],
+      type: "external",
+    });
+    const photo = (sequenceId: string, telegramUserId: string) =>
+      journalEntry({
+        actorId: telegramUserId,
+        attachment: {
+          attachmentId: `00000000-0000-4000-8000-0000000000${sequenceId}`,
+          kind: "photo",
+          mediaType: "image/jpeg",
+        },
+        messageKind: "photo",
+        sequenceId,
+        telegramUserId,
+      });
+    repository.groupContext.prepare.mockResolvedValue(
+      preparedTurnContext({
+        cursorSequence: "13",
+        currentMessageEnvelope: "что скажешь?",
+        durableMessage: "что скажешь?",
+        unseenTimelineEntries: [photo("11", "telegram-101"), photo("12", "telegram-202")],
+      }),
+    );
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(
+      telegramContext().context,
+      groupMessage(`@${BOT_USERNAME} что скажешь?`),
+    );
+
+    const context = result?.context?.join("\n") ?? "";
+    expect(context).toContain("00000000-0000-4000-8000-000000000011");
+    expect(context).not.toContain("00000000-0000-4000-8000-000000000012");
+  });
+
   it("adds only preceding messages from the current topic to an addressed turn", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
@@ -249,15 +318,12 @@ describe("createTelegramMessageHandler group routing", () => {
       toolAllowlist: ["remember"],
       type: "external",
     });
-    repository.groupContext.prepare.mockResolvedValue({
-      cursorSequence: "1",
-      durableMessage: "предыдущая реплика\n\nподведи итог",
-      currentMessageEnvelope: "подведи итог",
-      omittedBeforeSequence: null,
-      timelineOmission: null,
-      visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
-      visibleTimelineEntries: [],
-    });
+    repository.groupContext.prepare.mockResolvedValue(
+      preparedTurnContext({
+        currentMessageEnvelope: "подведи итог",
+        durableMessage: "предыдущая реплика\n\nподведи итог",
+      }),
+    );
     const handler = createTelegramMessageHandler(repository);
     const message = {
       ...groupMessage(`@${BOT_USERNAME} подведи итог`),
@@ -297,16 +363,13 @@ describe("createTelegramMessageHandler group routing", () => {
       type: "external",
     });
     repository.currentTime.findTurnTimezone.mockResolvedValue("Europe/Moscow");
-    repository.groupContext.prepare.mockResolvedValue({
-      cursorSequence: "1",
-      durableMessage: "подведи итог",
-      currentMessageEnvelope: "подведи итог",
-      omittedBeforeSequence: null,
-      timelineOmission: null,
-      timelineTimezone: "Europe/Moscow",
-      visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
-      visibleTimelineEntries: [],
-    });
+    repository.groupContext.prepare.mockResolvedValue(
+      preparedTurnContext({
+        currentMessageEnvelope: "подведи итог",
+        durableMessage: "подведи итог",
+        timelineTimezone: "Europe/Moscow",
+      }),
+    );
     const handler = createTelegramMessageHandler(repository);
 
     const result = await handler(

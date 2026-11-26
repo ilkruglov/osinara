@@ -271,7 +271,9 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     // The anti-join makes every non-terminal earlier update a hard FIFO barrier for its queue.
     // A private chat still receiving a burst is left alone until it has been quiet for the window,
     // or the cap has passed since its head arrived; only a pending message waits, never a retry.
-    // A button press has no message and must compare as not private, never as unknown.
+    // A group waits the same way only while an album of its queue is arriving (its photos are
+    // separate updates a moment apart), so the series takes the whole album (25 November 2026).
+    // A button press has no message and must compare as neither, never as unknown.
     const client = await database().connect();
     let result: QueryResult<ClaimRow>;
     try {
@@ -294,12 +296,22 @@ export const telegramIngressRepository: TelegramIngressRepository = {
                 AND earlier.status IN ('pending', 'processing')
            )
            AND NOT (item.status = 'pending' AND $2::bigint > 0
-             AND (item.payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
              AND item.received_at > now() - ($3 * interval '1 millisecond')
-             AND EXISTS (
-               SELECT 1 FROM telegram_ingress_updates latest
-                WHERE latest.queue_id = item.queue_id AND latest.status = 'pending' AND latest.payload ? 'message'
-                  AND latest.received_at > now() - ($2 * interval '1 millisecond')
+             AND (
+               ((item.payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
+                 AND EXISTS (
+                   SELECT 1 FROM telegram_ingress_updates latest
+                    WHERE latest.queue_id = item.queue_id AND latest.status = 'pending' AND latest.payload ? 'message'
+                      AND latest.received_at > now() - ($2 * interval '1 millisecond')))
+               -- Only an album of the head's own author: another author's album never joins its series.
+               -- Not correlated with the row, so it runs once per claim, not once per waiting row.
+               OR (COALESCE((item.payload #>> '{message,chat,type}') IN ('group', 'supergroup'), false)
+                 AND (item.queue_id, COALESCE(item.payload #>> '{message,from,id}', '')) IN (
+                   SELECT album.queue_id, COALESCE(album.payload #>> '{message,from,id}', '')
+                     FROM telegram_ingress_updates album
+                    WHERE album.status = 'pending'
+                      AND album.payload #> '{message,media_group_id}' IS NOT NULL
+                      AND album.received_at > now() - ($2 * interval '1 millisecond')))
              ))
          ORDER BY item.update_id
          FOR UPDATE SKIP LOCKED
@@ -319,7 +331,7 @@ export const telegramIngressRepository: TelegramIngressRepository = {
        RETURNING item.update_id::text, item.queue_id, item.ingress_continuation_key,
          item.payload, item.attempt_count, item.lease_token::text, item.lease_expires_at,
          item.voice_file_id, item.voice_file_size::text, item.voice_mime_type,
-         item.voice_transcript, queue.current_continuation_key`,
+         item.voice_transcript, item.series_addressed, queue.current_continuation_key`,
         [leaseMilliseconds, burst.quietMilliseconds, burst.maxWaitMilliseconds],
       );
       await client.query("COMMIT");
@@ -331,25 +343,50 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
   },
 
-  async heldPrivateChatReadyIn(burst) {
+  async markSeriesAddressed(updateIds) {
+    for (const updateId of updateIds) requireUpdateId(updateId);
+    // Beside Telegram's update, not inside it: a redelivery must still compare equal.
+    await database().query(
+      `UPDATE telegram_ingress_updates SET series_addressed = true
+        WHERE update_id = ANY($1::bigint[])`,
+      [updateIds],
+    );
+  },
+
+  async heldChatReadyIn(burst) {
     requirePrivateBurstPolicy(burst);
     if (burst.quietMilliseconds === 0) return null;
-    // The same moment the claim condition waits for: quiet since the newest message, or the cap
-    // counted from the head.
+    // The same moment the claim condition waits for: quiet since the newest private message or
+    // photo of the head author's album, or the cap counted from the head (the lowest update of
+    // the queue, whatever order the updates arrived in). A group with no album arriving is not held.
     const result = await database().query<{ wait: string | null }>(
-      `SELECT ceil(extract(epoch FROM min(ready_at) - clock_timestamp()) * 1000)::bigint::text AS wait
-         FROM (
-           SELECT LEAST(max(held.received_at) + ($1 * interval '1 millisecond'),
-                        min(held.received_at) + ($2 * interval '1 millisecond')) AS ready_at
-             FROM telegram_ingress_updates held
-            WHERE held.status = 'pending' AND (held.payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
-              -- A chat whose head is already being worked on is not held: its tail waits for that turn.
-              AND NOT EXISTS (
-                SELECT 1 FROM telegram_ingress_updates busy
-                 WHERE busy.queue_id = held.queue_id AND busy.status = 'processing')
-            GROUP BY held.queue_id
-         ) held
-        WHERE ready_at > clock_timestamp()`,
+      `WITH pending AS (
+         SELECT held.queue_id, held.received_at,
+                held.payload #> '{message,media_group_id}' IS NOT NULL AS in_album,
+                held.payload #>> '{message,from,id}' AS author,
+                first_value(held.received_at) OVER queue AS head_received_at,
+                first_value(held.payload #>> '{message,chat,type}') OVER queue AS head_chat_type,
+                first_value(held.payload #>> '{message,from,id}') OVER queue AS head_author
+           FROM telegram_ingress_updates held
+          WHERE held.status = 'pending'
+            AND (held.payload #>> '{message,chat,type}') IN ('private', 'group', 'supergroup')
+            -- A chat whose head is already being worked on is not held: its tail waits for that turn.
+            AND NOT EXISTS (
+              SELECT 1 FROM telegram_ingress_updates busy
+               WHERE busy.queue_id = held.queue_id AND busy.status = 'processing')
+         WINDOW queue AS (PARTITION BY held.queue_id ORDER BY held.update_id)
+       ), held AS (
+         SELECT max(received_at) FILTER (
+                  WHERE head_chat_type = 'private'
+                     OR (in_album AND author IS NOT DISTINCT FROM head_author))
+                  + ($1 * interval '1 millisecond') AS quiet_at,
+                min(head_received_at) + ($2 * interval '1 millisecond') AS cap_at
+           FROM pending
+          GROUP BY queue_id
+       )
+       SELECT ceil(extract(epoch FROM min(LEAST(quiet_at, cap_at)) - clock_timestamp()) * 1000)::bigint::text AS wait
+         FROM held
+        WHERE quiet_at IS NOT NULL AND LEAST(quiet_at, cap_at) > clock_timestamp()`,
       [burst.quietMilliseconds, burst.maxWaitMilliseconds],
     );
     const wait = result.rows[0]?.wait;
@@ -363,24 +400,34 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      // The head of this queue is leased by the caller, so every later item is still pending;
-      // the row locks keep a concurrent drain from interleaving a claim into the run.
+      // The head of this queue is leased by the caller. A later item is pending, or `processing`
+      // with an expired lease when a restart cut its series (`releaseStaleLeases`): both may join,
+      // in update order (sorted as numbers: the text of 100 sorts before 99). A live lease of
+      // another drain and an album still arriving (its own series, once quiet) end the run; the
+      // row locks keep a concurrent drain from interleaving a claim into it.
       const candidates = await client.query<{
+        album_arriving: boolean;
+        live_lease: boolean;
         payload: Record<string, unknown>;
         update_id: string;
         voice_file_id: string | null;
       }>(
-        `SELECT update_id::text, payload, voice_file_id
+        `SELECT update_id::text, payload, voice_file_id,
+                (status = 'processing' AND lease_expires_at > now()) AS live_lease,
+                (payload #> '{message,media_group_id}' IS NOT NULL
+                  AND received_at > now() - ($4 * interval '1 millisecond')) AS album_arriving
          FROM telegram_ingress_updates
-         WHERE queue_id = $1 AND update_id > $2::bigint AND status = 'pending'
-         ORDER BY update_id
+         WHERE queue_id = $1 AND update_id > $2::bigint AND status IN ('pending', 'processing')
+         ORDER BY telegram_ingress_updates.update_id
          LIMIT $3
          FOR UPDATE`,
-        [input.queueId, input.afterUpdateId, input.limit],
+        [input.queueId, input.afterUpdateId, input.limit, input.albumQuietMilliseconds],
       );
       const accepted: string[] = [];
       for (const candidate of candidates.rows) {
-        if (candidate.voice_file_id !== null || !input.accept(candidate.payload)) break;
+        if (candidate.live_lease || candidate.album_arriving || candidate.voice_file_id !== null)
+          break;
+        if (!input.accept(candidate.payload)) break;
         accepted.push(candidate.update_id);
       }
       if (accepted.length === 0) {
@@ -397,13 +444,16 @@ export const telegramIngressRepository: TelegramIngressRepository = {
                last_error_code = NULL,
                last_error_message = NULL,
                updated_at = now()
-           WHERE item.update_id = ANY($1::bigint[]) AND item.status = 'pending'
+           WHERE item.update_id = ANY($1::bigint[])
+             AND (item.status = 'pending'
+               OR (item.status = 'processing' AND item.lease_expires_at <= now()))
            RETURNING item.*
          )
          SELECT claimed.update_id::text, claimed.queue_id, claimed.ingress_continuation_key,
            claimed.payload, claimed.attempt_count, claimed.lease_token::text,
            claimed.lease_expires_at, claimed.voice_file_id, claimed.voice_file_size::text,
-           claimed.voice_mime_type, claimed.voice_transcript, queue.current_continuation_key
+           claimed.voice_mime_type, claimed.voice_transcript, claimed.series_addressed,
+           queue.current_continuation_key
          FROM claimed
          JOIN telegram_ingress_queues queue ON queue.id = claimed.queue_id
          ORDER BY claimed.update_id`,

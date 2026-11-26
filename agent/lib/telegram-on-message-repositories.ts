@@ -5,17 +5,12 @@
  * - `TelegramMessageRepositories`: explicit repository surface consumed by authorization handling.
  * - `productionTelegramMessageRepositories`: PostgreSQL, attachment, notice, and workspace adapters.
  */
-import type { TelegramMessage } from "eve/channels/telegram";
-
-import { downloadTelegramAttachment } from "./attachments/telegram-attachment-download.js";
+import { workspaceAttachmentImporter } from "./attachments/telegram-attachment-materializer.js";
 import {
   telegramGroupAttachmentRepository,
   type TelegramGroupAttachmentRepository,
 } from "./attachments/telegram-group-attachment-repository.js";
-import {
-  createTelegramWorkspaceAttachmentImporter,
-  type StoredTelegramAttachment,
-} from "./attachments/telegram-workspace-attachments.js";
+import type { createTelegramWorkspaceAttachmentImporter } from "./attachments/telegram-workspace-attachments.js";
 import { conversationRepository } from "./conversation-repository.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { currentTimeRepository } from "./current-time-repository.js";
@@ -41,8 +36,6 @@ import {
   type MemoryThreadNoticeDeliveryRepository,
 } from "./telegram-memory-thread-notice.js";
 import { telegramRepository, type TelegramRepository } from "./telegram-repository.js";
-import { workspaceBinaryRepository } from "./workspaces/workspace-binary-repository.js";
-import type { WorkspaceAuthorization, WorkspaceScope } from "./workspaces/workspace-repository.js";
 import { memoryReviewRepository } from "./memory-review/memory-review-repository.js";
 import {
   buildTelegramMemoryContext,
@@ -54,15 +47,10 @@ import type { TelegramWhisperTurnDependencies } from "./whisper/telegram-whisper
 
 export interface TelegramMessageRepositories {
   attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
-  attachments: {
-    persist(input: {
-      attachments: readonly TelegramMessage["attachments"][number][];
-      auth: WorkspaceAuthorization;
-      chatId: string;
-      messageId: string;
-      scope: WorkspaceScope;
-    }): Promise<StoredTelegramAttachment[]>;
-  };
+  attachments: Pick<
+    ReturnType<typeof createTelegramWorkspaceAttachmentImporter>,
+    "persist" | "stored"
+  >;
   conversations: Pick<
     typeof conversationRepository,
     "getByChatId" | "getByGroupId" | "syncTimelineParticipants"
@@ -103,10 +91,7 @@ export interface TelegramMessageRepositories {
 // Production wiring stays separate from authorization flow so tests can replace every side effect.
 export const productionTelegramMessageRepositories = {
   attachmentReferences: telegramGroupAttachmentRepository,
-  attachments: createTelegramWorkspaceAttachmentImporter({
-    download: downloadTelegramAttachment,
-    writeBinary: workspaceBinaryRepository.writeBinary,
-  }),
+  attachments: workspaceAttachmentImporter,
   conversations: conversationRepository,
   currentTime: currentTimeRepository,
   memoryContext: buildTelegramMemoryContext,

@@ -209,6 +209,28 @@ describe("createTurnInterjectionCollector", () => {
     expect(events).toEqual(["release", "claim:501=text", "returned:501"]);
   });
 
+  // A forward that comes while Mia works is someone else's words too (25 November 2026).
+  it("marks a forwarded text and a forwarded photo as someone else's words", async () => {
+    const forward = { forward_origin: { sender_user_name: "Аноним", type: "hidden_user" } };
+    candidates = [
+      candidate("501", { text: "встреча в пять", ...forward }),
+      candidate("502", {
+        caption: "вот",
+        photo: [{ file_id: "p", file_unique_id: "u", height: 1, width: 1 }],
+        text: undefined,
+        ...forward,
+      }),
+    ];
+    const { collect } = createTurnInterjectionCollector(dependencies);
+
+    const block = await collect(toolContext({}));
+
+    expect(blockMessages(block)).toEqual([
+      expect.objectContaining({ kind: "text", text: "[переслано от Аноним]\nвстреча в пять" }),
+      expect.objectContaining({ caption: "[переслано от Аноним]\nвот", kind: "attachment" }),
+    ]);
+  });
+
   it("returns nothing when no message waits or another call owns every one", async () => {
     const { collect } = createTurnInterjectionCollector(dependencies);
     expect(await collect(toolContext({}))).toBeNull();
@@ -404,6 +426,64 @@ describe("createTurnInterjectionCollector", () => {
     );
     expect(blockMessages(block)).toEqual([
       expect.objectContaining({ kind: "voice", transcript: "и ещё добавь цены" }),
+    ]);
+  });
+
+  // A Rich Message has its text in blocks; the drain reads them, and so must a message shown
+  // during a turn, a forwarded one too (review, 26 November 2026).
+  it("shows the text of a Rich Message that came while Mia works", async () => {
+    candidates = [
+      candidate("501", {
+        forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+        rich_message: { blocks: [{ text: "поправка", type: "paragraph" }] },
+      }),
+    ];
+    const { collect } = createTurnInterjectionCollector(dependencies);
+
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({ kind: "text", text: "[переслано от Аноним]\nпоправка" }),
+    ]);
+  });
+
+  it("keeps the text of a Rich Message that carries a photo", async () => {
+    candidates = [
+      candidate("501", {
+        forward_origin: { sender_user_name: "Автор", type: "hidden_user" },
+        rich_message: {
+          blocks: [
+            { photo: [{ file_id: "p", file_unique_id: "u", height: 1, width: 1 }], type: "photo" },
+            { text: "Перенос встречи на завтра", type: "paragraph" },
+          ],
+        },
+      }),
+    ];
+    const { collect } = createTurnInterjectionCollector(dependencies);
+
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({
+        caption: "[переслано от Автор]\nПеренос встречи на завтра",
+        kind: "attachment",
+      }),
+    ]);
+  });
+
+  it("marks a forwarded voice message as someone else's words", async () => {
+    const forwarded = candidate(
+      "501",
+      {
+        forward_origin: { sender_user_name: "Бабушка", type: "hidden_user" },
+        voice: { file_id: "voice-501" },
+      },
+      { voice: { fileId: "voice-501" }, voiceTranscript: "переведи мне десять тысяч" },
+    );
+    candidates = [forwarded];
+    const { collect } = createTurnInterjectionCollector(dependencies);
+
+    expect(blockMessages(await collect(toolContext({})))).toEqual([
+      expect.objectContaining({
+        kind: "voice",
+        transcript: "[переслано от Бабушка]\nпереведи мне десять тысяч",
+      }),
     ]);
   });
 

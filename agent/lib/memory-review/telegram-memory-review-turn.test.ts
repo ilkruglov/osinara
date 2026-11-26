@@ -70,6 +70,7 @@ function preparedContext(
     omittedBeforeSequence: null,
     currentMessageEnvelope: currentEnvelope,
     timelineOmission: null,
+    unseenTimelineEntries: [],
     visibleEntryIds: [...historicalSequences.map(id), currentEntryId],
     visibleTimelineEntries: historicalEntries,
   };

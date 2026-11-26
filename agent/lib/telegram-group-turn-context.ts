@@ -90,6 +90,12 @@ export interface PreparedTelegramGroupTurnContext {
   omittedBeforeSequence: string | null;
   visibleEntryIds: string[];
   visibleTimelineEntries: TelegramGroupJournalEntry[];
+  /**
+   * What this session has not seen yet, before the timeline is cut to its budget, with the
+   * references the turn may read; empty in a new session, which has no delta. The files of earlier
+   * series messages come from here (26 November 2026).
+   */
+  unseenTimelineEntries: TelegramGroupJournalEntry[];
   currentMessageEnvelope: string;
   timelineOmission: TelegramTimelineOmission | null;
   /** The timezone the timeline was rendered in, so a re-render keeps the same clock. */
@@ -470,6 +476,14 @@ export function createTelegramGroupTurnContextPreparer(
         input.currentEntryId,
       ],
       visibleTimelineEntries: selected.entries,
+      // The page also carries reply ancestors from before the cursor (for the timeline); an
+      // earlier turn saw them, so only what lies after the cursor is unseen.
+      unseenTimelineEntries:
+        cursor === null
+          ? []
+          : page.entries
+              .filter((entry) => BigInt(entry.sequenceId) > BigInt(cursor))
+              .map((entry) => visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess)),
       timelineTimezone: input.timezone ?? null,
     };
   };

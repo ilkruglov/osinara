@@ -22,10 +22,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BOT_USERNAME,
   groupMessage,
+  journalEntry,
+  preparedTurnContext,
   privateMessage,
   repositories,
   telegramContext,
 } from "./telegram-on-message.test-fixtures.js";
+import { AppError } from "./app-error.js";
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 describe("createTelegramMessageHandler", () => {
   it("adds one trusted UTC snapshot and reuses it across turn preparation", async () => {
@@ -308,6 +311,176 @@ describe("createTelegramMessageHandler", () => {
     expect(result?.context?.join("\n")).toContain("inbox/1/договор.pdf");
     expect(result?.context?.join("\n")).toContain("plain text by default");
     expect(result?.context?.join("\n")).toContain("Rich Markdown only when formatting");
+  });
+
+  // A forward is someone else's words: the current message reaches the model marked as one.
+  it("marks a forwarded current message for the model", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message: TelegramMessage = {
+      ...privateMessage("встреча в пять"),
+      raw: {
+        date: 1_700_000_000,
+        forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+      },
+    };
+
+    await handler(telegramContext().context, message);
+
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ messageText: "[переслано от Аноним]\nвстреча в пять" }),
+    );
+  });
+
+  // A forward that answers Mia's open question reaches it as someone else's words: Eve answers the
+  // question with this text instead of the raw one (review, 26 November 2026).
+  it("gives the marked text of a forward that answers Mia's question", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    // Mia's open question: Eve answers it with the reply text instead of starting a turn.
+    repository.hitl.authorizeReply.mockResolvedValue("authorized");
+    const handler = createTelegramMessageHandler(repository);
+    const message: TelegramMessage = {
+      ...privateMessage("в пять"),
+      raw: {
+        date: 1_700_000_000,
+        forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+      },
+      replyToMessage: {
+        chat: { id: "telegram-101", type: "private" },
+        from: { firstName: "Мия", id: "bot-1", isBot: true, username: BOT_USERNAME },
+        messageId: "41",
+      },
+    };
+
+    const result = await handler(telegramContext().context, message);
+
+    expect(result?.replyText).toBe("[переслано от Аноним]\nв пять");
+  });
+
+  // 25 November 2026: an album came one turn per photo. An earlier photo of a series is now stored
+  // when it is journaled, though it starts no turn of its own.
+  it("stores the photo of an earlier private series message that starts no turn", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message: TelegramMessage = {
+      ...privateMessage(""),
+      attachments: [
+        {
+          fileId: "telegram-photo-11",
+          fileUniqueId: "unique-11",
+          kind: "photo",
+          mediaType: "image/jpeg",
+          size: 1_024,
+        },
+      ],
+      messageId: "11",
+      raw: { osinara_series: { role: "context" }, photo: [{ file_id: "telegram-photo-11" }] },
+    };
+
+    const result = await handler(telegramContext().context, message);
+
+    expect(result).toBeNull();
+    expect(repository.attachments.persist).toHaveBeenCalledWith(
+      expect.objectContaining({ messageId: "11", scope: "personal" }),
+    );
+  });
+
+  // The ingress tells the person about a failed message itself (`sendTelegramFailureNotice`); the
+  // handler's own notice made two replies to one failed photo (review, 26 November 2026).
+  it("leaves the notice of a failed store to the ingress", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.attachments.persist.mockRejectedValue(
+      new AppError("AGENT_ATTACHMENT_INVALID", "Файл повреждён"),
+    );
+    const handler = createTelegramMessageHandler(repository);
+    const { context, sendMessage } = telegramContext();
+    const message: TelegramMessage = {
+      ...privateMessage(""),
+      attachments: [
+        { fileId: "f", fileUniqueId: "u", kind: "photo", mediaType: "image/jpeg", size: 1 },
+      ],
+      raw: { osinara_series: { role: "context" }, photo: [{ file_id: "f" }] },
+    };
+
+    await expect(handler(context, message)).rejects.toMatchObject({
+      code: "AGENT_ATTACHMENT_INVALID",
+    });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  // The last message of the series lists the files of the earlier ones from what this session has
+  // not seen yet (before the timeline budget), so a series cut by a failure or a restart still
+  // shows them, and a photo an earlier turn saw (answered with a reaction) does not come back.
+  it("lists the files of the person's unseen messages and of its series", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.groupContext.prepare.mockResolvedValue(
+      preparedTurnContext({
+        cursorSequence: "13",
+        // The budget kept none of them.
+        unseenTimelineEntries: [
+          journalEntry({ messageKind: "photo", sequenceId: "11" }),
+          journalEntry({ contentText: "ответ", sequenceId: "12" }),
+        ],
+      }),
+    );
+    repository.attachments.stored.mockResolvedValue([
+      {
+        mediaType: "image/jpeg",
+        path: "inbox/9/photo-z.jpg",
+        scope: "personal",
+        telegramMessageId: "9",
+      },
+      {
+        mediaType: "image/jpeg",
+        path: "inbox/11/photo-a.jpg",
+        scope: "personal",
+        telegramMessageId: "11",
+      },
+    ]);
+    const handler = createTelegramMessageHandler(repository);
+    const message: TelegramMessage = {
+      ...privateMessage("нарисуй меня в этом"),
+      messageId: "13",
+      raw: {
+        date: 1_700_000_000,
+        // A new session has no delta; the series still names its members.
+        osinara_series: { addressed: true, role: "current", telegramMessageIds: ["9", "12"] },
+      },
+    };
+
+    const result = await handler(telegramContext().context, message);
+
+    expect(repository.attachments.stored).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ["9", "11", "12"], scope: "personal" }),
+    );
+    const context = result?.context?.join("\n") ?? "";
+    expect(context).toContain("inbox/9/photo-z.jpg");
+    expect(context).toContain("inbox/11/photo-a.jpg");
   });
 
   it("persists a captionless private photo and exposes its trusted workspace path", async () => {
@@ -716,17 +889,13 @@ describe("createTelegramMessageHandler", () => {
       role: "owner",
       userId: "user-1",
     });
-    repository.groupContext.prepare.mockResolvedValueOnce({
-      cursorSequence: "1",
-      currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
-      durableMessage:
-        "<previous_context_summary>\nнить\n</previous_context_summary>\n\n<current_telegram_message>test</current_telegram_message>",
-      handoffBlock: "<previous_context_summary>\nнить\n</previous_context_summary>",
-      omittedBeforeSequence: null,
-      timelineOmission: null,
-      visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
-      visibleTimelineEntries: [],
-    });
+    repository.groupContext.prepare.mockResolvedValueOnce(
+      preparedTurnContext({
+        durableMessage:
+          "<previous_context_summary>\nнить\n</previous_context_summary>\n\n<current_telegram_message>test</current_telegram_message>",
+        handoffBlock: "<previous_context_summary>\nнить\n</previous_context_summary>",
+      }),
+    );
     const handler = createTelegramMessageHandler(repository);
 
     const carried = await handler(telegramContext().context, privateMessage("Продолжим"));

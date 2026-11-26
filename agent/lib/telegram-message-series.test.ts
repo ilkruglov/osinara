@@ -2,8 +2,10 @@
  * Message series tests.
  *
  * Constructs covered:
- * - Only plain text messages with a personal sender may form a series.
- * - Replies and mentions aimed at someone else, commands, media, voice, and forwards stay alone.
+ * - Messages with a personal sender may form a series: text, photos, image and text files, and
+ *   forwards (an album and the text after it are one turn, 25 November 2026).
+ * - Replies and mentions aimed at someone else (in the text or the caption), commands, voice and
+ *   other media stay alone.
  * - A series continues only for the same author in the same chat and topic.
  * - The series marker survives the raw-message transport and rejects malformed shapes.
  */
@@ -18,6 +20,7 @@ import {
 } from "./telegram-message-series.js";
 
 const BOT = "family_agent";
+const PHOTO = [{ file_id: "p", file_unique_id: "u", height: 1, width: 1 }];
 
 function update(message: Record<string, unknown>, updateId = 1) {
   const parsed = parseTelegramUpdate({
@@ -82,16 +85,16 @@ describe("isSeriesEligible", () => {
     ["mention of someone else", { text: "@osinara_bot привет" }],
     ["slash command", { text: "/start" }],
     ["voice", { text: "", voice: { file_id: "v", file_size: 1, mime_type: "audio/ogg" } }],
-    ["photo", { photo: [{ file_id: "p", file_unique_id: "u", height: 1, width: 1 }] }],
     [
-      "forward",
+      "video",
       {
-        forward_origin: {
-          date: 1,
-          sender_user: { first_name: "Х", id: 3, is_bot: false },
-          type: "user",
-        },
+        text: undefined,
+        video: { duration: 1, file_id: "v", file_unique_id: "vu", height: 1, width: 1 },
       },
+    ],
+    [
+      "caption naming someone else",
+      { caption: "@osinara_bot смотри", photo: PHOTO, text: undefined },
     ],
     [
       "channel post",
@@ -103,6 +106,64 @@ describe("isSeriesEligible", () => {
     ["empty text", { text: "   " }],
   ])("keeps %s out of a series", (_name, overrides) => {
     expect(isSeriesEligible(update(overrides), BOT)).toBe(false);
+  });
+
+  // 25 November 2026: Zhenya sent photos in albums of three and four, and each photo started its
+  // own turn; the answers came out of order and each said it would wait for the rest.
+  it.each([
+    ["photo without a caption", { photo: PHOTO, text: undefined }],
+    ["photo with a caption", { caption: "вот я", photo: PHOTO, text: undefined }],
+    [
+      "image file",
+      {
+        document: {
+          file_id: "d",
+          file_name: "a.jpg",
+          file_unique_id: "du",
+          mime_type: "image/jpeg",
+        },
+        text: undefined,
+      },
+    ],
+    [
+      "text file",
+      {
+        document: {
+          file_id: "t",
+          file_name: "a.txt",
+          file_unique_id: "tu",
+          mime_type: "text/plain",
+        },
+        text: undefined,
+      },
+    ],
+    [
+      "forward",
+      {
+        forward_origin: {
+          date: 1,
+          sender_user: { first_name: "Х", id: 3, is_bot: false },
+          type: "user",
+        },
+      },
+    ],
+  ])("lets a %s into a series", (_name, overrides) => {
+    expect(isSeriesEligible(update(overrides), BOT)).toBe(true);
+  });
+
+  // A forwarded post often ends with its channel's @name: those are the author's words, not the
+  // sender's address to someone else (review, 26 November 2026).
+  it("lets a forwarded post that names another account into a series", () => {
+    expect(
+      isSeriesEligible(
+        update({
+          chat: { id: 101, type: "private" },
+          forward_origin: { chat: { id: -2, title: "Новости" }, type: "channel" },
+          text: "Главное за день. Подписывайтесь: @moscow_news",
+        }),
+        BOT,
+      ),
+    ).toBe(true);
   });
 });
 

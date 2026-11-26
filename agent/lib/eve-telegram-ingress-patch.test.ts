@@ -72,6 +72,10 @@ describe("Eve Telegram verified ingress patch", () => {
     expect(codeText(inputRequestsRuntime)).toContain(codeText("queueDeferredStepInput"));
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
+    expect(
+      codeText(runtime).match(/l=r\.replyText\?\?\(e\.message\.text\|\|e\.message\.caption\)/g),
+    ).toHaveLength(1);
+    expect(types.match(/readonly replyText\?: string;/g)).toHaveLength(1);
     expect(valid).toMatchObject({ replyHandling: "message" });
     expect(invalid).toBeDefined();
     expect(callbackResult.acknowledgementText).toBe("Решение сохранено");
@@ -353,6 +357,56 @@ describe("Eve Telegram verified ingress patch", () => {
         requestId: "telegram_reply:341",
         text: "Да",
       },
+    ]);
+  });
+
+  // A forward that answers Mia's open question is someone else's words: the application's text
+  // (with the mark of the forward) is the answer, not the raw one (review, 26 November 2026).
+  it("answers a pending question with the application's reply text when it gives one", async () => {
+    const source = createChannelSource({ id: "session-hitl-forward" });
+    const channel = telegramChannel({
+      credentials: { webhookSecretToken: "webhook-secret" },
+      onMessage: async () => ({ auth: null, replyText: "[переслано от Аноним]\nв пять" }),
+    });
+    const route = channel.routes[0] as unknown as HttpRoute;
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await route.handler(
+      new Request("https://agent.example/eve/v1/telegram", {
+        body: JSON.stringify({
+          message: {
+            chat: { id: -100, type: "supergroup" },
+            date: 1_700_000_000,
+            forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+            from: { first_name: "Анна", id: 101, is_bot: false },
+            message_id: 344,
+            reply_to_message: {
+              chat: { id: -100, type: "supergroup" },
+              date: 1_699_999_999,
+              from: { first_name: "Osinara", id: 999, is_bot: true },
+              message_id: 341,
+              text: "Во сколько встреча?",
+            },
+            text: "в пять",
+          },
+          update_id: 1007,
+        }),
+        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        method: "POST",
+      }),
+      {
+        params: {},
+        requestIp: null,
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
+      },
+    );
+    await backgroundTask;
+
+    expect(source.respond.mock.calls[0]?.[0]).toEqual([
+      { requestId: "telegram_reply:341", text: "[переслано от Аноним]\nв пять" },
     ]);
   });
 

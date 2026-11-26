@@ -12,18 +12,39 @@
  * - `isSeriesEligible`: message shapes that may join a series at all.
  * - `continuesSeries`: whether a candidate extends the series started by the head message.
  * - `withSeriesMarker`, `readTelegramSeriesMarker`: marker transport through Eve's parsed update.
+ * - `withSeriesAddressed`, `wasAddressedInSeries`: the address a series keeps in the queue, carried
+ *   to the turn of a member that comes back alone.
  */
 import type { TelegramMessage, TelegramUpdate } from "eve/channels/telegram";
 
 import {
   classifyTelegramInboundMedia,
   isReplyToBot,
+  isTelegramForward,
   isTelegramSlashCommand,
   mentionsAnotherUsername,
+  telegramMessageText,
 } from "./telegram-message-policy.js";
 
-export const TELEGRAM_SERIES_MAX_MESSAGES = 5;
+export const TELEGRAM_SERIES_MAX_MESSAGES = 10;
 export const TELEGRAM_SERIES_MARKER_KEY = "osinara_series";
+/**
+ * A member of a series that called Mia keeps the address in the queue (`series_addressed`,
+ * 26 November 2026): one a failure or a restart returns there comes back without the caption that
+ * called her, and must still be answered. The drain sets this key at dispatch; it is never stored.
+ */
+const TELEGRAM_SERIES_ADDRESSED_KEY = "osinara_series_addressed";
+
+export function withSeriesAddressed(
+  update: TelegramUpdate & { kind: "message" },
+): TelegramUpdate & { kind: "message" } {
+  const raw = { ...update.message.raw, [TELEGRAM_SERIES_ADDRESSED_KEY]: true };
+  return { ...update, message: { ...update.message, raw } };
+}
+
+export function wasAddressedInSeries(raw: Record<string, unknown>): boolean {
+  return raw[TELEGRAM_SERIES_ADDRESSED_KEY] === true;
+}
 
 export type TelegramSeriesMarker =
   | { role: "context" }
@@ -34,23 +55,25 @@ export type TelegramSeriesMarker =
       telegramMessageIds: string[];
     };
 
-// Telegram marks forwarded content with one of these keys; a forward is someone else's words.
-const FORWARD_KEYS = ["forward_origin", "forward_from", "forward_from_chat", "forward_date"];
-
 export function isSeriesEligible(update: TelegramUpdate, botUsername: string): boolean {
   if (update.kind !== "message") return false;
   const message = update.message;
   if (message.chat.type === "channel") return false;
-  // A channel post has no personal sender; voice, media, and forwards keep their own turn.
+  // A channel post has no personal sender; voice and media other than photos and readable files
+  // keep their own turn. Photos, files and forwards join (an album is one turn, 25 November 2026).
   if (!message.from || Object.hasOwn(message.raw, "sender_chat")) return false;
-  if (Object.hasOwn(message.raw, "voice") || message.attachments.length > 0) return false;
-  if (classifyTelegramInboundMedia(message) !== "none") return false;
-  if (FORWARD_KEYS.some((key) => Object.hasOwn(message.raw, key))) return false;
-  const text = message.text.trim();
-  if (!text || isTelegramSlashCommand(text)) return false;
-  // Replies and mentions that point at someone other than this bot are that person's thread.
+  if (Object.hasOwn(message.raw, "voice")) return false;
+  const media = classifyTelegramInboundMedia(message);
+  if (media === "unsupported_media") return false;
+  const text = telegramMessageText(message).trim();
+  if (media === "none" && !text) return false;
+  if (isTelegramSlashCommand(text)) return false;
+  // Replies and mentions that point at someone other than this bot are that person's thread; a
+  // forward's mentions are its author's words, not the sender's.
   if (message.replyToMessage && !isReplyToBot(message, botUsername)) return false;
-  if (mentionsAnotherUsername(text, botUsername)) return false;
+  if (!isTelegramForward(message.raw) && mentionsAnotherUsername(text, botUsername)) {
+    return false;
+  }
   return true;
 }
 

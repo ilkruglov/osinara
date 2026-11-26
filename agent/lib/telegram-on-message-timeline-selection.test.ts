@@ -8,6 +8,7 @@
 import { expect, it } from "vitest";
 
 import {
+  preparedTurnContext,
   privateMessage,
   repositories,
   telegramContext,
@@ -25,15 +26,9 @@ function privateRepository(visibleEntryIds: string[]) {
     role: "owner",
     userId: "user-1",
   });
-  repository.groupContext.prepare.mockResolvedValue({
-    cursorSequence: String(visibleEntryIds.length),
-    currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
-    durableMessage: "<current_telegram_message>test</current_telegram_message>",
-    omittedBeforeSequence: null,
-    timelineOmission: null,
-    visibleEntryIds,
-    visibleTimelineEntries: [],
-  });
+  repository.groupContext.prepare.mockResolvedValue(
+    preparedTurnContext({ cursorSequence: String(visibleEntryIds.length), visibleEntryIds }),
+  );
   repository.conversations.syncTimelineParticipants.mockImplementation(
     async (_conversationId, entryIds) => {
       if (

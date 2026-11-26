@@ -13,7 +13,7 @@ import type { StoredTelegramAttachment } from "./attachments/telegram-workspace-
 import { evaluateConversationAccess } from "./family-access.js";
 import type { ProactiveDeliveryAuthorization } from "./proactive-deliveries/proactive-delivery-repository.js";
 import type { PrepareSessionInput } from "./sessions/session-repository.js";
-import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
+import type { TelegramAttachmentReference } from "./telegram-group-journal-context.js";
 import type { TelegramRepository } from "./telegram-repository.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "./workspaces/workspace-repository.js";
@@ -57,7 +57,7 @@ export function formatStoredTelegramAttachments(
 }
 
 export function formatTelegramAttachmentReferences(
-  attachments: readonly (TelegramGroupAttachmentSummary & { telegramMessageId: string })[],
+  attachments: readonly TelegramAttachmentReference[],
 ): string {
   const serialized = escapeUntrustedContextJson(attachments);
   return [

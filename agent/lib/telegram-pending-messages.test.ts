@@ -46,6 +46,33 @@ describe("pendingMessagesFromPayloads", () => {
     expect(pending?.text).toBe("[текст скрыт: секрет]");
   });
 
+  it("marks a forwarded message as someone else's words", () => {
+    const [pending] = pendingMessagesFromPayloads([
+      {
+        payload: payload(22, "встреча в пять", {
+          forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+        }),
+        receivedAt: new Date("2026-09-05T22:10:00Z"),
+      },
+    ]);
+
+    expect(pending?.text).toBe("[переслано от Аноним] встреча в пять");
+  });
+
+  it("keeps a forwarded message within the summary limit, its mark included", () => {
+    const [pending] = pendingMessagesFromPayloads([
+      {
+        payload: payload(23, "я".repeat(500), {
+          forward_origin: { sender_user_name: "Аноним", type: "hidden_user" },
+        }),
+        receivedAt: new Date("2026-09-05T22:10:00Z"),
+      },
+    ]);
+
+    expect(pending?.text.startsWith("[переслано от Аноним] я")).toBe(true);
+    expect(pending?.text.length).toBeLessThanOrEqual(500);
+  });
+
   it("masks a key before cutting the text", () => {
     const text = `${"ж".repeat(480)} FAL_KEY=abcdefgh12345`;
     const [pending] = pendingMessagesFromPayloads([

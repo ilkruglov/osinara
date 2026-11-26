@@ -188,6 +188,8 @@ const POST_V0101_MIGRATIONS = [
   "155_claim_evidence_recorded_by.sql",
   "156_conversation_participant_label_key.sql",
   "157_claim_evidence_recorded_by_backfill.sql",
+  "158_workspace_operations_by_workspace.sql",
+  "159_telegram_ingress_series_addressed.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

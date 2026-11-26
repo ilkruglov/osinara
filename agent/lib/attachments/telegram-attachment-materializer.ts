@@ -4,6 +4,7 @@
  * Exports:
  * - `createTelegramAttachmentMaterializer`: resolves one opaque reference and persists its bytes.
  * - `materializeTelegramAttachment`: production registered-group journal to workspace pipeline.
+ * - `workspaceAttachmentImporter`: the one production importer, shared with the message handler.
  */
 import type { TelegramAttachment } from "eve/channels/telegram";
 
@@ -72,8 +73,10 @@ export function createTelegramAttachmentMaterializer(
   };
 }
 
-const workspaceAttachmentImporter = createTelegramWorkspaceAttachmentImporter({
+export const workspaceAttachmentImporter = createTelegramWorkspaceAttachmentImporter({
   download: downloadTelegramAttachment,
+  findBinaryWritesByKeyPrefixes: workspaceBinaryRepository.findBinaryWritesByKeyPrefixes,
+  listFilesUnder: workspaceBinaryRepository.listFilesUnder,
   writeBinary: workspaceBinaryRepository.writeBinary,
 });
 

@@ -112,6 +112,36 @@ export function createWorkspaceBinaryRepository(root: string, resolver: Workspac
       return result.rows[0]?.result ?? null;
     },
 
+    /**
+     * For each prefix, the binary writes of the scope whose replay key starts with it, oldest first:
+     * one workspace check and one round trip for any number of prefixes.
+     */
+    async findBinaryWritesByKeyPrefixes(
+      auth: WorkspaceAuthorization,
+      scope: WorkspaceScope,
+      prefixes: readonly string[],
+    ): Promise<WorkspaceFileRecord[][]> {
+      const found: WorkspaceFileRecord[][] = prefixes.map(() => []);
+      if (prefixes.length === 0) return found;
+      const workspaceId = await resolveWorkspaceId(resolver, auth, scope);
+      // Under collation "C" a prefix known when the query is planned is a range of the key index
+      // (migration 158); a prefix joined from an array is not, and the workspace is read whole.
+      // So each prefix is a branch of its own with its own parameter.
+      const branches = prefixes.map(
+        (_, index) =>
+          `SELECT ${index} AS position, result, created_at, operation_key
+             FROM workspace_operations
+            WHERE workspace_id = $1 AND operation_type = 'binary_write'
+              AND starts_with(operation_key COLLATE "C", $${index + 2})`,
+      );
+      const result = await database().query<{ position: number; result: WorkspaceFileRecord }>(
+        `${branches.join(" UNION ALL ")} ORDER BY position, created_at, operation_key`,
+        [workspaceId, ...prefixes],
+      );
+      for (const row of result.rows) found[row.position]!.push(row.result);
+      return found;
+    },
+
     /** The files under a directory of the scope with their times; a missing directory has none. */
     async listFilesUnder(
       auth: WorkspaceAuthorization,

@@ -86,6 +86,26 @@ describe("telegramReplyTargetProjection", () => {
     ).toEqual({ quotedText: "streisand", snapshot: null });
   });
 
+  // A reply to a forward the journal lacks: this copy is where the model first reads those words,
+  // so it carries the mark (review, 26 November 2026).
+  it("marks a forwarded target as someone else's words", () => {
+    const message = productionReply();
+    const target = message.raw.reply_to_message as Record<string, unknown>;
+    const projection = telegramReplyTargetProjection({
+      ...message,
+      raw: {
+        ...message.raw,
+        reply_to_message: {
+          ...target,
+          forward_origin: { sender_user_name: "Источник", type: "hidden_user" },
+          text: "чужие слова",
+        },
+      },
+    });
+
+    expect(projection.snapshot?.contentText).toBe("[переслано от Источник]\nчужие слова");
+  });
+
   it("reads the text of a rich target from its blocks when text and caption are empty", () => {
     const message = productionReply();
     const target = message.raw.reply_to_message as Record<string, unknown>;

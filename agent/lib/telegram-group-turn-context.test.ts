@@ -502,6 +502,56 @@ describe("Telegram group turn context", () => {
     expect((await prepare(input)).currentMessageEnvelope).not.toContain("earlierMessagesInSeries");
   });
 
+  // The files of earlier messages a turn answers come from what its session has not seen yet,
+  // before the timeline is cut to its budget; a new session has no such delta (26 November 2026).
+  it("returns the unseen entries before the budget, with references the turn may read", async () => {
+    const deps = dependencies("10");
+    const photo = (sequenceId: string) => ({
+      ...entry(sequenceId, "x".repeat(5_000)),
+      attachment: {
+        attachmentId: `00000000-0000-4000-8000-0000000000${sequenceId}`,
+        kind: "photo" as const,
+        mediaType: "image/jpeg",
+      },
+    });
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [photo("11"), photo("12"), photo("13"), photo("14")],
+      omittedBeforeSequence: null,
+    });
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      attachmentReferenceAccess: { images: false, readableText: false },
+    });
+
+    expect(result.unseenTimelineEntries.map((item) => item.sequenceId)).toEqual([
+      "11",
+      "12",
+      "13",
+      "14",
+    ]);
+    expect(result.unseenTimelineEntries.every((item) => item.attachment === undefined)).toBe(true);
+    expect(result.visibleTimelineEntries.length).toBeLessThan(4);
+
+    const fresh = createTelegramGroupTurnContextPreparer(dependencies(null));
+    expect((await fresh(input)).unseenTimelineEntries).toEqual([]);
+  });
+
+  // The incremental page also carries reply ancestors from before the cursor, for the timeline;
+  // an earlier turn saw them, so they are not unseen (repeat review, 26 November 2026).
+  it("keeps reply ancestors from before the cursor out of the unseen entries", async () => {
+    const deps = dependencies("10");
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [entry("5", "старое фото"), entry("11", "ответ на ответ")],
+      omittedBeforeSequence: null,
+    });
+
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+
+    expect(result.unseenTimelineEntries.map((item) => item.sequenceId)).toEqual(["11"]);
+  });
+
   it("embeds the bootstrap timeline and reply ancestry into a new durable turn", async () => {
     const deps = dependencies(null);
     deps.journal.listRecent.mockResolvedValue([entry("98", "Казань"), entry("99", "Тула")]);

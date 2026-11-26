@@ -15,17 +15,16 @@
  * - `withPendingMarker`, `readTelegramPendingMarker`: marker transport through Eve's parsed update.
  * - `formatPendingMessagesContext`: the untrusted context block.
  */
-import {
-  parseTelegramUpdate,
-  type TelegramMessage,
-  type TelegramUpdate,
-} from "eve/channels/telegram";
+import type { TelegramMessage, TelegramUpdate } from "eve/channels/telegram";
 import { clipText } from "./display-text.js";
 
 import { journalText } from "./secret-redaction.js";
-import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
-import { normalizeRichMessage } from "./telegram-rich-message.js";
-import { withLocationText } from "./telegram-location-message.js";
+import {
+  classifyTelegramInboundMedia,
+  telegramForwardMarker,
+  withForwardMarker,
+} from "./telegram-message-policy.js";
+import { parseQueuedTelegramUpdate } from "./telegram-queued-update.js";
 
 export const TELEGRAM_PENDING_MESSAGES_MAX = 10;
 const TELEGRAM_PENDING_MARKER_KEY = "osinara_pending";
@@ -53,21 +52,23 @@ export function pendingMessagesFromPayloads(
 ): TelegramPendingMessage[] {
   const messages: TelegramPendingMessage[] = [];
   for (const row of rows) {
-    const parsed = parseTelegramUpdate(row.payload);
-    if (!parsed || parsed.kind !== "message") continue;
-    const update = withLocationText(normalizeRichMessage(parsed));
-    if (update.kind !== "message") continue;
+    const update = parseQueuedTelegramUpdate(row.payload);
+    if (update?.kind !== "message") continue;
     const message: TelegramMessage = update.message;
     const text = message.text.trim();
     const media = classifyTelegramInboundMedia(message);
+    // A forward is someone else's words, here as in the journal; the mark is cut and masked with
+    // the text, so the line keeps its limit.
+    const forward = telegramForwardMarker(message.raw);
+    const placeholder = Object.hasOwn(message.raw, "voice")
+      ? "[голосовое сообщение]"
+      : media !== "none" || message.attachments.length > 0
+        ? "[вложение]"
+        : "";
     const body =
       text.length > 0
-        ? clip(text)
-        : Object.hasOwn(message.raw, "voice")
-          ? "[голосовое сообщение]"
-          : media !== "none" || message.attachments.length > 0
-            ? "[вложение]"
-            : "";
+        ? clip(withForwardMarker(forward, text, " "))
+        : placeholder && withForwardMarker(forward, placeholder, " ");
     if (!body) continue;
     const from = message.from;
     messages.push({

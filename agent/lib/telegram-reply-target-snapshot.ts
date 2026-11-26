@@ -19,6 +19,7 @@ import type { TelegramMessage } from "eve/channels/telegram";
 import { clipText } from "./display-text.js";
 import { asRecord as record, nonEmptyText } from "./json-value.js";
 import { journalText, strictSecretSpans, type SecretSpan } from "./secret-redaction.js";
+import { telegramForwardMarker, withForwardMarker } from "./telegram-message-policy.js";
 import { richMessagePlainText, richQuotableText, richQuoteText } from "./telegram-rich-message.js";
 
 export interface TelegramReplyTargetSnapshot {
@@ -211,6 +212,10 @@ export function telegramReplyTargetProjection(
   return {
     quotedText:
       shownQuote === null ? null : clipText(shownQuote, TELEGRAM_REPLY_QUOTE_MAX_CHARACTERS),
-    snapshot: targetSnapshot(rawTarget, shownText),
+    // A forwarded target is someone else's words, marked as the journal marks it.
+    snapshot: targetSnapshot(
+      rawTarget,
+      withForwardMarker(telegramForwardMarker(rawTarget), shownText),
+    ),
   };
 }

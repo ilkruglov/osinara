@@ -9,7 +9,10 @@ import type { TelegramMessage } from "eve/channels/telegram";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import type { TelegramGroupAttachmentSummary } from "../telegram-group-journal-context.js";
+import type {
+  TelegramAttachmentReference,
+  TelegramGroupAttachmentSummary,
+} from "../telegram-group-journal-context.js";
 import {
   lockTelegramGroupJournal,
   requireTelegramPositiveBigint,
@@ -44,7 +47,7 @@ export interface TelegramGroupAttachmentRepository {
     groupId: string,
     currentEntryId: string,
     target: TelegramMessage,
-  ): Promise<(TelegramGroupAttachmentSummary & { telegramMessageId: string }) | null>;
+  ): Promise<TelegramAttachmentReference | null>;
   find(
     auth: WorkspaceAuthorization,
     attachmentId: string,
@@ -57,10 +60,7 @@ export interface TelegramGroupAttachmentRepository {
     auth: WorkspaceAuthorization,
     options: TelegramGroupAttachmentListOptions,
   ): Promise<{ items: TelegramGroupAttachmentListItem[]; nextCursor: string | null }>;
-  record(
-    groupId: string,
-    message: TelegramMessage,
-  ): Promise<TelegramGroupAttachmentSummary & { telegramMessageId: string }>;
+  record(groupId: string, message: TelegramMessage): Promise<TelegramAttachmentReference>;
 }
 
 function attachmentSummary(

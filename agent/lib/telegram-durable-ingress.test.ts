@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AppError } from "./app-error.js";
 import type { TelegramIngressRepository } from "./telegram-ingress-contract.js";
 import { createTelegramDurableIngress } from "./telegram-durable-ingress.js";
+import { TELEGRAM_SERIES_MAX_MESSAGES } from "./telegram-message-series.js";
 
 const BOUNDARY_SETTLEMENT_TIMEOUT_MILLISECONDS = 100;
 
@@ -68,6 +69,7 @@ function repository() {
       hasPendingApprovals: vi.fn().mockResolvedValue(false),
       hasPendingApprovalsInChat: vi.fn().mockResolvedValue(false),
       listPendingAfter: vi.fn().mockResolvedValue([]),
+      markSeriesAddressed: vi.fn(),
       rekeyQueue: vi.fn(),
       release: vi.fn(),
       releaseStaleLeases: vi.fn().mockResolvedValue(0),
@@ -93,7 +95,7 @@ describe("createTelegramDurableIngress", () => {
       handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
       leaseMilliseconds: 60_000,
       privateBurst: { maxWaitMilliseconds: 2_000, quietMilliseconds: 500 },
-      repository: { ...storage.value, heldPrivateChatReadyIn: ready },
+      repository: { ...storage.value, heldChatReadyIn: ready },
       transcribeVoice: vi.fn(),
     });
     const tasks: Promise<unknown>[] = [];
@@ -614,6 +616,160 @@ describe("createTelegramDurableIngress", () => {
     });
   }
 
+  /** A dispatch whose turn ends at once: `session.waiting` is its boundary. */
+  function waitingRun(id: string) {
+    return {
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "session.waiting" });
+          },
+        }),
+      id,
+    };
+  }
+
+  /** The drain the webhook of `head` starts, run to the end of its background work. */
+  async function runSeries(
+    storage: ReturnType<typeof repository>,
+    head: { payload: Record<string, unknown> },
+    dispatch: ReturnType<typeof vi.fn>,
+  ) {
+    const handle = seriesIngress(storage, dispatch);
+    const update = parseTelegramUpdate(head.payload);
+    if (!update)
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    let backgroundTask: Promise<unknown> | undefined;
+    await handle({
+      dispatch,
+      raw: head.payload,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+  }
+
+  // 25 November 2026: an album came as one turn per photo. Now the album and the text after it are
+  // one series, and a caption that calls Mia addresses the whole run.
+  it("answers an album and the text after it in one turn, addressed by a caption", async () => {
+    const storage = repository();
+    const photo = (updateId: number, caption?: string) => {
+      const claim = seriesClaim(storage, updateId, "");
+      const { text: _text, ...message } = claim.payload.message;
+      return {
+        ...claim,
+        payload: {
+          ...claim.payload,
+          message: {
+            ...message,
+            ...(caption === undefined ? {} : { caption }),
+            media_group_id: "album-1",
+            photo: [
+              { file_id: `p${updateId}`, file_unique_id: `u${updateId}`, height: 1, width: 1 },
+            ],
+          },
+        },
+      };
+    };
+    const head = photo(6001, "Мия, глянь");
+    const second = photo(6002);
+    const third = seriesClaim(storage, 6003, "что скажешь?");
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.claimFollowing = vi.fn(
+      async (input: { accept: (payload: Record<string, unknown>) => boolean }) => {
+        const accepted = [];
+        for (const candidate of [second, third]) {
+          if (!input.accept(candidate.payload)) break;
+          accepted.push(candidate);
+        }
+        return accepted;
+      },
+    );
+    const dispatch = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(waitingRun("session-album"));
+
+    await runSeries(storage, head, dispatch);
+
+    expect(storage.value.claimFollowing).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: TELEGRAM_SERIES_MAX_MESSAGES - 1 }),
+    );
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(dispatch.mock.calls[2]?.[0].message.raw.osinara_series).toEqual({
+      addressed: true,
+      earlierUpdateIds: ["6001", "6002"],
+      role: "current",
+      telegramMessageIds: ["6001", "6002"],
+    });
+    // Each member keeps the address in the queue: a tail that a failure or a restart returns there
+    // is still answered when it comes back without the caption that called Mia.
+    expect(storage.value.markSeriesAddressed).toHaveBeenCalledWith(["6001", "6002", "6003"]);
+  });
+
+  it("answers a returned tail of a series that was addressed before", async () => {
+    const storage = repository();
+    const addressed = (claim: ReturnType<typeof seriesClaim>) => ({
+      ...claim,
+      seriesAddressed: true,
+    });
+    const head = addressed(seriesClaim(storage, 6101, "вот ещё"));
+    const second = addressed(seriesClaim(storage, 6102, "и это"));
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.claimFollowing = vi.fn().mockResolvedValue([second]);
+    const dispatch = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(waitingRun("session-tail"));
+
+    await runSeries(storage, head, dispatch);
+
+    expect(dispatch.mock.calls[1]?.[0].message.raw.osinara_series).toMatchObject({
+      addressed: true,
+      role: "current",
+    });
+  });
+
+  // Repeat review, 26 November 2026: with the two queries run together, a failed read of the
+  // queue tail returned the members before their address was written.
+  it("writes the address of a series before a failure can return its members", async () => {
+    const storage = repository();
+    const head = seriesClaim(storage, 6301, "Мия, глянь");
+    const second = seriesClaim(storage, 6302, "вот ещё");
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.claimFollowing = vi.fn().mockResolvedValue([second]);
+    const order: string[] = [];
+    storage.value.markSeriesAddressed = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push("marked");
+    });
+    storage.value.listPendingAfter = vi.fn().mockRejectedValue(new Error("connection reset"));
+    storage.value.release = vi.fn(async () => {
+      order.push("released");
+    });
+
+    await runSeries(storage, head, vi.fn()).catch(() => undefined);
+
+    expect(order).toEqual(["marked", "released"]);
+  });
+
+  it("keeps the address of a member a failure returned to the queue alone", async () => {
+    const storage = repository();
+    const head = { ...seriesClaim(storage, 6201, "и вот это"), seriesAddressed: true };
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.claimFollowing = vi.fn().mockResolvedValue([]);
+    const dispatch = vi.fn().mockResolvedValueOnce(waitingRun("session-lone"));
+
+    await runSeries(storage, head, dispatch);
+
+    const raw = dispatch.mock.calls[0]?.[0].message.raw;
+    expect(raw.osinara_series_addressed).toBe(true);
+    expect(raw.osinara_series).toBeUndefined();
+  });
+
   it("answers consecutive messages of one author in a single turn started by the last one", async () => {
     const storage = repository();
     const head = seriesClaim(storage, 2001, "Мия, смотри");
@@ -674,7 +830,7 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.claimFollowing).toHaveBeenCalledWith(
       expect.objectContaining({
         afterUpdateId: "2001",
-        limit: 4,
+        limit: TELEGRAM_SERIES_MAX_MESSAGES - 1,
         queueId: storage.claim.queueId,
       }),
     );

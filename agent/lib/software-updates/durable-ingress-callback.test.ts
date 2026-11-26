@@ -50,6 +50,7 @@ describe("software update callback durable ingress", () => {
       fail: vi.fn(),
       hasPendingApprovals: vi.fn().mockResolvedValue(false),
       hasPendingApprovalsInChat: vi.fn().mockResolvedValue(false),
+      markSeriesAddressed: vi.fn(),
       listPendingAfter: vi.fn().mockResolvedValue([]),
       rekeyQueue: vi.fn(),
       release: vi.fn(),

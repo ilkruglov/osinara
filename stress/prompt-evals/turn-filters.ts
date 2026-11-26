@@ -10,7 +10,10 @@
  *   Latin word characters, so after a Cyrillic name it never matched and `--addressed-only`
  *   dropped every turn (5 November 2026).
  */
-import { isAgentNameMentioned } from "../../agent/lib/telegram-message-policy.js";
+import {
+  isAgentNameMentioned,
+  withoutForwardMarker,
+} from "../../agent/lib/telegram-message-policy.js";
 
 export function isAddressedToMia(envelope: string): boolean {
   const block = envelope
@@ -24,5 +27,6 @@ export function isAddressedToMia(envelope: string): boolean {
   } catch {
     // Not JSON: the block itself is the text.
   }
-  return isAgentNameMentioned(text);
+  // The mark of a forward opens the text and names its origin, not the one being addressed.
+  return isAgentNameMentioned(withoutForwardMarker(text));
 }
