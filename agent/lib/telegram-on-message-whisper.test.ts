@@ -288,9 +288,7 @@ describe("createTelegramMessageHandler whisper", () => {
   ])("answers a reply to %s within the budget, naming what it lacks", async (_, text, quote) => {
     const repository = familyGroup();
     const handler = createTelegramMessageHandler(repository);
-    // A long whisper (escaped six times) leaves the target and fragment no room unless they are
-    // shortened to fit the timeline's reserve.
-    const message = whisper(`/whisper ${"<".repeat(2_000)}`);
+    const message = whisper("/whisper что это?");
     const reply: TelegramMessage = {
       ...message,
       raw: {

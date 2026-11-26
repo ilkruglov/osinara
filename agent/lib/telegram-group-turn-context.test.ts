@@ -19,6 +19,7 @@ import {
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS,
 } from "../config.js";
 import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
 import {
@@ -161,9 +162,6 @@ describe("Telegram group turn context", () => {
     const result = await createTelegramGroupTurnContextPreparer(dependencies("7"))({
       ...input,
       currentSequence: "12",
-      // Escaped six times: 12 000 for the text, 6 144 each for the quote and the snapshot, past
-      // what the envelope may take before the timeline's reserve.
-      messageText: "<".repeat(2_000),
       replyQuotedText: "<".repeat(1_024),
       replyTargetSnapshot: {
         contentText: "<".repeat(1_024),
@@ -266,6 +264,73 @@ describe("Telegram group turn context", () => {
     expect(result.durableMessage).toContain(`ещё знаков: ${12_000 - kept}`);
   });
 
+  // Codex review, 26 November 2026: with the window nearly full, the shortened long entry no
+  // longer fitted, the window stopped at it, and the short entry before it (a move of the game)
+  // was hidden again. Such an entry now comes as a stub and the window goes on.
+  it("brings a long entry that no longer fits as a stub and goes on to older entries", async () => {
+    const deps = dependencies("90");
+    // The two newest entries leave 1 040 characters: less than the shortened entry takes.
+    const each = Math.floor((TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS - 1_040) / 2) - 80;
+    deps.journal.listRecent.mockResolvedValue([
+      entry("96", "поставили крестик"),
+      { ...entry("97", "z".repeat(12_000)), actorKind: "agent_self" },
+      entry("98", "a".repeat(each)),
+      entry("99", "b".repeat(each)),
+    ]);
+
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+
+    expect(result.durableMessage).toContain("поставили крестик");
+    expect(result.durableMessage).toContain("#97 ");
+    expect(result.durableMessage).not.toContain(
+      "z".repeat(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS),
+    );
+    const stub = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS;
+    expect(result.durableMessage).toContain(`${"z".repeat(stub)}… [ещё знаков: ${12_000 - stub}]`);
+  });
+
+  // Codex review of that fix: an entry just past the cap is not cut, and when it does not fit whole
+  // it still comes as a stub rather than stopping the window.
+  it("brings an entry just past the cap as a stub when it does not fit whole", async () => {
+    const deps = dependencies("90");
+    const each = Math.floor((TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS - 1_040) / 2) - 80;
+    const justPast = "z".repeat(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS + 1);
+    deps.journal.listRecent.mockResolvedValue([
+      entry("96", "поставили крестик"),
+      entry("97", justPast),
+      entry("98", "a".repeat(each)),
+      entry("99", "b".repeat(each)),
+    ]);
+
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+
+    expect(result.durableMessage).toContain("поставили крестик");
+    expect(result.durableMessage).not.toContain(justPast);
+    const stub = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS;
+    expect(result.durableMessage).toContain(`ещё знаков: ${justPast.length - stub}]`);
+  });
+
+  // Review, 26 November 2026: just past the cap the count made the "shortened" entry longer than
+  // the entry itself, so an entry that fitted whole came as a stub.
+  it("keeps an entry just past the cap whole when the shortened one would be longer", async () => {
+    const deps = dependencies("90");
+    const cap = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS;
+    const justPast = "x".repeat(cap + 1);
+    // Room for the entry whole (its text and 80 of framing), not for its head and the count.
+    const room = cap + 1 + 80 + 5;
+    const each = Math.floor((TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS - room) / 2) - 80;
+    deps.journal.listRecent.mockResolvedValue([
+      entry("97", justPast),
+      entry("98", "a".repeat(each)),
+      entry("99", "b".repeat(each)),
+    ]);
+
+    const result = await createTelegramGroupTurnContextPreparer(deps)(input);
+
+    expect(result.durableMessage).toContain(justPast);
+    expect(result.durableMessage).not.toContain("ещё знаков");
+  });
+
   it("stops the recent window at its character budget, newest entries first", async () => {
     const deps = dependencies("90");
     const long = (sequence: number) => entry(String(sequence), "w".repeat(5_000));
@@ -276,21 +341,29 @@ describe("Telegram group turn context", () => {
 
     const result = await prepare(input);
 
-    // Each shortened entry costs about the entry cap; the budget holds that many, newest kept.
-    const fits = Math.floor(
-      TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS /
-        (TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS + 120),
+    // Shortened entries first, newest kept; once one no longer fits, the older ones come as
+    // stubs until the budget ends, and the oldest stay out.
+    const cost = (kept: number) => kept + `… [ещё знаков: ${5_000 - kept}]`.length + 80;
+    const budget = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS;
+    const shortened = Math.floor(
+      budget / cost(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS),
     );
-    expect(result.durableMessage).toContain(`#${99 - fits} `);
-    expect(result.durableMessage).not.toContain(`#${98 - fits} `);
+    const left = budget - shortened * cost(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS);
+    const stubs = Math.floor(left / cost(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS));
+    // The entries are #90–#98, the newest first.
+    const oldest = 98 - shortened - stubs + 1;
+    expect(oldest).toBeGreaterThan(90);
+    expect(result.durableMessage).toContain(`#${oldest} `);
+    expect(result.durableMessage).not.toContain(`#${oldest - 1} `);
   });
 
   it("counts the left-out text of a shortened entry in characters, not UTF-16 units", async () => {
     const deps = dependencies("90");
-    const emoji = "😀".repeat(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS / 2 + 1);
+    // Twenty past the cap: 40 UTF-16 units left out, counted as 20 (one past it would not be cut).
+    const emoji = "😀".repeat(TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS / 2 + 20);
     deps.journal.listRecent.mockResolvedValue([entry("99", emoji)]);
     const result = await createTelegramGroupTurnContextPreparer(deps)(input);
-    expect(result.durableMessage).toContain("ещё знаков: 1]");
+    expect(result.durableMessage).toContain("ещё знаков: 20]");
   });
 
   // Codex review, 25 November 2026: an entry both unseen and in the window came in only in full,

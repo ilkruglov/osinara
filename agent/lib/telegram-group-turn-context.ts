@@ -16,6 +16,7 @@ import {
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS,
 } from "../config.js";
 import { sliceText } from "./display-text.js";
 import { AppError } from "./app-error.js";
@@ -138,23 +139,31 @@ export function fitHandoffBlock(text: string | null, budget: number): string | n
   return renderHandoffBlock(`${trimmed.slice(0, room - 1)}…`);
 }
 
-/** An entry cut to the window's per-entry cap, its head and a count of what was left out. */
-function windowEntry(entry: TelegramGroupJournalEntry): TelegramGroupJournalEntry {
+/**
+ * An entry cut to `cap` characters, its head and a count of what was left out; whole when the cut
+ * with its count would be no shorter (just past the cap).
+ */
+function windowEntry(
+  entry: TelegramGroupJournalEntry,
+  cap: number = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS,
+): TelegramGroupJournalEntry {
   const text = entry.contentText;
-  if (text === null || text.length <= TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS) {
-    return entry;
-  }
-  const head = sliceText(text, TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS).trimEnd();
+  if (text === null || text.length <= cap) return entry;
+  const head = sliceText(text, cap).trimEnd();
   // Counted in characters (an emoji is one), worded without number agreement.
   let omitted = 0;
   for (const _character of text.slice(head.length)) omitted += 1;
-  return { ...entry, contentText: `${head}… [ещё знаков: ${omitted}]` };
+  const shortened = `${head}… [ещё знаков: ${omitted}]`;
+  return shortened.length < text.length ? { ...entry, contentText: shortened } : entry;
 }
+
+const windowCost = (entry: TelegramGroupJournalEntry) =>
+  (entry.contentText ?? "").length + RECENT_WINDOW_ENTRY_OVERHEAD;
 
 /**
  * The newest entries that fit the recent-window character cap, in chronological order. A long
- * entry comes in shortened, so it never hides the entries before it; the full text of an unseen
- * entry still wins in `mergeTimelineEntries`.
+ * entry comes in shortened, and as a stub when even that no longer fits, so it never hides the
+ * entries before it; the full text of an unseen entry still wins in `mergeTimelineEntries`.
  */
 function recentTimelineWindow(
   entries: readonly TelegramGroupJournalEntry[],
@@ -163,10 +172,14 @@ function recentTimelineWindow(
   const window: TelegramGroupJournalEntry[] = [];
   let used = 0;
   for (const original of [...entries].reverse()) {
-    const entry = windowEntry(original);
-    const cost = (entry.contentText ?? "").length + RECENT_WINDOW_ENTRY_OVERHEAD;
-    if (used + cost > maxCharacters) break;
-    used += cost;
+    let entry = windowEntry(original);
+    const long =
+      (original.contentText?.length ?? 0) > TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS;
+    if (used + windowCost(entry) > maxCharacters && long) {
+      entry = windowEntry(original, TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS);
+    }
+    if (used + windowCost(entry) > maxCharacters) break;
+    used += windowCost(entry);
     window.unshift(entry);
   }
   return window;

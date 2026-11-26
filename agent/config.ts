@@ -17,10 +17,10 @@ import { integerSetting } from "./lib/runtime-tuning.js";
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
 // Eve compacts at threshold × context window. A million-token window would let a session grow to
 // 750k tokens that every turn re-sends, so the working window is capped: with the threshold above
-// compaction starts near 240k tokens regardless of what the model supports. Raised from 160k on
-// 25 November 2026 (owner) together with the turn timeline: DeepSeek served 93 % of a 120k prompt
-// from cache (about $0.001 a step), and the larger timeline would otherwise compact sooner.
-export const AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS = 320_000;
+// compaction starts near 120k tokens regardless of what the model supports. 1.8.69 raised it to
+// 320k with the turn timeline; the owner took both back on 26 November 2026 (memory got worse,
+// prompts reached ~213k tokens a step).
+export const AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS = 160_000;
 // The model may perform substantial tool work, but one turn must never consume unbounded calls.
 export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
 /** The owner is warned once a day while the DeepSeek balance is below this, in USD. */
@@ -81,8 +81,8 @@ export const TELEGRAM_HITL_TIMEOUT_SWEEP_TIMEOUT_MS = 180 * 1_000;
 // The timeout sweep needs a route-scoped `attachSession`, which exists only inside an HTTP handler,
 // so the minute schedule calls the agent's own private route. The port is fixed by `npm start`.
 export const AGENT_INTERNAL_SELF_BASE_URL = "http://127.0.0.1:3000";
-// Raised from 12 000 on 25 November 2026 (owner), with the recent window below.
-export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 24_000;
+// 1.8.69 raised it to 24 000 with the recent window below; back to 12 000 on 26 November 2026 (owner).
+export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 12_000;
 // The journal keeps every entry (owner's decision, 22 November 2026): the per-chat cap of 10 000
 // held ten days of the busiest group. At ~1.3 KB an entry the journal grows ~0.6 GB a year at the
 // pace measured that day, its alias table (`telegram_group_message_ids`) about a fifth more.
@@ -92,13 +92,18 @@ export const TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES = 100;
 // Eve history. Since delivery context of past turns is dropped from the prompt, a message that
 // never started a turn was visible for exactly one turn. A small recent window rides along with
 // every turn so the model keeps the last exchanges of the chat in front of it.
-// Raised from 15 entries and 3 000 characters on 25 November 2026 (owner).
-export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES = 30;
-export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS = 10_000;
+// 1.8.69 raised it to 30 entries and 10 000 characters; back on 26 November 2026 (owner).
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES = 15;
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS = 3_000;
 // A longer entry rides in the window as its head and a count of what was left out. Without the cut
 // one long answer stopped the window and hid everything before it: on 25 November 2026 a 12 KB
 // dossier made the next turn answer the same request again, and an 11 KB one hid a game board.
-export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS = 2_000;
+// 1 000 in a 3 000 window leaves room for 10–14 ordinary messages beside one long answer (owner,
+// 26 November 2026; it was 2 000 beside the 10 000 window of 1.8.69).
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_ENTRY_CHARACTERS = 1_000;
+// A long entry that no longer fits even shortened comes as a stub of this many characters, so it
+// never stops the window before the older entries (Codex review, 26 November 2026).
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_STUB_CHARACTERS = 200;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT = 50;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT = 50;
 export const TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED = 1;
